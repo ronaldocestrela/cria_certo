@@ -66,6 +66,10 @@ using Microsoft.IdentityModel.Tokens;
 
 using CriaCerto.Modules.Backoffice.Application;
 using CriaCerto.Modules.Backoffice.Application.Features.Dashboard;
+using CriaCerto.Modules.Backoffice.Application.Features.AdminUsers.Commands;
+using CriaCerto.Modules.Backoffice.Application.Features.AdminUsers.Queries;
+using CriaCerto.Modules.Backoffice.Application.Features.AdminUsers.Dtos;
+using CriaCerto.Modules.Backoffice.Application.Security;
 using CriaCerto.Modules.Backoffice.Infrastructure;
 using CriaCerto.Modules.Backoffice.Infrastructure.Persistence;
 
@@ -209,11 +213,6 @@ app.UseBackofficeModule();
 
 app.MapGet("/health", () => Results.Ok(new { status = "healthy", service = "CriaCerto.Api" }))
     .WithName("Health");
-
-using CriaCerto.Modules.Backoffice.Application.Features.AdminUsers.Commands;
-using CriaCerto.Modules.Backoffice.Application.Features.AdminUsers.Queries;
-using CriaCerto.Modules.Backoffice.Application.Features.AdminUsers.Dtos;
-using CriaCerto.Modules.Backoffice.Application.Security;
 
 // --- BACKOFFICE ADMIN ENDPOINTS ---
 var backoffice = app.MapGroup("/api/v1/backoffice").RequireAuthorization();

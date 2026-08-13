@@ -1,0 +1,18 @@
+@if (Count > 0)
+{
+    <div class="dnp-alert-banner">
+        <div class="dnp-alert-icon">
+            <span class="material-symbols-outlined">warning</span>
+        </div>
+        <div>
+            <p class="dnp-alert-label">Alerta de DNP</p>
+            <h3 class="dnp-alert-title">@Count @(Count == 1 ? "matriz requer" : "matrizes requerem") atenção imediata</h3>
+            <p class="dnp-alert-text">Matrizes ultrapassaram a janela ideal de diagnóstico sem confirmação de gestação.</p>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public int Count { get; set; }
+}
