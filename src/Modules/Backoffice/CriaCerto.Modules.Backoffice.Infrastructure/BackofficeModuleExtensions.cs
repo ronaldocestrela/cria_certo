@@ -1,5 +1,7 @@
+using CriaCerto.Modules.Backoffice.Application.Security;
 using CriaCerto.Modules.Backoffice.Infrastructure.Persistence;
 using CriaCerto.Modules.Backoffice.Infrastructure.Security;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -21,6 +23,11 @@ public static class BackofficeModuleExtensions
         {
             options.UseSqlServer(connectionString, b => b.MigrationsAssembly(typeof(BackofficeDbContext).Assembly.FullName));
         });
+
+        // Register Granular RBAC & Policy Authorization Services
+        services.AddScoped<IPermissionEvaluator, PermissionEvaluatorService>();
+        services.AddScoped<IAuthorizationHandler, PermissionAuthorizationHandler>();
+        services.AddSingleton<IAuthorizationPolicyProvider, BackofficePermissionPolicyProvider>();
 
         return services;
     }

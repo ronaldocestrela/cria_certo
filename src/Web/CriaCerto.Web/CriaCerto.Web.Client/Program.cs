@@ -16,6 +16,7 @@ builder.Services.AddScoped<NutritionApiClient>();
 builder.Services.AddScoped<CalvingApiClient>();
 builder.Services.AddScoped<TenancyApiClient>();
 builder.Services.AddScoped<IBackofficeApiClient, BackofficeApiClient>();
+builder.Services.AddScoped<IBackofficePermissionService, BackofficePermissionService>();
 builder.Services.AddScoped<IOfflineSyncService, OfflineSyncService>();
 builder.Services.AddScoped<IToastService, ToastService>();
 

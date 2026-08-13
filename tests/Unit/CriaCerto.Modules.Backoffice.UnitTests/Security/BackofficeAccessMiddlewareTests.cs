@@ -8,6 +8,8 @@ namespace CriaCerto.Modules.Backoffice.UnitTests.Security;
 
 public class BackofficeAccessMiddlewareTests
 {
+    private readonly PermissionEvaluatorService _evaluator = new();
+
     [Fact]
     public async Task InvokeAsync_WhenRouteIsBackofficeAndUserIsNotAdmin_ShouldBlockWith401Unauthorized()
     {
@@ -17,7 +19,7 @@ public class BackofficeAccessMiddlewareTests
         context.Request.Path = "/api/v1/backoffice/dashboard/kpis";
 
         // Act
-        await middleware.InvokeAsync(context);
+        await middleware.InvokeAsync(context, _evaluator);
 
         // Assert
         context.Response.StatusCode.Should().Be(StatusCodes.Status401Unauthorized);
@@ -47,7 +49,7 @@ public class BackofficeAccessMiddlewareTests
         context.User = new ClaimsPrincipal(identity);
 
         // Act
-        await middleware.InvokeAsync(context);
+        await middleware.InvokeAsync(context, _evaluator);
 
         // Assert
         nextCalled.Should().BeTrue();
@@ -69,7 +71,7 @@ public class BackofficeAccessMiddlewareTests
         context.Request.Path = "/api/v1/tenancy/farms";
 
         // Act
-        await middleware.InvokeAsync(context);
+        await middleware.InvokeAsync(context, _evaluator);
 
         // Assert
         nextCalled.Should().BeTrue();

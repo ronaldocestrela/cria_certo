@@ -33,12 +33,30 @@ public class AdminRole
     {
         if (permission is null)
         {
-            return Result.Failure(BackofficeErrors.InvalidRoleData);
+            return Result.Failure(BackofficeErrors.InvalidPermissionData);
         }
 
-        if (!_permissions.Any(p => p.Name.Equals(permission.Name, StringComparison.OrdinalIgnoreCase)))
+        if (!_permissions.Any(p => p.Name.Equals(permission.Name, StringComparison.OrdinalIgnoreCase) &&
+                                   p.Scope.Equals(permission.Scope, StringComparison.OrdinalIgnoreCase)))
         {
             _permissions.Add(permission);
+        }
+
+        return Result.Success();
+    }
+
+    public Result RemovePermission(string permissionName, string scope = "Global")
+    {
+        if (string.IsNullOrWhiteSpace(permissionName))
+        {
+            return Result.Failure(BackofficeErrors.InvalidPermissionData);
+        }
+
+        var existing = _permissions.FirstOrDefault(p => p.Name.Equals(permissionName, StringComparison.OrdinalIgnoreCase) &&
+                                                        p.Scope.Equals(scope, StringComparison.OrdinalIgnoreCase));
+        if (existing is not null)
+        {
+            _permissions.Remove(existing);
         }
 
         return Result.Success();

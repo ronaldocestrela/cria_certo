@@ -20,6 +20,14 @@ public static class BackofficeErrors
         "Backoffice.RoleNotFound",
         "O papel administrativo solicitado não foi encontrado.");
 
+    public static readonly Error InvalidPermissionData = Error.Validation(
+        "Backoffice.InvalidPermissionData",
+        "Os dados fornecidos para a permissão administrativa são inválidos.");
+
+    public static readonly Error InvalidScopeData = Error.Validation(
+        "Backoffice.InvalidScopeData",
+        "O escopo fornecido para a permissão administrativa é inválido.");
+
     public static readonly Error UnauthorizedAccess = Error.Unauthorized(
         "Backoffice.UnauthorizedAccess",
         "Acesso negado. Credenciais administrativas ou permissões insuficientes.");

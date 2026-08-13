@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using CriaCerto.Modules.Backoffice.Application.Security;
 using Microsoft.AspNetCore.Http;
 
 namespace CriaCerto.Modules.Backoffice.Infrastructure.Security;
@@ -13,13 +14,12 @@ public class BackofficeAccessMiddleware
         _next = next;
     }
 
-    public async Task InvokeAsync(HttpContext context)
+    public async Task InvokeAsync(HttpContext context, IPermissionEvaluator permissionEvaluator)
     {
         var path = context.Request.Path.Value ?? string.Empty;
 
         if (path.StartsWith(BackofficePathPrefix, StringComparison.OrdinalIgnoreCase))
         {
-            // Default Deny Policy Enforcement
             var user = context.User;
 
             if (user is null || user.Identity is null || !user.Identity.IsAuthenticated)
@@ -35,12 +35,9 @@ public class BackofficeAccessMiddleware
                 return;
             }
 
-            var hasAdminRole = user.IsInRole("PlatformOwner") ||
-                               user.IsInRole("SupportN1") ||
-                               user.IsInRole("SupportN2") ||
-                               user.IsInRole("FinanceOps") ||
-                               user.IsInRole("ReadOnlyAuditor") ||
-                               user.HasClaim(c => c.Type == "is_backoffice_admin" && c.Value.Equals("true", StringComparison.OrdinalIgnoreCase));
+            var hasAdminRole = BackofficeRoles.AllRoles.Any(role => user.IsInRole(role)) ||
+                               user.HasClaim(c => c.Type == "is_backoffice_admin" && c.Value.Equals("true", StringComparison.OrdinalIgnoreCase)) ||
+                               user.HasClaim(c => c.Type == "is_platform_owner" && c.Value.Equals("true", StringComparison.OrdinalIgnoreCase));
 
             if (!hasAdminRole)
             {

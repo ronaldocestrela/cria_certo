@@ -1,3 +1,5 @@
+@using CriaCerto.Modules.Backoffice.Application.Security
+
 <nav class="backoffice-nav" aria-label="Menu de Navegação Administrativo">
     <div class="nav-brand">
         <span class="brand-badge">SaaS Admin</span>
@@ -9,25 +11,39 @@
         <NavLink class="nav-link" href="backoffice/dashboard" Match="NavLinkMatch.All">
             <span class="nav-icon">📊</span> Dashboard Global
         </NavLink>
-        <NavLink class="nav-link" href="backoffice/tenants">
-            <span class="nav-icon">🏢</span> Tenants & Clientes
-        </NavLink>
-        <NavLink class="nav-link" href="backoffice/plans">
-            <span class="nav-icon">💳</span> Catálogo de Planos
-        </NavLink>
+
+        <PermissionGuard Permission="@BackofficePermissions.TenantsRead">
+            <NavLink class="nav-link" href="backoffice/tenants">
+                <span class="nav-icon">🏢</span> Tenants & Clientes
+            </NavLink>
+        </PermissionGuard>
+
+        <PermissionGuard Permission="@BackofficePermissions.PlansRead">
+            <NavLink class="nav-link" href="backoffice/plans">
+                <span class="nav-icon">💳</span> Catálogo de Planos
+            </NavLink>
+        </PermissionGuard>
     </div>
 
     <div class="nav-section">
         <div class="section-header">SEGURANÇA & OPERAÇÕES</div>
-        <NavLink class="nav-link" href="backoffice/users">
-            <span class="nav-icon">👤</span> Usuários Admin (IAM)
-        </NavLink>
-        <NavLink class="nav-link" href="backoffice/impersonation">
-            <span class="nav-icon">🔑</span> Impersonação
-        </NavLink>
-        <NavLink class="nav-link" href="backoffice/audit">
-            <span class="nav-icon">📜</span> Trilha de Auditoria
-        </NavLink>
+        <PermissionGuard Permission="@BackofficePermissions.UsersAdminManage">
+            <NavLink class="nav-link" href="backoffice/users">
+                <span class="nav-icon">👤</span> Usuários Admin (IAM)
+            </NavLink>
+        </PermissionGuard>
+
+        <PermissionGuard Permission="@BackofficePermissions.ImpersonationStart">
+            <NavLink class="nav-link" href="backoffice/impersonation">
+                <span class="nav-icon">🔑</span> Impersonação
+            </NavLink>
+        </PermissionGuard>
+
+        <PermissionGuard Permission="@BackofficePermissions.AuditRead">
+            <NavLink class="nav-link" href="backoffice/audit">
+                <span class="nav-icon">📜</span> Trilha de Auditoria
+            </NavLink>
+        </PermissionGuard>
     </div>
 </nav>
 

@@ -1,0 +1,48 @@
+@using CriaCerto.Web.Client.Services
+@inject IBackofficePermissionService PermissionService
+
+@if (_isAuthorized)
+{
+    if (Authorized is not null)
+    {
+        @Authorized
+    }
+    else if (ChildContent is not null)
+    {
+        @ChildContent
+    }
+}
+else if (NotAuthorized is not null)
+{
+    @NotAuthorized
+}
+
+@code {
+    [Parameter]
+    public string Permission { get; set; } = string.Empty;
+
+    [Parameter]
+    public string Scope { get; set; } = "Global";
+
+    [Parameter]
+    public RenderFragment? Authorized { get; set; }
+
+    [Parameter]
+    public RenderFragment? NotAuthorized { get; set; }
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    private bool _isAuthorized = false;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (string.IsNullOrWhiteSpace(Permission))
+        {
+            _isAuthorized = true;
+            return;
+        }
+
+        _isAuthorized = await PermissionService.HasPermissionAsync(Permission, Scope);
+    }
+}

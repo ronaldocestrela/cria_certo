@@ -62,7 +62,7 @@ As entregas estão organizadas em **6 Fases Sequenciais**, cobrindo fundação d
 * **TDD & Validação:**
   * Testes de autorização negando acesso por padrão (`default deny`) quando permissão inexistente.
 
-#### Sub-fase 1.2: Modelo de Permissões Granulares (RBAC + Policies) [PLANEJADA]
+#### Sub-fase 1.2: Modelo de Permissões Granulares (RBAC + Policies) [CONCLUÍDA]
 * **Backend:**
   * Implementar catálogo de permissões por recurso/ação, por exemplo:
     * `tenants.read`, `tenants.write`, `tenants.suspend`

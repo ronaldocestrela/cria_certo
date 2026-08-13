@@ -1,0 +1,44 @@
+using System.Security.Claims;
+using CriaCerto.Modules.Backoffice.Application.Security;
+using CriaCerto.Modules.Backoffice.Infrastructure.Security;
+using FluentAssertions;
+using Xunit;
+
+namespace CriaCerto.Modules.Backoffice.UnitTests.Security;
+
+public class BackofficeRolePermissionMatrixTests
+{
+    private readonly PermissionEvaluatorService _evaluator = new();
+
+    [Theory]
+    [InlineData(BackofficeRoles.PlatformOwner, BackofficePermissions.TenantsRead, true)]
+    [InlineData(BackofficeRoles.PlatformOwner, BackofficePermissions.TenantsSuspend, true)]
+    [InlineData(BackofficeRoles.PlatformOwner, BackofficePermissions.PlansPublish, true)]
+    [InlineData(BackofficeRoles.PlatformOwner, BackofficePermissions.ImpersonationStart, true)]
+    [InlineData(BackofficeRoles.SupportN1, BackofficePermissions.TenantsRead, true)]
+    [InlineData(BackofficeRoles.SupportN1, BackofficePermissions.SubscriptionsRead, true)]
+    [InlineData(BackofficeRoles.SupportN1, BackofficePermissions.TenantsSuspend, false)]
+    [InlineData(BackofficeRoles.SupportN1, BackofficePermissions.PlansPublish, false)]
+    [InlineData(BackofficeRoles.SupportN2, BackofficePermissions.TenantsWrite, true)]
+    [InlineData(BackofficeRoles.SupportN2, BackofficePermissions.ImpersonationStart, true)]
+    [InlineData(BackofficeRoles.SupportN2, BackofficePermissions.PlansPublish, false)]
+    [InlineData(BackofficeRoles.FinanceOps, BackofficePermissions.PlansPublish, true)]
+    [InlineData(BackofficeRoles.FinanceOps, BackofficePermissions.SubscriptionsManage, true)]
+    [InlineData(BackofficeRoles.FinanceOps, BackofficePermissions.ImpersonationStart, false)]
+    [InlineData(BackofficeRoles.ReadOnlyAuditor, BackofficePermissions.AuditRead, true)]
+    [InlineData(BackofficeRoles.ReadOnlyAuditor, BackofficePermissions.TenantsRead, true)]
+    [InlineData(BackofficeRoles.ReadOnlyAuditor, BackofficePermissions.TenantsWrite, false)]
+    public void HasPermission_RolePermissionMatrix_ShouldEvaluateCorrectly(string role, string permission, bool expectedResult)
+    {
+        // Arrange
+        var claims = new[] { new Claim(ClaimTypes.Role, role) };
+        var user = new ClaimsPrincipal(new ClaimsIdentity(claims, "TestAuth"));
+
+        // Act
+        var result = _evaluator.HasPermission(user, permission, BackofficePermissions.ScopeGlobal);
+
+        // Assert
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Should().Be(expectedResult);
+    }
+}
