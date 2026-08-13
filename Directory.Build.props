@@ -1,6 +1,6 @@
 <Project>
   <PropertyGroup>
-    <!-- Suppress transitive NuGet security audit warnings for pre-release .NET 10 framework packages -->
-    <NoWarn>$(NoWarn);NU1903</NoWarn>
+    <!-- NU1900: audit source unreachable; NU1903: transitive vulns in pre-release .NET 10 packages -->
+    <NoWarn>$(NoWarn);NU1900;NU1903</NoWarn>
   </PropertyGroup>
 </Project>
