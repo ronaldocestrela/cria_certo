@@ -9,7 +9,7 @@ public class Bull
     public string Name { get; private set; } = string.Empty;
     public string Breed { get; private set; } = string.Empty;
     public string? RegistryNumber { get; private set; }
-    public DateTime BirthDate { get; private set; }
+    public DateTime? BirthDate { get; private set; }
     public bool IsActive { get; private set; }
     public Guid TenantId { get; private set; }
 
@@ -19,7 +19,7 @@ public class Bull
         string earTag,
         string name,
         string breed,
-        DateTime birthDate,
+        DateTime? birthDate,
         Guid tenantId,
         string? registryNumber = null)
     {

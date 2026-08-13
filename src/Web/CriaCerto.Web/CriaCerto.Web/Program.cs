@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Authentication.Cookies;
 using CriaCerto.Web.Components;
 using CriaCerto.Web.Client.Services;
 using CriaCerto.Web.Client.Auth;
@@ -26,12 +25,6 @@ builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddScoped<CustomAuthStateProvider>();
 builder.Services.AddScoped<Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider>(sp => 
     sp.GetRequiredService<CustomAuthStateProvider>());
-builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
-    .AddCookie(options =>
-    {
-        options.LoginPath = "/login";
-    });
-builder.Services.AddAuthorization();
 
 var apiBaseUrl = builder.Configuration["ApiBaseUrl"] 
     ?? builder.Configuration["API_BASE_URL"] 
@@ -95,9 +88,6 @@ app.Use(async (context, next) =>
     await next();
 });
 
-app.UseAuthentication();
-app.UseAuthorization();
-
 app.Use(async (context, next) =>
 {
     try
@@ -127,6 +117,7 @@ app.MapReverseProxy();
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveWebAssemblyRenderMode()
-    .AddAdditionalAssemblies(typeof(CriaCerto.Web.Client._Imports).Assembly);
+    .AddAdditionalAssemblies(typeof(CriaCerto.Web.Client._Imports).Assembly)
+    .AllowAnonymous();
 
 app.Run();

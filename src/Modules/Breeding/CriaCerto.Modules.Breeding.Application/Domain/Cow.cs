@@ -13,7 +13,7 @@ public class Cow
     public string? RegistryNumber { get; private set; }
     public string Breed { get; private set; } = string.Empty;
     public string Origin { get; private set; } = "Nascimento Interno";
-    public DateTime BirthDate { get; private set; }
+    public DateTime? BirthDate { get; private set; }
     public DateTime? EntryDate { get; private set; }
     public decimal? EntryWeightKg { get; private set; }
     public string? SireInfo { get; private set; }
@@ -30,7 +30,7 @@ public class Cow
     public static Result<Cow> Create(
         string earTag,
         string breed,
-        DateTime birthDate,
+        DateTime? birthDate,
         Guid tenantId,
         string? sisbovId = null,
         string? rfidTag = null,
@@ -51,10 +51,10 @@ public class Cow
         if (string.IsNullOrWhiteSpace(breed))
             return Result.Failure<Cow>(Error.Validation("Cow.BreedRequired", "A raça do animal é obrigatória."));
 
-        if (birthDate > DateTime.UtcNow)
+        if (birthDate.HasValue && birthDate.Value > DateTime.UtcNow)
             return Result.Failure<Cow>(Error.Validation("Cow.InvalidBirthDate", "Data de nascimento não pode ser no futuro."));
 
-        if (entryDate.HasValue && entryDate.Value < birthDate)
+        if (entryDate.HasValue && birthDate.HasValue && entryDate.Value < birthDate.Value)
             return Result.Failure<Cow>(Error.Validation("Cow.InvalidEntryDate", "Data de entrada não pode ser anterior à data de nascimento."));
 
         if (bodyConditionScore.HasValue && (bodyConditionScore.Value < 1.0m || bodyConditionScore.Value > 5.0m))
@@ -90,7 +90,7 @@ public class Cow
     public Result Update(
         string earTag,
         string breed,
-        DateTime birthDate,
+        DateTime? birthDate,
         string? sisbovId = null,
         string? rfidTag = null,
         string? tattoo = null,
@@ -110,10 +110,10 @@ public class Cow
         if (string.IsNullOrWhiteSpace(breed))
             return Result.Failure(Error.Validation("Cow.BreedRequired", "A raça é obrigatória."));
 
-        if (birthDate > DateTime.UtcNow)
+        if (birthDate.HasValue && birthDate.Value > DateTime.UtcNow)
             return Result.Failure(Error.Validation("Cow.InvalidBirthDate", "Data de nascimento não pode ser no futuro."));
 
-        if (entryDate.HasValue && entryDate.Value < birthDate)
+        if (entryDate.HasValue && birthDate.HasValue && entryDate.Value < birthDate.Value)
             return Result.Failure(Error.Validation("Cow.InvalidEntryDate", "Data de entrada não pode ser anterior à data de nascimento."));
 
         if (bodyConditionScore.HasValue && (bodyConditionScore.Value < 1.0m || bodyConditionScore.Value > 5.0m))

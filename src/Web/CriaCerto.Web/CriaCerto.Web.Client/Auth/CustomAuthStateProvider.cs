@@ -9,6 +9,7 @@ public class CustomAuthStateProvider : AuthenticationStateProvider
 {
     private readonly IJSRuntime _jsRuntime;
     private readonly ClaimsPrincipal _anonymous = new(new ClaimsIdentity());
+    private AuthenticationState? _cachedState;
 
     public CustomAuthStateProvider(IJSRuntime jsRuntime)
     {
@@ -17,14 +18,63 @@ public class CustomAuthStateProvider : AuthenticationStateProvider
 
     public override async Task<AuthenticationState> GetAuthenticationStateAsync()
     {
+        if (!OperatingSystem.IsBrowser())
+        {
+            return _cachedState ?? new AuthenticationState(_anonymous);
+        }
+
         try
         {
             var token = await _jsRuntime.InvokeAsync<string?>("localStorage.getItem", "authToken");
             if (string.IsNullOrWhiteSpace(token))
             {
-                return new AuthenticationState(_anonymous);
+                _cachedState = new AuthenticationState(_anonymous);
+                return _cachedState;
             }
 
+            if (!TryCreateAuthenticatedState(token, out var authenticatedState))
+            {
+                await _jsRuntime.InvokeVoidAsync("localStorage.removeItem", "authToken");
+                _cachedState = new AuthenticationState(_anonymous);
+                return _cachedState;
+            }
+
+            _cachedState = authenticatedState;
+            return authenticatedState;
+        }
+        catch (JSException)
+        {
+            return _cachedState ?? new AuthenticationState(_anonymous);
+        }
+        catch (InvalidOperationException)
+        {
+            return _cachedState ?? new AuthenticationState(_anonymous);
+        }
+    }
+
+    public async Task MarkUserAsAuthenticated(string token)
+    {
+        await _jsRuntime.InvokeVoidAsync("localStorage.setItem", "authToken", token);
+        var authState = TryCreateAuthenticatedState(token, out var authenticatedState)
+            ? authenticatedState
+            : new AuthenticationState(_anonymous);
+        _cachedState = authState;
+        NotifyAuthenticationStateChanged(Task.FromResult(authState));
+    }
+
+    public async Task MarkUserAsLoggedOut()
+    {
+        await _jsRuntime.InvokeVoidAsync("localStorage.removeItem", "authToken");
+        _cachedState = new AuthenticationState(_anonymous);
+        NotifyAuthenticationStateChanged(Task.FromResult(_cachedState));
+    }
+
+    private bool TryCreateAuthenticatedState(string token, out AuthenticationState authState)
+    {
+        authState = new AuthenticationState(_anonymous);
+
+        try
+        {
             var claims = ParseClaimsFromJwt(token).ToList();
             var expClaim = claims.FirstOrDefault(c => c.Type == "exp")?.Value;
             if (expClaim != null && long.TryParse(expClaim, out var expSeconds))
@@ -32,38 +82,22 @@ public class CustomAuthStateProvider : AuthenticationStateProvider
                 var expirationDate = DateTimeOffset.FromUnixTimeSeconds(expSeconds);
                 if (expirationDate <= DateTimeOffset.UtcNow)
                 {
-                    await _jsRuntime.InvokeVoidAsync("localStorage.removeItem", "authToken");
-                    return new AuthenticationState(_anonymous);
+                    return false;
                 }
             }
 
             var identity = new ClaimsIdentity(claims, "jwt");
             var user = new ClaimsPrincipal(identity);
-            return new AuthenticationState(user);
+            authState = new AuthenticationState(user);
+            return user.Identity?.IsAuthenticated == true;
         }
         catch
         {
-            return new AuthenticationState(_anonymous);
+            return false;
         }
     }
 
-    public async Task MarkUserAsAuthenticated(string token)
-    {
-        await _jsRuntime.InvokeVoidAsync("localStorage.setItem", "authToken", token);
-        var identity = new ClaimsIdentity(ParseClaimsFromJwt(token), "jwt");
-        var user = new ClaimsPrincipal(identity);
-        var authState = Task.FromResult(new AuthenticationState(user));
-        NotifyAuthenticationStateChanged(authState);
-    }
-
-    public async Task MarkUserAsLoggedOut()
-    {
-        await _jsRuntime.InvokeVoidAsync("localStorage.removeItem", "authToken");
-        var authState = Task.FromResult(new AuthenticationState(_anonymous));
-        NotifyAuthenticationStateChanged(authState);
-    }
-
-    private static IEnumerable<Claim> ParseClaimsFromJwt(string jwt)
+    internal static IEnumerable<Claim> ParseClaimsFromJwt(string jwt)
     {
         var claims = new List<Claim>();
         var payload = jwt.Split('.')[1];

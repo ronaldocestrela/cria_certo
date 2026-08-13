@@ -62,8 +62,8 @@
                 <div class="col-md-3">
                     <div class="card border-0 shadow-sm p-3">
                         <span class="text-muted small">Idade Aproximada</span>
-                        <h4 class="fw-bold mb-0 text-primary">@CalculateAgeMonths(_animal.BirthDate) meses</h4>
-                        <small class="text-muted">Nasc: @_animal.BirthDate.ToString("dd/MM/yyyy")</small>
+                        <h4 class="fw-bold mb-0 text-primary">@(CalculateAgeMonths(_animal.BirthDate)?.ToString() ?? "-")@(_animal.BirthDate.HasValue ? " meses" : "")</h4>
+                        <small class="text-muted">Nasc: @(_animal.BirthDate?.ToString("dd/MM/yyyy") ?? "Não informada")</small>
                     </div>
                 </div>
                 <div class="col-md-3">
@@ -178,10 +178,11 @@
         }
     }
 
-    private int CalculateAgeMonths(DateTime birthDate)
+    private int? CalculateAgeMonths(DateTime? birthDate)
     {
+        if (!birthDate.HasValue) return null;
         var now = DateTime.Today;
-        return ((now.Year - birthDate.Year) * 12) + now.Month - birthDate.Month;
+        return ((now.Year - birthDate.Value.Year) * 12) + now.Month - birthDate.Value.Month;
     }
 
     private void GoBack()

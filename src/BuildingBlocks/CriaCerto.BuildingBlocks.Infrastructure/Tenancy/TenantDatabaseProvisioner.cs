@@ -89,6 +89,15 @@ public sealed class TenantDatabaseProvisioner : ITenantDatabaseProvisioner
                         {
                             _logger.LogDebug(ex, "Tabelas para {DbContextName} já existem no tenant {TenantId}.", dbContextType.Name, tenantId);
                         }
+
+                        try
+                        {
+                            await EnsureBirthDateNullableAsync(dbContext, cancellationToken);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogDebug(ex, "Falha ao ajustar colunas nulas em {DbContextName} no tenant {TenantId}.", dbContextType.Name, tenantId);
+                        }
                     }
                 }
                 else
@@ -109,5 +118,31 @@ public sealed class TenantDatabaseProvisioner : ITenantDatabaseProvisioner
         {
             _semaphore.Release();
         }
+    }
+
+    private static async Task EnsureBirthDateNullableAsync(DbContext dbContext, CancellationToken cancellationToken)
+    {
+        var alterSql = @"
+            IF EXISTS (
+                SELECT 1 FROM sys.columns c
+                JOIN sys.tables t ON c.object_id = t.object_id
+                JOIN sys.schemas s ON t.schema_id = s.schema_id
+                WHERE s.name = 'breeding' AND t.name = 'Cows' AND c.name = 'BirthDate' AND c.is_nullable = 0
+            )
+            BEGIN
+                ALTER TABLE [breeding].[Cows] ALTER COLUMN [BirthDate] DATETIME2 NULL;
+            END;
+
+            IF EXISTS (
+                SELECT 1 FROM sys.columns c
+                JOIN sys.tables t ON c.object_id = t.object_id
+                JOIN sys.schemas s ON t.schema_id = s.schema_id
+                WHERE s.name = 'breeding' AND t.name = 'Bulls' AND c.name = 'BirthDate' AND c.is_nullable = 0
+            )
+            BEGIN
+                ALTER TABLE [breeding].[Bulls] ALTER COLUMN [BirthDate] DATETIME2 NULL;
+            END;";
+
+        await dbContext.Database.ExecuteSqlRawAsync(alterSql, cancellationToken);
     }
 }

@@ -103,7 +103,7 @@ public sealed record CowDetailDto(
     string? RegistryNumber,
     string Breed,
     string Origin,
-    DateTime BirthDate,
+    DateTime? BirthDate,
     DateTime? EntryDate,
     decimal? EntryWeightKg,
     string? SireInfo,
@@ -121,7 +121,7 @@ public sealed class CreateAnimalRequest
 {
     public string EarTag { get; set; } = string.Empty;
     public string Breed { get; set; } = "Nelore";
-    public DateTime BirthDate { get; set; } = DateTime.Today.AddYears(-2);
+    public DateTime? BirthDate { get; set; }
     public Guid TenantId { get; set; }
     public string? SisbovId { get; set; }
     public string? RfidTag { get; set; }
@@ -142,7 +142,7 @@ public sealed class UpdateAnimalRequest
     public Guid Id { get; set; }
     public string EarTag { get; set; } = string.Empty;
     public string Breed { get; set; } = string.Empty;
-    public DateTime BirthDate { get; set; }
+    public DateTime? BirthDate { get; set; }
     public string? SisbovId { get; set; }
     public string? RfidTag { get; set; }
     public string? Tattoo { get; set; }

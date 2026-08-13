@@ -15,8 +15,8 @@ namespace CriaCerto.Modules.Breeding.Application.Features.Plantel;
 public sealed record CreateCowCommand(
     string EarTag,
     string Breed,
-    DateTime BirthDate,
-    Guid TenantId,
+    DateTime? BirthDate = null,
+    Guid TenantId = default,
     string? SisbovId = null,
     string? RfidTag = null,
     string? Tattoo = null,
@@ -35,7 +35,7 @@ public sealed record UpdateCowCommand(
     Guid Id,
     string EarTag,
     string Breed,
-    DateTime BirthDate,
+    DateTime? BirthDate = null,
     string? SisbovId = null,
     string? RfidTag = null,
     string? Tattoo = null,
@@ -61,7 +61,7 @@ public sealed class CreateCowCommandValidator : AbstractValidator<CreateCowComma
     {
         RuleFor(x => x.EarTag).NotEmpty().MaximumLength(50);
         RuleFor(x => x.Breed).NotEmpty().MaximumLength(100);
-        RuleFor(x => x.BirthDate).LessThanOrEqualTo(DateTime.UtcNow);
+        RuleFor(x => x.BirthDate).LessThanOrEqualTo(DateTime.UtcNow).When(x => x.BirthDate.HasValue);
         RuleFor(x => x.BodyConditionScore).InclusiveBetween(1.0m, 5.0m).When(x => x.BodyConditionScore.HasValue);
     }
 }
@@ -73,7 +73,7 @@ public sealed class UpdateCowCommandValidator : AbstractValidator<UpdateCowComma
         RuleFor(x => x.Id).NotEmpty();
         RuleFor(x => x.EarTag).NotEmpty().MaximumLength(50);
         RuleFor(x => x.Breed).NotEmpty().MaximumLength(100);
-        RuleFor(x => x.BirthDate).LessThanOrEqualTo(DateTime.UtcNow);
+        RuleFor(x => x.BirthDate).LessThanOrEqualTo(DateTime.UtcNow).When(x => x.BirthDate.HasValue);
         RuleFor(x => x.BodyConditionScore).InclusiveBetween(1.0m, 5.0m).When(x => x.BodyConditionScore.HasValue);
     }
 }
@@ -182,10 +182,12 @@ public sealed class GetCowQueryHandler : IRequestHandler<GetCowQuery, Result<Cow
 
     private static List<TimelineEventDto> BuildTimeline(Cow cow)
     {
-        var events = new List<TimelineEventDto>
+        var events = new List<TimelineEventDto>();
+
+        if (cow.BirthDate.HasValue)
         {
-            new(cow.BirthDate, "Birth", "Nascimento do Animal", $"Raça {cow.Breed}. Origem: {cow.Origin}", "Cadastral", "cake")
-        };
+            events.Add(new(cow.BirthDate.Value, "Birth", "Nascimento do Animal", $"Raça {cow.Breed}. Origem: {cow.Origin}", "Cadastral", "cake"));
+        }
 
         if (cow.EntryDate.HasValue)
         {

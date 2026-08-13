@@ -31,6 +31,7 @@ public sealed class BreedingDbContext : DbContext, IBreedingDbContext
             builder.Property(c => c.RfidTag).HasMaxLength(50);
             builder.Property(c => c.Tattoo).HasMaxLength(50);
             builder.Property(c => c.Breed).HasMaxLength(100).IsRequired();
+            builder.Property(c => c.BirthDate).IsRequired(false);
             builder.Property(c => c.Status).HasConversion<string>().HasMaxLength(40);
         });
 
@@ -42,6 +43,7 @@ public sealed class BreedingDbContext : DbContext, IBreedingDbContext
             builder.Property(b => b.EarTag).HasMaxLength(50).IsRequired();
             builder.Property(b => b.Name).HasMaxLength(100).IsRequired();
             builder.Property(b => b.Breed).HasMaxLength(100).IsRequired();
+            builder.Property(b => b.BirthDate).IsRequired(false);
             builder.Property(b => b.RegistryNumber).HasMaxLength(50);
         });
 

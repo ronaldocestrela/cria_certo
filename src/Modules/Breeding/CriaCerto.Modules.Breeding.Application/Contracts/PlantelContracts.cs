@@ -36,7 +36,7 @@ public sealed record CowDetailDto(
     string? RegistryNumber,
     string Breed,
     string Origin,
-    DateTime BirthDate,
+    DateTime? BirthDate,
     DateTime? EntryDate,
     decimal? EntryWeightKg,
     string? SireInfo,

@@ -207,6 +207,15 @@
         string Email
     );
 
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        if (authState.User.Identity?.IsAuthenticated == true)
+        {
+            Navigation.NavigateTo("/analytics/executive-dashboard");
+        }
+    }
+
     private async Task HandleLogin()
     {
         _isLoading = true;

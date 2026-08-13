@@ -21,6 +21,16 @@ public class CowTests
     }
 
     [Fact]
+    public void Create_WithoutBirthDate_ShouldReturnSuccess()
+    {
+        var result = Cow.Create("BR-101B", "Nelore", null, _tenantId);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.EarTag.Should().Be("BR-101B");
+        result.Value.BirthDate.Should().BeNull();
+    }
+
+    [Fact]
     public void Create_WithoutEarTag_ShouldReturnFailure()
     {
         var result = Cow.Create("", "Nelore", DateTime.UtcNow.AddYears(-3), _tenantId);
