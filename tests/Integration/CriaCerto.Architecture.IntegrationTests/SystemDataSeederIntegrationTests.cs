@@ -3,6 +3,8 @@ using CriaCerto.BuildingBlocks.Application.Features.GetReferenceBreeds;
 using CriaCerto.BuildingBlocks.Infrastructure.Persistence;
 using CriaCerto.Modules.Backoffice.Application.Security;
 using CriaCerto.Modules.Backoffice.Infrastructure.Persistence;
+using CriaCerto.Modules.Backoffice.Application.Domain.Entities;
+using CriaCerto.Modules.Backoffice.Infrastructure.Persistence.Seeders;
 using CriaCerto.Modules.Backoffice.Infrastructure.Security;
 using CriaCerto.Modules.Sanitary.Application.Features.GetVaccineCalendar;
 using CriaCerto.Modules.Sanitary.Infrastructure.Persistence;
@@ -77,7 +79,7 @@ public class SystemDataSeederIntegrationTests : IDisposable
     public async Task SeedAsync_WhenDatabaseIsEmpty_ShouldPopulateBreedsVaccinesAndBackofficeData()
     {
         // Act
-        await SystemDataSeeder.SeedDataAsync(_foundationDb, _sanitaryDb, _backofficeDb, _passwordHasher, CancellationToken.None);
+        await SystemDataSeeder.SeedDataAsync(_foundationDb, _sanitaryDb, _backofficeDb, _passwordHasher, null, CancellationToken.None);
 
         // Assert - Breeds
         var breeds = await _foundationDb.BovineBreeds.ToListAsync();
@@ -108,17 +110,39 @@ public class SystemDataSeederIntegrationTests : IDisposable
         adminUsers.Should().HaveCount(1);
 
         var masterAdmin = adminUsers.First();
-        masterAdmin.Email.Should().Be("admin@criacerto.com.br");
+        masterAdmin.Email.Should().Be(BackofficeDataSeeder.MasterAdminEmail);
         masterAdmin.IsActive.Should().BeTrue();
         masterAdmin.Roles.Should().Contain(r => r.Name == BackofficeRoles.PlatformOwner);
-        _passwordHasher.VerifyPassword("AdminPassword123!", masterAdmin.PasswordHash).Should().BeTrue();
+        _passwordHasher.VerifyPassword(BackofficeDataSeeder.MasterAdminPassword, masterAdmin.PasswordHash).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task SeedAsync_WhenAnotherAdminExists_ShouldStillCreateBootstrapAdmin()
+    {
+        var otherAdmin = AdminUser.Create(
+            "Outro Admin",
+            "other.admin@criacerto.com.br",
+            _passwordHasher.HashPassword("OtherPassword123!")).Value;
+        _backofficeDb.AdminUsers.Add(otherAdmin);
+        await _backofficeDb.SaveChangesAsync();
+
+        await SystemDataSeeder.SeedDataAsync(_foundationDb, _sanitaryDb, _backofficeDb, _passwordHasher, null, CancellationToken.None);
+
+        var adminUsers = await _backofficeDb.AdminUsers
+            .Include(u => u.Roles)
+            .ToListAsync();
+
+        adminUsers.Should().HaveCount(2);
+        adminUsers.Should().Contain(u => u.Email == BackofficeDataSeeder.MasterAdminEmail);
+        adminUsers.Single(u => u.Email == BackofficeDataSeeder.MasterAdminEmail)
+            .Roles.Should().Contain(r => r.Name == BackofficeRoles.PlatformOwner);
     }
 
     [Fact]
     public async Task SeedAsync_WhenExecutedMultipleTimes_ShouldBeIdempotentWithoutDuplicates()
     {
         // First seed
-        await SystemDataSeeder.SeedDataAsync(_foundationDb, _sanitaryDb, _backofficeDb, _passwordHasher, CancellationToken.None);
+        await SystemDataSeeder.SeedDataAsync(_foundationDb, _sanitaryDb, _backofficeDb, _passwordHasher, null, CancellationToken.None);
         var breedsInitialCount = await _foundationDb.BovineBreeds.CountAsync();
         var vaccinesInitialCount = await _sanitaryDb.VaccineReferences.CountAsync();
         var permissionsInitialCount = await _backofficeDb.Permissions.CountAsync();
@@ -126,8 +150,8 @@ public class SystemDataSeederIntegrationTests : IDisposable
         var usersInitialCount = await _backofficeDb.AdminUsers.CountAsync();
 
         // Second & Third seeds
-        await SystemDataSeeder.SeedDataAsync(_foundationDb, _sanitaryDb, _backofficeDb, _passwordHasher, CancellationToken.None);
-        await SystemDataSeeder.SeedDataAsync(_foundationDb, _sanitaryDb, _backofficeDb, _passwordHasher, CancellationToken.None);
+        await SystemDataSeeder.SeedDataAsync(_foundationDb, _sanitaryDb, _backofficeDb, _passwordHasher, null, CancellationToken.None);
+        await SystemDataSeeder.SeedDataAsync(_foundationDb, _sanitaryDb, _backofficeDb, _passwordHasher, null, CancellationToken.None);
 
         // Assert
         (await _foundationDb.BovineBreeds.CountAsync()).Should().Be(breedsInitialCount);
@@ -140,7 +164,7 @@ public class SystemDataSeederIntegrationTests : IDisposable
     [Fact]
     public async Task GetReferenceBreedsQuery_ShouldReturnPopulatedBreedsWithResultSuccess()
     {
-        await SystemDataSeeder.SeedDataAsync(_foundationDb, _sanitaryDb, _backofficeDb, _passwordHasher, CancellationToken.None);
+        await SystemDataSeeder.SeedDataAsync(_foundationDb, _sanitaryDb, _backofficeDb, _passwordHasher, null, CancellationToken.None);
 
         var handler = new GetReferenceBreedsQueryHandler(_foundationDb);
         var result = await handler.Handle(new GetReferenceBreedsQuery(), CancellationToken.None);
@@ -153,7 +177,7 @@ public class SystemDataSeederIntegrationTests : IDisposable
     [Fact]
     public async Task GetVaccineCalendarQuery_ShouldReturnPopulatedCalendarWithResultSuccess()
     {
-        await SystemDataSeeder.SeedDataAsync(_foundationDb, _sanitaryDb, _backofficeDb, _passwordHasher, CancellationToken.None);
+        await SystemDataSeeder.SeedDataAsync(_foundationDb, _sanitaryDb, _backofficeDb, _passwordHasher, null, CancellationToken.None);
 
         var handler = new GetVaccineCalendarQueryHandler(_sanitaryDb);
         var result = await handler.Handle(new GetVaccineCalendarQuery(), CancellationToken.None);

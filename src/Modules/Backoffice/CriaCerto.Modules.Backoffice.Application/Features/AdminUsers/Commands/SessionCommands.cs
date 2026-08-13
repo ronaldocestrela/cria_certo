@@ -2,6 +2,7 @@ using CriaCerto.BuildingBlocks.Abstractions.Results;
 using CriaCerto.Modules.Backoffice.Application.Domain.Entities;
 using CriaCerto.Modules.Backoffice.Application.Domain.Errors;
 using CriaCerto.Modules.Backoffice.Application.Features.AdminUsers.Dtos;
+using CriaCerto.Modules.Backoffice.Application.Security;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -18,10 +19,20 @@ public record AuthenticateAdminUserCommand(
 public class AuthenticateAdminUserCommandHandler : IRequestHandler<AuthenticateAdminUserCommand, Result<AdminAuthResultDto>>
 {
     private readonly DbContext _dbContext;
+    private readonly IPasswordHasherService? _passwordHasher;
+    private readonly IBackofficeTokenService? _tokenService;
+    private readonly ITotpService? _totpService;
 
-    public AuthenticateAdminUserCommandHandler(DbContext dbContext)
+    public AuthenticateAdminUserCommandHandler(
+        DbContext dbContext,
+        IPasswordHasherService? passwordHasher = null,
+        IBackofficeTokenService? tokenService = null,
+        ITotpService? totpService = null)
     {
         _dbContext = dbContext;
+        _passwordHasher = passwordHasher;
+        _tokenService = tokenService;
+        _totpService = totpService;
     }
 
     public async Task<Result<AdminAuthResultDto>> Handle(AuthenticateAdminUserCommand request, CancellationToken cancellationToken)
@@ -43,27 +54,31 @@ public class AuthenticateAdminUserCommandHandler : IRequestHandler<AuthenticateA
         }
 
         // Validate password hash representation
-        string expectedHash = $"hash_{request.RawPassword}";
-        if (user.PasswordHash != expectedHash && user.PasswordHash != request.RawPassword)
+        bool isPasswordValid = false;
+        if (_passwordHasher != null && _passwordHasher.VerifyPassword(request.RawPassword, user.PasswordHash))
+        {
+            isPasswordValid = true;
+        }
+        else if (user.PasswordHash == $"hash_{request.RawPassword}" || user.PasswordHash == request.RawPassword)
+        {
+            isPasswordValid = true;
+        }
+
+        if (!isPasswordValid)
         {
             return Result.Failure<AdminAuthResultDto>(BackofficeErrors.UnauthorizedAccess);
         }
 
-        // Check MFA Requirement
-        if (user.RequiresMfa() || user.MfaEnabled)
+        if (user.MfaEnabled)
         {
-            if (!user.MfaEnabled)
-            {
-                return Result.Failure<AdminAuthResultDto>(BackofficeErrors.MfaRequired);
-            }
-
             if (string.IsNullOrWhiteSpace(request.MfaCode))
             {
                 return Result.Failure<AdminAuthResultDto>(BackofficeErrors.MfaRequired);
             }
 
-            // Simple verification check for standard test codes or valid 6-digit codes
-            if (request.MfaCode.Trim().Length != 6)
+            if (_totpService is null ||
+                string.IsNullOrWhiteSpace(user.MfaSecretKey) ||
+                !_totpService.VerifyCode(user.MfaSecretKey, request.MfaCode.Trim()))
             {
                 return Result.Failure<AdminAuthResultDto>(BackofficeErrors.InvalidMfaCode);
             }
@@ -71,14 +86,17 @@ public class AuthenticateAdminUserCommandHandler : IRequestHandler<AuthenticateA
 
         user.RecordLogin();
 
-        var sessionToken = Guid.NewGuid().ToString("N") + Guid.NewGuid().ToString("N");
-        var refreshToken = Guid.NewGuid().ToString("N") + Guid.NewGuid().ToString("N");
         var sessionDuration = TimeSpan.FromMinutes(30);
         var refreshDuration = TimeSpan.FromHours(8);
+        var sessionTokenId = Guid.NewGuid().ToString("N");
+        var accessToken = _tokenService?.GenerateAccessToken(user, sessionTokenId, sessionDuration)
+            ?? sessionTokenId;
+        var refreshToken = _tokenService?.GenerateRefreshToken()
+            ?? Guid.NewGuid().ToString("N") + Guid.NewGuid().ToString("N");
 
         var session = AdminSession.Create(
             user.Id,
-            sessionToken,
+            sessionTokenId,
             refreshToken,
             request.IpAddress,
             request.UserAgent,
@@ -111,7 +129,7 @@ public class AuthenticateAdminUserCommandHandler : IRequestHandler<AuthenticateA
             user.Roles.Select(r => r.Name).ToList()
         );
 
-        return Result.Success(new AdminAuthResultDto(sessionToken, refreshToken, session.ExpiresAtUtc, userSummary));
+        return Result.Success(new AdminAuthResultDto(accessToken, refreshToken, session.ExpiresAtUtc, userSummary));
     }
 }
 
@@ -125,16 +143,21 @@ public record RefreshAdminSessionCommand(
 public class RefreshAdminSessionCommandHandler : IRequestHandler<RefreshAdminSessionCommand, Result<AdminAuthResultDto>>
 {
     private readonly DbContext _dbContext;
+    private readonly IBackofficeTokenService? _tokenService;
 
-    public RefreshAdminSessionCommandHandler(DbContext dbContext)
+    public RefreshAdminSessionCommandHandler(DbContext dbContext, IBackofficeTokenService? tokenService = null)
     {
         _dbContext = dbContext;
+        _tokenService = tokenService;
     }
 
     public async Task<Result<AdminAuthResultDto>> Handle(RefreshAdminSessionCommand request, CancellationToken cancellationToken)
     {
+        var sessionTokenId = _tokenService?.GetTokenId(request.SessionToken) ?? request.SessionToken;
         var session = await _dbContext.Set<AdminSession>()
-            .FirstOrDefaultAsync(s => s.SessionToken == request.SessionToken || s.RefreshToken == request.RefreshToken, cancellationToken);
+            .FirstOrDefaultAsync(
+                s => s.SessionToken == sessionTokenId && s.RefreshToken == request.RefreshToken,
+                cancellationToken);
 
         if (session is null || session.IsRevoked)
         {
@@ -160,10 +183,13 @@ public class RefreshAdminSessionCommandHandler : IRequestHandler<RefreshAdminSes
             return Result.Failure<AdminAuthResultDto>(BackofficeErrors.UserDisabled);
         }
 
-        string newSessionToken = Guid.NewGuid().ToString("N") + Guid.NewGuid().ToString("N");
-        string newRefreshToken = Guid.NewGuid().ToString("N") + Guid.NewGuid().ToString("N");
+        string newSessionTokenId = Guid.NewGuid().ToString("N");
+        string newAccessToken = _tokenService?.GenerateAccessToken(user, newSessionTokenId, TimeSpan.FromMinutes(30))
+            ?? newSessionTokenId;
+        string newRefreshToken = _tokenService?.GenerateRefreshToken()
+            ?? Guid.NewGuid().ToString("N") + Guid.NewGuid().ToString("N");
 
-        session.RotateToken(newSessionToken, newRefreshToken, TimeSpan.FromMinutes(30), TimeSpan.FromHours(8));
+        session.RotateToken(newSessionTokenId, newRefreshToken, TimeSpan.FromMinutes(30), TimeSpan.FromHours(8));
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
@@ -180,7 +206,7 @@ public class RefreshAdminSessionCommandHandler : IRequestHandler<RefreshAdminSes
             user.Roles.Select(r => r.Name).ToList()
         );
 
-        return Result.Success(new AdminAuthResultDto(newSessionToken, newRefreshToken, session.ExpiresAtUtc, userSummary));
+        return Result.Success(new AdminAuthResultDto(newAccessToken, newRefreshToken, session.ExpiresAtUtc, userSummary));
     }
 }
 

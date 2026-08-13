@@ -27,7 +27,13 @@ public class BackofficeDbContext : DbContext
             builder.HasKey(u => u.Id);
             builder.Property(u => u.Name).IsRequired().HasMaxLength(200);
             builder.Property(u => u.Email).IsRequired().HasMaxLength(200);
+            builder.Property(u => u.PasswordHash).IsRequired();
+            builder.Property(u => u.IsActive);
+            builder.Property(u => u.MfaEnabled);
             builder.Property(u => u.MfaSecretKey).HasMaxLength(500);
+            builder.Property(u => u.MustChangePasswordOnNextLogin);
+            builder.Property(u => u.CreatedAtUtc);
+            builder.Property(u => u.LastLoginAtUtc);
             builder.HasIndex(u => u.Email).IsUnique();
             builder.HasMany(u => u.Roles).WithMany();
         });

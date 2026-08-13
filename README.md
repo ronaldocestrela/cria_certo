@@ -170,7 +170,11 @@ dotnet test tests/Unit/CriaCerto.BuildingBlocks.UnitTests/CriaCerto.BuildingBloc
 dotnet run --project src/Host/CriaCerto.Api/CriaCerto.Api.csproj
 ```
 
-Ao iniciar, a API aplica automaticamente as migrations pendentes de todos os `DbContext` registrados no host.
+Ao iniciar, a API aplica automaticamente as migrations EF Core pendentes de todos os `DbContext` registrados no host.
+Para bancos legados sem histórico, a API valida tabelas, colunas, tipos e nulabilidade antes de registrar
+automaticamente o baseline. Se houver drift ou schema parcial, o startup é interrompido sem alterar dados.
+Os scripts manuais em [`scripts/database/baseline/README.md`](scripts/database/baseline/README.md) permanecem
+disponíveis para operações controladas.
 
 Health check:
 

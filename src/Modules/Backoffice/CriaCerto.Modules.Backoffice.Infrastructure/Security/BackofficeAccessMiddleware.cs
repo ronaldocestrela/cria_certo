@@ -8,6 +8,7 @@ public class BackofficeAccessMiddleware
 {
     private readonly RequestDelegate _next;
     private const string BackofficePathPrefix = "/api/v1/backoffice";
+    private const string BackofficeAuthPathPrefix = "/api/v1/backoffice/auth";
 
     public BackofficeAccessMiddleware(RequestDelegate next)
     {
@@ -18,7 +19,8 @@ public class BackofficeAccessMiddleware
     {
         var path = context.Request.Path.Value ?? string.Empty;
 
-        if (path.StartsWith(BackofficePathPrefix, StringComparison.OrdinalIgnoreCase))
+        if (path.StartsWith(BackofficePathPrefix, StringComparison.OrdinalIgnoreCase) &&
+            !path.StartsWith(BackofficeAuthPathPrefix, StringComparison.OrdinalIgnoreCase))
         {
             var user = context.User;
 

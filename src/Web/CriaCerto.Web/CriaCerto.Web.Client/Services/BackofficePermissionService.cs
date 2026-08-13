@@ -103,17 +103,13 @@ public class BackofficePermissionService : IBackofficePermissionService
         if (_authStateProvider is not null)
         {
             var authState = await _authStateProvider.GetAuthenticationStateAsync();
-            return authState.User;
+            if (authState.User.Identity?.IsAuthenticated == true)
+            {
+                return authState.User;
+            }
         }
 
-        var claims = new[]
-        {
-            new Claim(ClaimTypes.NameIdentifier, Guid.NewGuid().ToString()),
-            new Claim(ClaimTypes.Name, "Admin PlatformOwner"),
-            new Claim(ClaimTypes.Role, BackofficeRoles.PlatformOwner),
-            new Claim("is_platform_owner", "true")
-        };
-        var identity = new ClaimsIdentity(claims, "DefaultAuth");
-        return new ClaimsPrincipal(identity);
+        return null;
     }
 }
+

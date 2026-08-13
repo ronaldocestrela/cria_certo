@@ -1,4 +1,5 @@
 using CriaCerto.BuildingBlocks.Abstractions.Tenancy;
+using CriaCerto.BuildingBlocks.Infrastructure.Persistence;
 using CriaCerto.Modules.Sanitary.Application.Contracts;
 using CriaCerto.Modules.Sanitary.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -16,7 +17,7 @@ public static class DependencyInjection
             var connectionProvider = sp.GetRequiredService<ITenantConnectionProvider>();
             options.UseSqlServer(connectionProvider.GetConnectionString(), sqlServerOptions =>
             {
-                sqlServerOptions.EnableRetryOnFailure(maxRetryCount: 3);
+                sqlServerOptions.ConfigureModuleMigrations<SanitaryDbContext>("sanitary");
             });
 
             options.EnableDetailedErrors();

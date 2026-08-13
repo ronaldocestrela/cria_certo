@@ -43,8 +43,8 @@ services:
       - "${API_PORT:-8080}:8080"
     environment:
       ASPNETCORE_ENVIRONMENT: Production
-      ConnectionStrings__SqlServer: "Server=${DB_HOST:-database},${DB_PORT_API:-1433};Database=${DATABASE_NAME:-CriaCertoDb};User Id=sa;Password=${MSSQL_SA_PASSWORD:-Password123!};TrustServerCertificate=True;"
-      ConnectionStrings__DefaultConnection: "Server=${DB_HOST:-database},${DB_PORT_API:-1433};Database=${DATABASE_NAME:-CriaCertoDb};User Id=sa;Password=${MSSQL_SA_PASSWORD:-Password123!};TrustServerCertificate=True;"
+      ConnectionStrings__SqlServer: "Server=${DB_HOST:-database},${DB_PORT_API:-1433};Database=${DATABASE_NAME:-criacerto_foundation};User Id=sa;Password=${MSSQL_SA_PASSWORD:-Password123!};TrustServerCertificate=True;"
+      ConnectionStrings__DefaultConnection: "Server=${DB_HOST:-database},${DB_PORT_API:-1433};Database=${DATABASE_NAME:-criacerto_foundation};User Id=sa;Password=${MSSQL_SA_PASSWORD:-Password123!};TrustServerCertificate=True;"
       JwtSettings__Secret: "${JWT_SECRET:-CriaCertoProductionSecureJwtKey2026!32Bytes}"
       Jwt__SecretKey: "${JWT_SECRET:-CriaCertoProductionSecureJwtKey2026!32Bytes}"
       JwtSettings__Issuer: "CriaCerto.Api"

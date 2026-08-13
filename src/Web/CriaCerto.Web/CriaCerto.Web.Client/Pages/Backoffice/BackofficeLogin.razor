@@ -1,0 +1,434 @@
+@page "/backoffice/login"
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@layout EmptyLayout
+@inject IBackofficeApiClient BackofficeApiClient
+@inject Auth.CustomAuthStateProvider AuthStateProvider
+@inject NavigationManager Navigation
+
+<PageTitle>Login Administrativo | Backoffice CriaCerto</PageTitle>
+
+<div class="backoffice-login-container">
+    <div class="login-card">
+        <header class="login-header">
+            <div class="brand-badge">
+                <span class="badge-dot"></span>
+                <span>SaaS Governance</span>
+            </div>
+            <h1 class="brand-title">CriaCerto Backoffice</h1>
+            <p class="brand-subtitle">Portal de Administração Global & Operações</p>
+        </header>
+
+        @if (!string.IsNullOrEmpty(_errorMessage))
+        {
+            <div class="alert-box error">
+                <span class="alert-icon">⚠️</span>
+                <span>@_errorMessage</span>
+            </div>
+        }
+
+        @if (_currentStep == LoginStep.Credentials)
+        {
+            <EditForm Model="@_loginModel" OnValidSubmit="HandleLoginSubmit" class="login-form">
+                <DataAnnotationsValidator />
+
+                <div class="form-group">
+                    <label class="form-label">E-MAIL ADMINISTRATIVO</label>
+                    <InputText @bind-Value="_loginModel.Email" 
+                               class="form-input" 
+                               placeholder="admin@criacerto.com.br" 
+                               type="email" 
+                               disabled="@_isLoading" />
+                    <ValidationMessage For="@(() => _loginModel.Email)" class="form-error" />
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">SENHA DE ACESSO</label>
+                    <InputText @bind-Value="_loginModel.Password" 
+                               class="form-input" 
+                               placeholder="••••••••••••" 
+                               type="password" 
+                               disabled="@_isLoading" />
+                    <ValidationMessage For="@(() => _loginModel.Password)" class="form-error" />
+                </div>
+
+                <button class="btn-submit" type="submit" disabled="@_isLoading">
+                    @if (_isLoading)
+                    {
+                        <span class="spinner-sm"></span>
+                        <span>Autenticando...</span>
+                    }
+                    else
+                    {
+                        <span>Entrar no Backoffice &rarr;</span>
+                    }
+                </button>
+            </EditForm>
+        }
+        else if (_currentStep == LoginStep.MfaChallenge)
+        {
+            <div class="mfa-step">
+                <div class="mfa-header">
+                    <span class="mfa-icon">🛡️</span>
+                    <h3>Autenticação em Duas Etapas (MFA)</h3>
+                    <p>Insira o código de 6 dígitos gerado pelo seu aplicativo autenticador.</p>
+                </div>
+
+                <EditForm Model="@_loginModel" OnValidSubmit="HandleLoginSubmit" class="login-form">
+                    <div class="form-group">
+                        <label class="form-label">CÓDIGO TOTP (6 DÍGITOS)</label>
+                        <InputText @bind-Value="_loginModel.MfaCode" 
+                                   class="form-input text-center font-mono text-lg tracking-widest" 
+                                   placeholder="000 000" 
+                                   maxlength="6" 
+                                   disabled="@_isLoading" />
+                    </div>
+
+                    <div class="mfa-actions">
+                        <button class="btn-secondary" type="button" @onclick="BackToCredentials" disabled="@_isLoading">
+                            &larr; Voltar
+                        </button>
+                        <button class="btn-submit flex-1" type="submit" disabled="@_isLoading">
+                            @if (_isLoading)
+                            {
+                                <span class="spinner-sm"></span>
+                                <span>Verificando...</span>
+                            }
+                            else
+                            {
+                                <span>Confirmar Código</span>
+                            }
+                        </button>
+                    </div>
+                </EditForm>
+            </div>
+        }
+
+        <footer class="login-footer">
+            <div class="footer-badges">
+                <span>🔒 Retenção Auditada</span>
+                <span>•</span>
+                <span>🛡️ RBAC Granular</span>
+            </div>
+            <p class="footer-copy">Ambiente restrito a pessoal autorizado.</p>
+        </footer>
+    </div>
+</div>
+
+<style>
+    .backoffice-login-container {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: radial-gradient(circle at 50% 20%, #1e293b 0%, #090d16 80%);
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        color: #f8fafc;
+        padding: 1.5rem;
+    }
+
+    .login-card {
+        width: 100%;
+        max-width: 440px;
+        background: rgba(15, 23, 42, 0.85);
+        backdrop-filter: blur(16px);
+        border: 1px solid #1e293b;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+        border-radius: 1rem;
+        padding: 2.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+    }
+
+    .login-header {
+        text-align: center;
+    }
+
+    .brand-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        background: rgba(56, 189, 248, 0.1);
+        border: 1px solid rgba(56, 189, 248, 0.2);
+        color: #38bdf8;
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        padding: 0.35rem 0.75rem;
+        border-radius: 9999px;
+        margin-bottom: 0.75rem;
+    }
+
+    .badge-dot {
+        width: 6px;
+        height: 6px;
+        background-color: #38bdf8;
+        border-radius: 50%;
+        box-shadow: 0 0 8px #38bdf8;
+    }
+
+    .brand-title {
+        font-size: 1.6rem;
+        font-weight: 800;
+        margin: 0;
+        color: #ffffff;
+        letter-spacing: -0.02em;
+    }
+
+    .brand-subtitle {
+        font-size: 0.875rem;
+        color: #94a3b8;
+        margin-top: 0.35rem;
+    }
+
+    .alert-box {
+        padding: 0.85rem 1rem;
+        border-radius: 0.5rem;
+        font-size: 0.875rem;
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+    }
+
+    .alert-box.error {
+        background-color: rgba(239, 68, 68, 0.15);
+        border: 1px solid rgba(239, 68, 68, 0.3);
+        color: #fca5a5;
+    }
+
+    .login-form {
+        display: flex;
+        flex-direction: column;
+        gap: 1.25rem;
+    }
+
+    .form-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+    }
+
+    .form-label {
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: #cbd5e1;
+        letter-spacing: 0.05em;
+    }
+
+    .form-input {
+        width: 100%;
+        height: 46px;
+        padding: 0 1rem;
+        border-radius: 0.5rem;
+        background-color: #090d16;
+        border: 1px solid #334155;
+        color: #f8fafc;
+        font-size: 0.95rem;
+        transition: all 0.2s ease;
+        box-sizing: border-box;
+    }
+
+    .form-input:focus {
+        outline: none;
+        border-color: #38bdf8;
+        box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2);
+    }
+
+    .form-error {
+        font-size: 0.75rem;
+        color: #fca5a5;
+    }
+
+    .btn-submit {
+        height: 48px;
+        width: 100%;
+        background: linear-gradient(135deg, #0284c7, #2563eb);
+        color: #ffffff;
+        font-weight: 700;
+        font-size: 0.95rem;
+        border: none;
+        border-radius: 0.5rem;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+    }
+
+    .btn-submit:hover:not(:disabled) {
+        background: linear-gradient(135deg, #0369a1, #1d4ed8);
+        transform: translateY(-1px);
+    }
+
+    .btn-submit:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+
+    .btn-secondary {
+        height: 48px;
+        padding: 0 1.25rem;
+        background: #1e293b;
+        color: #e2e8f0;
+        font-weight: 600;
+        border: 1px solid #334155;
+        border-radius: 0.5rem;
+        cursor: pointer;
+        transition: background 0.2s ease;
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+        background: #334155;
+    }
+
+    .mfa-step {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .mfa-header {
+        text-align: center;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.4rem;
+    }
+
+    .mfa-icon {
+        font-size: 2rem;
+    }
+
+    .mfa-header h3 {
+        margin: 0;
+        font-size: 1.1rem;
+        color: #f8fafc;
+    }
+
+    .mfa-header p {
+        margin: 0;
+        font-size: 0.85rem;
+        color: #94a3b8;
+    }
+
+    .mfa-actions {
+        display: flex;
+        gap: 0.75rem;
+        margin-top: 0.5rem;
+    }
+
+    .spinner-sm {
+        width: 16px;
+        height: 16px;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        border-top-color: #ffffff;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+    }
+
+    @@keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+
+    .login-footer {
+        border-top: 1px solid #1e293b;
+        padding-top: 1.25rem;
+        text-align: center;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .footer-badges {
+        font-size: 0.75rem;
+        color: #64748b;
+        display: flex;
+        justify-content: center;
+        gap: 0.6rem;
+    }
+
+    .footer-copy {
+        margin: 0;
+        font-size: 0.75rem;
+        color: #475569;
+    }
+</style>
+
+@code {
+    private LoginModel _loginModel = new();
+    private bool _isLoading;
+    private string? _errorMessage;
+    private LoginStep _currentStep = LoginStep.Credentials;
+
+    private enum LoginStep
+    {
+        Credentials,
+        MfaChallenge
+    }
+
+    private class LoginModel
+    {
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "O e-mail é obrigatório.")]
+        [System.ComponentModel.DataAnnotations.EmailAddress(ErrorMessage = "Insira um e-mail válido.")]
+        public string Email { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "A senha é obrigatória.")]
+        public string Password { get; set; } = string.Empty;
+
+        public string? MfaCode { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        if (authState.User.Identity?.IsAuthenticated == true &&
+            (authState.User.IsInRole("PlatformOwner") || authState.User.HasClaim(c => c.Type == "is_platform_owner" || c.Type == "is_backoffice_admin")))
+        {
+            Navigation.NavigateTo("/backoffice/dashboard");
+        }
+    }
+
+    private async Task HandleLoginSubmit()
+    {
+        _isLoading = true;
+        _errorMessage = null;
+
+        try
+        {
+            var loginResponse = await BackofficeApiClient.LoginAsync(_loginModel.Email, _loginModel.Password, _loginModel.MfaCode);
+
+            if (loginResponse.IsSuccess && loginResponse.AuthResult is not null)
+            {
+                await AuthStateProvider.MarkUserAsAuthenticated(loginResponse.AuthResult.SessionToken);
+                Navigation.NavigateTo("/backoffice/dashboard");
+                return;
+            }
+
+            if (loginResponse.MfaRequired)
+            {
+                _currentStep = LoginStep.MfaChallenge;
+                _errorMessage = loginResponse.ErrorMessage;
+                return;
+            }
+
+            _errorMessage = loginResponse.ErrorMessage ?? "Credenciais inválidas ou e-mail/senha incorretos.";
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Erro de conexão com o servidor: {ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void BackToCredentials()
+    {
+        _currentStep = LoginStep.Credentials;
+        _errorMessage = null;
+    }
+}

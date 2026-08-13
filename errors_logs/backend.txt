@@ -1,0 +1,108 @@
+2026-08-13 14:25:07.085 | fail: Microsoft.EntityFrameworkCore.Database.Command[20102]
+2026-08-13 14:25:07.086 |       Failed executing DbCommand (2ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+2026-08-13 14:25:07.086 |       CREATE TABLE [foundation].[bovine_breeds] (
+2026-08-13 14:25:07.086 |           [Id] uniqueidentifier NOT NULL,
+2026-08-13 14:25:07.086 |           [Code] nvarchar(20) NOT NULL,
+2026-08-13 14:25:07.086 |           [Name] nvarchar(100) NOT NULL,
+2026-08-13 14:25:07.086 |           [Category] nvarchar(50) NOT NULL,
+2026-08-13 14:25:07.086 |           [Aptitude] nvarchar(50) NOT NULL,
+2026-08-13 14:25:07.086 |           [Origin] nvarchar(50) NOT NULL,
+2026-08-13 14:25:07.086 |           [IsOfficial] bit NOT NULL,
+2026-08-13 14:25:07.086 |           CONSTRAINT [PK_bovine_breeds] PRIMARY KEY ([Id])
+2026-08-13 14:25:07.086 |       );
+2026-08-13 14:25:07.270 | fail: Microsoft.EntityFrameworkCore.Database.Command[20102]
+2026-08-13 14:25:07.270 |       Failed executing DbCommand (1ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+2026-08-13 14:25:07.270 |       CREATE TABLE [tenancy].[Tenants] (
+2026-08-13 14:25:07.270 |           [Id] uniqueidentifier NOT NULL,
+2026-08-13 14:25:07.270 |           [Name] nvarchar(150) NOT NULL,
+2026-08-13 14:25:07.270 |           [CNPJ] nvarchar(20) NOT NULL,
+2026-08-13 14:25:07.270 |           [Status] nvarchar(50) NOT NULL,
+2026-08-13 14:25:07.270 |           [SubscribedPlan] nvarchar(50) NOT NULL,
+2026-08-13 14:25:07.270 |           [Capacity] int NOT NULL,
+2026-08-13 14:25:07.270 |           [State] nvarchar(50) NOT NULL,
+2026-08-13 14:25:07.270 |           [City] nvarchar(100) NOT NULL,
+2026-08-13 14:25:07.270 |           [StateRegistration] nvarchar(50) NOT NULL,
+2026-08-13 14:25:07.270 |           [AreaInHectares] decimal(18,2) NOT NULL,
+2026-08-13 14:25:07.270 |           [Type] nvarchar(100) NOT NULL,
+2026-08-13 14:25:07.270 |           CONSTRAINT [PK_Tenants] PRIMARY KEY ([Id])
+2026-08-13 14:25:07.270 |       );
+2026-08-13 14:25:07.338 | fail: Microsoft.EntityFrameworkCore.Database.Command[20102]
+2026-08-13 14:25:07.338 |       Failed executing DbCommand (1ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+2026-08-13 14:25:07.338 |       CREATE TABLE [breeding].[Bulls] (
+2026-08-13 14:25:07.338 |           [Id] uniqueidentifier NOT NULL,
+2026-08-13 14:25:07.338 |           [EarTag] nvarchar(50) NOT NULL,
+2026-08-13 14:25:07.338 |           [Name] nvarchar(100) NOT NULL,
+2026-08-13 14:25:07.338 |           [Breed] nvarchar(100) NOT NULL,
+2026-08-13 14:25:07.338 |           [RegistryNumber] nvarchar(50) NULL,
+2026-08-13 14:25:07.338 |           [BirthDate] datetime2 NULL,
+2026-08-13 14:25:07.338 |           [IsActive] bit NOT NULL,
+2026-08-13 14:25:07.338 |           [TenantId] uniqueidentifier NOT NULL,
+2026-08-13 14:25:07.338 |           CONSTRAINT [PK_Bulls] PRIMARY KEY ([Id])
+2026-08-13 14:25:07.338 |       );
+2026-08-13 14:25:07.418 | fail: Microsoft.EntityFrameworkCore.Database.Command[20102]
+2026-08-13 14:25:07.418 |       Failed executing DbCommand (1ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+2026-08-13 14:25:07.418 |       CREATE TABLE [calving].[Calves] (
+2026-08-13 14:25:07.418 |           [Id] uniqueidentifier NOT NULL,
+2026-08-13 14:25:07.418 |           [TagId] nvarchar(50) NOT NULL,
+2026-08-13 14:25:07.418 |           [MotherCowId] uniqueidentifier NOT NULL,
+2026-08-13 14:25:07.418 |           [BirthDate] datetime2 NOT NULL,
+2026-08-13 14:25:07.418 |           [Sex] nvarchar(5) NOT NULL,
+2026-08-13 14:25:07.418 |           [Breed] nvarchar(100) NOT NULL,
+2026-08-13 14:25:07.418 |           [BirthWeightKg] decimal(18,2) NOT NULL,
+2026-08-13 14:25:07.418 |           [Status] nvarchar(40) NOT NULL,
+2026-08-13 14:25:07.418 |           [TenantId] uniqueidentifier NOT NULL,
+2026-08-13 14:25:07.418 |           CONSTRAINT [PK_Calves] PRIMARY KEY ([Id])
+2026-08-13 14:25:07.418 |       );
+2026-08-13 14:25:07.462 | fail: Microsoft.EntityFrameworkCore.Database.Command[20102]
+2026-08-13 14:25:07.462 |       Failed executing DbCommand (1ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+2026-08-13 14:25:07.462 |       CREATE TABLE [growth].[LotMovements] (
+2026-08-13 14:25:07.462 |           [Id] uniqueidentifier NOT NULL,
+2026-08-13 14:25:07.462 |           [LotId] uniqueidentifier NOT NULL,
+2026-08-13 14:25:07.462 |           [SourcePaddockId] uniqueidentifier NULL,
+2026-08-13 14:25:07.462 |           [DestinationPaddockId] uniqueidentifier NULL,
+2026-08-13 14:25:07.462 |           [MovementDate] datetime2 NOT NULL,
+2026-08-13 14:25:07.462 |           [HeadCountMoved] int NOT NULL,
+2026-08-13 14:25:07.462 |           [Notes] nvarchar(500) NOT NULL,
+2026-08-13 14:25:07.462 |           [TenantId] uniqueidentifier NOT NULL,
+2026-08-13 14:25:07.462 |           CONSTRAINT [PK_LotMovements] PRIMARY KEY ([Id])
+2026-08-13 14:25:07.462 |       );
+2026-08-13 14:25:07.497 | fail: Microsoft.EntityFrameworkCore.Database.Command[20102]
+2026-08-13 14:25:07.497 |       Failed executing DbCommand (1ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+2026-08-13 14:25:07.497 |       CREATE TABLE [nutrition].[DailyFeedBatches] (
+2026-08-13 14:25:07.497 |           [Id] uniqueidentifier NOT NULL,
+2026-08-13 14:25:07.497 |           [TenantId] uniqueidentifier NOT NULL,
+2026-08-13 14:25:07.497 |           [LotId] uniqueidentifier NOT NULL,
+2026-08-13 14:25:07.497 |           [FeedRationId] uniqueidentifier NOT NULL,
+2026-08-13 14:25:07.497 |           [FeedingTime] datetime2 NOT NULL,
+2026-08-13 14:25:07.497 |           [OfferedAsFedKg] decimal(18,2) NOT NULL,
+2026-08-13 14:25:07.497 |           [OfferedDryMatterKg] decimal(18,2) NOT NULL,
+2026-08-13 14:25:07.497 |           [TroughScore] int NOT NULL,
+2026-08-13 14:25:07.497 |           [HeadCountAtFeeding] int NOT NULL,
+2026-08-13 14:25:07.497 |           CONSTRAINT [PK_DailyFeedBatches] PRIMARY KEY ([Id])
+2026-08-13 14:25:07.497 |       );
+2026-08-13 14:25:07.523 | fail: Microsoft.EntityFrameworkCore.Database.Command[20102]
+2026-08-13 14:25:07.523 |       Failed executing DbCommand (1ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+2026-08-13 14:25:07.523 |       CREATE TABLE [sanitary].[treatment_records] (
+2026-08-13 14:25:07.523 |           [Id] uniqueidentifier NOT NULL,
+2026-08-13 14:25:07.523 |           [AnimalId] uniqueidentifier NULL,
+2026-08-13 14:25:07.523 |           [LotId] uniqueidentifier NULL,
+2026-08-13 14:25:07.523 |           [ProductCommercialName] nvarchar(150) NOT NULL,
+2026-08-13 14:25:07.523 |           [Type] int NOT NULL,
+2026-08-13 14:25:07.523 |           [BatchNumber] nvarchar(50) NULL,
+2026-08-13 14:25:07.523 |           [Dosage] nvarchar(50) NOT NULL,
+2026-08-13 14:25:07.523 |           [WithdrawalDays] int NOT NULL,
+2026-08-13 14:25:07.523 |           [ApplicationDateUtc] datetime2 NOT NULL,
+2026-08-13 14:25:07.523 |           [WithdrawalEndDateUtc] datetime2 NOT NULL,
+2026-08-13 14:25:07.523 |           [AppliedByVeterinarian] nvarchar(150) NULL,
+2026-08-13 14:25:07.523 |           [Notes] nvarchar(500) NULL,
+2026-08-13 14:25:07.523 |           [CreatedAtUtc] datetime2 NOT NULL,
+2026-08-13 14:25:07.523 |           CONSTRAINT [PK_treatment_records] PRIMARY KEY ([Id])
+2026-08-13 14:25:07.523 |       );
+2026-08-13 14:25:07.584 | fail: Microsoft.EntityFrameworkCore.Database.Command[20102]
+2026-08-13 14:25:07.584 |       Failed executing DbCommand (1ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+2026-08-13 14:25:07.584 |       CREATE TABLE [backoffice].[AdminRoles] (
+2026-08-13 14:25:07.584 |           [Id] uniqueidentifier NOT NULL,
+2026-08-13 14:25:07.584 |           [Name] nvarchar(100) NOT NULL,
+2026-08-13 14:25:07.584 |           [Description] nvarchar(max) NOT NULL,
+2026-08-13 14:25:07.584 |           CONSTRAINT [PK_AdminRoles] PRIMARY KEY ([Id])
+2026-08-13 14:25:07.584 |       );

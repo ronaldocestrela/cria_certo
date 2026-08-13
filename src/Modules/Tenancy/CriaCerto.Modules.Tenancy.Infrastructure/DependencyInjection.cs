@@ -1,3 +1,4 @@
+using CriaCerto.BuildingBlocks.Infrastructure.Persistence;
 using CriaCerto.Modules.Tenancy.Application.Abstractions;
 using CriaCerto.Modules.Tenancy.Infrastructure.Persistence;
 using CriaCerto.Modules.Tenancy.Infrastructure.Services;
@@ -21,7 +22,7 @@ public static class DependencyInjection
         {
             options.UseSqlServer(connectionString, sqlServerOptions =>
             {
-                sqlServerOptions.EnableRetryOnFailure(maxRetryCount: 3);
+                sqlServerOptions.ConfigureModuleMigrations<TenancyDbContext>("tenancy");
             });
         });
 

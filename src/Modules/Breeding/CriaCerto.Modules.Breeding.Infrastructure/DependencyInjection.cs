@@ -1,4 +1,5 @@
 using CriaCerto.BuildingBlocks.Abstractions.Tenancy;
+using CriaCerto.BuildingBlocks.Infrastructure.Persistence;
 using CriaCerto.Modules.Breeding.Application.Abstractions;
 using CriaCerto.Modules.Breeding.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -15,7 +16,7 @@ public static class DependencyInjection
             var connectionProvider = sp.GetRequiredService<ITenantConnectionProvider>();
             options.UseSqlServer(connectionProvider.GetConnectionString(), sqlServerOptions =>
             {
-                sqlServerOptions.EnableRetryOnFailure(maxRetryCount: 3);
+                sqlServerOptions.ConfigureModuleMigrations<BreedingDbContext>("breeding");
             });
 
             options.EnableDetailedErrors();

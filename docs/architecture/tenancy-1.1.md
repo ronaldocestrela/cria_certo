@@ -11,10 +11,8 @@ Establish the core identity models, database-per-tenant connection resolution, a
 - **UserTenant**: Join table mapping users to multiple tenants.
 
 ### 2. Database Isolation Strategy
-- **Master Database (`criacerto_foundation`)**: Contains the global `tenancy` schema (`Users`, `Tenants`, `UserTenants` tables) to authenticate and resolve user-tenant mappings.
-- **Tenant Database (`criacerto_tenant_{TenantId:N}`)**: Independent database catalog dynamically resolved per request using:
-  - `ITenantContext`: Reads claims from `ClaimsPrincipal`.
-  - `ITenantConnectionProvider`: Constructs dynamic connection strings pointing to the tenant's database.
+- **Master Database (catálogo configurável via connection string, padrão `criacerto_foundation`)**: Contém os schemas globais `foundation`, `tenancy`, `backoffice` e, no startup, também recebe os schemas dos módulos tenant enquanto não há `TenantId` no contexto HTTP.
+- **Tenant Database (`criacerto_tenant_{TenantId:N}`)**: Catálogo independente provisionado por tenant com os schemas `breeding`, `calving`, `growth`, `nutrition` e `sanitary`.
 
 ---
 

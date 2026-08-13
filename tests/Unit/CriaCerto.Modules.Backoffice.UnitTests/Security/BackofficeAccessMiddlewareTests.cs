@@ -57,6 +57,50 @@ public class BackofficeAccessMiddlewareTests
     }
 
     [Fact]
+    public async Task InvokeAsync_WhenRouteIsBackofficeAuthLogin_ShouldBypassMiddleware()
+    {
+        // Arrange
+        var nextCalled = false;
+        var middleware = new BackofficeAccessMiddleware(next: _ =>
+        {
+            nextCalled = true;
+            return Task.CompletedTask;
+        });
+
+        var context = new DefaultHttpContext();
+        context.Request.Path = "/api/v1/backoffice/auth/login";
+
+        // Act
+        await middleware.InvokeAsync(context, _evaluator);
+
+        // Assert
+        nextCalled.Should().BeTrue();
+        context.Response.StatusCode.Should().Be(StatusCodes.Status200OK);
+    }
+
+    [Fact]
+    public async Task InvokeAsync_WhenRouteIsBackofficeAuthRefresh_ShouldBypassMiddleware()
+    {
+        // Arrange
+        var nextCalled = false;
+        var middleware = new BackofficeAccessMiddleware(next: _ =>
+        {
+            nextCalled = true;
+            return Task.CompletedTask;
+        });
+
+        var context = new DefaultHttpContext();
+        context.Request.Path = "/api/v1/backoffice/auth/refresh";
+
+        // Act
+        await middleware.InvokeAsync(context, _evaluator);
+
+        // Assert
+        nextCalled.Should().BeTrue();
+        context.Response.StatusCode.Should().Be(StatusCodes.Status200OK);
+    }
+
+    [Fact]
     public async Task InvokeAsync_WhenRouteIsNotBackoffice_ShouldBypassMiddleware()
     {
         // Arrange

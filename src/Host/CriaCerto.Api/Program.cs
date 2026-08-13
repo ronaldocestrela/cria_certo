@@ -186,11 +186,11 @@ var app = builder.Build();
 
 if (app.Services.GetService<CriaCerto.BuildingBlocks.Abstractions.Tenancy.ITenantDatabaseProvisioner>() is CriaCerto.BuildingBlocks.Infrastructure.Tenancy.TenantDatabaseProvisioner provisioner)
 {
-    provisioner.RegisterTenantDbContextType(typeof(BreedingDbContext));
-    provisioner.RegisterTenantDbContextType(typeof(CalvingDbContext));
-    provisioner.RegisterTenantDbContextType(typeof(GrowthDbContext));
-    provisioner.RegisterTenantDbContextType(typeof(NutritionDbContext));
-    provisioner.RegisterTenantDbContextType(typeof(SanitaryDbContext));
+    provisioner.RegisterTenantDbContextType(typeof(BreedingDbContext), "breeding");
+    provisioner.RegisterTenantDbContextType(typeof(CalvingDbContext), "calving");
+    provisioner.RegisterTenantDbContextType(typeof(GrowthDbContext), "growth");
+    provisioner.RegisterTenantDbContextType(typeof(NutritionDbContext), "nutrition");
+    provisioner.RegisterTenantDbContextType(typeof(SanitaryDbContext), "sanitary");
 }
 
 ApplyMigrations(app);
@@ -856,67 +856,7 @@ static void ApplyMigrations(WebApplication app)
 
     foreach (var dbContext in dbContexts)
     {
-        try
-        {
-            if (dbContext.Database.IsRelational())
-            {
-                var databaseCreator = dbContext.Database.GetService<IDatabaseCreator>() as RelationalDatabaseCreator;
-                if (databaseCreator != null)
-                {
-                    if (!databaseCreator.Exists())
-                    {
-                        databaseCreator.Create();
-                    }
-
-                    var defaultSchema = dbContext.Model.GetDefaultSchema();
-                    if (!string.IsNullOrWhiteSpace(defaultSchema))
-                    {
-                        try
-                        {
-                            var createSchemaSql = $@"
-                                IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = '{defaultSchema}')
-                                BEGIN
-                                    EXEC('CREATE SCHEMA [{defaultSchema}]')
-                                END";
-                            dbContext.Database.ExecuteSqlRaw(createSchemaSql);
-                        }
-                        catch
-                        {
-                            // Schema creation fallback if already existing or unsupported
-                        }
-                    }
-
-                    try
-                    {
-                        databaseCreator.CreateTables();
-                        logger.LogInformation("Tables created for DbContext {DbContextName}", dbContext.GetType().Name);
-                    }
-                    catch
-                    {
-                        // Tables may already exist
-                    }
-                }
-
-                try
-                {
-                    dbContext.Database.Migrate();
-                    logger.LogInformation("Migrations applied for DbContext {DbContextName}", dbContext.GetType().Name);
-                }
-                catch
-                {
-                    // Ignore migration errors if no migration history/files
-                }
-            }
-            else
-            {
-                dbContext.Database.EnsureCreated();
-                logger.LogInformation("EnsureCreated applied for non-relational DbContext {DbContextName}", dbContext.GetType().Name);
-            }
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "Note for DbContext {DbContextName} during startup migration/schema check.", dbContext.GetType().Name);
-        }
+        DatabaseMigrationRunner.ApplyMigrations(dbContext, logger);
     }
 }
 

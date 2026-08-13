@@ -1,3 +1,4 @@
+using CriaCerto.BuildingBlocks.Infrastructure.Persistence;
 using CriaCerto.Modules.Backoffice.Application.Security;
 using CriaCerto.Modules.Backoffice.Infrastructure.Persistence;
 using CriaCerto.Modules.Backoffice.Infrastructure.Security;
@@ -6,6 +7,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using DbContext = Microsoft.EntityFrameworkCore.DbContext;
 
 namespace CriaCerto.Modules.Backoffice.Infrastructure;
 
@@ -21,8 +23,11 @@ public static class BackofficeModuleExtensions
 
         services.AddDbContext<BackofficeDbContext>(options =>
         {
-            options.UseSqlServer(connectionString, b => b.MigrationsAssembly(typeof(BackofficeDbContext).Assembly.FullName));
+            options.UseSqlServer(connectionString, sql =>
+                sql.ConfigureModuleMigrations<BackofficeDbContext>("backoffice"));
         });
+
+        services.AddScoped<DbContext>(sp => sp.GetRequiredService<BackofficeDbContext>());
 
         // Register Granular RBAC & Policy Authorization Services
         services.AddScoped<IPermissionEvaluator, PermissionEvaluatorService>();
@@ -32,6 +37,7 @@ public static class BackofficeModuleExtensions
         // Register Security & IAM Services
         services.AddSingleton<IPasswordHasherService, PasswordHasherService>();
         services.AddSingleton<ITotpService, TotpService>();
+        services.AddSingleton<IBackofficeTokenService, BackofficeTokenService>();
 
         return services;
     }

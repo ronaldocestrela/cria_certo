@@ -23,10 +23,7 @@ public sealed class TenantConnectionProvider : ITenantConnectionProvider
         var tenantId = _tenantContext.TenantId;
         if (tenantId == null)
         {
-            // Default/Foundation database catalog
-            var builder = new SqlConnectionStringBuilder(_baseConnectionString);
-            builder.InitialCatalog = "criacerto_foundation";
-            return builder.ConnectionString;
+            return _baseConnectionString;
         }
 
         var tenantBuilder = new SqlConnectionStringBuilder(_baseConnectionString);

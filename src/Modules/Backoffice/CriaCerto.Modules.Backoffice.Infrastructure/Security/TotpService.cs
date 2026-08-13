@@ -1,15 +1,8 @@
 using System.Security.Cryptography;
 using System.Text;
+using CriaCerto.Modules.Backoffice.Application.Security;
 
 namespace CriaCerto.Modules.Backoffice.Infrastructure.Security;
-
-public interface ITotpService
-{
-    string GenerateSecretKey();
-    string GenerateQrCodeUri(string email, string secretKey, string issuer = "CriaCerto Backoffice");
-    bool VerifyCode(string secretKey, string code, int timeWindowSeconds = 30);
-    List<string> GenerateRecoveryCodes(int count = 8);
-}
 
 public class TotpService : ITotpService
 {

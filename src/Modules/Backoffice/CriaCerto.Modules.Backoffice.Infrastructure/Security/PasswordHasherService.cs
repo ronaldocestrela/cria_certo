@@ -1,13 +1,8 @@
 using System.Security.Cryptography;
 using System.Text;
+using CriaCerto.Modules.Backoffice.Application.Security;
 
 namespace CriaCerto.Modules.Backoffice.Infrastructure.Security;
-
-public interface IPasswordHasherService
-{
-    string HashPassword(string password);
-    bool VerifyPassword(string password, string hashedPassword);
-}
 
 public class PasswordHasherService : IPasswordHasherService
 {

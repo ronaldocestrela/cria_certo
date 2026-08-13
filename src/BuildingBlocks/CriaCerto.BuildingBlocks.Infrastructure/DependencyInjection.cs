@@ -22,7 +22,7 @@ public static class DependencyInjection
         {
             options.UseSqlServer(connectionString, sqlServerOptions =>
             {
-                sqlServerOptions.EnableRetryOnFailure(maxRetryCount: 3);
+                sqlServerOptions.ConfigureModuleMigrations<FoundationDbContext>("foundation");
             });
 
             options.EnableDetailedErrors();

@@ -1,9 +1,8 @@
 using System.Collections.Concurrent;
 using CriaCerto.BuildingBlocks.Abstractions.Tenancy;
+using CriaCerto.BuildingBlocks.Infrastructure.Persistence;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
@@ -11,12 +10,12 @@ namespace CriaCerto.BuildingBlocks.Infrastructure.Tenancy;
 
 public sealed class TenantDatabaseProvisioner : ITenantDatabaseProvisioner
 {
-    private static readonly ConcurrentDictionary<Guid, bool> _provisionedTenants = new();
-    private static readonly SemaphoreSlim _semaphore = new(1, 1);
+    private static readonly ConcurrentDictionary<Guid, bool> ProvisionedTenants = new();
+    private static readonly SemaphoreSlim Semaphore = new(1, 1);
 
     private readonly IConfiguration _configuration;
     private readonly ILogger<TenantDatabaseProvisioner> _logger;
-    private readonly List<Type> _tenantDbContextTypes = new();
+    private readonly Dictionary<Type, string> _tenantDbContextTypes = new();
 
     public TenantDatabaseProvisioner(IConfiguration configuration, ILogger<TenantDatabaseProvisioner> logger)
     {
@@ -24,27 +23,35 @@ public sealed class TenantDatabaseProvisioner : ITenantDatabaseProvisioner
         _logger = logger;
     }
 
-    public void RegisterTenantDbContextType(Type dbContextType)
+    public void RegisterTenantDbContextType(Type dbContextType, string historySchema)
     {
         if (!typeof(DbContext).IsAssignableFrom(dbContextType))
-            throw new ArgumentException($"Tipo {dbContextType.Name} não é um DbContext.", nameof(dbContextType));
-
-        if (!_tenantDbContextTypes.Contains(dbContextType))
         {
-            _tenantDbContextTypes.Add(dbContextType);
+            throw new ArgumentException($"Tipo {dbContextType.Name} não é um DbContext.", nameof(dbContextType));
         }
+
+        if (string.IsNullOrWhiteSpace(historySchema))
+        {
+            throw new ArgumentException("Schema de histórico de migrations é obrigatório.", nameof(historySchema));
+        }
+
+        _tenantDbContextTypes[dbContextType] = historySchema;
     }
 
     public async Task EnsureTenantDatabaseAsync(Guid tenantId, CancellationToken cancellationToken = default)
     {
-        if (_provisionedTenants.ContainsKey(tenantId))
+        if (ProvisionedTenants.ContainsKey(tenantId))
+        {
             return;
+        }
 
-        await _semaphore.WaitAsync(cancellationToken);
+        await Semaphore.WaitAsync(cancellationToken);
         try
         {
-            if (_provisionedTenants.ContainsKey(tenantId))
+            if (ProvisionedTenants.ContainsKey(tenantId))
+            {
                 return;
+            }
 
             _logger.LogInformation("Garantindo inicialização do banco de dados para tenant {TenantId}...", tenantId);
 
@@ -58,55 +65,18 @@ public sealed class TenantDatabaseProvisioner : ITenantDatabaseProvisioner
             };
             var tenantConnectionString = tenantBuilder.ConnectionString;
 
-            foreach (var dbContextType in _tenantDbContextTypes)
+            foreach (var (dbContextType, historySchema) in _tenantDbContextTypes)
             {
                 var optionsBuilderType = typeof(DbContextOptionsBuilder<>).MakeGenericType(dbContextType);
                 var optionsBuilder = (DbContextOptionsBuilder)Activator.CreateInstance(optionsBuilderType)!;
-                optionsBuilder.UseSqlServer(tenantConnectionString, sqlOptions =>
-                {
-                    sqlOptions.EnableRetryOnFailure(maxRetryCount: 3);
-                });
 
-                using var dbContext = (DbContext)Activator.CreateInstance(dbContextType, optionsBuilder.Options)!;
+                ConfigureTenantDbContextOptions(optionsBuilder, dbContextType, historySchema, tenantConnectionString);
 
-                if (dbContext.Database.IsRelational())
-                {
-                    var databaseCreator = dbContext.Database.GetService<IDatabaseCreator>() as RelationalDatabaseCreator;
-                    if (databaseCreator != null)
-                    {
-                        if (!await databaseCreator.ExistsAsync(cancellationToken))
-                        {
-                            await databaseCreator.CreateAsync(cancellationToken);
-                            _logger.LogInformation("Banco de dados criacerto_tenant_{TenantId:N} criado com sucesso.", tenantId);
-                        }
-
-                        try
-                        {
-                            await databaseCreator.CreateTablesAsync(cancellationToken);
-                            _logger.LogInformation("Tabelas criadas para {DbContextName} no tenant {TenantId}.", dbContextType.Name, tenantId);
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogDebug(ex, "Tabelas para {DbContextName} já existem no tenant {TenantId}.", dbContextType.Name, tenantId);
-                        }
-
-                        try
-                        {
-                            await EnsureBirthDateNullableAsync(dbContext, cancellationToken);
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogDebug(ex, "Falha ao ajustar colunas nulas em {DbContextName} no tenant {TenantId}.", dbContextType.Name, tenantId);
-                        }
-                    }
-                }
-                else
-                {
-                    await dbContext.Database.EnsureCreatedAsync(cancellationToken);
-                }
+                await using var dbContext = (DbContext)Activator.CreateInstance(dbContextType, optionsBuilder.Options)!;
+                await DatabaseMigrationRunner.ApplyMigrationsAsync(dbContext, _logger, cancellationToken);
             }
 
-            _provisionedTenants.TryAdd(tenantId, true);
+            ProvisionedTenants.TryAdd(tenantId, true);
             _logger.LogInformation("Inicialização do banco de dados do tenant {TenantId} concluída.", tenantId);
         }
         catch (Exception ex)
@@ -116,33 +86,23 @@ public sealed class TenantDatabaseProvisioner : ITenantDatabaseProvisioner
         }
         finally
         {
-            _semaphore.Release();
+            Semaphore.Release();
         }
     }
 
-    private static async Task EnsureBirthDateNullableAsync(DbContext dbContext, CancellationToken cancellationToken)
+    private static void ConfigureTenantDbContextOptions(
+        DbContextOptionsBuilder optionsBuilder,
+        Type dbContextType,
+        string historySchema,
+        string connectionString)
     {
-        var alterSql = @"
-            IF EXISTS (
-                SELECT 1 FROM sys.columns c
-                JOIN sys.tables t ON c.object_id = t.object_id
-                JOIN sys.schemas s ON t.schema_id = s.schema_id
-                WHERE s.name = 'breeding' AND t.name = 'Cows' AND c.name = 'BirthDate' AND c.is_nullable = 0
-            )
-            BEGIN
-                ALTER TABLE [breeding].[Cows] ALTER COLUMN [BirthDate] DATETIME2 NULL;
-            END;
+        optionsBuilder.UseSqlServer(connectionString, sqlOptions =>
+        {
+            var configureMethod = typeof(SqlServerMigrationExtensions)
+                .GetMethod(nameof(SqlServerMigrationExtensions.ConfigureModuleMigrations))!
+                .MakeGenericMethod(dbContextType);
 
-            IF EXISTS (
-                SELECT 1 FROM sys.columns c
-                JOIN sys.tables t ON c.object_id = t.object_id
-                JOIN sys.schemas s ON t.schema_id = s.schema_id
-                WHERE s.name = 'breeding' AND t.name = 'Bulls' AND c.name = 'BirthDate' AND c.is_nullable = 0
-            )
-            BEGIN
-                ALTER TABLE [breeding].[Bulls] ALTER COLUMN [BirthDate] DATETIME2 NULL;
-            END;";
-
-        await dbContext.Database.ExecuteSqlRawAsync(alterSql, cancellationToken);
+            configureMethod.Invoke(null, [sqlOptions, historySchema]);
+        });
     }
 }

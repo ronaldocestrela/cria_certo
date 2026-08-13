@@ -7,6 +7,7 @@ using CriaCerto.Modules.Tenancy.Application.Features.Login;
 using CriaCerto.Modules.Tenancy.Application.Features.SelectTenant;
 using CriaCerto.Modules.Tenancy.Infrastructure.Persistence;
 using FluentAssertions;
+using Microsoft.Data.SqlClient;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -68,7 +69,7 @@ public class TenancyTests : IDisposable
 
         var configuration = Substitute.For<IConfiguration>();
         configuration.GetConnectionString("SqlServer")
-            .Returns("Server=localhost;User Id=sa;Password=CriaCerto@123;TrustServerCertificate=True;Encrypt=False");
+            .Returns("Server=localhost;Database=criacerto_foundation;User Id=sa;Password=CriaCerto@123;TrustServerCertificate=True;Encrypt=False");
 
         var provider = new TenantConnectionProvider(tenantContext, configuration);
 
@@ -76,7 +77,8 @@ public class TenancyTests : IDisposable
         var connectionString = provider.GetConnectionString();
 
         // Assert
-        connectionString.Should().Contain("Initial Catalog=criacerto_foundation");
+        new SqlConnectionStringBuilder(connectionString).InitialCatalog
+            .Should().Be("criacerto_foundation");
     }
 
     [Fact]
