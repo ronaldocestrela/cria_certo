@@ -1,0 +1,314 @@
+@page "/backoffice/dashboard"
+@layout BackofficeLayout
+@inject IBackofficeApiClient ApiClient
+
+<PageTitle>Dashboard Operacional | Backoffice CriaCerto</PageTitle>
+
+<div class="dashboard-container">
+    <div class="dashboard-banner">
+        <div>
+            <h2>Visão Geral da Plataforma SaaS</h2>
+            <p>Acompanhamento em tempo real de tenants, saúde do sistema, faturamento e inadimplência.</p>
+        </div>
+        <button class="btn-refresh" @onclick="LoadDashboardData">
+            🔄 Atualizar Indicadores
+        </button>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Carregando KPIs administrativos...</p>
+        </div>
+    }
+    else if (kpis is not null)
+    {
+        <div class="kpi-grid">
+            <div class="kpi-card accent-blue">
+                <div class="kpi-header">
+                    <span class="kpi-title">TOTAL DE TENANTS</span>
+                    <span class="kpi-icon">🏢</span>
+                </div>
+                <div class="kpi-value">@kpis.TotalTenants</div>
+                <div class="kpi-footer">
+                    <span class="badge-success">@kpis.ActiveTenants Ativos</span>
+                    <span class="badge-info">@kpis.TrialTenants Em Trial</span>
+                </div>
+            </div>
+
+            <div class="kpi-card accent-emerald">
+                <div class="kpi-header">
+                    <span class="kpi-title">ASSINATURAS ATIVAS</span>
+                    <span class="kpi-icon">💳</span>
+                </div>
+                <div class="kpi-value">@kpis.ActiveSubscriptionsCount</div>
+                <div class="kpi-footer">
+                    <span class="kpi-subtext">MRR Estimado: <strong>R$ @kpis.MonthlyRecurringRevenue.ToString("N2")</strong></span>
+                </div>
+            </div>
+
+            <div class="kpi-card accent-rose">
+                <div class="kpi-header">
+                    <span class="kpi-title">INADIMPLÊNCIA / PAST DUE</span>
+                    <span class="kpi-icon">⚠️</span>
+                </div>
+                <div class="kpi-value">@kpis.PastDueTenants</div>
+                <div class="kpi-footer">
+                    <span class="kpi-subtext">Taxa de Inadimplência: <strong>@kpis.DelinquencyRatePercentage.ToString("F1")%</strong></span>
+                </div>
+            </div>
+
+            <div class="kpi-card accent-purple">
+                <div class="kpi-header">
+                    <span class="kpi-title">SAÚDE DO SISTEMA</span>
+                    <span class="kpi-icon">🟢</span>
+                </div>
+                <div class="kpi-value health-text">@kpis.SystemHealthStatus</div>
+                <div class="kpi-footer">
+                    <span class="kpi-subtext">Calculado às @kpis.CalculatedAtUtc.ToLocalTime().ToString("HH:mm:ss")</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="dashboard-sections">
+            <div class="section-card">
+                <h3>Ações Rápidas de Governança</h3>
+                <div class="actions-grid">
+                    <a href="backoffice/tenants" class="action-btn">
+                        <span class="action-icon">➕</span>
+                        <span>Gerenciar Tenants</span>
+                    </a>
+                    <a href="backoffice/plans" class="action-btn">
+                        <span class="action-icon">📋</span>
+                        <span>Catálogo de Planos</span>
+                    </a>
+                    <a href="backoffice/users" class="action-btn">
+                        <span class="action-icon">🛡️</span>
+                        <span>Acessos & MFA</span>
+                    </a>
+                    <a href="backoffice/audit" class="action-btn">
+                        <span class="action-icon">🔍</span>
+                        <span>Trilha de Auditoria</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<style>
+    .dashboard-container {
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+    }
+
+    .dashboard-banner {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1.5rem;
+        background: linear-gradient(135deg, #1e293b, #0f172a);
+        border: 1px solid #334155;
+        border-radius: 0.75rem;
+    }
+
+    .dashboard-banner h2 {
+        margin: 0;
+        font-size: 1.35rem;
+        color: #ffffff;
+    }
+
+    .dashboard-banner p {
+        margin: 0.25rem 0 0 0;
+        color: #94a3b8;
+        font-size: 0.9rem;
+    }
+
+    .btn-refresh {
+        background: #38bdf8;
+        color: #0f172a;
+        border: none;
+        padding: 0.6rem 1.2rem;
+        border-radius: 0.5rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.2s ease;
+    }
+
+    .btn-refresh:hover {
+        background: #7dd3fc;
+    }
+
+    .kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 1.25rem;
+    }
+
+    .kpi-card {
+        background: #0f172a;
+        border: 1px solid #1e293b;
+        border-radius: 0.75rem;
+        padding: 1.25rem;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        gap: 1rem;
+        transition: transform 0.2s ease, border-color 0.2s ease;
+    }
+
+    .kpi-card:hover {
+        transform: translateY(-2px);
+        border-color: #334155;
+    }
+
+    .accent-blue { border-top: 3px solid #38bdf8; }
+    .accent-emerald { border-top: 3px solid #10b981; }
+    .accent-rose { border-top: 3px solid #f43f5e; }
+    .accent-purple { border-top: 3px solid #a855f7; }
+
+    .kpi-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .kpi-title {
+        font-size: 0.7rem;
+        font-weight: 700;
+        color: #64748b;
+        letter-spacing: 0.05em;
+    }
+
+    .kpi-icon {
+        font-size: 1.2rem;
+    }
+
+    .kpi-value {
+        font-size: 2rem;
+        font-weight: 800;
+        color: #ffffff;
+    }
+
+    .health-text {
+        font-size: 1.5rem;
+        color: #4ade80;
+    }
+
+    .kpi-footer {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+    }
+
+    .badge-success {
+        background: rgba(34, 197, 94, 0.15);
+        color: #4ade80;
+        font-size: 0.75rem;
+        padding: 0.2rem 0.5rem;
+        border-radius: 0.25rem;
+        font-weight: 600;
+    }
+
+    .badge-info {
+        background: rgba(56, 189, 248, 0.15);
+        color: #38bdf8;
+        font-size: 0.75rem;
+        padding: 0.2rem 0.5rem;
+        border-radius: 0.25rem;
+        font-weight: 600;
+    }
+
+    .kpi-subtext {
+        font-size: 0.8rem;
+        color: #94a3b8;
+    }
+
+    .dashboard-sections {
+        margin-top: 1rem;
+    }
+
+    .section-card {
+        background: #0f172a;
+        border: 1px solid #1e293b;
+        border-radius: 0.75rem;
+        padding: 1.5rem;
+    }
+
+    .section-card h3 {
+        margin: 0 0 1rem 0;
+        font-size: 1.1rem;
+        color: #f1f5f9;
+    }
+
+    .actions-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 1rem;
+    }
+
+    .action-btn {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 1.25rem 1rem;
+        background: #1e293b;
+        border-radius: 0.5rem;
+        color: #e2e8f0;
+        text-decoration: none;
+        font-weight: 600;
+        font-size: 0.9rem;
+        transition: background 0.2s ease, color 0.2s ease;
+    }
+
+    .action-btn:hover {
+        background: #334155;
+        color: #38bdf8;
+    }
+
+    .action-icon {
+        font-size: 1.5rem;
+    }
+
+    .loading-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 3rem;
+        gap: 1rem;
+        color: #94a3b8;
+    }
+
+    .spinner {
+        width: 32px;
+        height: 32px;
+        border: 3px solid #1e293b;
+        border-top-color: #38bdf8;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+
+    @@keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+</style>
+
+@code {
+    private BackofficeDashboardKpisModel? kpis;
+    private bool isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDashboardData();
+    }
+
+    private async Task LoadDashboardData()
+    {
+        isLoading = true;
+        kpis = await ApiClient.GetDashboardKpisAsync();
+        isLoading = false;
+    }
+}

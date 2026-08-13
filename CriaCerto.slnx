@@ -37,6 +37,10 @@
     <Project Path="src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/CriaCerto.Modules.Tenancy.Application.csproj" />
     <Project Path="src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Infrastructure/CriaCerto.Modules.Tenancy.Infrastructure.csproj" />
   </Folder>
+  <Folder Name="/src/Modules/Backoffice/">
+    <Project Path="src/Modules/Backoffice/CriaCerto.Modules.Backoffice.Application/CriaCerto.Modules.Backoffice.Application.csproj" />
+    <Project Path="src/Modules/Backoffice/CriaCerto.Modules.Backoffice.Infrastructure/CriaCerto.Modules.Backoffice.Infrastructure.csproj" />
+  </Folder>
   <Folder Name="/src/Web/" />
   <Folder Name="/src/Web/CriaCerto.Web/">
     <Project Path="src/Web/CriaCerto.Web/CriaCerto.Web.Client/CriaCerto.Web.Client.csproj" />
@@ -55,6 +59,7 @@
     <Project Path="tests/Unit/CriaCerto.Modules.Sanitary.UnitTests/CriaCerto.Modules.Sanitary.UnitTests.csproj" />
     <Project Path="tests/Unit/CriaCerto.Modules.Analytics.UnitTests/CriaCerto.Modules.Analytics.UnitTests.csproj" />
     <Project Path="tests/Unit/CriaCerto.Modules.Tenancy.UnitTests/CriaCerto.Modules.Tenancy.UnitTests.csproj" />
+    <Project Path="tests/Unit/CriaCerto.Modules.Backoffice.UnitTests/CriaCerto.Modules.Backoffice.UnitTests.csproj" />
     <Project Path="tests/Unit/CriaCerto.Web.Client.UnitTests/CriaCerto.Web.Client.UnitTests.csproj" />
   </Folder>
 </Solution>

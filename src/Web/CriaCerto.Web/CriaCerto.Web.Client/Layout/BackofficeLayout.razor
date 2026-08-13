@@ -1,0 +1,110 @@
+@inherits LayoutComponentBase
+@using CriaCerto.Web.Client.Components.Backoffice
+
+<div class="backoffice-shell">
+    <aside class="backoffice-sidebar">
+        <BackofficeNavMenu />
+    </aside>
+
+    <main class="backoffice-main">
+        <header class="backoffice-header">
+            <div class="header-left">
+                <span class="header-tag">Módulo Administrativo Global</span>
+                <h1 class="header-title">Governança SaaS & Operações</h1>
+            </div>
+
+            <div class="header-right">
+                <div class="admin-badge">
+                    <span class="status-indicator"></span>
+                    <span class="admin-name">Admin PlatformOwner</span>
+                </div>
+            </div>
+        </header>
+
+        <section class="backoffice-content">
+            <CustomErrorBoundary>
+                @Body
+            </CustomErrorBoundary>
+        </section>
+    </main>
+</div>
+
+<style>
+    .backoffice-shell {
+        display: grid;
+        grid-template-columns: 260px 1fr;
+        min-height: 100vh;
+        background-color: #090d16;
+        color: #f8fafc;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    }
+
+    .backoffice-sidebar {
+        border-right: 1px solid #1e293b;
+        background: #0f172a;
+    }
+
+    .backoffice-main {
+        display: flex;
+        flex-direction: column;
+        overflow-y: auto;
+    }
+
+    .backoffice-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1.25rem 2rem;
+        background: #0f172a;
+        border-bottom: 1px solid #1e293b;
+    }
+
+    .header-tag {
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: #38bdf8;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .header-title {
+        font-size: 1.25rem;
+        font-weight: 700;
+        margin: 0.2rem 0 0 0;
+        color: #ffffff;
+    }
+
+    .admin-badge {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.4rem 0.8rem;
+        background: #1e293b;
+        border-radius: 9999px;
+        border: 1px solid #334155;
+        font-size: 0.85rem;
+        color: #e2e8f0;
+    }
+
+    .status-indicator {
+        width: 8px;
+        height: 8px;
+        background-color: #22c55e;
+        border-radius: 50%;
+        box-shadow: 0 0 8px #22c55e;
+    }
+
+    .backoffice-content {
+        padding: 2rem;
+        flex: 1;
+    }
+
+    @@media (max-width: 768px) {
+        .backoffice-shell {
+            grid-template-columns: 1fr;
+        }
+        .backoffice-sidebar {
+            display: none;
+        }
+    }
+</style>

@@ -64,6 +64,11 @@ using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.IdentityModel.Tokens;
 
+using CriaCerto.Modules.Backoffice.Application;
+using CriaCerto.Modules.Backoffice.Application.Features.Dashboard;
+using CriaCerto.Modules.Backoffice.Infrastructure;
+using CriaCerto.Modules.Backoffice.Infrastructure.Persistence;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Configure Data Protection to persist keys across container restarts
@@ -88,7 +93,8 @@ builder.Services.AddBuildingBlocksApplication(
     typeof(NutritionAssemblyMarker).Assembly,
     typeof(VaccinationCampaignDto).Assembly,
     typeof(ExecutiveScorecardDto).Assembly,
-    typeof(TenancyAssemblyMarker).Assembly);
+    typeof(TenancyAssemblyMarker).Assembly,
+    typeof(BackofficeAssemblyMarker).Assembly);
 
 var connectionString = builder.Configuration.GetConnectionString("SqlServer")
     ?? builder.Configuration.GetConnectionString("DefaultConnection")
@@ -102,6 +108,7 @@ builder.Services.AddCalvingInfrastructure();
 builder.Services.AddGrowthInfrastructure();
 builder.Services.AddNutritionInfrastructure();
 builder.Services.AddSanitaryModule(builder.Configuration);
+builder.Services.AddBackofficeInfrastructure(builder.Configuration);
 
 // Configure CORS Policy
 var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() 
@@ -198,9 +205,19 @@ app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseTenantDatabase();
+app.UseBackofficeModule();
 
 app.MapGet("/health", () => Results.Ok(new { status = "healthy", service = "CriaCerto.Api" }))
     .WithName("Health");
+
+// --- BACKOFFICE ADMIN ENDPOINTS ---
+var backoffice = app.MapGroup("/api/v1/backoffice").RequireAuthorization();
+
+backoffice.MapGet("/dashboard/kpis", async (ISender sender) =>
+{
+    var result = await sender.Send(new GetBackofficeDashboardKpisQuery());
+    return ToHttpResult(result);
+}).WithTags("Backoffice");
 
 // Auth Endpoints
 app.MapPost("/api/auth/login", async (LoginCommand command, ISender sender) =>
@@ -702,7 +719,8 @@ static void ApplyMigrations(WebApplication app)
         scope.ServiceProvider.GetRequiredService<CalvingDbContext>(),
         scope.ServiceProvider.GetRequiredService<GrowthDbContext>(),
         scope.ServiceProvider.GetRequiredService<NutritionDbContext>(),
-        scope.ServiceProvider.GetRequiredService<SanitaryDbContext>()
+        scope.ServiceProvider.GetRequiredService<SanitaryDbContext>(),
+        scope.ServiceProvider.GetRequiredService<BackofficeDbContext>()
     };
 
     foreach (var dbContext in dbContexts)

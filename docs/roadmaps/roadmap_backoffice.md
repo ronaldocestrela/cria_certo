@@ -51,7 +51,7 @@ As entregas estão organizadas em **6 Fases Sequenciais**, cobrindo fundação d
 
 ### Phase 1: Fundação de Backoffice, IAM e Permissões Granulares
 
-#### Sub-fase 1.1: Módulo Administrativo Global (`Modules.Backoffice`) [PLANEJADA]
+#### Sub-fase 1.1: Módulo Administrativo Global (`Modules.Backoffice`) [CONCLUÍDA]
 * **Backend (.NET 10):**
   * Criar módulo interno de backoffice com boundaries próprios (sem acoplamento direto cross-module).
   * Definir agregados iniciais: `AdminUser`, `AdminRole`, `Permission`, `AdminSession`, `AuditLog`.

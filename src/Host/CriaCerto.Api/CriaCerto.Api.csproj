@@ -28,6 +28,8 @@
     <ProjectReference Include="..\..\Modules\Analytics\CriaCerto.Modules.Analytics.Infrastructure\CriaCerto.Modules.Analytics.Infrastructure.csproj" />
     <ProjectReference Include="..\..\Modules\Tenancy\CriaCerto.Modules.Tenancy.Application\CriaCerto.Modules.Tenancy.Application.csproj" />
     <ProjectReference Include="..\..\Modules\Tenancy\CriaCerto.Modules.Tenancy.Infrastructure\CriaCerto.Modules.Tenancy.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\Modules\Backoffice\CriaCerto.Modules.Backoffice.Application\CriaCerto.Modules.Backoffice.Application.csproj" />
+    <ProjectReference Include="..\..\Modules\Backoffice\CriaCerto.Modules.Backoffice.Infrastructure\CriaCerto.Modules.Backoffice.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>
