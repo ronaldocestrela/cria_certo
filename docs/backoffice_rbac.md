@@ -74,3 +74,18 @@ Utilize o componente `<PermissionGuard>`:
     </Authorized>
 </PermissionGuard>
 ```
+
+---
+
+## 6. Autenticação Multi-Fator (MFA) e Gestão de Sessões
+
+### MFA Obrigatório
+Contas administrativas que possuam permissões sensíveis (`impersonation.start`, `impersonation.stop`, `plans.publish`, `tenants.suspend`) exigem obrigatoriamente autenticação de dois fatores (TOTP / RFC 6238).
+- Na tentativa de login de usuários com permissões sensíveis sem MFA ativado ou sem envio de `MfaCode`, a API responde com o erro padronizado `Backoffice.MfaRequired`.
+- Desativação de MFA para contas com permissões sensíveis é bloqueada via regra de negócio (`Backoffice.MfaRequiredForRole`).
+
+### Governança de Sessões (`AdminSession`)
+- **TTL de Sessão**: 30 minutos por token de sessão (`SessionToken`).
+- **TTL de Refresh**: 8 horas por refresh token (`RefreshToken`) com rotação automática (*Refresh Token Rotation*).
+- **Revogação em Tempo Real**: Desativação de conta ou alteração de senha revoga imediatamente todas as sessões ativas do usuário.
+- **Trilha de Auditoria**: Todas as operações de login, rotação de credenciais, MFA e revogação de sessões geram registros imutáveis em `AuditLog`.

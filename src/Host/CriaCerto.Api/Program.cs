@@ -210,6 +210,11 @@ app.UseBackofficeModule();
 app.MapGet("/health", () => Results.Ok(new { status = "healthy", service = "CriaCerto.Api" }))
     .WithName("Health");
 
+using CriaCerto.Modules.Backoffice.Application.Features.AdminUsers.Commands;
+using CriaCerto.Modules.Backoffice.Application.Features.AdminUsers.Queries;
+using CriaCerto.Modules.Backoffice.Application.Features.AdminUsers.Dtos;
+using CriaCerto.Modules.Backoffice.Application.Security;
+
 // --- BACKOFFICE ADMIN ENDPOINTS ---
 var backoffice = app.MapGroup("/api/v1/backoffice").RequireAuthorization();
 
@@ -218,6 +223,133 @@ backoffice.MapGet("/dashboard/kpis", async (ISender sender) =>
     var result = await sender.Send(new GetBackofficeDashboardKpisQuery());
     return ToHttpResult(result);
 }).WithTags("Backoffice");
+
+// Admin Users Management Endpoints
+backoffice.MapGet("/users", async (
+    string? searchTerm,
+    bool? isActive,
+    string? roleName,
+    int? page,
+    int? pageSize,
+    ISender sender) =>
+{
+    var query = new GetAdminUsersQuery(searchTerm, isActive, roleName, page ?? 1, pageSize ?? 20);
+    var result = await sender.Send(query);
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.UsersAdminManage)).WithTags("Backoffice IAM");
+
+backoffice.MapGet("/users/{id:guid}", async (Guid id, ISender sender) =>
+{
+    var result = await sender.Send(new GetAdminUserByIdQuery(id));
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.UsersAdminManage)).WithTags("Backoffice IAM");
+
+backoffice.MapPost("/users", async (CreateAdminUserRequest req, HttpContext ctx, ISender sender) =>
+{
+    var callerId = Guid.Empty;
+    var callerEmail = ctx.User.Identity?.Name ?? "admin@criacerto.com.br";
+    var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "127.0.0.1";
+    var command = new CreateAdminUserCommand(req.Name, req.Email, req.RawPassword, req.RoleIds, callerId, callerEmail, ip);
+    var result = await sender.Send(command);
+    return ToHttpResult(result, StatusCodes.Status201Created);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.UsersAdminManage)).WithTags("Backoffice IAM");
+
+backoffice.MapPut("/users/{id:guid}", async (Guid id, UpdateAdminUserRequest req, HttpContext ctx, ISender sender) =>
+{
+    var callerId = Guid.Empty;
+    var callerEmail = ctx.User.Identity?.Name ?? "admin@criacerto.com.br";
+    var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "127.0.0.1";
+    var command = new UpdateAdminUserCommand(id, req.Name, req.Email, req.RoleIds, callerId, callerEmail, ip);
+    var result = await sender.Send(command);
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.UsersAdminManage)).WithTags("Backoffice IAM");
+
+backoffice.MapPatch("/users/{id:guid}/status", async (Guid id, ToggleStatusRequest req, HttpContext ctx, ISender sender) =>
+{
+    var callerId = Guid.Empty;
+    var callerEmail = ctx.User.Identity?.Name ?? "admin@criacerto.com.br";
+    var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "127.0.0.1";
+    var command = new ToggleAdminUserStatusCommand(id, req.IsActive, callerId, callerEmail, ip);
+    var result = await sender.Send(command);
+    return result.IsSuccess ? Results.Ok() : Results.Json(result.Error, statusCode: ToStatusCode(result.Error.Type));
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.UsersAdminManage)).WithTags("Backoffice IAM");
+
+backoffice.MapPost("/users/{id:guid}/reset-password", async (Guid id, ResetPasswordRequest req, HttpContext ctx, ISender sender) =>
+{
+    var callerId = Guid.Empty;
+    var callerEmail = ctx.User.Identity?.Name ?? "admin@criacerto.com.br";
+    var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "127.0.0.1";
+    var command = new ResetAdminUserPasswordCommand(id, req.NewRawPassword, callerId, callerEmail, ip);
+    var result = await sender.Send(command);
+    return result.IsSuccess ? Results.Ok() : Results.Json(result.Error, statusCode: ToStatusCode(result.Error.Type));
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.UsersAdminManage)).WithTags("Backoffice IAM");
+
+// MFA Endpoints
+backoffice.MapPost("/users/{id:guid}/mfa/setup", async (Guid id, ISender sender) =>
+{
+    var result = await sender.Send(new GenerateMfaSetupCommand(id));
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.UsersAdminManage)).WithTags("Backoffice MFA");
+
+backoffice.MapPost("/users/{id:guid}/mfa/enable", async (Guid id, EnableMfaRequest req, HttpContext ctx, ISender sender) =>
+{
+    var callerId = Guid.Empty;
+    var callerEmail = ctx.User.Identity?.Name ?? "admin@criacerto.com.br";
+    var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "127.0.0.1";
+    var command = new EnableMfaCommand(id, req.SecretKey, req.VerificationCode, req.RecoveryCodes, callerId, callerEmail, ip);
+    var result = await sender.Send(command);
+    return result.IsSuccess ? Results.Ok() : Results.Json(result.Error, statusCode: ToStatusCode(result.Error.Type));
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.UsersAdminManage)).WithTags("Backoffice MFA");
+
+backoffice.MapPost("/users/{id:guid}/mfa/disable", async (Guid id, HttpContext ctx, ISender sender) =>
+{
+    var callerId = Guid.Empty;
+    var callerEmail = ctx.User.Identity?.Name ?? "admin@criacerto.com.br";
+    var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "127.0.0.1";
+    var command = new DisableMfaCommand(id, callerId, callerEmail, ip);
+    var result = await sender.Send(command);
+    return result.IsSuccess ? Results.Ok() : Results.Json(result.Error, statusCode: ToStatusCode(result.Error.Type));
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.UsersAdminManage)).WithTags("Backoffice MFA");
+
+// Session Management Endpoints
+backoffice.MapDelete("/sessions/{sessionId:guid}", async (Guid sessionId, HttpContext ctx, ISender sender) =>
+{
+    var callerId = Guid.Empty;
+    var callerEmail = ctx.User.Identity?.Name ?? "admin@criacerto.com.br";
+    var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "127.0.0.1";
+    var command = new RevokeAdminSessionCommand(sessionId, callerId, callerEmail, ip);
+    var result = await sender.Send(command);
+    return result.IsSuccess ? Results.Ok() : Results.Json(result.Error, statusCode: ToStatusCode(result.Error.Type));
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.UsersAdminManage)).WithTags("Backoffice Sessions");
+
+backoffice.MapDelete("/users/{id:guid}/sessions", async (Guid id, HttpContext ctx, ISender sender) =>
+{
+    var callerId = Guid.Empty;
+    var callerEmail = ctx.User.Identity?.Name ?? "admin@criacerto.com.br";
+    var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "127.0.0.1";
+    var command = new RevokeAllUserSessionsCommand(id, callerId, callerEmail, ip);
+    var result = await sender.Send(command);
+    return result.IsSuccess ? Results.Ok() : Results.Json(result.Error, statusCode: ToStatusCode(result.Error.Type));
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.UsersAdminManage)).WithTags("Backoffice Sessions");
+
+// Backoffice Auth Endpoints (Anonymous / Credentials + MFA)
+app.MapPost("/api/v1/backoffice/auth/login", async (BackofficeLoginRequest req, HttpContext ctx, ISender sender) =>
+{
+    var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "127.0.0.1";
+    var ua = ctx.Request.Headers.UserAgent.ToString() ?? "Unknown";
+    var command = new AuthenticateAdminUserCommand(req.Email, req.Password, req.MfaCode, ip, ua);
+    var result = await sender.Send(command);
+    return ToHttpResult(result);
+}).AllowAnonymous().WithTags("Backoffice Auth");
+
+app.MapPost("/api/v1/backoffice/auth/refresh", async (RefreshSessionRequest req, HttpContext ctx, ISender sender) =>
+{
+    var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "127.0.0.1";
+    var ua = ctx.Request.Headers.UserAgent.ToString() ?? "Unknown";
+    var command = new RefreshAdminSessionCommand(req.SessionToken, req.RefreshToken, ip, ua);
+    var result = await sender.Send(command);
+    return ToHttpResult(result);
+}).AllowAnonymous().WithTags("Backoffice Auth");
 
 // Auth Endpoints
 app.MapPost("/api/auth/login", async (LoginCommand command, ISender sender) =>
@@ -809,3 +941,11 @@ static int ToStatusCode(ErrorType errorType) => errorType switch
     ErrorType.Unauthorized => StatusCodes.Status403Forbidden,
     _ => StatusCodes.Status400BadRequest
 };
+
+public record CreateAdminUserRequest(string Name, string Email, string RawPassword, List<Guid> RoleIds);
+public record UpdateAdminUserRequest(string Name, string Email, List<Guid> RoleIds);
+public record ToggleStatusRequest(bool IsActive);
+public record ResetPasswordRequest(string NewRawPassword);
+public record EnableMfaRequest(string SecretKey, string VerificationCode, List<string> RecoveryCodes);
+public record BackofficeLoginRequest(string Email, string Password, string? MfaCode);
+public record RefreshSessionRequest(string SessionToken, string RefreshToken);

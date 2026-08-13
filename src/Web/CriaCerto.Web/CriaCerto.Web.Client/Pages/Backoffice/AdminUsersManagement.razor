@@ -1,0 +1,357 @@
+@page "/backoffice/users"
+@layout Layout.BackofficeLayout
+@using CriaCerto.Modules.Backoffice.Application.Security
+@using CriaCerto.Modules.Backoffice.Application.Features.AdminUsers.Dtos
+@using CriaCerto.Modules.Backoffice.Application.Features.AdminUsers.Queries
+@using CriaCerto.Web.Client.Components.Backoffice
+@using CriaCerto.Web.Client.Services
+@inject IBackofficeApiClient ApiClient
+
+<PermissionGuard Permission="@BackofficePermissions.UsersAdminManage">
+    <Authorized>
+        <div class="admin-users-page">
+            <header class="page-header">
+                <div>
+                    <span class="badge-iam">IAM & Segurança</span>
+                    <h1 class="page-title">Usuários Administrativos e Sessões</h1>
+                    <p class="page-subtitle">Gerencie contas do backoffice, privilégios, obrigatoriedade de MFA e revogação de sessões ativas.</p>
+                </div>
+                <button class="btn btn-primary" @onclick="OpenCreateModal">
+                    <span class="icon">+</span> Novo Usuário Admin
+                </button>
+            </header>
+
+            <div class="kpis-grid">
+                <div class="kpi-card">
+                    <span class="kpi-label">Total de Admins</span>
+                    <span class="kpi-value">@(PagedUsers?.TotalCount ?? 0)</span>
+                </div>
+                <div class="kpi-card">
+                    <span class="kpi-label">Contas Ativas</span>
+                    <span class="kpi-value text-success">@(PagedUsers?.Items.Count(u => u.IsActive) ?? 0)</span>
+                </div>
+                <div class="kpi-card">
+                    <span class="kpi-label">Com MFA Ativado</span>
+                    <span class="kpi-value text-info">@(PagedUsers?.Items.Count(u => u.MfaEnabled) ?? 0)</span>
+                </div>
+                <div class="kpi-card">
+                    <span class="kpi-label">MFA Obrigatório (Perfis Sensíveis)</span>
+                    <span class="kpi-value text-warning">@(PagedUsers?.Items.Count(u => u.RequiresMfa) ?? 0)</span>
+                </div>
+            </div>
+
+            <div class="filters-bar">
+                <div class="search-box">
+                    <span class="search-icon">🔍</span>
+                    <input type="text" placeholder="Buscar por nome ou e-mail..." @bind="SearchTerm" @bind:event="oninput" @onkeyup="HandleSearch" />
+                </div>
+
+                <div class="filters-group">
+                    <select class="filter-select" @bind="StatusFilter" @bind:after="LoadData">
+                        <option value="">Todos os Status</option>
+                        <option value="active">Ativo</option>
+                        <option value="inactive">Inativo</option>
+                    </select>
+
+                    <select class="filter-select" @bind="RoleFilter" @bind:after="LoadData">
+                        <option value="">Todos os Papéis</option>
+                        <option value="PlatformOwner">PlatformOwner</option>
+                        <option value="SupportN1">SupportN1</option>
+                        <option value="SupportN2">SupportN2</option>
+                        <option value="FinanceOps">FinanceOps</option>
+                        <option value="ReadOnlyAuditor">ReadOnlyAuditor</option>
+                    </select>
+                </div>
+            </div>
+
+            @if (IsLoading)
+            {
+                <div class="loading-state">
+                    <div class="spinner"></div>
+                    <span>Carregando usuários administrativos...</span>
+                </div>
+            }
+            else if (PagedUsers == null || !PagedUsers.Items.Any())
+            {
+                <div class="empty-state">
+                    <span class="empty-icon">👥</span>
+                    <h3>Nenhum usuário administrativo encontrado</h3>
+                    <p>Tente ajustar seus filtros de busca ou cadastre um novo usuário.</p>
+                </div>
+            }
+            else
+            {
+                <div class="table-container">
+                    <table class="users-table">
+                        <thead>
+                            <tr>
+                                <th>Usuário</th>
+                                <th>Status</th>
+                                <th>Papéis (Roles)</th>
+                                <th>Segurança MFA</th>
+                                <th>Último Acesso</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var user in PagedUsers.Items)
+                            {
+                                <tr>
+                                    <td>
+                                        <div class="user-cell">
+                                            <span class="user-name">@user.Name</span>
+                                            <span class="user-email">@user.Email</span>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        @if (user.IsActive)
+                                        {
+                                            <span class="status-badge status-active">Ativo</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="status-badge status-inactive">Inativo</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <div class="roles-tags">
+                                            @foreach (var role in user.Roles)
+                                            {
+                                                <span class="role-tag">@role</span>
+                                            }
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="mfa-status-cell">
+                                            @if (user.MfaEnabled)
+                                            {
+                                                <span class="badge-mfa mfa-active">🔒 Ativado</span>
+                                            }
+                                            else if (user.RequiresMfa)
+                                            {
+                                                <span class="badge-mfa mfa-required">⚠️ Obrigatório (Pendente)</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge-mfa mfa-optional">Opcional</span>
+                                            }
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="last-access">
+                                            @(user.LastLoginAtUtc.HasValue ? user.LastLoginAtUtc.Value.ToLocalTime().ToString("g") : "Nunca acessou")
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div class="actions-cell">
+                                            <button class="btn-action" title="Editar Usuário" @onclick="() => OpenEditModal(user)">✏️</button>
+                                            <button class="btn-action" title="Ver Sessões Ativas" @onclick="() => OpenSessionsModal(user.Id)">🖥️</button>
+                                            <button class="btn-action" title="Configurar MFA" @onclick="() => OpenMfaSetupModal(user.Id)">🔒</button>
+                                            <button class="btn-action" title="Resetar Senha" @onclick="() => ResetPassword(user.Id)">🔑</button>
+                                            <button class="btn-action" title="@(user.IsActive ? "Desativar" : "Ativar")" @onclick="() => ToggleStatus(user.Id, !user.IsActive)">
+                                                @(user.IsActive ? "⛔" : "✅")
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+
+        <AdminUserModal IsOpen="IsUserModalOpen" IsEdit="IsUserModalEdit" UserId="SelectedUserId" Name="@SelectedUserName" Email="@SelectedUserEmail" OnClose="CloseUserModal" OnSave="HandleSaveUser" />
+        <MfaSetupModal IsOpen="IsMfaModalOpen" SecretKey="@MfaSecret" QrCodeUri="@MfaQrUri" RecoveryCodes="MfaRecoveryCodes" OnClose="CloseMfaModal" OnConfirm="HandleConfirmMfa" />
+        <AdminUserSessionsModal IsOpen="IsSessionsModalOpen" UserId="SelectedUserId" Sessions="ActiveSessions" OnClose="CloseSessionsModal" OnRevokeSession="HandleRevokeSession" OnRevokeAllSessions="HandleRevokeAllSessions" />
+    </Authorized>
+    <NotAuthorized>
+        <div class="access-denied-container">
+            <h2>Acesso Negado</h2>
+            <p>Você não possui a permissão necessária (<code>users_admin.manage</code>) para gerenciar usuários administrativos.</p>
+        </div>
+    </NotAuthorized>
+</PermissionGuard>
+
+<style>
+    .admin-users-page { padding: 1.5rem; color: #f8fafc; display: flex; flex-direction: column; gap: 1.5rem; }
+    .page-header { display: flex; justify-content: space-between; align-items: flex-start; }
+    .badge-iam { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; background: #38bdf8; color: #0f172a; padding: 0.2rem 0.5rem; border-radius: 9999px; letter-spacing: 0.05em; }
+    .page-title { font-size: 1.5rem; font-weight: 800; margin: 0.3rem 0; color: #f1f5f9; }
+    .page-subtitle { color: #94a3b8; font-size: 0.9rem; margin: 0; }
+    
+    .kpis-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; }
+    .kpi-card { background: #1e293b; padding: 1rem; border-radius: 0.75rem; border: 1px solid #334155; display: flex; flex-direction: column; gap: 0.4rem; }
+    .kpi-label { font-size: 0.75rem; font-weight: 600; color: #94a3b8; text-transform: uppercase; }
+    .kpi-value { font-size: 1.5rem; font-weight: 800; color: #f8fafc; }
+    .text-success { color: #4ade80; }
+    .text-info { color: #38bdf8; }
+    .text-warning { color: #fbbf24; }
+
+    .filters-bar { display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; background: #1e293b; padding: 0.75rem; border-radius: 0.75rem; border: 1px solid #334155; }
+    .search-box { display: flex; align-items: center; gap: 0.5rem; background: #0f172a; padding: 0.5rem 0.75rem; border-radius: 0.5rem; border: 1px solid #334155; flex: 1; min-width: 250px; }
+    .search-box input { background: transparent; border: none; color: #f8fafc; width: 100%; outline: none; font-size: 0.85rem; }
+    .filters-group { display: flex; gap: 0.5rem; }
+    .filter-select { background: #0f172a; border: 1px solid #334155; color: #f8fafc; padding: 0.5rem 0.75rem; border-radius: 0.5rem; font-size: 0.85rem; outline: none; }
+
+    .table-container { background: #1e293b; border-radius: 0.75rem; border: 1px solid #334155; overflow: hidden; }
+    .users-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.85rem; }
+    .users-table th { background: #0f172a; padding: 0.85rem 1rem; color: #94a3b8; font-weight: 700; border-bottom: 1px solid #334155; }
+    .users-table td { padding: 0.85rem 1rem; border-bottom: 1px solid #334155; color: #cbd5e1; }
+    .user-cell { display: flex; flex-direction: column; }
+    .user-name { font-weight: 700; color: #f8fafc; }
+    .user-email { font-size: 0.75rem; color: #94a3b8; }
+
+    .status-badge { padding: 0.2rem 0.5rem; border-radius: 9999px; font-size: 0.7rem; font-weight: 700; }
+    .status-active { background: rgba(74, 222, 128, 0.15); color: #4ade80; }
+    .status-inactive { background: rgba(248, 113, 113, 0.15); color: #f87171; }
+
+    .roles-tags { display: flex; gap: 0.3rem; flex-wrap: wrap; }
+    .role-tag { background: #0f172a; border: 1px solid #38bdf8; color: #38bdf8; padding: 0.1rem 0.4rem; border-radius: 0.3rem; font-size: 0.7rem; font-weight: 600; }
+
+    .badge-mfa { padding: 0.2rem 0.5rem; border-radius: 0.3rem; font-size: 0.7rem; font-weight: 600; }
+    .mfa-active { background: rgba(56, 189, 248, 0.15); color: #38bdf8; }
+    .mfa-required { background: rgba(251, 191, 36, 0.15); color: #fbbf24; }
+    .mfa-optional { background: rgba(148, 163, 184, 0.15); color: #94a3b8; }
+
+    .actions-cell { display: flex; gap: 0.3rem; }
+    .btn-action { background: #0f172a; border: 1px solid #334155; color: #f8fafc; border-radius: 0.3rem; padding: 0.3rem 0.5rem; cursor: pointer; transition: all 0.2s; }
+    .btn-action:hover { background: #334155; }
+
+    .btn-primary { background: #0284c7; color: #ffffff; padding: 0.6rem 1rem; border-radius: 0.5rem; border: none; font-weight: 700; cursor: pointer; }
+    .btn-primary:hover { background: #0369a1; }
+    .loading-state, .empty-state { text-align: center; padding: 3rem; background: #1e293b; border-radius: 0.75rem; border: 1px solid #334155; }
+    .access-denied-container { text-align: center; padding: 4rem; color: #ef4444; }
+</style>
+
+@code {
+    private PagedResult<AdminUserSummaryDto>? PagedUsers;
+    private bool IsLoading = true;
+
+    private string SearchTerm = string.Empty;
+    private string StatusFilter = string.Empty;
+    private string RoleFilter = string.Empty;
+
+    // Modal States
+    private bool IsUserModalOpen = false;
+    private bool IsUserModalEdit = false;
+    private Guid SelectedUserId = Guid.Empty;
+    private string SelectedUserName = string.Empty;
+    private string SelectedUserEmail = string.Empty;
+
+    private bool IsMfaModalOpen = false;
+    private string MfaSecret = string.Empty;
+    private string MfaQrUri = string.Empty;
+    private IReadOnlyCollection<string>? MfaRecoveryCodes;
+
+    private bool IsSessionsModalOpen = false;
+    private IReadOnlyCollection<AdminSessionDto>? ActiveSessions;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        IsLoading = true;
+        bool? isActive = string.IsNullOrEmpty(StatusFilter) ? null : StatusFilter == "active";
+        string? role = string.IsNullOrEmpty(RoleFilter) ? null : RoleFilter;
+
+        PagedUsers = await ApiClient.GetAdminUsersAsync(SearchTerm, isActive, role);
+        IsLoading = false;
+    }
+
+    private async Task HandleSearch()
+    {
+        await LoadData();
+    }
+
+    private void OpenCreateModal()
+    {
+        SelectedUserId = Guid.Empty;
+        SelectedUserName = string.Empty;
+        SelectedUserEmail = string.Empty;
+        IsUserModalEdit = false;
+        IsUserModalOpen = true;
+    }
+
+    private void OpenEditModal(AdminUserSummaryDto user)
+    {
+        SelectedUserId = user.Id;
+        SelectedUserName = user.Name;
+        SelectedUserEmail = user.Email;
+        IsUserModalEdit = true;
+        IsUserModalOpen = true;
+    }
+
+    private void CloseUserModal() => IsUserModalOpen = false;
+
+    private async Task HandleSaveUser(AdminUserModal.AdminUserSaveModel model)
+    {
+        if (IsUserModalEdit)
+        {
+            await ApiClient.UpdateAdminUserAsync(model.Id, model.Name, model.Email, model.RoleIds);
+        }
+        else
+        {
+            await ApiClient.CreateAdminUserAsync(model.Name, model.Email, model.Password, model.RoleIds);
+        }
+        await LoadData();
+    }
+
+    private async Task ToggleStatus(Guid id, bool newStatus)
+    {
+        await ApiClient.ToggleAdminUserStatusAsync(id, newStatus);
+        await LoadData();
+    }
+
+    private async Task ResetPassword(Guid id)
+    {
+        await ApiClient.ResetAdminUserPasswordAsync(id, "CriaCerto@2026!");
+        await LoadData();
+    }
+
+    private async Task OpenMfaSetupModal(Guid userId)
+    {
+        SelectedUserId = userId;
+        var setup = await ApiClient.SetupMfaAsync(userId);
+        if (setup != null)
+        {
+            MfaSecret = setup.SecretKey;
+            MfaQrUri = setup.QrCodeUri;
+            MfaRecoveryCodes = setup.RecoveryCodes;
+            IsMfaModalOpen = true;
+        }
+    }
+
+    private void CloseMfaModal() => IsMfaModalOpen = false;
+
+    private async Task HandleConfirmMfa(string code)
+    {
+        await ApiClient.EnableMfaAsync(SelectedUserId, MfaSecret, code, MfaRecoveryCodes?.ToList() ?? new());
+        await LoadData();
+    }
+
+    private async Task OpenSessionsModal(Guid userId)
+    {
+        SelectedUserId = userId;
+        var detail = await ApiClient.GetAdminUserByIdAsync(userId);
+        ActiveSessions = detail?.ActiveSessions ?? new List<AdminSessionDto>();
+        IsSessionsModalOpen = true;
+    }
+
+    private void CloseSessionsModal() => IsSessionsModalOpen = false;
+
+    private async Task HandleRevokeSession(Guid sessionId)
+    {
+        await ApiClient.RevokeSessionAsync(sessionId);
+        await OpenSessionsModal(SelectedUserId);
+    }
+
+    private async Task HandleRevokeAllSessions(Guid userId)
+    {
+        await ApiClient.RevokeAllUserSessionsAsync(userId);
+        await OpenSessionsModal(userId);
+    }
+}

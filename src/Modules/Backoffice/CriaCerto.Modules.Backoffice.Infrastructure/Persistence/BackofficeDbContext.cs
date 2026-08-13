@@ -27,6 +27,7 @@ public class BackofficeDbContext : DbContext
             builder.HasKey(u => u.Id);
             builder.Property(u => u.Name).IsRequired().HasMaxLength(200);
             builder.Property(u => u.Email).IsRequired().HasMaxLength(200);
+            builder.Property(u => u.MfaSecretKey).HasMaxLength(500);
             builder.HasIndex(u => u.Email).IsUnique();
             builder.HasMany(u => u.Roles).WithMany();
         });
@@ -51,6 +52,10 @@ public class BackofficeDbContext : DbContext
             builder.ToTable("AdminSessions");
             builder.HasKey(s => s.Id);
             builder.Property(s => s.SessionToken).IsRequired().HasMaxLength(500);
+            builder.Property(s => s.RefreshToken).HasMaxLength(500);
+            builder.HasIndex(s => s.AdminUserId);
+            builder.HasIndex(s => s.SessionToken);
+            builder.HasIndex(s => s.RefreshToken);
         });
 
         modelBuilder.Entity<AuditLog>(builder =>

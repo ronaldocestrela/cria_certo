@@ -77,7 +77,7 @@ As entregas estão organizadas em **6 Fases Sequenciais**, cobrindo fundação d
 * **TDD & Validação:**
   * Matriz de testes role x permission x scope garantindo bloqueio de ações fora do escopo.
 
-#### Sub-fase 1.3: Gestão de Usuários Administrativos e Sessões [PLANEJADA]
+#### Sub-fase 1.3: Gestão de Usuários Administrativos e Sessões [CONCLUÍDA]
 * **Backend:**
   * CRUD de usuários administrativos, vínculo de múltiplos papéis e rotação de credenciais.
   * MFA obrigatório para perfis com permissões sensíveis (`impersonation.*`, `plans.publish`, `tenants.suspend`).

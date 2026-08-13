@@ -29,6 +29,10 @@ public static class BackofficeModuleExtensions
         services.AddScoped<IAuthorizationHandler, PermissionAuthorizationHandler>();
         services.AddSingleton<IAuthorizationPolicyProvider, BackofficePermissionPolicyProvider>();
 
+        // Register Security & IAM Services
+        services.AddSingleton<IPasswordHasherService, PasswordHasherService>();
+        services.AddSingleton<ITotpService, TotpService>();
+
         return services;
     }
 
