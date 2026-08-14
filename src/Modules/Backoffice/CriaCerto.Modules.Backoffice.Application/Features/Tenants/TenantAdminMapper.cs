@@ -19,6 +19,7 @@ internal static class TenantAdminMapper
             dto.City,
             dto.TechnicalOwnerName,
             dto.CommercialOwnerName,
+            dto.IsProtected,
             dto.CreatedAtUtc);
 
     public static TenantAdminDetailDto ToDetailDto(TenantBackofficeDetailDto dto) =>
@@ -42,6 +43,9 @@ internal static class TenantAdminMapper
             dto.TechnicalOwnerEmail,
             dto.CommercialOwnerName,
             dto.CommercialOwnerEmail,
+            dto.IsProtected,
+            dto.StatusReason,
+            dto.StatusChangedAtUtc,
             dto.TeamMemberCount,
             dto.ProductionUnitCount,
             dto.CreatedAtUtc,

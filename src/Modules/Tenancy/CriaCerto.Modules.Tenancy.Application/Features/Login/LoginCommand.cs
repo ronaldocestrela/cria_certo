@@ -2,6 +2,7 @@ using CriaCerto.BuildingBlocks.Abstractions.Results;
 using CriaCerto.Modules.Tenancy.Application.Abstractions;
 using CriaCerto.Modules.Tenancy.Application.Contracts;
 using CriaCerto.Modules.Tenancy.Application.Domain;
+using CriaCerto.Modules.Tenancy.Application.Domain.Errors;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -33,18 +34,23 @@ public sealed class LoginCommandHandler : IRequestHandler<LoginCommand, Result<A
                 Error.Unauthorized("Auth.InvalidCredentials", "E-mail ou senha inválidos."));
         }
 
-        var userTenants = user.UserTenants;
-        if (userTenants.Count == 0)
+        var accessibleTenants = user.UserTenants
+            .Where(ut => ut.Tenant is not null && TenantLifecycle.CanProducerAccess(ut.Tenant.Status))
+            .ToList();
+
+        if (accessibleTenants.Count == 0)
         {
+            var hasAnyTenant = user.UserTenants.Count > 0;
             return Result.Failure<AuthResponse>(
-                Error.Failure("Auth.NoTenantAssociation", "Sua conta não está associada a nenhuma granja."));
+                hasAnyTenant
+                    ? TenancyErrors.TenantNotAccessible
+                    : Error.Failure("Auth.NoTenantAssociation", "Sua conta não está associada a nenhuma granja."));
         }
 
-        // Check if there is only 1 tenant
-        if (userTenants.Count == 1)
+        if (accessibleTenants.Count == 1)
         {
-            var singleTenant = userTenants[0].Tenant!;
-            var token = _jwtService.GenerateToken(user, singleTenant, userTenants[0].Role);
+            var singleTenant = accessibleTenants[0].Tenant!;
+            var token = _jwtService.GenerateToken(user, singleTenant, accessibleTenants[0].Role);
             return Result.Success(new AuthResponse(
                 Token: token,
                 RequiresTenantSelection: false,
@@ -55,8 +61,7 @@ public sealed class LoginCommandHandler : IRequestHandler<LoginCommand, Result<A
             ));
         }
 
-        // Multiple tenants require selection
-        var availableTenants = userTenants
+        var availableTenants = accessibleTenants
             .Select(ut => new TenantDto(
                 ut.Tenant!.Id,
                 ut.Tenant.Name,

@@ -25,7 +25,10 @@ O módulo `Modules.Tenancy` gerencia as identidades dos usuários, organizaçõe
   - `CnpjNormalized`: `string` (11 ou 14 dígitos, **único**)
   - `ExternalIdentifier`: `string?` (**único** quando informado)
   - `State`, `City`, `StateRegistration`, `AreaInHectares`, `Type`
-  - `Status`: `string` (Active, Suspended, Maintenance — ciclo completo na sub-fase 2.2)
+  - `Status`: `string` (`Trial`, `Active`, `PastDue`, `Suspended`, `Cancelled`, `Archived`)
+  - `IsProtected`: `bool` — impede suspensão/cancelamento/arquivamento
+  - `StatusReason`: `string?` — última justificativa de transição
+  - `StatusChangedAtUtc`: `DateTime?`
   - `SubscribedPlan`: `string` (Starter, Pro, Enterprise)
   - `Capacity`: `int` (limite de cabeças; validado via `PlanCapacityLimits`)
   - `TechnicalOwnerName` / `TechnicalOwnerEmail`
@@ -56,8 +59,22 @@ O módulo `Modules.Tenancy` gerencia as identidades dos usuários, organizaçõe
 | `GET` | `/api/v1/backoffice/tenants/{id}` | `tenants.read` | Visão 360 do tenant |
 | `POST` | `/api/v1/backoffice/tenants` | `tenants.write` | Cadastro administrativo |
 | `PUT` | `/api/v1/backoffice/tenants/{id}` | `tenants.write` | Atualização cadastral (sem alterar plano/status) |
+| `POST` | `/api/v1/backoffice/tenants/{id}/suspend` | `tenants.suspend` | Suspensão com justificativa |
+| `POST` | `/api/v1/backoffice/tenants/{id}/reactivate` | `tenants.suspend` | Reativação com justificativa |
+| `POST` | `/api/v1/backoffice/tenants/{id}/cancel` | `tenants.suspend` | Cancelamento com justificativa |
+| `POST` | `/api/v1/backoffice/tenants/{id}/archive` | `tenants.suspend` | Arquivamento com justificativa |
+| `POST` | `/api/v1/backoffice/tenants/{id}/protection` | `tenants.suspend` | Proteger/desproteger tenant |
 
----
+### Máquina de Estados do Tenant (Sub-fase 2.2)
+
+Estados: `Trial`, `Active`, `PastDue`, `Suspended`, `Cancelled`, `Archived`.
+
+Transições administrativas exigem justificativa (mín. 15 caracteres) e permissão `tenants.suspend`.
+
+Acesso do produtor permitido em: `Trial`, `Active`, `PastDue`. Bloqueado em: `Suspended`, `Cancelled`, `Archived`.
+
+Erros: `Tenant.InvalidTransition`, `Tenant.JustificationRequired`, `Tenant.ProtectedTenant`, `Tenant.NotAccessible`.
+
 
 ## 3. Casos de Uso (CQRS / MediatR)
 
@@ -83,6 +100,7 @@ O módulo `Modules.Tenancy` gerencia as identidades dos usuários, organizaçõe
 
 - **`CreateTenantForAdminCommand`**: cadastro administrativo sem exigir usuário produtor; provisiona DB do tenant; `OwnerUserEmail` opcional.
 - **`UpdateTenantForAdminCommand`**: atualização cadastral; não altera `Status` nem `SubscribedPlan`.
+- **`SuspendTenantForAdminCommand`**, **`ReactivateTenantForAdminCommand`**, **`CancelTenantForAdminCommand`**, **`ArchiveTenantForAdminCommand`**, **`SetTenantProtectionForAdminCommand`**: governança de ciclo de vida.
 - **`GetTenantsBackofficeQuery`**: listagem paginada com filtros (busca, status, plano, UF, owners).
 - **`GetTenantBackofficeDetailQuery`**: visão 360 com limites, owners, contagem de time e unidades produtivas.
 

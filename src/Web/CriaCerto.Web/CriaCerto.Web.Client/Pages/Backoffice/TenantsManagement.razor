@@ -41,6 +41,10 @@
                     <span class="kpi-label">Trial</span>
                     <span class="kpi-value text-info">@(PagedTenants?.Items.Count(t => t.Status == "Trial") ?? 0)</span>
                 </div>
+                <div class="kpi-card">
+                    <span class="kpi-label">Inadimplentes</span>
+                    <span class="kpi-value text-danger">@(PagedTenants?.Items.Count(t => t.Status == "PastDue") ?? 0)</span>
+                </div>
             </div>
 
             <div class="filters-bar">
@@ -54,7 +58,9 @@
                         <option value="Active">Active</option>
                         <option value="Suspended">Suspended</option>
                         <option value="Trial">Trial</option>
-                        <option value="Maintenance">Maintenance</option>
+                        <option value="PastDue">PastDue</option>
+                        <option value="Cancelled">Cancelled</option>
+                        <option value="Archived">Archived</option>
                     </select>
                     <select class="filter-select" @bind="PlanFilter" @bind:after="LoadData">
                         <option value="">Todos os Planos</option>
@@ -119,12 +125,48 @@
                     @if (SelectedTenant != null)
                     {
                         <div class="detail-header">
-                            <h2>@SelectedTenant.Name</h2>
-                            <PermissionGuard Permission="@BackofficePermissions.TenantsWrite">
-                                <Authorized>
-                                    <button class="btn btn-secondary" @onclick="OpenEditModal">Editar</button>
-                                </Authorized>
-                            </PermissionGuard>
+                            <div>
+                                <h2>@SelectedTenant.Name</h2>
+                                @if (SelectedTenant.IsProtected)
+                                {
+                                    <span class="protected-badge">Protegido</span>
+                                }
+                            </div>
+                            <div class="detail-actions">
+                                <PermissionGuard Permission="@BackofficePermissions.TenantsWrite">
+                                    <Authorized>
+                                        <button class="btn btn-secondary" @onclick="OpenEditModal">Editar</button>
+                                    </Authorized>
+                                </PermissionGuard>
+                                <PermissionGuard Permission="@BackofficePermissions.TenantsSuspend">
+                                    <Authorized>
+                                        @if (CanSuspend(SelectedTenant))
+                                        {
+                                            <button class="btn btn-warning" @onclick="() => OpenLifecycleModal(TenantLifecycleModal.LifecycleAction.Suspend)">Suspender</button>
+                                        }
+                                        @if (CanReactivate(SelectedTenant))
+                                        {
+                                            <button class="btn btn-primary" @onclick="() => OpenLifecycleModal(TenantLifecycleModal.LifecycleAction.Reactivate)">Reativar</button>
+                                        }
+                                        @if (CanCancel(SelectedTenant))
+                                        {
+                                            <button class="btn btn-danger" @onclick="() => OpenLifecycleModal(TenantLifecycleModal.LifecycleAction.Cancel)">Cancelar</button>
+                                        }
+                                        @if (CanArchive(SelectedTenant))
+                                        {
+                                            <button class="btn btn-danger" @onclick="() => OpenLifecycleModal(TenantLifecycleModal.LifecycleAction.Archive)">Arquivar</button>
+                                        }
+                                        @if (!SelectedTenant.IsProtected)
+                                        {
+                                            <button class="btn btn-secondary" @onclick="() => OpenLifecycleModal(TenantLifecycleModal.LifecycleAction.Protect)">Proteger</button>
+                                        }
+                                        else
+                                        {
+                                            <button class="btn btn-secondary" @onclick="() => OpenLifecycleModal(TenantLifecycleModal.LifecycleAction.Unprotect)">Desproteger</button>
+                                        }
+                                    </Authorized>
+                                </PermissionGuard>
+                            </div>
                         </div>
                         <div class="detail-section">
                             <h3>Dados Cadastrais</h3>
@@ -141,7 +183,15 @@
                         <div class="detail-section">
                             <h3>Contrato & Limites</h3>
                             <dl class="detail-grid">
-                                <dt>Status</dt><dd>@SelectedTenant.Status</dd>
+                                <dt>Status</dt><dd><span class="status-badge status-@SelectedTenant.Status.ToLower()">@SelectedTenant.Status</span></dd>
+                                @if (!string.IsNullOrWhiteSpace(SelectedTenant.StatusReason))
+                                {
+                                    <dt>Última Justificativa</dt><dd>@SelectedTenant.StatusReason</dd>
+                                }
+                                @if (SelectedTenant.StatusChangedAtUtc.HasValue)
+                                {
+                                    <dt>Status alterado em</dt><dd>@SelectedTenant.StatusChangedAtUtc.Value.ToLocalTime().ToString("g")</dd>
+                                }
                                 <dt>Plano</dt><dd>@SelectedTenant.SubscribedPlan</dd>
                                 <dt>Capacidade</dt><dd>@SelectedTenant.Capacity.ToString("N0") cabeças</dd>
                                 <dt>Limite do Plano</dt><dd>@(SelectedTenant.PlanHeadCapacityLimit == int.MaxValue ? "Ilimitado" : SelectedTenant.PlanHeadCapacityLimit.ToString("N0"))</dd>
@@ -197,6 +247,15 @@
             CommercialOwnerEmail="@FormCommOwnerEmail"
             OnClose="CloseModal"
             OnSave="HandleSave" />
+
+        <TenantLifecycleModal
+            IsOpen="IsLifecycleModalOpen"
+            Action="LifecycleAction"
+            TenantName="@(SelectedTenant?.Name ?? string.Empty)"
+            IsProtected="@(SelectedTenant?.IsProtected ?? false)"
+            ErrorMessage="@LifecycleErrorMessage"
+            OnClose="CloseLifecycleModal"
+            OnConfirm="HandleLifecycleConfirm" />
     </Authorized>
     <NotAuthorized>
         <div class="access-denied-container">
@@ -239,8 +298,24 @@
     .status-active { background: rgba(74, 222, 128, 0.15); color: #4ade80; }
     .status-suspended { background: rgba(251, 191, 36, 0.15); color: #fbbf24; }
     .status-trial { background: rgba(56, 189, 248, 0.15); color: #38bdf8; }
-    .status-maintenance { background: rgba(148, 163, 184, 0.15); color: #94a3b8; }
-    .detail-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+    .status-pastdue { background: rgba(248, 113, 113, 0.15); color: #f87171; }
+    .status-cancelled { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+    .status-archived { background: rgba(148, 163, 184, 0.15); color: #94a3b8; }
+    .text-danger { color: #f87171; }
+    .protected-badge {
+        display: inline-block;
+        margin-top: 0.35rem;
+        padding: 0.15rem 0.5rem;
+        border-radius: 9999px;
+        font-size: 0.7rem;
+        font-weight: 700;
+        background: rgba(56, 189, 248, 0.15);
+        color: #38bdf8;
+    }
+    .detail-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: flex-end; }
+    .btn-warning { background: #d97706; color: #fff; padding: 0.4rem 0.8rem; border-radius: 0.5rem; border: none; font-weight: 600; cursor: pointer; }
+    .btn-danger { background: #dc2626; color: #fff; padding: 0.4rem 0.8rem; border-radius: 0.5rem; border: none; font-weight: 600; cursor: pointer; }
+    .detail-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; margin-bottom: 1rem; }
     .detail-header h2 { margin: 0; font-size: 1.2rem; }
     .detail-section { margin-bottom: 1.25rem; }
     .detail-section h3 { font-size: 0.8rem; text-transform: uppercase; color: #38bdf8; margin: 0 0 0.5rem; }
@@ -282,6 +357,10 @@
     private string? FormTechOwnerEmail;
     private string? FormCommOwnerName;
     private string? FormCommOwnerEmail;
+
+    private bool IsLifecycleModalOpen;
+    private TenantLifecycleModal.LifecycleAction LifecycleAction;
+    private string? LifecycleErrorMessage;
 
     protected override async Task OnInitializedAsync() => await LoadData();
 
@@ -380,6 +459,59 @@
         }
 
         IsModalOpen = false;
+        await LoadData();
+    }
+
+    private static bool CanSuspend(TenantAdminDetailDto tenant) =>
+        !tenant.IsProtected && tenant.Status is "Trial" or "Active" or "PastDue";
+
+    private static bool CanReactivate(TenantAdminDetailDto tenant) =>
+        tenant.Status == "Suspended";
+
+    private static bool CanCancel(TenantAdminDetailDto tenant) =>
+        !tenant.IsProtected && tenant.Status is "Trial" or "Active" or "PastDue" or "Suspended";
+
+    private static bool CanArchive(TenantAdminDetailDto tenant) =>
+        !tenant.IsProtected && tenant.Status == "Cancelled";
+
+    private void OpenLifecycleModal(TenantLifecycleModal.LifecycleAction action)
+    {
+        if (SelectedTenant == null) return;
+        LifecycleAction = action;
+        LifecycleErrorMessage = null;
+        IsLifecycleModalOpen = true;
+    }
+
+    private void CloseLifecycleModal()
+    {
+        IsLifecycleModalOpen = false;
+        LifecycleErrorMessage = null;
+    }
+
+    private async Task HandleLifecycleConfirm(string reason)
+    {
+        if (SelectedTenant == null) return;
+
+        LifecycleActionResult result = LifecycleAction switch
+        {
+            TenantLifecycleModal.LifecycleAction.Suspend => await ApiClient.SuspendTenantAsync(SelectedTenant.Id, reason),
+            TenantLifecycleModal.LifecycleAction.Reactivate => await ApiClient.ReactivateTenantAsync(SelectedTenant.Id, reason),
+            TenantLifecycleModal.LifecycleAction.Cancel => await ApiClient.CancelTenantAsync(SelectedTenant.Id, reason),
+            TenantLifecycleModal.LifecycleAction.Archive => await ApiClient.ArchiveTenantAsync(SelectedTenant.Id, reason),
+            TenantLifecycleModal.LifecycleAction.Protect => await ApiClient.SetTenantProtectionAsync(SelectedTenant.Id, true, reason),
+            TenantLifecycleModal.LifecycleAction.Unprotect => await ApiClient.SetTenantProtectionAsync(SelectedTenant.Id, false, reason),
+            _ => new LifecycleActionResult { ErrorMessage = "Ação inválida." }
+        };
+
+        if (!result.IsSuccess || result.Tenant == null)
+        {
+            LifecycleErrorMessage = result.ErrorMessage ?? "Falha ao executar ação.";
+            return;
+        }
+
+        SelectedTenant = result.Tenant;
+        IsLifecycleModalOpen = false;
+        LifecycleErrorMessage = null;
         await LoadData();
     }
 }

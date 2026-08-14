@@ -212,6 +212,7 @@ app.UseHttpsRedirection();
 
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseTenantAccess();
 app.UseTenantDatabase();
 app.UseBackofficeModule();
 
@@ -368,6 +369,46 @@ backoffice.MapPut("/tenants/{id:guid}", async (Guid id, UpdateTenantAdminRequest
     var result = await sender.Send(command);
     return ToHttpResult(result);
 }).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.TenantsWrite)).WithTags("Backoffice Tenants");
+
+backoffice.MapPost("/tenants/{id:guid}/suspend", async (Guid id, TenantLifecycleActionRequest req, HttpContext ctx, ISender sender) =>
+{
+    var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var command = new SuspendTenantAdminCommand(id, req.Reason, callerId, callerEmail, ip);
+    var result = await sender.Send(command);
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.TenantsSuspend)).WithTags("Backoffice Tenants");
+
+backoffice.MapPost("/tenants/{id:guid}/reactivate", async (Guid id, TenantLifecycleActionRequest req, HttpContext ctx, ISender sender) =>
+{
+    var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var command = new ReactivateTenantAdminCommand(id, req.Reason, callerId, callerEmail, ip);
+    var result = await sender.Send(command);
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.TenantsSuspend)).WithTags("Backoffice Tenants");
+
+backoffice.MapPost("/tenants/{id:guid}/cancel", async (Guid id, TenantLifecycleActionRequest req, HttpContext ctx, ISender sender) =>
+{
+    var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var command = new CancelTenantAdminCommand(id, req.Reason, callerId, callerEmail, ip);
+    var result = await sender.Send(command);
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.TenantsSuspend)).WithTags("Backoffice Tenants");
+
+backoffice.MapPost("/tenants/{id:guid}/archive", async (Guid id, TenantLifecycleActionRequest req, HttpContext ctx, ISender sender) =>
+{
+    var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var command = new ArchiveTenantAdminCommand(id, req.Reason, callerId, callerEmail, ip);
+    var result = await sender.Send(command);
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.TenantsSuspend)).WithTags("Backoffice Tenants");
+
+backoffice.MapPost("/tenants/{id:guid}/protection", async (Guid id, TenantProtectionRequest req, HttpContext ctx, ISender sender) =>
+{
+    var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var command = new SetTenantProtectionAdminCommand(id, req.IsProtected, req.Reason, callerId, callerEmail, ip);
+    var result = await sender.Send(command);
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.TenantsSuspend)).WithTags("Backoffice Tenants");
 
 // Backoffice Auth Endpoints (Anonymous / Credentials + MFA)
 app.MapPost("/api/v1/backoffice/auth/login", async (BackofficeLoginRequest req, HttpContext ctx, ISender sender) =>

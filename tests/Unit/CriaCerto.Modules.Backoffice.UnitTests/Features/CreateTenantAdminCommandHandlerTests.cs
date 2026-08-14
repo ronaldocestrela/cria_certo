@@ -43,7 +43,7 @@ public class CreateTenantAdminCommandHandlerTests : IDisposable
             .Returns(Result.Success(new TenantBackofficeDetailDto(
                 tenantId, "Fazenda", null, "12.345.678/0001-90", null, "Active", "Starter",
                 500, 500, false, "MT", "Sinop", "IE", 1000, "Corte",
-                null, null, null, null, 0, 0, DateTime.UtcNow, DateTime.UtcNow)));
+                null, null, null, null, false, null, null, 0, 0, DateTime.UtcNow, DateTime.UtcNow)));
 
         var handler = new CreateTenantAdminCommandHandler(_sender, _dbContext);
         var result = await handler.Handle(new CreateTenantAdminCommand(

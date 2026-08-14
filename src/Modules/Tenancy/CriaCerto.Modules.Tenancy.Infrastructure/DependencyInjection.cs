@@ -29,6 +29,7 @@ public static class DependencyInjection
         // Register both interface and DbContext
         services.AddScoped<ITenancyDbContext>(sp => sp.GetRequiredService<TenancyDbContext>());
         services.AddScoped<IJwtService, JwtService>();
+        services.AddScoped<ITenantAccessGuard, TenantAccessGuard>();
 
         return services;
     }

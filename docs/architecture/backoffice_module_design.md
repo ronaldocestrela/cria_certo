@@ -19,6 +19,12 @@ O módulo `Modules.Backoffice` é o núcleo administrativo isolado da plataforma
 * Auditoria (`Tenant.Created`, `Tenant.Updated`) é gravada no `BackofficeDbContext`.
 * Proibido join direto entre DbContexts.
 
+## 4.1 Integração de Ciclo de Vida (Sub-fase 2.2)
+* Comandos admin (`SuspendTenantAdminCommand`, etc.) delegam para `*ForAdminCommand` no Tenancy.
+* Auditoria: `Tenant.Suspended`, `Tenant.Reactivated`, `Tenant.Cancelled`, `Tenant.Archived`, `Tenant.ProtectionChanged`.
+* `DetailsJson` inclui `FromStatus`, `ToStatus`, `Reason`, `IsProtected`.
+* Enforcement de acesso produtor via `LoginCommand`, `SelectTenantCommand` e `TenantAccessMiddleware`.
+
 ## 5. Política de Segurança Default Deny
 Todas as requisições destinadas ao prefixo `/api/v1/backoffice/*` passam pelo middleware de segurança `BackofficeAccessMiddleware`.
 * Se o usuário não possuir credenciais autenticadas ou a claim/permissão administrativa correspondente, a requisição é bloqueada imediatamente com status `401 Unauthorized` ou `403 Forbidden`.

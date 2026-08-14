@@ -13,6 +13,7 @@ public sealed record TenantAdminSummaryDto(
     string City,
     string? TechnicalOwnerName,
     string? CommercialOwnerName,
+    bool IsProtected,
     DateTime CreatedAtUtc
 );
 
@@ -36,6 +37,9 @@ public sealed record TenantAdminDetailDto(
     string? TechnicalOwnerEmail,
     string? CommercialOwnerName,
     string? CommercialOwnerEmail,
+    bool IsProtected,
+    string? StatusReason,
+    DateTime? StatusChangedAtUtc,
     int TeamMemberCount,
     int ProductionUnitCount,
     DateTime CreatedAtUtc,
@@ -65,7 +69,8 @@ public sealed record CreateTenantAdminRequest(
     string? TechnicalOwnerEmail,
     string? CommercialOwnerName,
     string? CommercialOwnerEmail,
-    string? OwnerUserEmail
+    string? OwnerUserEmail,
+    string? InitialStatus = null
 );
 
 public sealed record UpdateTenantAdminRequest(
@@ -84,3 +89,7 @@ public sealed record UpdateTenantAdminRequest(
     string? CommercialOwnerName,
     string? CommercialOwnerEmail
 );
+
+public sealed record TenantLifecycleActionRequest(string Reason);
+
+public sealed record TenantProtectionRequest(bool IsProtected, string Reason);

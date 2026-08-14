@@ -1,6 +1,8 @@
 using CriaCerto.BuildingBlocks.Abstractions.Results;
 using CriaCerto.Modules.Tenancy.Application.Abstractions;
 using CriaCerto.Modules.Tenancy.Application.Contracts;
+using CriaCerto.Modules.Tenancy.Application.Domain;
+using CriaCerto.Modules.Tenancy.Application.Domain.Errors;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -40,6 +42,11 @@ public sealed class SelectTenantCommandHandler : IRequestHandler<SelectTenantCom
         }
 
         var tenant = userTenant.Tenant!;
+        if (!TenantLifecycle.CanProducerAccess(tenant.Status))
+        {
+            return Result.Failure<AuthResponse>(TenancyErrors.TenantNotAccessible);
+        }
+
         var token = _jwtService.GenerateToken(user, tenant, userTenant.Role);
 
         return Result.Success(new AuthResponse(

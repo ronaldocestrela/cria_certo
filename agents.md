@@ -145,9 +145,11 @@ public class Result<TValue> : Result
 
 ### 5.6 Tenant & Licensing Module (`Modules.Tenancy`)
 * **Entities:** `Tenant`, `SubscriptionPlan`, `ModuleAccess`.
+* **Tenant lifecycle states:** `Trial`, `Active`, `PastDue`, `Suspended`, `Cancelled`, `Archived` — governed via `TenantLifecycle` with mandatory admin justification for transitions.
 * **Features:**
   * Middleware for module availability verification per tenant.
   * Feature toggling and usage limits (e.g., max head of cattle supported per plan).
+  * Producer access enforcement for blocked tenant statuses (`Suspended`, `Cancelled`, `Archived`).
 
 ---
 

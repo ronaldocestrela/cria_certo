@@ -101,7 +101,7 @@ As entregas estão organizadas em **6 Fases Sequenciais**, cobrindo fundação d
 * **TDD & Validação:**
   * Testes para consistência de dados cadastrais e regras de unicidade (CNPJ/identificador externo).
 
-#### Sub-fase 2.2: Estados do Tenant e Governança de Ciclo de Vida [PLANEJADA]
+#### Sub-fase 2.2: Estados do Tenant e Governança de Ciclo de Vida [CONCLUÍDA]
 * **Backend:**
   * Máquina de estados: `Trial`, `Active`, `PastDue`, `Suspended`, `Cancelled`, `Archived`.
   * Transições com política e motivo obrigatório (`SuspendTenantCommand`, `ReactivateTenantCommand`).

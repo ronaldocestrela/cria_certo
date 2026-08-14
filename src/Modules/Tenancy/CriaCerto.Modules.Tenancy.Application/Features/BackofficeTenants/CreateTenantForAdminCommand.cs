@@ -26,7 +26,8 @@ public record CreateTenantForAdminCommand(
     string? TechnicalOwnerEmail,
     string? CommercialOwnerName,
     string? CommercialOwnerEmail,
-    string? OwnerUserEmail
+    string? OwnerUserEmail,
+    string? InitialStatus = null
 ) : IRequest<Result<TenantBackofficeDetailDto>>;
 
 public sealed class CreateTenantForAdminCommandValidator : AbstractValidator<CreateTenantForAdminCommand>
@@ -64,6 +65,12 @@ public sealed class CreateTenantForAdminCommandValidator : AbstractValidator<Cre
         RuleFor(x => x)
             .Must(cmd => PlanCapacityLimits.IsCapacityWithinPlan(cmd.SubscribedPlan, cmd.Capacity))
             .WithMessage("A capacidade solicitada excede o limite permitido para o plano contratado.");
+
+        RuleFor(x => x.InitialStatus)
+            .Must(status => status is null
+                || string.Equals(status, TenantLifecycle.ToStatusString(TenantStatus.Trial), StringComparison.OrdinalIgnoreCase)
+                || string.Equals(status, TenantLifecycle.ToStatusString(TenantStatus.Active), StringComparison.OrdinalIgnoreCase))
+            .WithMessage("O status inicial deve ser Trial ou Active.");
     }
 }
 
@@ -121,6 +128,9 @@ public sealed class CreateTenantForAdminCommandHandler : IRequestHandler<CreateT
 
         var now = DateTime.UtcNow;
         var plan = request.SubscribedPlan.Trim();
+        var initialStatus = string.IsNullOrWhiteSpace(request.InitialStatus)
+            ? TenantLifecycle.ToStatusString(TenantStatus.Active)
+            : request.InitialStatus.Trim();
         var tenant = new Tenant
         {
             Id = Guid.NewGuid(),
@@ -135,7 +145,8 @@ public sealed class CreateTenantForAdminCommandHandler : IRequestHandler<CreateT
             AreaInHectares = request.AreaInHectares,
             SubscribedPlan = plan,
             Capacity = request.Capacity,
-            Status = "Active",
+            Status = initialStatus,
+            StatusChangedAtUtc = now,
             Type = string.IsNullOrWhiteSpace(request.Type) ? "Pecuária de Corte e Cria" : request.Type.Trim(),
             TechnicalOwnerName = TrimOrNull(request.TechnicalOwnerName),
             TechnicalOwnerEmail = TrimOrNull(request.TechnicalOwnerEmail),

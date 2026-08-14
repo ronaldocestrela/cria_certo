@@ -26,6 +26,8 @@ O módulo adota a diretiva **Default Deny**: qualquer requisição para a rota `
 | **Leitura de Tenants** | `tenants.read` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **Edição de Tenants** | `tenants.write` | ✅ | ❌ | ✅ | ❌ | ❌ |
 | **Suspensão de Tenants** | `tenants.suspend` | ✅ | ❌ | ❌ | ❌ | ❌ |
+
+> `tenants.suspend` também cobre reativação, cancelamento, arquivamento e proteção/desproteção de tenants.
 | **Leitura de Planos** | `plans.read` | ✅ | ❌ | ❌ | ✅ | ✅ |
 | **Edição de Planos** | `plans.write` | ✅ | ❌ | ❌ | ✅ | ❌ |
 | **Publicação de Planos** | `plans.publish` | ✅ | ❌ | ❌ | ✅ | ❌ |

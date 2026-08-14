@@ -28,6 +28,18 @@ public interface IBackofficeApiClient
     Task<TenantAdminDetailDto?> GetTenantByIdAsync(Guid id, CancellationToken cancellationToken = default);
     Task<TenantAdminDetailDto?> CreateTenantAsync(CreateTenantAdminRequest request, CancellationToken cancellationToken = default);
     Task<TenantAdminDetailDto?> UpdateTenantAsync(Guid id, UpdateTenantAdminRequest request, CancellationToken cancellationToken = default);
+    Task<LifecycleActionResult> SuspendTenantAsync(Guid id, string reason, CancellationToken cancellationToken = default);
+    Task<LifecycleActionResult> ReactivateTenantAsync(Guid id, string reason, CancellationToken cancellationToken = default);
+    Task<LifecycleActionResult> CancelTenantAsync(Guid id, string reason, CancellationToken cancellationToken = default);
+    Task<LifecycleActionResult> ArchiveTenantAsync(Guid id, string reason, CancellationToken cancellationToken = default);
+    Task<LifecycleActionResult> SetTenantProtectionAsync(Guid id, bool isProtected, string reason, CancellationToken cancellationToken = default);
+}
+
+public sealed class LifecycleActionResult
+{
+    public TenantAdminDetailDto? Tenant { get; init; }
+    public string? ErrorMessage { get; init; }
+    public bool IsSuccess => Tenant is not null && string.IsNullOrWhiteSpace(ErrorMessage);
 }
 
 public class BackofficeApiClient : IBackofficeApiClient
@@ -220,5 +232,46 @@ public class BackofficeApiClient : IBackofficeApiClient
         var response = await _httpClient.PutAsJsonAsync($"api/v1/backoffice/tenants/{id}", request, cancellationToken);
         if (!response.IsSuccessStatusCode) return null;
         return await response.Content.ReadFromJsonAsync<TenantAdminDetailDto>(cancellationToken: cancellationToken);
+    }
+
+    public Task<LifecycleActionResult> SuspendTenantAsync(Guid id, string reason, CancellationToken cancellationToken = default) =>
+        PostLifecycleActionAsync($"api/v1/backoffice/tenants/{id}/suspend", new TenantLifecycleActionRequest(reason), cancellationToken);
+
+    public Task<LifecycleActionResult> ReactivateTenantAsync(Guid id, string reason, CancellationToken cancellationToken = default) =>
+        PostLifecycleActionAsync($"api/v1/backoffice/tenants/{id}/reactivate", new TenantLifecycleActionRequest(reason), cancellationToken);
+
+    public Task<LifecycleActionResult> CancelTenantAsync(Guid id, string reason, CancellationToken cancellationToken = default) =>
+        PostLifecycleActionAsync($"api/v1/backoffice/tenants/{id}/cancel", new TenantLifecycleActionRequest(reason), cancellationToken);
+
+    public Task<LifecycleActionResult> ArchiveTenantAsync(Guid id, string reason, CancellationToken cancellationToken = default) =>
+        PostLifecycleActionAsync($"api/v1/backoffice/tenants/{id}/archive", new TenantLifecycleActionRequest(reason), cancellationToken);
+
+    public Task<LifecycleActionResult> SetTenantProtectionAsync(Guid id, bool isProtected, string reason, CancellationToken cancellationToken = default) =>
+        PostLifecycleActionAsync($"api/v1/backoffice/tenants/{id}/protection", new TenantProtectionRequest(isProtected, reason), cancellationToken);
+
+    private async Task<LifecycleActionResult> PostLifecycleActionAsync<TRequest>(string url, TRequest request, CancellationToken cancellationToken)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.PostAsJsonAsync(url, request, cancellationToken);
+        if (response.IsSuccessStatusCode)
+        {
+            var tenant = await response.Content.ReadFromJsonAsync<TenantAdminDetailDto>(cancellationToken: cancellationToken);
+            return new LifecycleActionResult { Tenant = tenant };
+        }
+
+        Error? error = null;
+        try
+        {
+            error = await response.Content.ReadFromJsonAsync<Error>(cancellationToken: cancellationToken);
+        }
+        catch
+        {
+            // Ignore parse errors.
+        }
+
+        return new LifecycleActionResult
+        {
+            ErrorMessage = error?.Message ?? "Não foi possível executar a ação de ciclo de vida."
+        };
     }
 }

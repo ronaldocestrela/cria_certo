@@ -13,6 +13,7 @@ public sealed record TenantBackofficeSummaryDto(
     string City,
     string? TechnicalOwnerName,
     string? CommercialOwnerName,
+    bool IsProtected,
     DateTime CreatedAtUtc
 );
 
@@ -36,6 +37,9 @@ public sealed record TenantBackofficeDetailDto(
     string? TechnicalOwnerEmail,
     string? CommercialOwnerName,
     string? CommercialOwnerEmail,
+    bool IsProtected,
+    string? StatusReason,
+    DateTime? StatusChangedAtUtc,
     int TeamMemberCount,
     int ProductionUnitCount,
     DateTime CreatedAtUtc,

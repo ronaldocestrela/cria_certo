@@ -58,6 +58,9 @@ public sealed class TenancyDbContext : DbContext, ITenancyDbContext
             builder.Property(t => t.TechnicalOwnerEmail).HasMaxLength(150);
             builder.Property(t => t.CommercialOwnerName).HasMaxLength(150);
             builder.Property(t => t.CommercialOwnerEmail).HasMaxLength(150);
+            builder.Property(t => t.IsProtected).IsRequired().HasDefaultValue(false);
+            builder.Property(t => t.StatusReason).HasMaxLength(500);
+            builder.Property(t => t.StatusChangedAtUtc);
             builder.Property(t => t.CreatedAtUtc).IsRequired();
             builder.Property(t => t.UpdatedAtUtc).IsRequired();
         });

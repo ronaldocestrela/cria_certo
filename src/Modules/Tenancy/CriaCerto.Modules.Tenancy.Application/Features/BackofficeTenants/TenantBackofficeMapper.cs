@@ -19,6 +19,7 @@ internal static class TenantBackofficeMapper
             tenant.City,
             tenant.TechnicalOwnerName,
             tenant.CommercialOwnerName,
+            tenant.IsProtected,
             tenant.CreatedAtUtc);
 
     public static TenantBackofficeDetailDto ToDetailDto(Tenant tenant, int teamMemberCount, int productionUnitCount)
@@ -44,6 +45,9 @@ internal static class TenantBackofficeMapper
             tenant.TechnicalOwnerEmail,
             tenant.CommercialOwnerName,
             tenant.CommercialOwnerEmail,
+            tenant.IsProtected,
+            tenant.StatusReason,
+            tenant.StatusChangedAtUtc,
             teamMemberCount,
             productionUnitCount,
             tenant.CreatedAtUtc,

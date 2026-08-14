@@ -1,0 +1,166 @@
+@if (IsOpen)
+{
+    <div class="modal-backdrop" @onclick="Close">
+        <div class="modal-card" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <h3>@GetTitle()</h3>
+                <button class="close-btn" @onclick="Close">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="warning-box">
+                    <strong>Ação crítica de ciclo de vida</strong>
+                    <p>Você está prestes a executar <strong>@ActionLabel</strong> no tenant <strong>@TenantName</strong>.</p>
+                    @if (IsProtected && IsDestructiveAction)
+                    {
+                        <p class="error-text">Este tenant está protegido e não pode receber esta ação.</p>
+                    }
+                </div>
+                <div class="form-group">
+                    <label>Justificativa obrigatória (mín. 15 caracteres)</label>
+                    <textarea class="form-control" rows="4" @bind="Reason" placeholder="Descreva o motivo operacional desta ação..."></textarea>
+                    <small class="char-count">@(Reason?.Trim().Length ?? 0) / 15 mínimo</small>
+                </div>
+                @if (!string.IsNullOrWhiteSpace(ErrorMessage))
+                {
+                    <div class="error-text">@ErrorMessage</div>
+                }
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="Close">Cancelar</button>
+                <button class="btn @GetConfirmButtonClass()" disabled="@(!CanConfirm)" @onclick="Confirm">Confirmar</button>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .modal-backdrop {
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(15, 23, 42, 0.75);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+        backdrop-filter: blur(4px);
+    }
+    .modal-card {
+        background: #1e293b;
+        color: #f8fafc;
+        border-radius: 0.75rem;
+        width: 100%;
+        max-width: 560px;
+        border: 1px solid #334155;
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+    }
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1.25rem;
+        border-bottom: 1px solid #334155;
+    }
+    .modal-header h3 { margin: 0; font-size: 1.1rem; font-weight: 700; color: #f1f5f9; }
+    .close-btn { background: none; border: none; color: #94a3b8; font-size: 1.2rem; cursor: pointer; }
+    .modal-body { padding: 1.25rem; display: flex; flex-direction: column; gap: 1rem; }
+    .modal-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.75rem;
+        padding: 1rem 1.25rem;
+        border-top: 1px solid #334155;
+    }
+    .warning-box {
+        background: rgba(251, 191, 36, 0.08);
+        border: 1px solid rgba(251, 191, 36, 0.35);
+        border-radius: 0.5rem;
+        padding: 0.85rem;
+        font-size: 0.9rem;
+    }
+    .warning-box p { margin: 0.35rem 0 0; color: #cbd5e1; }
+    .form-group { display: flex; flex-direction: column; gap: 0.35rem; }
+    .form-group label { font-size: 0.85rem; font-weight: 600; color: #94a3b8; }
+    .form-control {
+        background: #0f172a;
+        border: 1px solid #334155;
+        color: #f8fafc;
+        padding: 0.6rem 0.75rem;
+        border-radius: 0.5rem;
+        font-size: 0.9rem;
+        resize: vertical;
+    }
+    .char-count { color: #64748b; font-size: 0.75rem; }
+    .error-text { color: #f87171; font-size: 0.85rem; }
+    .btn-secondary { background: #334155; color: #f8fafc; padding: 0.55rem 1rem; border-radius: 0.5rem; border: none; font-weight: 600; cursor: pointer; }
+    .btn-danger { background: #dc2626; color: #fff; padding: 0.55rem 1rem; border-radius: 0.5rem; border: none; font-weight: 700; cursor: pointer; }
+    .btn-warning { background: #d97706; color: #fff; padding: 0.55rem 1rem; border-radius: 0.5rem; border: none; font-weight: 700; cursor: pointer; }
+    .btn-primary { background: #0284c7; color: #fff; padding: 0.55rem 1rem; border-radius: 0.5rem; border: none; font-weight: 700; cursor: pointer; }
+    .btn-danger:disabled, .btn-warning:disabled, .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+</style>
+
+@code {
+    public enum LifecycleAction
+    {
+        Suspend,
+        Reactivate,
+        Cancel,
+        Archive,
+        Protect,
+        Unprotect
+    }
+
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public LifecycleAction Action { get; set; }
+    [Parameter] public string TenantName { get; set; } = string.Empty;
+    [Parameter] public bool IsProtected { get; set; }
+    [Parameter] public string? ErrorMessage { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback<string> OnConfirm { get; set; }
+
+    private string? Reason { get; set; }
+
+    private string ActionLabel => Action switch
+    {
+        LifecycleAction.Suspend => "Suspensão",
+        LifecycleAction.Reactivate => "Reativação",
+        LifecycleAction.Cancel => "Cancelamento",
+        LifecycleAction.Archive => "Arquivamento",
+        LifecycleAction.Protect => "Proteção",
+        LifecycleAction.Unprotect => "Remoção de Proteção",
+        _ => "Ação"
+    };
+
+    private bool IsDestructiveAction =>
+        Action is LifecycleAction.Suspend or LifecycleAction.Cancel or LifecycleAction.Archive;
+
+    private bool CanConfirm =>
+        !string.IsNullOrWhiteSpace(Reason)
+        && Reason.Trim().Length >= 15
+        && !(IsProtected && IsDestructiveAction);
+
+    private string GetTitle() => $"Confirmar {ActionLabel}";
+
+    private string GetConfirmButtonClass() =>
+        Action is LifecycleAction.Reactivate or LifecycleAction.Protect or LifecycleAction.Unprotect
+            ? "btn-primary"
+            : Action is LifecycleAction.Suspend
+                ? "btn-warning"
+                : "btn-danger";
+
+    private async Task Close()
+    {
+        Reason = null;
+        ErrorMessage = null;
+        await OnClose.InvokeAsync();
+    }
+
+    private async Task Confirm()
+    {
+        if (!CanConfirm || string.IsNullOrWhiteSpace(Reason))
+        {
+            return;
+        }
+
+        await OnConfirm.InvokeAsync(Reason.Trim());
+    }
+}
