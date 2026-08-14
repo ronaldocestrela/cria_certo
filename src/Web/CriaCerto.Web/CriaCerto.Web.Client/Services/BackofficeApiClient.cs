@@ -4,6 +4,9 @@ using CriaCerto.BuildingBlocks.Abstractions.Results;
 using CriaCerto.Modules.Backoffice.Application.Features.AdminUsers.Dtos;
 using CriaCerto.Modules.Backoffice.Application.Features.AdminUsers.Queries;
 using CriaCerto.Modules.Backoffice.Application.Features.Tenants.Dtos;
+using CriaCerto.Modules.Backoffice.Application.Features.Plans.Dtos;
+using CriaCerto.Modules.Backoffice.Application.Features.Plans.Commands;
+using CriaCerto.Modules.Backoffice.Application.Features.Plans.Queries;
 using CriaCerto.Web.Client.Models;
 using Microsoft.JSInterop;
 
@@ -54,6 +57,15 @@ public interface IBackofficeApiClient
     Task<LifecycleActionResult> CancelTenantAsync(Guid id, string reason, CancellationToken cancellationToken = default);
     Task<LifecycleActionResult> ArchiveTenantAsync(Guid id, string reason, CancellationToken cancellationToken = default);
     Task<LifecycleActionResult> SetTenantProtectionAsync(Guid id, bool isProtected, string reason, CancellationToken cancellationToken = default);
+
+    // Plan Catalog Methods
+    Task<IReadOnlyCollection<PlanCatalogDto>?> GetPlansAsync(bool includeArchived = false, CancellationToken cancellationToken = default);
+    Task<PlanCatalogDto?> GetPlanByIdAsync(Guid id, CancellationToken cancellationToken = default);
+    Task<PlanCatalogDto?> CreatePlanAsync(CreatePlanCatalogCommand command, CancellationToken cancellationToken = default);
+    Task<PlanVersionDto?> CreatePlanVersionAsync(Guid planId, CreatePlanVersionCommand command, CancellationToken cancellationToken = default);
+    Task<PlanVersionDto?> UpdateDraftPlanVersionAsync(Guid versionId, UpdateDraftPlanVersionCommand command, CancellationToken cancellationToken = default);
+    Task<PlanVersionDto?> PublishPlanVersionAsync(Guid versionId, string? approvalNotes = null, CancellationToken cancellationToken = default);
+    Task<PlanVersionComparisonDto?> ComparePlanVersionsAsync(Guid baseVersionId, Guid targetVersionId, CancellationToken cancellationToken = default);
 }
 
 public sealed class LifecycleActionResult
@@ -416,5 +428,51 @@ public class BackofficeApiClient : IBackofficeApiClient
         {
             ErrorMessage = error?.Message ?? "Não foi possível executar a ação de ciclo de vida."
         };
+    }
+
+    public async Task<IReadOnlyCollection<PlanCatalogDto>?> GetPlansAsync(bool includeArchived = false, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        return await _httpClient.GetFromJsonAsync<IReadOnlyCollection<PlanCatalogDto>>($"api/v1/backoffice/plans?includeArchived={includeArchived}", cancellationToken);
+    }
+
+    public async Task<PlanCatalogDto?> GetPlanByIdAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        return await _httpClient.GetFromJsonAsync<PlanCatalogDto>($"api/v1/backoffice/plans/{id}", cancellationToken);
+    }
+
+    public async Task<PlanCatalogDto?> CreatePlanAsync(CreatePlanCatalogCommand command, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.PostAsJsonAsync("api/v1/backoffice/plans", command, cancellationToken);
+        return response.IsSuccessStatusCode ? await response.Content.ReadFromJsonAsync<PlanCatalogDto>(cancellationToken: cancellationToken) : null;
+    }
+
+    public async Task<PlanVersionDto?> CreatePlanVersionAsync(Guid planId, CreatePlanVersionCommand command, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.PostAsJsonAsync($"api/v1/backoffice/plans/{planId}/versions", command, cancellationToken);
+        return response.IsSuccessStatusCode ? await response.Content.ReadFromJsonAsync<PlanVersionDto>(cancellationToken: cancellationToken) : null;
+    }
+
+    public async Task<PlanVersionDto?> UpdateDraftPlanVersionAsync(Guid versionId, UpdateDraftPlanVersionCommand command, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.PutAsJsonAsync($"api/v1/backoffice/plans/versions/{versionId}", command, cancellationToken);
+        return response.IsSuccessStatusCode ? await response.Content.ReadFromJsonAsync<PlanVersionDto>(cancellationToken: cancellationToken) : null;
+    }
+
+    public async Task<PlanVersionDto?> PublishPlanVersionAsync(Guid versionId, string? approvalNotes = null, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.PostAsJsonAsync($"api/v1/backoffice/plans/versions/{versionId}/publish", new { ApprovalNotes = approvalNotes }, cancellationToken);
+        return response.IsSuccessStatusCode ? await response.Content.ReadFromJsonAsync<PlanVersionDto>(cancellationToken: cancellationToken) : null;
+    }
+
+    public async Task<PlanVersionComparisonDto?> ComparePlanVersionsAsync(Guid baseVersionId, Guid targetVersionId, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        return await _httpClient.GetFromJsonAsync<PlanVersionComparisonDto>($"api/v1/backoffice/plans/versions/compare?baseVersionId={baseVersionId}&targetVersionId={targetVersionId}", cancellationToken);
     }
 }

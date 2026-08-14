@@ -73,6 +73,9 @@ using CriaCerto.Modules.Backoffice.Application.Features.AdminUsers.Dtos;
 using CriaCerto.Modules.Backoffice.Application.Features.Tenants.Commands;
 using CriaCerto.Modules.Backoffice.Application.Features.Tenants.Dtos;
 using CriaCerto.Modules.Backoffice.Application.Features.Tenants.Queries;
+using CriaCerto.Modules.Backoffice.Application.Features.Plans.Commands;
+using CriaCerto.Modules.Backoffice.Application.Features.Plans.Queries;
+using CriaCerto.Modules.Backoffice.Application.Features.Plans.Dtos;
 using CriaCerto.Modules.Backoffice.Application.Security;
 using CriaCerto.Modules.Backoffice.Infrastructure;
 using CriaCerto.Modules.Backoffice.Infrastructure.Persistence;
@@ -535,6 +538,57 @@ backoffice.MapDelete("/tenants/saved-filters/{filterId:guid}", async (Guid filte
     var result = await sender.Send(new DeleteAdminFilterCommand(callerId, filterId));
     return result.IsSuccess ? Results.Ok() : Results.Json(result.Error, statusCode: ToStatusCode(result.Error.Type));
 }).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.TenantsRead)).WithTags("Backoffice Tenants");
+
+// --- BACKOFFICE PLAN CATALOG ENDPOINTS ---
+backoffice.MapGet("/plans", async (bool? includeArchived, ISender sender) =>
+{
+    var result = await sender.Send(new GetPlanCatalogsQuery(includeArchived ?? false));
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.PlansRead)).WithTags("Backoffice Plans");
+
+backoffice.MapGet("/plans/{id:guid}", async (Guid id, ISender sender) =>
+{
+    var result = await sender.Send(new GetPlanCatalogByIdQuery(id));
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.PlansRead)).WithTags("Backoffice Plans");
+
+backoffice.MapGet("/plans/versions/compare", async (Guid baseVersionId, Guid targetVersionId, ISender sender) =>
+{
+    var result = await sender.Send(new ComparePlanVersionsQuery(baseVersionId, targetVersionId));
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.PlansRead)).WithTags("Backoffice Plans");
+
+backoffice.MapPost("/plans", async (CreatePlanCatalogCommand req, HttpContext ctx, ISender sender) =>
+{
+    var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var command = req with { PerformedByAdminUserId = callerId, PerformedByAdminEmail = callerEmail, IpAddress = ip };
+    var result = await sender.Send(command);
+    return ToHttpResult(result, StatusCodes.Status201Created);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.PlansWrite)).WithTags("Backoffice Plans");
+
+backoffice.MapPost("/plans/{id:guid}/versions", async (Guid id, CreatePlanVersionCommand req, HttpContext ctx, ISender sender) =>
+{
+    var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var command = req with { PlanCatalogId = id, PerformedByAdminUserId = callerId, PerformedByAdminEmail = callerEmail, IpAddress = ip };
+    var result = await sender.Send(command);
+    return ToHttpResult(result, StatusCodes.Status201Created);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.PlansWrite)).WithTags("Backoffice Plans");
+
+backoffice.MapPut("/plans/versions/{versionId:guid}", async (Guid versionId, UpdateDraftPlanVersionCommand req, HttpContext ctx, ISender sender) =>
+{
+    var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var command = req with { VersionId = versionId, PerformedByAdminUserId = callerId, PerformedByAdminEmail = callerEmail, IpAddress = ip };
+    var result = await sender.Send(command);
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.PlansWrite)).WithTags("Backoffice Plans");
+
+backoffice.MapPost("/plans/versions/{versionId:guid}/publish", async (Guid versionId, PublishPlanVersionRequest req, HttpContext ctx, ISender sender) =>
+{
+    var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var command = new PublishPlanVersionCommand(versionId, req.ApprovalNotes, callerId, callerEmail, ip);
+    var result = await sender.Send(command);
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.PlansPublish)).WithTags("Backoffice Plans");
 
 // Backoffice Auth Endpoints (Anonymous / Credentials + MFA)
 app.MapPost("/api/v1/backoffice/auth/login", async (BackofficeLoginRequest req, HttpContext ctx, ISender sender) =>
@@ -1106,3 +1160,4 @@ public record ResetPasswordRequest(string NewRawPassword);
 public record EnableMfaRequest(string SecretKey, string VerificationCode, List<string> RecoveryCodes);
 public record BackofficeLoginRequest(string Email, string Password, string? MfaCode);
 public record RefreshSessionRequest(string SessionToken, string RefreshToken);
+public record PublishPlanVersionRequest(string? ApprovalNotes);

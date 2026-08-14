@@ -30,14 +30,17 @@ public static class BackofficeDataSeeder
             rolesMap,
             cancellationToken);
 
+        var plansCreated = await SeedPlansAsync(dbContext, cancellationToken);
+
         await dbContext.SaveChangesAsync(cancellationToken);
 
         logger?.LogInformation(
-            "Backoffice seed completed. PermissionsCreated={PermissionsCreated}, RolesCreated={RolesCreated}, AdminCreated={AdminCreated}, AdminRoleRepaired={AdminRoleRepaired}.",
+            "Backoffice seed completed. PermissionsCreated={PermissionsCreated}, RolesCreated={RolesCreated}, AdminCreated={AdminCreated}, AdminRoleRepaired={AdminRoleRepaired}, PlansCreated={PlansCreated}.",
             permissionsCreated,
             rolesCreated,
             adminCreated,
-            adminRoleRepaired);
+            adminRoleRepaired,
+            plansCreated);
     }
 
     private static async Task<(int Created, Dictionary<string, Permission> PermissionsMap)> SeedPermissionsAsync(
@@ -214,4 +217,101 @@ public static class BackofficeDataSeeder
         BackofficeRoles.ReadOnlyAuditor => "Auditor Somente-Leitura: Acesso exclusivo para consulta de logs e relatórios",
         _ => $"Função administrativa {roleName}"
     };
+
+    private static async Task<int> SeedPlansAsync(BackofficeDbContext dbContext, CancellationToken cancellationToken)
+    {
+        var existingPlans = await dbContext.PlanCatalogs.ToListAsync(cancellationToken);
+        if (existingPlans.Any()) return 0;
+
+        var bootstrapAdminId = Guid.NewGuid();
+        var created = 0;
+
+        // 1. Starter Plan
+        var starterResult = PlanCatalog.Create("starter", "Plano Starter", "Ideal para pequenas propriedades com controle inicial de reprodução e parto.", "PeDistributed");
+        if (starterResult.IsSuccess)
+        {
+            var plan = starterResult.Value;
+            var v1 = plan.CreateVersion(
+                "v1.0 - Lançamento",
+                149.90m,
+                119.90m,
+                500,
+                3,
+                1,
+                new[]
+                {
+                    PlanFeature.Create("Modules.Breeding", "Módulo de Reprodução & IATF", true),
+                    PlanFeature.Create("Modules.Calving", "Módulo de Partos & Bezerreiro", true)
+                },
+                new[]
+                {
+                    PlanLimit.Create("MaxCattleHeads", 500, "cabeças")
+                }).Value;
+            plan.PublishVersion(v1.Id, bootstrapAdminId, "Seed inicial de produção");
+            dbContext.PlanCatalogs.Add(plan);
+            created++;
+        }
+
+        // 2. Pro Plan
+        var proResult = PlanCatalog.Create("pro", "Plano Profissional", "Para médias e grandes fazendas com controle sanitário, nutricional e crescimento.", "PeDistributed");
+        if (proResult.IsSuccess)
+        {
+            var plan = proResult.Value;
+            var v1 = plan.CreateVersion(
+                "v1.0 - Lançamento",
+                349.90m,
+                299.90m,
+                2500,
+                10,
+                5,
+                new[]
+                {
+                    PlanFeature.Create("Modules.Breeding", "Módulo de Reprodução & IATF", true),
+                    PlanFeature.Create("Modules.Calving", "Módulo de Partos & Bezerreiro", true),
+                    PlanFeature.Create("Modules.Growth", "Módulo de Manejo & Pesagem", true),
+                    PlanFeature.Create("Modules.Sanitary", "Módulo Sanitário & Vacinação", true),
+                    PlanFeature.Create("Modules.Nutrition", "Módulo Nutricional & Suplementação", true)
+                },
+                new[]
+                {
+                    PlanLimit.Create("MaxCattleHeads", 2500, "cabeças")
+                }).Value;
+            plan.PublishVersion(v1.Id, bootstrapAdminId, "Seed inicial de produção");
+            dbContext.PlanCatalogs.Add(plan);
+            created++;
+        }
+
+        // 3. Enterprise Plan
+        var entResult = PlanCatalog.Create("enterprise", "Plano Enterprise", "Solução completa para grandes grupos pecuários com cabeças ilimitadas e analytics.", "Enterprise");
+        if (entResult.IsSuccess)
+        {
+            var plan = entResult.Value;
+            var v1 = plan.CreateVersion(
+                "v1.0 - Lançamento",
+                799.90m,
+                699.90m,
+                999999,
+                50,
+                20,
+                new[]
+                {
+                    PlanFeature.Create("Modules.Breeding", "Módulo de Reprodução & IATF", true),
+                    PlanFeature.Create("Modules.Calving", "Módulo de Partos & Bezerreiro", true),
+                    PlanFeature.Create("Modules.Growth", "Módulo de Manejo & Pesagem", true),
+                    PlanFeature.Create("Modules.Sanitary", "Módulo Sanitário & Vacinação", true),
+                    PlanFeature.Create("Modules.Nutrition", "Módulo Nutricional & Suplementação", true),
+                    PlanFeature.Create("Modules.Analytics", "Zootecnia Avançada & Indicadores", true),
+                    PlanFeature.Create("PwaOfflineMode", "Modo Offline PWA em Curral", true)
+                },
+                new[]
+                {
+                    PlanLimit.Create("MaxCattleHeads", 999999, "cabeças")
+                }).Value;
+            plan.PublishVersion(v1.Id, bootstrapAdminId, "Seed inicial de produção");
+            dbContext.PlanCatalogs.Add(plan);
+            created++;
+        }
+
+        return created;
+    }
 }

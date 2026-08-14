@@ -124,7 +124,7 @@ As entregas estão organizadas em **6 Fases Sequenciais**, cobrindo fundação d
 
 ### Phase 3: Catálogo de Planos, Assinaturas e Feature Gating
 
-#### Sub-fase 3.1: Catálogo de Planos Versionado [PLANEJADA]
+#### Sub-fase 3.1: Catálogo de Planos Versionado [CONCLUÍDA]
 * **Backend:**
   * Entidades: `PlanCatalog`, `PlanVersion`, `PlanFeature`, `PlanLimit`.
   * Versionamento sem impacto retroativo nas assinaturas vigentes.

@@ -1,0 +1,966 @@
+@page "/backoffice/plans"
+@layout Layout.BackofficeLayout
+@using CriaCerto.Modules.Backoffice.Application.Features.Plans.Dtos
+@using CriaCerto.Modules.Backoffice.Application.Features.Plans.Commands
+@using CriaCerto.Modules.Backoffice.Application.Security
+@using CriaCerto.Web.Client.Components.Backoffice
+@using CriaCerto.Web.Client.Services
+@inject IBackofficeApiClient ApiClient
+@attribute [Authorize]
+
+<div class="plans-management-container">
+    <header class="page-header">
+        <div>
+            <span class="badge-category">Gestão Comercial & Preços</span>
+            <h1 class="page-title">Catálogo de Planos Versionado</h1>
+            <p class="page-subtitle">Gerencie planos SaaS, crie rascunhos de versão e publique atualizações sem impacto retroativo nas assinaturas ativas.</p>
+        </div>
+
+        <PermissionGuard Permission="@BackofficePermissions.PlansWrite">
+            <button class="btn btn-primary" @onclick="OpenCreatePlanModal">
+                <span class="icon">➕</span> Novo Plano
+            </button>
+        </PermissionGuard>
+    </header>
+
+    @if (_isLoading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Carregando catálogo de planos...</p>
+        </div>
+    }
+    else if (_plans is null || !_plans.Any())
+    {
+        <div class="empty-state">
+            <div class="empty-icon">💳</div>
+            <h3>Nenhum plano encontrado</h3>
+            <p>Comece criando seu primeiro plano de assinatura para os clientes da plataforma.</p>
+        </div>
+    }
+    else
+    {
+        <div class="plans-grid">
+            @foreach (var plan in _plans)
+            {
+                <div class="plan-card @(plan.IsArchived ? "archived" : "")">
+                    <div class="plan-card-header">
+                        <div class="plan-header-main">
+                            <span class="plan-code">@plan.Code</span>
+                            <span class="plan-category">@plan.Category</span>
+                        </div>
+                        <h2 class="plan-name">@plan.Name</h2>
+                        <p class="plan-description">@plan.Description</p>
+                    </div>
+
+                    <div class="plan-card-body">
+                        <!-- Active Version Summary -->
+                        @if (plan.ActiveVersion != null)
+                        {
+                            <div class="version-box active-version">
+                                <div class="version-box-header">
+                                    <span class="status-badge published">● Versão Ativa (@plan.ActiveVersion.VersionName)</span>
+                                    <span class="version-num">v@plan.ActiveVersion.VersionNumber.0</span>
+                                </div>
+                                <div class="price-row">
+                                    <span class="price">R$ @plan.ActiveVersion.MonthlyPrice.ToString("N2")/mês</span>
+                                    <span class="price-sub">R$ @plan.ActiveVersion.AnnualPriceMonthly.ToString("N2")/mês no anual</span>
+                                </div>
+                                <div class="limits-row">
+                                    <span>Capacidade: <strong>@plan.ActiveVersion.HeadCapacityLimit.ToString("N0") cabeças</strong></span>
+                                </div>
+                                <div class="features-summary">
+                                    <span class="feature-count">@plan.ActiveVersion.Features.Count(f => f.IsEnabled) módulos inclusos</span>
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="version-box no-active">
+                                <span>Nenhuma versão publicada ativa</span>
+                            </div>
+                        }
+
+                        <!-- Draft Version Summary (If Exists) -->
+                        @if (plan.DraftVersion != null)
+                        {
+                            <div class="version-box draft-version">
+                                <div class="version-box-header">
+                                    <span class="status-badge draft">✏️ Rascunho em Edição (@plan.DraftVersion.VersionName)</span>
+                                    <span class="version-num">v@plan.DraftVersion.VersionNumber.0</span>
+                                </div>
+                                <div class="price-row">
+                                    <span class="price">R$ @plan.DraftVersion.MonthlyPrice.ToString("N2")/mês</span>
+                                </div>
+                                <div class="draft-actions">
+                                    <PermissionGuard Permission="@BackofficePermissions.PlansWrite">
+                                        <button class="btn btn-sm btn-outline" @onclick="() => OpenEditDraftModal(plan, plan.DraftVersion)">Editar Rascunho</button>
+                                    </PermissionGuard>
+                                    <PermissionGuard Permission="@BackofficePermissions.PlansPublish">
+                                        <button class="btn btn-sm btn-success" @onclick="() => OpenPublishModal(plan, plan.DraftVersion)">Publicar Versão</button>
+                                    </PermissionGuard>
+                                </div>
+                            </div>
+                        }
+                    </div>
+
+                    <div class="plan-card-footer">
+                        <div class="versions-history">
+                            <span class="history-label">Histórico de Versões (@plan.Versions.Count)</span>
+                            <div class="version-tags">
+                                @foreach (var v in plan.Versions)
+                                {
+                                    <span class="v-tag @v.Status.ToLower()">v@v.VersionNumber (@v.Status)</span>
+                                }
+                            </div>
+                        </div>
+
+                        <div class="card-footer-actions">
+                            @if (plan.DraftVersion == null)
+                            {
+                                <PermissionGuard Permission="@BackofficePermissions.PlansWrite">
+                                    <button class="btn btn-sm btn-secondary" @onclick="() => CreateNewVersionDraft(plan)">
+                                        ➕ Criar Rascunho
+                                    </button>
+                                </PermissionGuard>
+                            }
+
+                            @if (plan.Versions.Count >= 2)
+                            {
+                                <button class="btn btn-sm btn-ghost" @onclick="() => OpenCompareModal(plan)">
+                                    🔍 Comparar
+                                </button>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@if (_showCreatePlanModal)
+{
+    <div class="modal-backdrop">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3>Criar Novo Plano no Catálogo</h3>
+                <button class="btn-close" @onclick="CloseModals">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Código Slug (Único)</label>
+                    <input class="form-input" @bind="_newPlanCode" placeholder="ex: starter, pro, enterprise" />
+                </div>
+                <div class="form-group">
+                    <label>Nome Comercial do Plano</label>
+                    <input class="form-input" @bind="_newPlanName" placeholder="ex: Plano Produtor Starter" />
+                </div>
+                <div class="form-group">
+                    <label>Categoria</label>
+                    <select class="form-input" @bind="_newPlanCategory">
+                        <option value="PeDistributed">Pecuária Distribuída</option>
+                        <option value="Confinamento">Confinamento / Engorda</option>
+                        <option value="Enterprise">Grupo Enterprise</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Descrição Curta</label>
+                    <textarea class="form-input" @bind="_newPlanDescription" rows="3" placeholder="Descrição do escopo do plano..."></textarea>
+                </div>
+
+                <hr />
+                <h4>Parâmetros da Versão Inicial (v1.0)</h4>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Preço Mensal (R$)</label>
+                        <input type="number" class="form-input" @bind="_newPlanPrice" step="0.01" />
+                    </div>
+                    <div class="form-group">
+                        <label>Capacidade (Cabeças)</label>
+                        <input type="number" class="form-input" @bind="_newPlanCapacity" step="100" />
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" @onclick="CloseModals">Cancelar</button>
+                <button class="btn btn-primary" @onclick="SubmitCreatePlan">Criar Plano</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_showPublishModal && _targetPublishVersion != null)
+{
+    <div class="modal-backdrop">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3>Publicar Versão v@_targetPublishVersion.VersionNumber</h3>
+                <button class="btn-close" @onclick="CloseModals">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning">
+                    ⚠️ <strong>Atenção:</strong> Ao publicar a versão v@_targetPublishVersion.VersionNumber do plano '<strong>@_targetPublishPlan?.Name</strong>', ela se tornará <strong>estritamente imutável</strong>. Qualquer versão publicada anterior passará a ser considerada obsoleta para novas assinaturas.
+                </div>
+                <div class="form-group">
+                    <label>Justificativa / Notas de Aprovação (Obrigatório)</label>
+                    <textarea class="form-input" @bind="_approvalNotes" rows="3" placeholder="Motivo do lançamento ou reajuste de preço..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" @onclick="CloseModals">Cancelar</button>
+                <button class="btn btn-success" @onclick="ConfirmPublishVersion">Confirmar & Publicar</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_showEditDraftModal && _targetEditDraftVersion != null)
+{
+    <div class="modal-backdrop">
+        <div class="modal-card modal-lg">
+            <div class="modal-header">
+                <h3>Editar Rascunho — @_targetEditDraftPlan?.Name (@_targetEditDraftVersion.VersionName)</h3>
+                <button class="btn-close" @onclick="CloseModals">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Nome da Versão Rascunho</label>
+                    <input class="form-input" @bind="_editVersionName" placeholder="ex: v2.0 - Reajuste Anual & Novos Módulos" />
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Preço Mensal (R$)</label>
+                        <input type="number" step="0.01" class="form-input" @bind="_editMonthlyPrice" />
+                    </div>
+                    <div class="form-group">
+                        <label>Preço Anual Mensalizado (R$)</label>
+                        <input type="number" step="0.01" class="form-input" @bind="_editAnnualPriceMonthly" />
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Capacidade (Cabeças de Gado)</label>
+                        <input type="number" step="100" class="form-input" @bind="_editHeadCapacityLimit" />
+                    </div>
+                    <div class="form-group">
+                        <label>Máx. Usuários (Opcional)</label>
+                        <input type="number" class="form-input" @bind="_editMaxUsers" placeholder="Deixe em branco para ilimitado" />
+                    </div>
+                </div>
+
+                <hr />
+                <h4>Módulos Inclusos na Versão</h4>
+                <div class="modules-toggle-grid">
+                    @foreach (var key in _availableFeatureKeys)
+                    {
+                        var isChecked = _editSelectedFeatures.ContainsKey(key.Key) && _editSelectedFeatures[key.Key];
+                        <label class="module-toggle-card @(isChecked ? "selected" : "")">
+                            <input type="checkbox" checked="@isChecked" @onchange="(e) => ToggleFeature(key.Key, e.Value)" />
+                            <span>@key.Value</span>
+                        </label>
+                    }
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" @onclick="CloseModals">Cancelar</button>
+                <button class="btn btn-primary" @onclick="SubmitUpdateDraftVersion">Salvar Alterações no Rascunho</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_showCompareModal && _targetComparePlan != null)
+{
+    <div class="modal-backdrop">
+        <div class="modal-card modal-lg">
+            <div class="modal-header">
+                <h3>🔍 Comparativo de Versões — @_targetComparePlan.Name</h3>
+                <button class="btn-close" @onclick="CloseModals">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-row mb-3">
+                    <div class="form-group">
+                        <label>Versão Base (Original)</label>
+                        <select class="form-input" value="@_selectedBaseVersionId" @onchange="OnBaseVersionChanged">
+                            @foreach (var v in _targetComparePlan.Versions)
+                            {
+                                <option value="@v.Id">v@v.VersionNumber — @v.VersionName (@v.Status)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Versão Alvo (Comparada)</label>
+                        <select class="form-input" value="@_selectedTargetVersionId" @onchange="OnTargetVersionChanged">
+                            @foreach (var v in _targetComparePlan.Versions)
+                            {
+                                <option value="@v.Id">v@v.VersionNumber — @v.VersionName (@v.Status)</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+
+                @if (_isComparing)
+                {
+                    <div class="text-center p-4">Carregando comparativo entre versões...</div>
+                }
+                else if (_comparisonDto != null)
+                {
+                    <div class="diff-summary-card">
+                        <h4>Resumo Financeiro & Limites</h4>
+                        <div class="diff-grid">
+                            <div class="diff-item">
+                                <span class="diff-label">Preço Mensal</span>
+                                <div class="diff-values">
+                                    <span class="val-old">R$ @_comparisonDto.BaseVersion.MonthlyPrice.ToString("F2")</span>
+                                    <span class="arrow">➔</span>
+                                    <span class="val-new">R$ @_comparisonDto.TargetVersion.MonthlyPrice.ToString("F2")</span>
+                                </div>
+                                <span class="diff-delta @(_comparisonDto.PriceDifferenceMonthly >= 0 ? "positive" : "negative")">
+                                    @(_comparisonDto.PriceDifferenceMonthly >= 0 ? "+" : "")R$ @_comparisonDto.PriceDifferenceMonthly.ToString("F2") / mês
+                                </span>
+                            </div>
+
+                            <div class="diff-item">
+                                <span class="diff-label">Preço Anual (Mensalizado)</span>
+                                <div class="diff-values">
+                                    <span class="val-old">R$ @_comparisonDto.BaseVersion.AnnualPriceMonthly.ToString("F2")</span>
+                                    <span class="arrow">➔</span>
+                                    <span class="val-new">R$ @_comparisonDto.TargetVersion.AnnualPriceMonthly.ToString("F2")</span>
+                                </div>
+                                <span class="diff-delta @(_comparisonDto.PriceDifferenceAnnual >= 0 ? "positive" : "negative")">
+                                    @(_comparisonDto.PriceDifferenceAnnual >= 0 ? "+" : "")R$ @_comparisonDto.PriceDifferenceAnnual.ToString("F2") / mês
+                                </span>
+                            </div>
+
+                            <div class="diff-item">
+                                <span class="diff-label">Capacidade (Cabeças)</span>
+                                <div class="diff-values">
+                                    <span class="val-old">@_comparisonDto.BaseVersion.HeadCapacityLimit</span>
+                                    <span class="arrow">➔</span>
+                                    <span class="val-new">@_comparisonDto.TargetVersion.HeadCapacityLimit</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <hr />
+                        <h4>Módulos Inclusos na Nova Versão</h4>
+                        @if (_comparisonDto.AddedFeatures.Count == 0 && _comparisonDto.RemovedFeatures.Count == 0)
+                        {
+                            <p class="text-subtle">Nenhuma alteração nos módulos acessíveis entre estas versões.</p>
+                        }
+                        else
+                        {
+                            <div class="features-diff-container">
+                                @if (_comparisonDto.AddedFeatures.Count > 0)
+                                {
+                                    <div class="diff-block added">
+                                        <h5>➕ Novas Funcionalidades Adicionadas</h5>
+                                        <div class="badge-list">
+                                            @foreach (var key in _comparisonDto.AddedFeatures)
+                                            {
+                                                <span class="badge badge-added">@GetFeatureDisplayName(key)</span>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+
+                                @if (_comparisonDto.RemovedFeatures.Count > 0)
+                                {
+                                    <div class="diff-block removed">
+                                        <h5>➖ Funcionalidades Removidas</h5>
+                                        <div class="badge-list">
+                                            @foreach (var key in _comparisonDto.RemovedFeatures)
+                                            {
+                                                <span class="badge badge-removed">@GetFeatureDisplayName(key)</span>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+
+                        @if (_comparisonDto.ChangedLimits.Count > 0)
+                        {
+                            <hr />
+                            <h4>Variações de Limites Operacionais</h4>
+                            <ul>
+                                @foreach (var limit in _comparisonDto.ChangedLimits)
+                                {
+                                    <li>@limit</li>
+                                }
+                            </ul>
+                        }
+                    </div>
+                }
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" @onclick="CloseModals">Fechar Comparativo</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private IReadOnlyCollection<PlanCatalogDto>? _plans;
+    private bool _isLoading = true;
+
+    // Create Plan Modal state
+    private bool _showCreatePlanModal = false;
+    private string _newPlanCode = "";
+    private string _newPlanName = "";
+    private string _newPlanCategory = "PeDistributed";
+    private string _newPlanDescription = "";
+    private decimal _newPlanPrice = 199.90m;
+    private int _newPlanCapacity = 1000;
+
+    // Publish Modal state
+    private bool _showPublishModal = false;
+    private PlanCatalogDto? _targetPublishPlan;
+    private PlanVersionDto? _targetPublishVersion;
+    private string _approvalNotes = "";
+
+    // Edit Draft Modal state
+    private bool _showEditDraftModal = false;
+    private PlanCatalogDto? _targetEditDraftPlan;
+    private PlanVersionDto? _targetEditDraftVersion;
+    private string _editVersionName = "";
+    private decimal _editMonthlyPrice;
+    private decimal _editAnnualPriceMonthly;
+    private int _editHeadCapacityLimit;
+    private int? _editMaxUsers;
+    private int? _editMaxProductionUnits;
+    private Dictionary<string, bool> _editSelectedFeatures = new();
+
+    // Compare Modal State
+    private bool _showCompareModal = false;
+    private PlanCatalogDto? _targetComparePlan;
+    private Guid _selectedBaseVersionId;
+    private Guid _selectedTargetVersionId;
+    private PlanVersionComparisonDto? _comparisonDto;
+    private bool _isComparing = false;
+
+    private static readonly Dictionary<string, string> _availableFeatureKeys = new()
+    {
+        { "Modules.Breeding", "Módulo de Reprodução & IATF" },
+        { "Modules.Calving", "Módulo de Partos & Bezerreiro" },
+        { "Modules.Growth", "Módulo de Manejo & Pesagem" },
+        { "Modules.Sanitary", "Módulo Sanitário & Vacinação" },
+        { "Modules.Nutrition", "Módulo Nutricional & Suplementação" },
+        { "Modules.Analytics", "Zootecnia Avançada & Analytics" },
+        { "PwaOfflineMode", "Modo Offline PWA em Curral" }
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadPlansAsync();
+    }
+
+    private async Task LoadPlansAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            _plans = await ApiClient.GetPlansAsync();
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void OpenCreatePlanModal()
+    {
+        _newPlanCode = "";
+        _newPlanName = "";
+        _newPlanCategory = "PeDistributed";
+        _newPlanDescription = "";
+        _newPlanPrice = 199.90m;
+        _newPlanCapacity = 1000;
+        _showCreatePlanModal = true;
+    }
+
+    private void CloseModals()
+    {
+        _showCreatePlanModal = false;
+        _showPublishModal = false;
+        _showEditDraftModal = false;
+        _showCompareModal = false;
+        _targetPublishPlan = null;
+        _targetPublishVersion = null;
+        _targetEditDraftPlan = null;
+        _targetEditDraftVersion = null;
+        _targetComparePlan = null;
+        _comparisonDto = null;
+    }
+
+    private async Task SubmitCreatePlan()
+    {
+        if (string.IsNullOrWhiteSpace(_newPlanCode) || string.IsNullOrWhiteSpace(_newPlanName))
+        {
+            return;
+        }
+
+        var command = new CreatePlanCatalogCommand(
+            _newPlanCode,
+            _newPlanName,
+            _newPlanDescription,
+            _newPlanCategory,
+            _newPlanPrice,
+            _newPlanPrice * 0.85m,
+            _newPlanCapacity,
+            new List<PlanFeatureInputDto>
+            {
+                new("Modules.Breeding", "Módulo de Reprodução & IATF", true),
+                new("Modules.Calving", "Módulo de Partos & Bezerreiro", true)
+            },
+            new List<PlanLimitInputDto>
+            {
+                new("MaxCattleHeads", _newPlanCapacity, "cabeças")
+            },
+            Guid.Empty,
+            "",
+            ""
+        );
+
+        var result = await ApiClient.CreatePlanAsync(command);
+        if (result != null)
+        {
+            CloseModals();
+            await LoadPlansAsync();
+        }
+    }
+
+    private async Task CreateNewVersionDraft(PlanCatalogDto plan)
+    {
+        var baseVersion = plan.ActiveVersion ?? plan.Versions.LastOrDefault();
+        var price = baseVersion?.MonthlyPrice ?? 199.90m;
+        var capacity = baseVersion?.HeadCapacityLimit ?? 1000;
+
+        var command = new CreatePlanVersionCommand(
+            plan.Id,
+            $"v{(plan.Versions.Count + 1)}.0 - Nova Revisão",
+            price,
+            price * 0.85m,
+            capacity,
+            null,
+            null,
+            baseVersion?.Features.Select(f => new PlanFeatureInputDto(f.FeatureKey, f.DisplayName, f.IsEnabled, f.FeatureType)).ToList(),
+            baseVersion?.Limits.Select(l => new PlanLimitInputDto(l.LimitKey, l.LimitValue, l.Unit)).ToList(),
+            Guid.Empty,
+            "",
+            ""
+        );
+
+        var result = await ApiClient.CreatePlanVersionAsync(plan.Id, command);
+        if (result != null)
+        {
+            await LoadPlansAsync();
+        }
+    }
+
+    private void OpenEditDraftModal(PlanCatalogDto plan, PlanVersionDto draftVersion)
+    {
+        _targetEditDraftPlan = plan;
+        _targetEditDraftVersion = draftVersion;
+        _editVersionName = draftVersion.VersionName;
+        _editMonthlyPrice = draftVersion.MonthlyPrice;
+        _editAnnualPriceMonthly = draftVersion.AnnualPriceMonthly;
+        _editHeadCapacityLimit = draftVersion.HeadCapacityLimit;
+        _editMaxUsers = draftVersion.MaxUsers;
+        _editMaxProductionUnits = draftVersion.MaxProductionUnits;
+
+        _editSelectedFeatures = _availableFeatureKeys.Keys.ToDictionary(
+            k => k,
+            k => draftVersion.Features.Any(f => f.FeatureKey == k && f.IsEnabled)
+        );
+
+        _showEditDraftModal = true;
+    }
+
+    private void ToggleFeature(string key, object? isCheckedObj)
+    {
+        bool isChecked = isCheckedObj is bool b && b;
+        _editSelectedFeatures[key] = isChecked;
+    }
+
+    private async Task SubmitUpdateDraftVersion()
+    {
+        if (_targetEditDraftVersion is null || string.IsNullOrWhiteSpace(_editVersionName))
+        {
+            return;
+        }
+
+        var featureInputs = _editSelectedFeatures.Select(kv => new PlanFeatureInputDto(
+            kv.Key,
+            _availableFeatureKeys.TryGetValue(kv.Key, out var name) ? name : kv.Key,
+            kv.Value,
+            "ModuleAccess"
+        )).ToList();
+
+        var limitInputs = new List<PlanLimitInputDto>
+        {
+            new("MaxCattleHeads", _editHeadCapacityLimit, "cabeças")
+        };
+
+        var command = new UpdateDraftPlanVersionCommand(
+            _targetEditDraftVersion.Id,
+            _editVersionName,
+            _editMonthlyPrice,
+            _editAnnualPriceMonthly,
+            _editHeadCapacityLimit,
+            _editMaxUsers,
+            _editMaxProductionUnits,
+            featureInputs,
+            limitInputs,
+            Guid.Empty,
+            "",
+            ""
+        );
+
+        var result = await ApiClient.UpdateDraftPlanVersionAsync(_targetEditDraftVersion.Id, command);
+        if (result != null)
+        {
+            CloseModals();
+            await LoadPlansAsync();
+        }
+    }
+
+    private void OpenPublishModal(PlanCatalogDto plan, PlanVersionDto draftVersion)
+    {
+        _targetPublishPlan = plan;
+        _targetPublishVersion = draftVersion;
+        _approvalNotes = "";
+        _showPublishModal = true;
+    }
+
+    private async Task ConfirmPublishVersion()
+    {
+        if (_targetPublishVersion is null || string.IsNullOrWhiteSpace(_approvalNotes))
+        {
+            return;
+        }
+
+        var result = await ApiClient.PublishPlanVersionAsync(_targetPublishVersion.Id, _approvalNotes);
+        if (result != null)
+        {
+            CloseModals();
+            await LoadPlansAsync();
+        }
+    }
+
+    private async Task OpenCompareModal(PlanCatalogDto plan)
+    {
+        if (plan.Versions.Count < 2) return;
+
+        _targetComparePlan = plan;
+        _selectedBaseVersionId = plan.ActiveVersion?.Id ?? plan.Versions.First().Id;
+        _selectedTargetVersionId = plan.DraftVersion?.Id ?? plan.Versions.Last().Id;
+
+        if (_selectedBaseVersionId == _selectedTargetVersionId)
+        {
+            _selectedTargetVersionId = plan.Versions.FirstOrDefault(v => v.Id != _selectedBaseVersionId)?.Id ?? _selectedBaseVersionId;
+        }
+
+        _showCompareModal = true;
+        await LoadComparisonAsync();
+    }
+
+    private async Task OnBaseVersionChanged(ChangeEventArgs e)
+    {
+        if (Guid.TryParse(e.Value?.ToString(), out var id))
+        {
+            _selectedBaseVersionId = id;
+            await LoadComparisonAsync();
+        }
+    }
+
+    private async Task OnTargetVersionChanged(ChangeEventArgs e)
+    {
+        if (Guid.TryParse(e.Value?.ToString(), out var id))
+        {
+            _selectedTargetVersionId = id;
+            await LoadComparisonAsync();
+        }
+    }
+
+    private async Task LoadComparisonAsync()
+    {
+        if (_selectedBaseVersionId == Guid.Empty || _selectedTargetVersionId == Guid.Empty) return;
+
+        _isComparing = true;
+        try
+        {
+            _comparisonDto = await ApiClient.ComparePlanVersionsAsync(_selectedBaseVersionId, _selectedTargetVersionId);
+        }
+        finally
+        {
+            _isComparing = false;
+        }
+    }
+
+    private string GetFeatureDisplayName(string featureKey)
+    {
+        return _availableFeatureKeys.TryGetValue(featureKey, out var name) ? name : featureKey;
+    }
+}
+
+<style>
+    .plans-management-container {
+        padding: 2rem;
+        max-width: 1400px;
+        margin: 0 auto;
+        color: #f8fafc;
+    }
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 2rem;
+        padding-bottom: 1.5rem;
+        border-bottom: 1px solid #1e293b;
+    }
+    .badge-category {
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        color: #38bdf8;
+        letter-spacing: 0.05em;
+    }
+    .page-title {
+        font-size: 1.8rem;
+        font-weight: 800;
+        margin: 0.4rem 0;
+        color: #f1f5f9;
+    }
+    .page-subtitle {
+        color: #94a3b8;
+        font-size: 0.95rem;
+        max-width: 700px;
+    }
+    .plans-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+        gap: 1.5rem;
+    }
+    .plan-card {
+        background: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 1rem;
+        padding: 1.5rem;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+        transition: transform 0.2s ease, border-color 0.2s ease;
+    }
+    .plan-card:hover {
+        transform: translateY(-2px);
+        border-color: #38bdf8;
+    }
+    .plan-header-main {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.5rem;
+    }
+    .plan-code {
+        font-family: monospace;
+        font-weight: 700;
+        color: #38bdf8;
+        background: #0f172a;
+        padding: 0.2rem 0.6rem;
+        border-radius: 0.4rem;
+        font-size: 0.8rem;
+    }
+    .plan-category {
+        font-size: 0.75rem;
+        color: #94a3b8;
+        background: #334155;
+        padding: 0.2rem 0.5rem;
+        border-radius: 0.3rem;
+    }
+    .plan-name {
+        font-size: 1.3rem;
+        font-weight: 700;
+        margin: 0.3rem 0;
+        color: #f8fafc;
+    }
+    .plan-description {
+        font-size: 0.85rem;
+        color: #94a3b8;
+        margin-bottom: 1rem;
+        min-height: 2.6rem;
+    }
+    .version-box {
+        background: #0f172a;
+        border-radius: 0.75rem;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        border: 1px solid #1e293b;
+    }
+    .version-box.active-version {
+        border-left: 4px solid #10b981;
+    }
+    .version-box.draft-version {
+        border-left: 4px solid #f59e0b;
+        background: #18181b;
+    }
+    .version-box-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.5rem;
+    }
+    .status-badge.published {
+        color: #34d399;
+        font-weight: 600;
+        font-size: 0.8rem;
+    }
+    .status-badge.draft {
+        color: #fbbf24;
+        font-weight: 600;
+        font-size: 0.8rem;
+    }
+    .version-num {
+        font-size: 0.75rem;
+        color: #64748b;
+    }
+    .price-row {
+        margin: 0.5rem 0;
+    }
+    .price {
+        font-size: 1.2rem;
+        font-weight: 800;
+        color: #f8fafc;
+        display: block;
+    }
+    .price-sub {
+        font-size: 0.75rem;
+        color: #94a3b8;
+    }
+    .limits-row {
+        font-size: 0.85rem;
+        color: #cbd5e1;
+        margin-top: 0.4rem;
+    }
+    .draft-actions {
+        display: flex;
+        gap: 0.5rem;
+        margin-top: 0.75rem;
+    }
+    .versions-history {
+        margin-top: 1rem;
+        padding-top: 0.75rem;
+        border-top: 1px solid #334155;
+    }
+    .history-label {
+        font-size: 0.7rem;
+        font-weight: 700;
+        color: #64748b;
+        text-transform: uppercase;
+        display: block;
+        margin-bottom: 0.4rem;
+    }
+    .version-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.3rem;
+    }
+    .v-tag {
+        font-size: 0.7rem;
+        padding: 0.15rem 0.4rem;
+        border-radius: 0.25rem;
+        background: #334155;
+        color: #94a3b8;
+    }
+    .v-tag.published { background: #064e3b; color: #6ee7b7; }
+    .v-tag.draft { background: #78350f; color: #fde68a; }
+    .v-tag.deprecated { background: #451a03; color: #fdba74; }
+    .card-footer-actions {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 1rem;
+    }
+    .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.6rem 1.2rem;
+        border-radius: 0.5rem;
+        font-weight: 600;
+        font-size: 0.9rem;
+        cursor: pointer;
+        border: none;
+        transition: all 0.2s ease;
+    }
+    .btn-sm { padding: 0.35rem 0.75rem; font-size: 0.8rem; }
+    .btn-primary { background: #38bdf8; color: #0f172a; }
+    .btn-primary:hover { background: #7dd3fc; }
+    .btn-success { background: #10b981; color: #ffffff; }
+    .btn-success:hover { background: #059669; }
+    .btn-outline { background: transparent; border: 1px solid #475569; color: #f1f5f9; }
+    .btn-outline:hover { background: #334155; }
+    .btn-secondary { background: #334155; color: #f8fafc; }
+    .btn-ghost { background: transparent; color: #94a3b8; }
+    .btn-ghost:hover { color: #f8fafc; }
+
+    .modal-backdrop {
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0, 0, 0, 0.75);
+        backdrop-filter: blur(4px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+    }
+    .modal-card {
+        background: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 1rem;
+        width: 100%;
+        max-width: 520px;
+        padding: 1.5rem;
+        box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
+    }
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+    }
+    .btn-close { background: none; border: none; color: #94a3b8; font-size: 1.2rem; cursor: pointer; }
+    .form-group { margin-bottom: 1rem; display: flex; flex-direction: column; gap: 0.3rem; }
+    .form-group label { font-size: 0.85rem; font-weight: 600; color: #cbd5e1; }
+    .form-input { background: #0f172a; border: 1px solid #334155; border-radius: 0.5rem; padding: 0.6rem; color: #f8fafc; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .modal-footer { display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.5rem; }
+    .alert-warning { background: #451a03; border: 1px solid #b45309; color: #fef3c7; padding: 0.8rem; border-radius: 0.5rem; font-size: 0.85rem; margin-bottom: 1rem; }
+    .modal-card.modal-lg { max-width: 680px; }
+    .modules-toggle-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 0.6rem; margin-top: 0.5rem; }
+    .module-toggle-card { display: flex; align-items: center; gap: 0.6rem; padding: 0.6rem 0.8rem; background: #0f172a; border: 1px solid #334155; border-radius: 0.5rem; cursor: pointer; font-size: 0.85rem; color: #94a3b8; transition: all 0.2s ease; }
+    .module-toggle-card.selected { border-color: #38bdf8; background: #1e293b; color: #f8fafc; font-weight: 600; }
+    .diff-summary-card { background: #0f172a; border: 1px solid #334155; border-radius: 0.75rem; padding: 1.2rem; margin-top: 0.5rem; }
+    .diff-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-top: 0.8rem; }
+    .diff-item { background: #1e293b; padding: 0.8rem; border-radius: 0.5rem; display: flex; flex-direction: column; gap: 0.3rem; }
+    .diff-label { font-size: 0.8rem; color: #94a3b8; font-weight: 600; }
+    .diff-values { display: flex; align-items: center; gap: 0.5rem; font-size: 0.95rem; font-weight: 700; }
+    .val-old { color: #94a3b8; text-decoration: line-through; }
+    .val-new { color: #f8fafc; }
+    .arrow { color: #38bdf8; font-size: 0.85rem; }
+    .diff-delta { font-size: 0.8rem; font-weight: 600; }
+    .diff-delta.positive { color: #34d399; }
+    .diff-delta.negative { color: #f87171; }
+    .features-diff-container { display: flex; flex-direction: column; gap: 1rem; margin-top: 0.8rem; }
+    .diff-block { padding: 0.8rem; border-radius: 0.5rem; }
+    .diff-block.added { background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); }
+    .diff-block.removed { background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); }
+    .diff-block h5 { margin: 0 0 0.5rem 0; font-size: 0.85rem; }
+    .badge-list { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+    .badge { padding: 0.3rem 0.6rem; border-radius: 0.375rem; font-size: 0.8rem; font-weight: 600; }
+    .badge-added { background: #064e3b; color: #6ee7b7; border: 1px solid #047857; }
+    .badge-removed { background: #7f1d1d; color: #fca5a5; border: 1px solid #b91c1c; }
+    .mb-3 { margin-bottom: 1rem; }
+    .text-subtle { color: #94a3b8; font-size: 0.85rem; font-style: italic; }
+</style>
