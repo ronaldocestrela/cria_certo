@@ -1,4 +1,5 @@
 using CriaCerto.Modules.Tenancy.Application.Abstractions;
+using CriaCerto.Modules.Tenancy.Application.Domain;
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
 
@@ -18,7 +19,7 @@ public sealed class UpdateTenantProfileCommandValidator : AbstractValidator<Upda
 
         RuleFor(x => x.CNPJ)
             .NotEmpty().WithMessage("O CNPJ/CPF é obrigatório.")
-            .Must(BeValidCnpjOrCpf).WithMessage("O CNPJ ou CPF informado é inválido.");
+            .Must(CnpjNormalizer.IsValidCnpjOrCpf).WithMessage("O CNPJ ou CPF informado é inválido.");
 
         RuleFor(x => x.State)
             .NotEmpty().WithMessage("O estado (UF) é obrigatório.")
@@ -42,22 +43,10 @@ public sealed class UpdateTenantProfileCommandValidator : AbstractValidator<Upda
 
                 if (tenant is null) return true;
 
-                var maxAllowed = tenant.SubscribedPlan?.ToUpperInvariant() switch
-                {
-                    "STARTER" => 1000,
-                    "PRO" => 5000,
-                    _ => int.MaxValue
-                };
+                var maxAllowed = PlanCapacityLimits.GetHeadCapacityLimit(tenant.SubscribedPlan);
 
                 return cmd.Capacity <= maxAllowed;
             })
             .WithMessage("A capacidade solicitada excede o limite permitido para o plano contratado da fazenda.");
-    }
-
-    private static bool BeValidCnpjOrCpf(string input)
-    {
-        if (string.IsNullOrWhiteSpace(input)) return false;
-        var digits = new string(input.Where(char.IsDigit).ToArray());
-        return digits.Length is 11 or 14;
     }
 }

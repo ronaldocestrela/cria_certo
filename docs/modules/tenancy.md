@@ -19,12 +19,18 @@ O módulo `Modules.Tenancy` gerencia as identidades dos usuários, organizaçõe
 
 - **Tenant**: Representa a unidade produtiva/fazenda.
   - `Id`: `Guid`
-  - `Name`: `string`
-  - `CNPJ`: `string`
-  - `State`: `string`
-  - `Type`: `string` (ex: Matriz, Recria, Engorda)
-  - `Status`: `string`
+  - `Name`: `string` (nome fantasia/fazenda)
+  - `LegalName`: `string?` (razão social)
+  - `CNPJ`: `string` (formatado, exibido na UI)
+  - `CnpjNormalized`: `string` (11 ou 14 dígitos, **único**)
+  - `ExternalIdentifier`: `string?` (**único** quando informado)
+  - `State`, `City`, `StateRegistration`, `AreaInHectares`, `Type`
+  - `Status`: `string` (Active, Suspended, Maintenance — ciclo completo na sub-fase 2.2)
   - `SubscribedPlan`: `string` (Starter, Pro, Enterprise)
+  - `Capacity`: `int` (limite de cabeças; validado via `PlanCapacityLimits`)
+  - `TechnicalOwnerName` / `TechnicalOwnerEmail`
+  - `CommercialOwnerName` / `CommercialOwnerEmail`
+  - `CreatedAtUtc` / `UpdatedAtUtc`
 
 - **UserTenant**: Tabela associativa entre `User` e `Tenant`.
 
@@ -41,6 +47,15 @@ O módulo `Modules.Tenancy` gerencia as identidades dos usuários, organizaçõe
 | `POST` | `/api/auth/reset-password` | Redefinição de senha com token de verificação | Não | `200 OK` |
 | `POST` | `/api/v1/tenancy/farms` | Onboarding de fazenda e associação automática de tenant | Não | `201 Created` (`AuthResponse`) |
 | `GET` | `/api/v1/tenancy/plans` | Consulta de planos de assinatura comercial | Não | `200 OK` (`List<SubscriptionPlanDto>`) |
+
+### Endpoints Backoffice (`/api/v1/backoffice/tenants`)
+
+| Método | Endpoint | Permissão | Descrição |
+|---|---|---|---|
+| `GET` | `/api/v1/backoffice/tenants` | `tenants.read` | Listagem paginada com filtros |
+| `GET` | `/api/v1/backoffice/tenants/{id}` | `tenants.read` | Visão 360 do tenant |
+| `POST` | `/api/v1/backoffice/tenants` | `tenants.write` | Cadastro administrativo |
+| `PUT` | `/api/v1/backoffice/tenants/{id}` | `tenants.write` | Atualização cadastral (sem alterar plano/status) |
 
 ---
 
@@ -63,6 +78,17 @@ O módulo `Modules.Tenancy` gerencia as identidades dos usuários, organizaçõe
 - **Contrato:** `ForgotPasswordCommand(string Email)`
 - **Validações (`ForgotPasswordCommandValidator`):** Formato de e-mail válido.
 - **Regra de Negócio:** Gera token de 6 dígitos numéricos alfanuméricos com validade de 1 hora (`PasswordResetTokenExpiresAt = DateTime.UtcNow.AddHours(1)`). Retorna `Result.Success`.
+
+### 3.5 Comandos Backoffice (via `Modules.Backoffice` → MediatR → `Modules.Tenancy`)
+
+- **`CreateTenantForAdminCommand`**: cadastro administrativo sem exigir usuário produtor; provisiona DB do tenant; `OwnerUserEmail` opcional.
+- **`UpdateTenantForAdminCommand`**: atualização cadastral; não altera `Status` nem `SubscribedPlan`.
+- **`GetTenantsBackofficeQuery`**: listagem paginada com filtros (busca, status, plano, UF, owners).
+- **`GetTenantBackofficeDetailQuery`**: visão 360 com limites, owners, contagem de time e unidades produtivas.
+
+**Unicidade:** `CnpjNormalized` e `ExternalIdentifier` são validados no onboarding (`CreateTenantCommand`) e no backoffice.
+
+**Limites de plano:** `PlanCapacityLimits` — Starter: 500, Pro: 2500, Enterprise: ilimitado.
 
 ### 3.4 `ResetPasswordCommand`
 - **Contrato:** `ResetPasswordCommand(string Email, string Token, string NewPassword)`

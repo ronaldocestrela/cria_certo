@@ -38,6 +38,54 @@ public class CreateTenantCommandHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task Handle_Should_Fail_When_Cnpj_Already_Exists()
+    {
+        var user = new User
+        {
+            Id = Guid.NewGuid(),
+            FullName = "Carlos Produtor",
+            Email = "carlos@fazenda.com.br",
+            PasswordHash = "hash"
+        };
+        _dbContext.Users.Add(user);
+        _dbContext.Tenants.Add(new Tenant
+        {
+            Id = Guid.NewGuid(),
+            Name = "Existing Farm",
+            CNPJ = "12.345.678/0001-90",
+            CnpjNormalized = "12345678000190",
+            State = "MT",
+            City = "Sinop",
+            Status = "Active",
+            SubscribedPlan = "Starter",
+            Capacity = 500,
+            StateRegistration = "IE",
+            Type = "Corte",
+            CreatedAtUtc = DateTime.UtcNow,
+            UpdatedAtUtc = DateTime.UtcNow
+        });
+        await _dbContext.SaveChangesAsync();
+
+        var handler = new CreateTenantCommandHandler(_dbContext, _jwtService, new NoOpTenantDatabaseProvisioner());
+        var command = new CreateTenantCommand(
+            user.Id,
+            "Fazenda Duplicada",
+            "12.345.678/0001-90",
+            "MT",
+            "Sinop",
+            "12345678",
+            1200,
+            "Pro",
+            5000
+        );
+
+        var result = await handler.Handle(command, CancellationToken.None);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("Tenant.CnpjAlreadyExists");
+    }
+
+    [Fact]
     public async Task Handle_Should_Create_Tenant_And_UserTenant_When_User_Exists()
     {
         // Arrange

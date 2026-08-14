@@ -48,21 +48,14 @@ O módulo adota a diretiva **Default Deny**: qualquer requisição para a rota `
 
 ## 5. Como Utilizar no Backend e Frontend
 
-### Backend (.NET 10 Web API)
-Decore a controller ou action com o atributo `HasPermission`:
+### Backend (.NET 10 Web API) — Minimal APIs em `Program.cs`
+
 ```csharp
-[ApiController]
-[Route("api/v1/backoffice/tenants")]
-[HasPermission(BackofficePermissions.TenantsRead)]
-public class TenantsController : ControllerBase
-{
-    [HttpPost("{id}/suspend")]
-    [HasPermission(BackofficePermissions.TenantsSuspend, BackofficePermissions.ScopeGlobal)]
-    public async Task<IActionResult> SuspendTenant(Guid id)
-    {
-        // Apenas PlatformOwner tem essa permissão
-    }
-}
+backoffice.MapGet("/tenants", ...)
+    .RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.TenantsRead));
+
+backoffice.MapPost("/tenants", ...)
+    .RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.TenantsWrite));
 ```
 
 ### Frontend (Blazor Web App)

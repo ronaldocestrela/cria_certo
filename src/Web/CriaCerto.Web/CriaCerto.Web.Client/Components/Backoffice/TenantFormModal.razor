@@ -1,0 +1,182 @@
+@using CriaCerto.Modules.Backoffice.Application.Features.Tenants.Dtos
+@using CriaCerto.Modules.Backoffice.Application.Security
+@using CriaCerto.Web.Client.Services
+
+@if (IsOpen)
+{
+    <div class="modal-backdrop" @onclick="Close">
+        <div class="modal-card modal-wide" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <h3>@(IsEdit ? "Editar Tenant" : "Novo Tenant")</h3>
+                <button class="close-btn" @onclick="Close">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Nome da Fazenda *</label>
+                        <input type="text" class="form-control" @bind="Name" />
+                    </div>
+                    <div class="form-group">
+                        <label>Razão Social</label>
+                        <input type="text" class="form-control" @bind="LegalName" />
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>CNPJ/CPF *</label>
+                        <input type="text" class="form-control" @bind="CNPJ" />
+                    </div>
+                    <div class="form-group">
+                        <label>Identificador Externo</label>
+                        <input type="text" class="form-control" @bind="ExternalIdentifier" />
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>UF *</label>
+                        <input type="text" class="form-control" maxlength="2" @bind="State" />
+                    </div>
+                    <div class="form-group">
+                        <label>Município *</label>
+                        <input type="text" class="form-control" @bind="City" />
+                    </div>
+                    <div class="form-group">
+                        <label>Inscrição Estadual</label>
+                        <input type="text" class="form-control" @bind="StateRegistration" />
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Área (ha)</label>
+                        <input type="number" class="form-control" @bind="AreaInHectares" />
+                    </div>
+                    <div class="form-group">
+                        <label>Capacidade (cabeças) *</label>
+                        <input type="number" class="form-control" @bind="Capacity" />
+                    </div>
+                    <div class="form-group">
+                        <label>Tipo Produtivo</label>
+                        <input type="text" class="form-control" @bind="Type" />
+                    </div>
+                </div>
+                @if (!IsEdit)
+                {
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Plano *</label>
+                            <select class="form-control" @bind="SubscribedPlan">
+                                <option value="Starter">Starter</option>
+                                <option value="Pro">Pro</option>
+                                <option value="Enterprise">Enterprise</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>E-mail Owner Produtor (opcional)</label>
+                            <input type="email" class="form-control" @bind="OwnerUserEmail" placeholder="produtor@fazenda.com.br" />
+                        </div>
+                    </div>
+                }
+                <div class="form-section-title">Owners Operacionais</div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Owner Técnico</label>
+                        <input type="text" class="form-control" @bind="TechnicalOwnerName" />
+                    </div>
+                    <div class="form-group">
+                        <label>E-mail Técnico</label>
+                        <input type="email" class="form-control" @bind="TechnicalOwnerEmail" />
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Owner Comercial</label>
+                        <input type="text" class="form-control" @bind="CommercialOwnerName" />
+                    </div>
+                    <div class="form-group">
+                        <label>E-mail Comercial</label>
+                        <input type="email" class="form-control" @bind="CommercialOwnerEmail" />
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="Close">Cancelar</button>
+                <button class="btn btn-primary" @onclick="Save">Salvar Tenant</button>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .modal-backdrop { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(15, 23, 42, 0.75); display: flex; align-items: center; justify-content: center; z-index: 1000; backdrop-filter: blur(4px); }
+    .modal-card { background: #1e293b; color: #f8fafc; border-radius: 0.75rem; width: 100%; max-width: 500px; border: 1px solid #334155; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5); }
+    .modal-wide { max-width: 720px; }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 1.25rem; border-bottom: 1px solid #334155; }
+    .modal-header h3 { margin: 0; font-size: 1.1rem; font-weight: 700; }
+    .close-btn { background: none; border: none; color: #94a3b8; font-size: 1.2rem; cursor: pointer; }
+    .modal-body { padding: 1.25rem; display: flex; flex-direction: column; gap: 0.75rem; max-height: 70vh; overflow-y: auto; }
+    .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.75rem; }
+    .form-group { display: flex; flex-direction: column; gap: 0.4rem; }
+    .form-group label { font-size: 0.85rem; font-weight: 600; color: #cbd5e1; }
+    .form-control { background: #0f172a; border: 1px solid #334155; color: #f8fafc; padding: 0.6rem 0.8rem; border-radius: 0.5rem; font-size: 0.9rem; }
+    .form-section-title { font-size: 0.8rem; font-weight: 700; text-transform: uppercase; color: #38bdf8; margin-top: 0.5rem; }
+    .modal-footer { display: flex; justify-content: flex-end; gap: 0.75rem; padding: 1.25rem; border-top: 1px solid #334155; }
+    .btn { padding: 0.5rem 1rem; border-radius: 0.5rem; font-size: 0.85rem; font-weight: 600; border: none; cursor: pointer; }
+    .btn-secondary { background: #334155; color: #f8fafc; }
+    .btn-primary { background: #0284c7; color: #ffffff; }
+</style>
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public bool IsEdit { get; set; }
+    [Parameter] public Guid TenantId { get; set; }
+    [Parameter] public string Name { get; set; } = string.Empty;
+    [Parameter] public string? LegalName { get; set; }
+    [Parameter] public string CNPJ { get; set; } = string.Empty;
+    [Parameter] public string? ExternalIdentifier { get; set; }
+    [Parameter] public string State { get; set; } = string.Empty;
+    [Parameter] public string City { get; set; } = string.Empty;
+    [Parameter] public string StateRegistration { get; set; } = string.Empty;
+    [Parameter] public decimal AreaInHectares { get; set; }
+    [Parameter] public int Capacity { get; set; } = 500;
+    [Parameter] public string Type { get; set; } = "Pecuária de Corte e Cria";
+    [Parameter] public string SubscribedPlan { get; set; } = "Starter";
+    [Parameter] public string? TechnicalOwnerName { get; set; }
+    [Parameter] public string? TechnicalOwnerEmail { get; set; }
+    [Parameter] public string? CommercialOwnerName { get; set; }
+    [Parameter] public string? CommercialOwnerEmail { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback<TenantFormSaveModel> OnSave { get; set; }
+
+    private string? OwnerUserEmail { get; set; }
+
+    private async Task Close() => await OnClose.InvokeAsync();
+
+    private async Task Save()
+    {
+        await OnSave.InvokeAsync(new TenantFormSaveModel(
+            TenantId, Name, LegalName, CNPJ, ExternalIdentifier, State, City,
+            StateRegistration, AreaInHectares, Capacity, Type, SubscribedPlan,
+            TechnicalOwnerName, TechnicalOwnerEmail, CommercialOwnerName, CommercialOwnerEmail,
+            OwnerUserEmail));
+    }
+
+    public sealed record TenantFormSaveModel(
+        Guid TenantId,
+        string Name,
+        string? LegalName,
+        string CNPJ,
+        string? ExternalIdentifier,
+        string State,
+        string City,
+        string StateRegistration,
+        decimal AreaInHectares,
+        int Capacity,
+        string Type,
+        string SubscribedPlan,
+        string? TechnicalOwnerName,
+        string? TechnicalOwnerEmail,
+        string? CommercialOwnerName,
+        string? CommercialOwnerEmail,
+        string? OwnerUserEmail
+    );
+}

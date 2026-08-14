@@ -92,7 +92,7 @@ As entregas estão organizadas em **6 Fases Sequenciais**, cobrindo fundação d
 
 ### Phase 2: Gestão de Tenants, Clientes e Ciclo de Vida
 
-#### Sub-fase 2.1: Cadastro e Visão 360 do Tenant [PLANEJADA]
+#### Sub-fase 2.1: Cadastro e Visão 360 do Tenant [CONCLUÍDA]
 * **Backend:**
   * `CreateTenantAdminCommand`, `UpdateTenantAdminCommand`, `GetTenantBackofficeDetailQuery`.
   * Campos operacionais: dados fiscais, status contratual, limites ativos, owner técnico/comercial.

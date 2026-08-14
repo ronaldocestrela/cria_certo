@@ -1,6 +1,8 @@
 using CriaCerto.BuildingBlocks.Abstractions.Results;
 using CriaCerto.Modules.Tenancy.Application.Abstractions;
 using CriaCerto.Modules.Tenancy.Application.Contracts;
+using CriaCerto.Modules.Tenancy.Application.Domain;
+using CriaCerto.Modules.Tenancy.Application.Domain.Errors;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -34,17 +36,32 @@ public class UpdateTenantProfileCommandHandler : IRequestHandler<UpdateTenantPro
 
         if (tenant is null)
         {
-            return Result.Failure<TenantProfileDto>(Error.NotFound("Tenant.NotFound", $"Organização/Fazenda com ID '{request.TenantId}' não foi encontrada."));
+            return Result.Failure<TenantProfileDto>(TenancyErrors.TenantNotFound);
+        }
+
+        var cnpjNormalized = CnpjNormalizer.Normalize(request.CNPJ);
+        if (!CnpjNormalizer.IsValidCnpjOrCpf(request.CNPJ))
+        {
+            return Result.Failure<TenantProfileDto>(TenancyErrors.InvalidCnpj);
+        }
+
+        var cnpjConflict = await _dbContext.Tenants
+            .AnyAsync(t => t.CnpjNormalized == cnpjNormalized && t.Id != request.TenantId, cancellationToken);
+        if (cnpjConflict)
+        {
+            return Result.Failure<TenantProfileDto>(TenancyErrors.CnpjAlreadyExists);
         }
 
         tenant.Name = request.Name;
         tenant.CNPJ = request.CNPJ;
+        tenant.CnpjNormalized = cnpjNormalized;
         tenant.State = request.State;
         tenant.City = request.City;
         tenant.StateRegistration = request.StateRegistration;
         tenant.AreaInHectares = request.AreaInHectares;
         tenant.Capacity = request.Capacity;
         tenant.Type = request.Type;
+        tenant.UpdatedAtUtc = DateTime.UtcNow;
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 

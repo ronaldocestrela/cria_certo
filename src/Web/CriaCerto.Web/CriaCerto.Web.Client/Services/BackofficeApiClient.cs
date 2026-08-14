@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using CriaCerto.BuildingBlocks.Abstractions.Results;
 using CriaCerto.Modules.Backoffice.Application.Features.AdminUsers.Dtos;
 using CriaCerto.Modules.Backoffice.Application.Features.AdminUsers.Queries;
+using CriaCerto.Modules.Backoffice.Application.Features.Tenants.Dtos;
 using CriaCerto.Web.Client.Models;
 using Microsoft.JSInterop;
 
@@ -23,6 +24,10 @@ public interface IBackofficeApiClient
     Task<bool> DisableMfaAsync(Guid id, CancellationToken cancellationToken = default);
     Task<bool> RevokeSessionAsync(Guid sessionId, CancellationToken cancellationToken = default);
     Task<bool> RevokeAllUserSessionsAsync(Guid userId, CancellationToken cancellationToken = default);
+    Task<PagedTenantAdminResult?> GetTenantsAsync(string? searchTerm = null, string? status = null, string? subscribedPlan = null, string? state = null, string? ownerSearch = null, int page = 1, int pageSize = 20, CancellationToken cancellationToken = default);
+    Task<TenantAdminDetailDto?> GetTenantByIdAsync(Guid id, CancellationToken cancellationToken = default);
+    Task<TenantAdminDetailDto?> CreateTenantAsync(CreateTenantAdminRequest request, CancellationToken cancellationToken = default);
+    Task<TenantAdminDetailDto?> UpdateTenantAsync(Guid id, UpdateTenantAdminRequest request, CancellationToken cancellationToken = default);
 }
 
 public class BackofficeApiClient : IBackofficeApiClient
@@ -180,5 +185,40 @@ public class BackofficeApiClient : IBackofficeApiClient
         await AttachTokenAsync();
         var response = await _httpClient.DeleteAsync($"api/v1/backoffice/users/{userId}/sessions", cancellationToken);
         return response.IsSuccessStatusCode;
+    }
+
+    public async Task<PagedTenantAdminResult?> GetTenantsAsync(string? searchTerm = null, string? status = null, string? subscribedPlan = null, string? state = null, string? ownerSearch = null, int page = 1, int pageSize = 20, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var url = $"api/v1/backoffice/tenants?page={page}&pageSize={pageSize}";
+        if (!string.IsNullOrWhiteSpace(searchTerm)) url += $"&searchTerm={Uri.EscapeDataString(searchTerm)}";
+        if (!string.IsNullOrWhiteSpace(status)) url += $"&status={Uri.EscapeDataString(status)}";
+        if (!string.IsNullOrWhiteSpace(subscribedPlan)) url += $"&subscribedPlan={Uri.EscapeDataString(subscribedPlan)}";
+        if (!string.IsNullOrWhiteSpace(state)) url += $"&state={Uri.EscapeDataString(state)}";
+        if (!string.IsNullOrWhiteSpace(ownerSearch)) url += $"&ownerSearch={Uri.EscapeDataString(ownerSearch)}";
+
+        return await _httpClient.GetFromJsonAsync<PagedTenantAdminResult>(url, cancellationToken);
+    }
+
+    public async Task<TenantAdminDetailDto?> GetTenantByIdAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        return await _httpClient.GetFromJsonAsync<TenantAdminDetailDto>($"api/v1/backoffice/tenants/{id}", cancellationToken);
+    }
+
+    public async Task<TenantAdminDetailDto?> CreateTenantAsync(CreateTenantAdminRequest request, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.PostAsJsonAsync("api/v1/backoffice/tenants", request, cancellationToken);
+        if (!response.IsSuccessStatusCode) return null;
+        return await response.Content.ReadFromJsonAsync<TenantAdminDetailDto>(cancellationToken: cancellationToken);
+    }
+
+    public async Task<TenantAdminDetailDto?> UpdateTenantAsync(Guid id, UpdateTenantAdminRequest request, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.PutAsJsonAsync($"api/v1/backoffice/tenants/{id}", request, cancellationToken);
+        if (!response.IsSuccessStatusCode) return null;
+        return await response.Content.ReadFromJsonAsync<TenantAdminDetailDto>(cancellationToken: cancellationToken);
     }
 }

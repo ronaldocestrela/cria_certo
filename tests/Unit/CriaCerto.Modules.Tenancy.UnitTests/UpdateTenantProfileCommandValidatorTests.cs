@@ -68,8 +68,16 @@ public class UpdateTenantProfileCommandValidatorTests : IDisposable
             Id = Guid.NewGuid(),
             Name = "Fazenda Pequena",
             CNPJ = "12.345.678/0001-99",
+            CnpjNormalized = "12345678000199",
             SubscribedPlan = "Starter",
-            Capacity = 500
+            Capacity = 500,
+            State = "MT",
+            City = "Sinop",
+            Status = "Active",
+            StateRegistration = "IE",
+            Type = "Retiro",
+            CreatedAtUtc = DateTime.UtcNow,
+            UpdatedAtUtc = DateTime.UtcNow
         };
         _dbContext.Tenants.Add(tenant);
         await _dbContext.SaveChangesAsync();
@@ -82,7 +90,7 @@ public class UpdateTenantProfileCommandValidatorTests : IDisposable
             "Sinop",
             "IE123",
             500,
-            2500, // Exceeds Starter plan limit of 1000
+            2500, // Exceeds Starter plan limit of 500
             "Retiro"
         );
 
@@ -103,8 +111,16 @@ public class UpdateTenantProfileCommandValidatorTests : IDisposable
             Id = Guid.NewGuid(),
             Name = "Fazenda Pequena",
             CNPJ = "12.345.678/0001-99",
+            CnpjNormalized = "12345678000199",
             SubscribedPlan = "Pro",
-            Capacity = 2000
+            Capacity = 2000,
+            State = "MT",
+            City = "Sinop",
+            Status = "Active",
+            StateRegistration = "IE",
+            Type = "Retiro",
+            CreatedAtUtc = DateTime.UtcNow,
+            UpdatedAtUtc = DateTime.UtcNow
         };
         _dbContext.Tenants.Add(tenant);
         await _dbContext.SaveChangesAsync();
@@ -117,7 +133,7 @@ public class UpdateTenantProfileCommandValidatorTests : IDisposable
             "Sorriso",
             "IE123456",
             1200.00m,
-            3000, // Valid for Pro plan (limit 5000)
+            2400, // Valid for Pro plan (limit 2500)
             "Recria e Engorda"
         );
 

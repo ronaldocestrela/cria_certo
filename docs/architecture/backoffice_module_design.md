@@ -14,9 +14,14 @@ O módulo `Modules.Backoffice` é o núcleo administrativo isolado da plataforma
 * **`AdminSession`:** Controle e revogação de sessões ativas com rastreamento de IP e User-Agent.
 * **`AuditLog`:** Trilha forense imutável de ações administrativas efetuadas no sistema.
 
-## 4. Política de Segurança Default Deny
+## 4. Integração Backoffice ↔ Tenancy (Sub-fase 2.1)
+* Handlers em `Modules.Backoffice` delegam persistência a comandos/queries em `Modules.Tenancy` via MediatR (`ISender`).
+* Auditoria (`Tenant.Created`, `Tenant.Updated`) é gravada no `BackofficeDbContext`.
+* Proibido join direto entre DbContexts.
+
+## 5. Política de Segurança Default Deny
 Todas as requisições destinadas ao prefixo `/api/v1/backoffice/*` passam pelo middleware de segurança `BackofficeAccessMiddleware`.
 * Se o usuário não possuir credenciais autenticadas ou a claim/permissão administrativa correspondente, a requisição é bloqueada imediatamente com status `401 Unauthorized` ou `403 Forbidden`.
 
-## 5. Interface Blazor Web App (Shell Admin)
+## 6. Interface Blazor Web App (Shell Admin)
 O acesso ao Backoffice na camada de apresentação utiliza um Shell próprio (`BackofficeLayout.razor`) e menus com verificação de autorização (`BackofficeNavMenu.razor`), isolados da interface operacional dos produtores.

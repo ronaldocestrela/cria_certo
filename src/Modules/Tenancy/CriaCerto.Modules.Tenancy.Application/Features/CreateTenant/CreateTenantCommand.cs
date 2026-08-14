@@ -3,6 +3,7 @@ using CriaCerto.BuildingBlocks.Abstractions.Tenancy;
 using CriaCerto.Modules.Tenancy.Application.Abstractions;
 using CriaCerto.Modules.Tenancy.Application.Contracts;
 using CriaCerto.Modules.Tenancy.Application.Domain;
+using CriaCerto.Modules.Tenancy.Application.Domain.Errors;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -61,12 +62,27 @@ public sealed class CreateTenantCommandHandler : IRequestHandler<CreateTenantCom
 
         var plan = string.IsNullOrWhiteSpace(request.SubscribedPlan) ? "Starter" : request.SubscribedPlan.Trim();
         var capacity = request.Capacity > 0 ? request.Capacity : 1000;
+        var cnpjNormalized = CnpjNormalizer.Normalize(request.CNPJ);
 
+        if (!CnpjNormalizer.IsValidCnpjOrCpf(request.CNPJ))
+        {
+            return Result.Failure<AuthResponse>(TenancyErrors.InvalidCnpj);
+        }
+
+        var cnpjExists = await _dbContext.Tenants
+            .AnyAsync(t => t.CnpjNormalized == cnpjNormalized, cancellationToken);
+        if (cnpjExists)
+        {
+            return Result.Failure<AuthResponse>(TenancyErrors.CnpjAlreadyExists);
+        }
+
+        var now = DateTime.UtcNow;
         var tenant = new Tenant
         {
             Id = Guid.NewGuid(),
             Name = request.Name.Trim(),
             CNPJ = request.CNPJ?.Trim() ?? string.Empty,
+            CnpjNormalized = cnpjNormalized,
             State = request.State?.Trim().ToUpperInvariant() ?? string.Empty,
             City = request.City?.Trim() ?? string.Empty,
             StateRegistration = request.StateRegistration?.Trim() ?? string.Empty,
@@ -74,7 +90,9 @@ public sealed class CreateTenantCommandHandler : IRequestHandler<CreateTenantCom
             SubscribedPlan = plan,
             Capacity = capacity,
             Status = "Active",
-            Type = "Pecuária de Corte e Cria"
+            Type = "Pecuária de Corte e Cria",
+            CreatedAtUtc = now,
+            UpdatedAtUtc = now
         };
 
         var userTenant = new UserTenant

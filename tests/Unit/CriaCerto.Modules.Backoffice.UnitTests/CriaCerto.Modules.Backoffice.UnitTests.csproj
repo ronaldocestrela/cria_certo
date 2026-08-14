@@ -27,6 +27,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\src\Modules\Backoffice\CriaCerto.Modules.Backoffice.Application\CriaCerto.Modules.Backoffice.Application.csproj" />
     <ProjectReference Include="..\..\..\src\Modules\Backoffice\CriaCerto.Modules.Backoffice.Infrastructure\CriaCerto.Modules.Backoffice.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\..\src\Modules\Tenancy\CriaCerto.Modules.Tenancy.Application\CriaCerto.Modules.Tenancy.Application.csproj" />
   </ItemGroup>
 
 </Project>

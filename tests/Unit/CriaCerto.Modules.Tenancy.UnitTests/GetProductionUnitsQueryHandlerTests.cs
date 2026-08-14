@@ -40,8 +40,8 @@ public class GetProductionUnitsQueryHandlerTests : IDisposable
         var tenant2 = Guid.NewGuid();
 
         _dbContext.Tenants.AddRange(
-            new Tenant { Id = tenant1, Name = "Tenant 1", CNPJ = "11.111.111/0001-11" },
-            new Tenant { Id = tenant2, Name = "Tenant 2", CNPJ = "22.222.222/0001-22" }
+            new Tenant { Id = tenant1, Name = "Tenant 1", CNPJ = "11.111.111/0001-11", CnpjNormalized = "11111111000111", State = "MT", City = "A", Status = "Active", SubscribedPlan = "Starter", Capacity = 100, StateRegistration = "IE", Type = "Corte", CreatedAtUtc = DateTime.UtcNow, UpdatedAtUtc = DateTime.UtcNow },
+            new Tenant { Id = tenant2, Name = "Tenant 2", CNPJ = "22.222.222/0001-22", CnpjNormalized = "22222222000122", State = "MT", City = "B", Status = "Active", SubscribedPlan = "Starter", Capacity = 100, StateRegistration = "IE", Type = "Corte", CreatedAtUtc = DateTime.UtcNow, UpdatedAtUtc = DateTime.UtcNow }
         );
 
         _dbContext.ProductionUnits.AddRange(
