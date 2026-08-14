@@ -51,4 +51,28 @@ public static class TenancyErrors
     public static readonly Error TenantNotAccessible = Error.Unauthorized(
         "Tenant.NotAccessible",
         "O acesso a esta organização/fazenda está temporariamente indisponível.");
+
+    public static readonly Error InvalidSegmentation = Error.Validation(
+        "Tenant.InvalidSegmentation",
+        "Um ou mais valores de segmentação operacional são inválidos.");
+
+    public static readonly Error InvalidTagCategory = Error.Validation(
+        "Tenant.InvalidTagCategory",
+        "A categoria da etiqueta operacional é inválida.");
+
+    public static readonly Error TagNotFound = Error.NotFound(
+        "Tenant.TagNotFound",
+        "A etiqueta operacional solicitada não foi encontrada.");
+
+    public static readonly Error TagSlugAlreadyExists = Error.Conflict(
+        "Tenant.TagSlugAlreadyExists",
+        "Já existe uma etiqueta operacional com este identificador.");
+
+    public static readonly Error TagInactive = Error.Validation(
+        "Tenant.TagInactive",
+        "A etiqueta operacional está inativa e não pode ser atribuída.");
+
+    public static readonly Error ExportLimitExceeded = Error.Validation(
+        "Tenant.ExportLimitExceeded",
+        "O recorte de exportação excede o limite máximo de 10.000 registros. Refine os filtros.");
 }

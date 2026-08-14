@@ -327,13 +327,77 @@ backoffice.MapGet("/tenants", async (
     string? subscribedPlan,
     string? state,
     string? ownerSearch,
+    string? sizeSegment,
+    string? commercialRegion,
+    string? productiveProfile,
+    string? churnRisk,
+    Guid[]? tagIds,
+    bool? includeInactiveTags,
+    DateTime? afterCreatedAtUtc,
+    Guid? afterId,
     int? page,
     int? pageSize,
     ISender sender) =>
 {
-    var query = new GetTenantsAdminQuery(searchTerm, status, subscribedPlan, state, ownerSearch, page ?? 1, pageSize ?? 20);
+    var query = new GetTenantsAdminQuery(
+        searchTerm,
+        status,
+        subscribedPlan,
+        state,
+        ownerSearch,
+        sizeSegment,
+        commercialRegion,
+        productiveProfile,
+        churnRisk,
+        tagIds,
+        includeInactiveTags ?? false,
+        afterCreatedAtUtc,
+        afterId,
+        page ?? 1,
+        pageSize ?? 20);
     var result = await sender.Send(query);
     return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.TenantsRead)).WithTags("Backoffice Tenants");
+
+backoffice.MapGet("/tenants/export", async (
+    string? searchTerm,
+    string? status,
+    string? subscribedPlan,
+    string? state,
+    string? ownerSearch,
+    string? sizeSegment,
+    string? commercialRegion,
+    string? productiveProfile,
+    string? churnRisk,
+    Guid[]? tagIds,
+    bool? includeInactiveTags,
+    HttpContext ctx,
+    ISender sender) =>
+{
+    var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var exportQuery = new ExportTenantsAdminQuery(
+        searchTerm,
+        status,
+        subscribedPlan,
+        state,
+        ownerSearch,
+        sizeSegment,
+        commercialRegion,
+        productiveProfile,
+        churnRisk,
+        tagIds,
+        includeInactiveTags ?? false);
+
+    var result = await sender.Send(exportQuery);
+    if (result.IsFailure)
+    {
+        return Results.Json(result.Error, statusCode: ToStatusCode(result.Error.Type));
+    }
+
+    await sender.Send(new ExportTenantsAdminAuditCommand(
+        exportQuery, callerId, callerEmail, ip, result.Value));
+
+    return Results.File(result.Value.Content, "text/csv", result.Value.FileName);
 }).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.TenantsRead)).WithTags("Backoffice Tenants");
 
 backoffice.MapGet("/tenants/{id:guid}", async (Guid id, ISender sender) =>
@@ -409,6 +473,68 @@ backoffice.MapPost("/tenants/{id:guid}/protection", async (Guid id, TenantProtec
     var result = await sender.Send(command);
     return ToHttpResult(result);
 }).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.TenantsSuspend)).WithTags("Backoffice Tenants");
+
+backoffice.MapPut("/tenants/{id:guid}/segmentation", async (Guid id, UpdateTenantSegmentationAdminRequest req, HttpContext ctx, ISender sender) =>
+{
+    var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var command = new UpdateTenantSegmentationAdminCommand(
+        id, req.SizeSegment, req.CommercialRegion, req.ProductiveProfile, req.ChurnRisk,
+        callerId, callerEmail, ip);
+    var result = await sender.Send(command);
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.TenantsWrite)).WithTags("Backoffice Tenants");
+
+backoffice.MapPut("/tenants/{id:guid}/tags", async (Guid id, ReplaceTenantTagsAdminRequest req, HttpContext ctx, ISender sender) =>
+{
+    var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var command = new ReplaceTenantTagsAdminCommand(id, req.TagIds, callerId, callerEmail, ip);
+    var result = await sender.Send(command);
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.TenantsWrite)).WithTags("Backoffice Tenants");
+
+backoffice.MapGet("/tenants/tags", async (bool? includeInactive, ISender sender) =>
+{
+    var result = await sender.Send(new GetOperationalTagsAdminQuery(includeInactive ?? false));
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.TenantsRead)).WithTags("Backoffice Tenants");
+
+backoffice.MapPost("/tenants/tags", async (CreateOperationalTagAdminRequest req, HttpContext ctx, ISender sender) =>
+{
+    var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var command = new CreateOperationalTagAdminCommand(req.Name, req.Category, req.ColorHex, callerId, callerEmail, ip);
+    var result = await sender.Send(command);
+    return ToHttpResult(result, StatusCodes.Status201Created);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.TenantsWrite)).WithTags("Backoffice Tenants");
+
+backoffice.MapDelete("/tenants/tags/{tagId:guid}", async (Guid tagId, HttpContext ctx, ISender sender) =>
+{
+    var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var command = new DeactivateOperationalTagAdminCommand(tagId, callerId, callerEmail, ip);
+    var result = await sender.Send(command);
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.TenantsWrite)).WithTags("Backoffice Tenants");
+
+backoffice.MapGet("/tenants/saved-filters", async (HttpContext ctx, ISender sender) =>
+{
+    var (callerId, _, _) = GetBackofficeActor(ctx);
+    var result = await sender.Send(new GetAdminSavedFiltersQuery(callerId));
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.TenantsRead)).WithTags("Backoffice Tenants");
+
+backoffice.MapPost("/tenants/saved-filters", async (SaveAdminFilterRequest req, HttpContext ctx, ISender sender) =>
+{
+    var (callerId, _, _) = GetBackofficeActor(ctx);
+    var command = new SaveAdminFilterCommand(callerId, req.Name, req.Filter, req.IsDefault);
+    var result = await sender.Send(command);
+    return ToHttpResult(result, StatusCodes.Status201Created);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.TenantsRead)).WithTags("Backoffice Tenants");
+
+backoffice.MapDelete("/tenants/saved-filters/{filterId:guid}", async (Guid filterId, HttpContext ctx, ISender sender) =>
+{
+    var (callerId, _, _) = GetBackofficeActor(ctx);
+    var result = await sender.Send(new DeleteAdminFilterCommand(callerId, filterId));
+    return result.IsSuccess ? Results.Ok() : Results.Json(result.Error, statusCode: ToStatusCode(result.Error.Type));
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.TenantsRead)).WithTags("Backoffice Tenants");
 
 // Backoffice Auth Endpoints (Anonymous / Credentials + MFA)
 app.MapPost("/api/v1/backoffice/auth/login", async (BackofficeLoginRequest req, HttpContext ctx, ISender sender) =>

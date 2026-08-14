@@ -24,7 +24,28 @@ public interface IBackofficeApiClient
     Task<bool> DisableMfaAsync(Guid id, CancellationToken cancellationToken = default);
     Task<bool> RevokeSessionAsync(Guid sessionId, CancellationToken cancellationToken = default);
     Task<bool> RevokeAllUserSessionsAsync(Guid userId, CancellationToken cancellationToken = default);
-    Task<PagedTenantAdminResult?> GetTenantsAsync(string? searchTerm = null, string? status = null, string? subscribedPlan = null, string? state = null, string? ownerSearch = null, int page = 1, int pageSize = 20, CancellationToken cancellationToken = default);
+    Task<PagedTenantAdminResult?> GetTenantsAsync(
+        string? searchTerm = null,
+        string? status = null,
+        string? subscribedPlan = null,
+        string? state = null,
+        string? ownerSearch = null,
+        string? sizeSegment = null,
+        string? commercialRegion = null,
+        string? productiveProfile = null,
+        string? churnRisk = null,
+        IReadOnlyCollection<Guid>? tagIds = null,
+        int page = 1,
+        int pageSize = 20,
+        CancellationToken cancellationToken = default);
+    Task<IReadOnlyCollection<OperationalTagAdminDto>?> GetOperationalTagsAsync(CancellationToken cancellationToken = default);
+    Task<OperationalTagAdminDto?> CreateOperationalTagAsync(CreateOperationalTagAdminRequest request, CancellationToken cancellationToken = default);
+    Task<TenantAdminDetailDto?> UpdateTenantSegmentationAsync(Guid id, UpdateTenantSegmentationAdminRequest request, CancellationToken cancellationToken = default);
+    Task<TenantAdminDetailDto?> ReplaceTenantTagsAsync(Guid id, ReplaceTenantTagsAdminRequest request, CancellationToken cancellationToken = default);
+    Task<IReadOnlyCollection<AdminSavedFilterDto>?> GetSavedFiltersAsync(CancellationToken cancellationToken = default);
+    Task<AdminSavedFilterDto?> SaveFilterAsync(SaveAdminFilterRequest request, CancellationToken cancellationToken = default);
+    Task<bool> DeleteSavedFilterAsync(Guid filterId, CancellationToken cancellationToken = default);
+    Task<ExportTenantsResult?> ExportTenantsCsvAsync(TenantAdminFilterDto filter, CancellationToken cancellationToken = default);
     Task<TenantAdminDetailDto?> GetTenantByIdAsync(Guid id, CancellationToken cancellationToken = default);
     Task<TenantAdminDetailDto?> CreateTenantAsync(CreateTenantAdminRequest request, CancellationToken cancellationToken = default);
     Task<TenantAdminDetailDto?> UpdateTenantAsync(Guid id, UpdateTenantAdminRequest request, CancellationToken cancellationToken = default);
@@ -40,6 +61,14 @@ public sealed class LifecycleActionResult
     public TenantAdminDetailDto? Tenant { get; init; }
     public string? ErrorMessage { get; init; }
     public bool IsSuccess => Tenant is not null && string.IsNullOrWhiteSpace(ErrorMessage);
+}
+
+public sealed class ExportTenantsResult
+{
+    public byte[] Content { get; init; } = Array.Empty<byte>();
+    public string FileName { get; init; } = "tenants-export.csv";
+    public string? ErrorMessage { get; init; }
+    public bool IsSuccess => string.IsNullOrWhiteSpace(ErrorMessage) && Content.Length > 0;
 }
 
 public class BackofficeApiClient : IBackofficeApiClient
@@ -199,17 +228,131 @@ public class BackofficeApiClient : IBackofficeApiClient
         return response.IsSuccessStatusCode;
     }
 
-    public async Task<PagedTenantAdminResult?> GetTenantsAsync(string? searchTerm = null, string? status = null, string? subscribedPlan = null, string? state = null, string? ownerSearch = null, int page = 1, int pageSize = 20, CancellationToken cancellationToken = default)
+    public async Task<PagedTenantAdminResult?> GetTenantsAsync(
+        string? searchTerm = null,
+        string? status = null,
+        string? subscribedPlan = null,
+        string? state = null,
+        string? ownerSearch = null,
+        string? sizeSegment = null,
+        string? commercialRegion = null,
+        string? productiveProfile = null,
+        string? churnRisk = null,
+        IReadOnlyCollection<Guid>? tagIds = null,
+        int page = 1,
+        int pageSize = 20,
+        CancellationToken cancellationToken = default)
     {
         await AttachTokenAsync();
-        var url = $"api/v1/backoffice/tenants?page={page}&pageSize={pageSize}";
-        if (!string.IsNullOrWhiteSpace(searchTerm)) url += $"&searchTerm={Uri.EscapeDataString(searchTerm)}";
-        if (!string.IsNullOrWhiteSpace(status)) url += $"&status={Uri.EscapeDataString(status)}";
-        if (!string.IsNullOrWhiteSpace(subscribedPlan)) url += $"&subscribedPlan={Uri.EscapeDataString(subscribedPlan)}";
-        if (!string.IsNullOrWhiteSpace(state)) url += $"&state={Uri.EscapeDataString(state)}";
-        if (!string.IsNullOrWhiteSpace(ownerSearch)) url += $"&ownerSearch={Uri.EscapeDataString(ownerSearch)}";
-
+        var url = BuildTenantFilterUrl("api/v1/backoffice/tenants", new TenantAdminFilterDto(
+            searchTerm, status, subscribedPlan, state, ownerSearch,
+            sizeSegment, commercialRegion, productiveProfile, churnRisk, tagIds), page, pageSize);
         return await _httpClient.GetFromJsonAsync<PagedTenantAdminResult>(url, cancellationToken);
+    }
+
+    public async Task<IReadOnlyCollection<OperationalTagAdminDto>?> GetOperationalTagsAsync(CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        return await _httpClient.GetFromJsonAsync<IReadOnlyCollection<OperationalTagAdminDto>>(
+            "api/v1/backoffice/tenants/tags", cancellationToken);
+    }
+
+    public async Task<OperationalTagAdminDto?> CreateOperationalTagAsync(CreateOperationalTagAdminRequest request, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.PostAsJsonAsync("api/v1/backoffice/tenants/tags", request, cancellationToken);
+        if (!response.IsSuccessStatusCode) return null;
+        return await response.Content.ReadFromJsonAsync<OperationalTagAdminDto>(cancellationToken: cancellationToken);
+    }
+
+    public async Task<TenantAdminDetailDto?> UpdateTenantSegmentationAsync(Guid id, UpdateTenantSegmentationAdminRequest request, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.PutAsJsonAsync($"api/v1/backoffice/tenants/{id}/segmentation", request, cancellationToken);
+        if (!response.IsSuccessStatusCode) return null;
+        return await response.Content.ReadFromJsonAsync<TenantAdminDetailDto>(cancellationToken: cancellationToken);
+    }
+
+    public async Task<TenantAdminDetailDto?> ReplaceTenantTagsAsync(Guid id, ReplaceTenantTagsAdminRequest request, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.PutAsJsonAsync($"api/v1/backoffice/tenants/{id}/tags", request, cancellationToken);
+        if (!response.IsSuccessStatusCode) return null;
+        return await response.Content.ReadFromJsonAsync<TenantAdminDetailDto>(cancellationToken: cancellationToken);
+    }
+
+    public async Task<IReadOnlyCollection<AdminSavedFilterDto>?> GetSavedFiltersAsync(CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        return await _httpClient.GetFromJsonAsync<IReadOnlyCollection<AdminSavedFilterDto>>(
+            "api/v1/backoffice/tenants/saved-filters", cancellationToken);
+    }
+
+    public async Task<AdminSavedFilterDto?> SaveFilterAsync(SaveAdminFilterRequest request, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.PostAsJsonAsync("api/v1/backoffice/tenants/saved-filters", request, cancellationToken);
+        if (!response.IsSuccessStatusCode) return null;
+        return await response.Content.ReadFromJsonAsync<AdminSavedFilterDto>(cancellationToken: cancellationToken);
+    }
+
+    public async Task<bool> DeleteSavedFilterAsync(Guid filterId, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.DeleteAsync($"api/v1/backoffice/tenants/saved-filters/{filterId}", cancellationToken);
+        return response.IsSuccessStatusCode;
+    }
+
+    public async Task<ExportTenantsResult?> ExportTenantsCsvAsync(TenantAdminFilterDto filter, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var url = BuildTenantFilterUrl("api/v1/backoffice/tenants/export", filter);
+        var response = await _httpClient.GetAsync(url, cancellationToken);
+        if (response.IsSuccessStatusCode)
+        {
+            var bytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
+            var fileName = response.Content.Headers.ContentDisposition?.FileName?.Trim('"')
+                ?? "tenants-export.csv";
+            return new ExportTenantsResult { Content = bytes, FileName = fileName };
+        }
+
+        Error? error = null;
+        try
+        {
+            error = await response.Content.ReadFromJsonAsync<Error>(cancellationToken: cancellationToken);
+        }
+        catch
+        {
+            // Ignore parse errors.
+        }
+
+        return new ExportTenantsResult { ErrorMessage = error?.Message ?? "Falha ao exportar recorte operacional." };
+    }
+
+    private static string BuildTenantFilterUrl(
+        string basePath,
+        TenantAdminFilterDto filter,
+        int? page = null,
+        int? pageSize = null)
+    {
+        var query = new List<string>();
+        if (page.HasValue) query.Add($"page={page.Value}");
+        if (pageSize.HasValue) query.Add($"pageSize={pageSize.Value}");
+        if (!string.IsNullOrWhiteSpace(filter.SearchTerm)) query.Add($"searchTerm={Uri.EscapeDataString(filter.SearchTerm)}");
+        if (!string.IsNullOrWhiteSpace(filter.Status)) query.Add($"status={Uri.EscapeDataString(filter.Status)}");
+        if (!string.IsNullOrWhiteSpace(filter.SubscribedPlan)) query.Add($"subscribedPlan={Uri.EscapeDataString(filter.SubscribedPlan)}");
+        if (!string.IsNullOrWhiteSpace(filter.State)) query.Add($"state={Uri.EscapeDataString(filter.State)}");
+        if (!string.IsNullOrWhiteSpace(filter.OwnerSearch)) query.Add($"ownerSearch={Uri.EscapeDataString(filter.OwnerSearch)}");
+        if (!string.IsNullOrWhiteSpace(filter.SizeSegment)) query.Add($"sizeSegment={Uri.EscapeDataString(filter.SizeSegment)}");
+        if (!string.IsNullOrWhiteSpace(filter.CommercialRegion)) query.Add($"commercialRegion={Uri.EscapeDataString(filter.CommercialRegion)}");
+        if (!string.IsNullOrWhiteSpace(filter.ProductiveProfile)) query.Add($"productiveProfile={Uri.EscapeDataString(filter.ProductiveProfile)}");
+        if (!string.IsNullOrWhiteSpace(filter.ChurnRisk)) query.Add($"churnRisk={Uri.EscapeDataString(filter.ChurnRisk)}");
+        if (filter.TagIds is { Count: > 0 })
+        {
+            query.AddRange(filter.TagIds.Select(tagId => $"tagIds={tagId}"));
+        }
+
+        return query.Count == 0 ? basePath : $"{basePath}?{string.Join('&', query)}";
     }
 
     public async Task<TenantAdminDetailDto?> GetTenantByIdAsync(Guid id, CancellationToken cancellationToken = default)

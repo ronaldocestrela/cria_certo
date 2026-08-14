@@ -5,6 +5,12 @@ namespace CriaCerto.Modules.Backoffice.Application.Features.Tenants;
 
 internal static class TenantAdminMapper
 {
+    public static TenantOperationalTagAdminDto ToTagDto(TenantOperationalTagDto dto) =>
+        new(dto.Id, dto.Slug, dto.Name, dto.ColorHex, dto.Category);
+
+    public static OperationalTagAdminDto ToTagDto(OperationalTagDto dto) =>
+        new(dto.Id, dto.Slug, dto.Name, dto.ColorHex, dto.Category, dto.IsActive, dto.CreatedAtUtc);
+
     public static TenantAdminSummaryDto ToSummaryDto(TenantBackofficeSummaryDto dto) =>
         new(
             dto.Id,
@@ -17,6 +23,11 @@ internal static class TenantAdminMapper
             dto.Capacity,
             dto.State,
             dto.City,
+            dto.SizeSegment,
+            dto.CommercialRegion,
+            dto.ProductiveProfile,
+            dto.ChurnRisk,
+            dto.Tags.Select(ToTagDto).ToList(),
             dto.TechnicalOwnerName,
             dto.CommercialOwnerName,
             dto.IsProtected,
@@ -39,6 +50,11 @@ internal static class TenantAdminMapper
             dto.StateRegistration,
             dto.AreaInHectares,
             dto.Type,
+            dto.SizeSegment,
+            dto.CommercialRegion,
+            dto.ProductiveProfile,
+            dto.ChurnRisk,
+            dto.Tags.Select(ToTagDto).ToList(),
             dto.TechnicalOwnerName,
             dto.TechnicalOwnerEmail,
             dto.CommercialOwnerName,

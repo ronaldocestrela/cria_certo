@@ -33,7 +33,14 @@ O módulo `Modules.Tenancy` gerencia as identidades dos usuários, organizaçõe
   - `Capacity`: `int` (limite de cabeças; validado via `PlanCapacityLimits`)
   - `TechnicalOwnerName` / `TechnicalOwnerEmail`
   - `CommercialOwnerName` / `CommercialOwnerEmail`
+  - `SizeSegment`: `Micro`, `Small`, `Medium`, `Large` (default por `Capacity`)
+  - `CommercialRegion`: `Norte`, `Nordeste`, `CentroOeste`, `Sudeste`, `Sul` (default por UF)
+  - `ProductiveProfile`: `Corte`, `Leite`, `Misto`, `Cria`, `Recria`, `Engorda`, `Confinamento`
+  - `ChurnRisk`: `None`, `Low`, `Medium`, `High`, `Critical`
   - `CreatedAtUtc` / `UpdatedAtUtc`
+
+- **OperationalTag**: Catálogo de etiquetas operacionais (`Slug` único, `Category`: `Support` | `CustomerSuccess` | `Retention`).
+- **TenantOperationalTag**: Vínculo N:N entre `Tenant` e `OperationalTag`.
 
 - **UserTenant**: Tabela associativa entre `User` e `Tenant`.
 
@@ -64,6 +71,23 @@ O módulo `Modules.Tenancy` gerencia as identidades dos usuários, organizaçõe
 | `POST` | `/api/v1/backoffice/tenants/{id}/cancel` | `tenants.suspend` | Cancelamento com justificativa |
 | `POST` | `/api/v1/backoffice/tenants/{id}/archive` | `tenants.suspend` | Arquivamento com justificativa |
 | `POST` | `/api/v1/backoffice/tenants/{id}/protection` | `tenants.suspend` | Proteger/desproteger tenant |
+| `GET` | `/api/v1/backoffice/tenants/export` | `tenants.read` | Exportação CSV do recorte filtrado (máx. 10.000 linhas) |
+| `PUT` | `/api/v1/backoffice/tenants/{id}/segmentation` | `tenants.write` | Atualizar taxonomias operacionais |
+| `PUT` | `/api/v1/backoffice/tenants/{id}/tags` | `tenants.write` | Substituir etiquetas operacionais do tenant |
+| `GET` | `/api/v1/backoffice/tenants/tags` | `tenants.read` | Listar catálogo de etiquetas |
+| `POST` | `/api/v1/backoffice/tenants/tags` | `tenants.write` | Criar etiqueta operacional |
+| `DELETE` | `/api/v1/backoffice/tenants/tags/{tagId}` | `tenants.write` | Desativar etiqueta operacional |
+| `GET` | `/api/v1/backoffice/tenants/saved-filters` | `tenants.read` | Listar filtros salvos do admin autenticado |
+| `POST` | `/api/v1/backoffice/tenants/saved-filters` | `tenants.read` | Salvar recorte operacional |
+| `DELETE` | `/api/v1/backoffice/tenants/saved-filters/{id}` | `tenants.read` | Excluir filtro salvo do admin autenticado |
+
+### Segmentação Operacional (Sub-fase 2.3)
+
+Filtros adicionais em `GET /api/v1/backoffice/tenants`: `sizeSegment`, `commercialRegion`, `productiveProfile`, `churnRisk`, `tagIds[]`, `afterCreatedAtUtc`, `afterId`.
+
+Paginação: offset (`page`/`pageSize`, clamp 1–100) e keyset (`afterCreatedAtUtc` + `afterId`) com ordenação `CreatedAtUtc DESC, Id DESC`.
+
+Erros: `Tenant.InvalidSegmentation`, `Tenant.TagNotFound`, `Tenant.TagInactive`, `Tenant.TagSlugAlreadyExists`, `Tenant.ExportLimitExceeded`.
 
 ### Máquina de Estados do Tenant (Sub-fase 2.2)
 
@@ -101,8 +125,9 @@ Erros: `Tenant.InvalidTransition`, `Tenant.JustificationRequired`, `Tenant.Prote
 - **`CreateTenantForAdminCommand`**: cadastro administrativo sem exigir usuário produtor; provisiona DB do tenant; `OwnerUserEmail` opcional.
 - **`UpdateTenantForAdminCommand`**: atualização cadastral; não altera `Status` nem `SubscribedPlan`.
 - **`SuspendTenantForAdminCommand`**, **`ReactivateTenantForAdminCommand`**, **`CancelTenantForAdminCommand`**, **`ArchiveTenantForAdminCommand`**, **`SetTenantProtectionForAdminCommand`**: governança de ciclo de vida.
-- **`GetTenantsBackofficeQuery`**: listagem paginada com filtros (busca, status, plano, UF, owners).
-- **`GetTenantBackofficeDetailQuery`**: visão 360 com limites, owners, contagem de time e unidades produtivas.
+- **`GetTenantsBackofficeQuery`**: listagem paginada com filtros (busca, status, plano, UF, owners, segmentação, tags).
+- **`GetTenantBackofficeDetailQuery`**: visão 360 com limites, owners, segmentação, tags, contagem de time e unidades produtivas.
+- **`UpdateTenantSegmentationForAdminCommand`**, **`ReplaceTenantTagsForAdminCommand`**, **`CreateOperationalTagForAdminCommand`**, **`DeactivateOperationalTagForAdminCommand`**, **`GetOperationalTagsQuery`**, **`ExportTenantsBackofficeQuery`**: segmentação operacional e exportação CSV.
 
 **Unicidade:** `CnpjNormalized` e `ExternalIdentifier` são validados no onboarding (`CreateTenantCommand`) e no backoffice.
 

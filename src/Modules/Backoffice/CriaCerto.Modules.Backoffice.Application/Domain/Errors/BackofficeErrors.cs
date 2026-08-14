@@ -67,4 +67,12 @@ public static class BackofficeErrors
     public static readonly Error WeakPassword = Error.Validation(
         "Backoffice.WeakPassword",
         "A senha fornecida não atende aos requisitos mínimos de segurança.");
+
+    public static readonly Error SavedFilterNotFound = Error.NotFound(
+        "Backoffice.SavedFilterNotFound",
+        "O filtro salvo solicitado não foi encontrado.");
+
+    public static readonly Error SavedFilterNameAlreadyExists = Error.Conflict(
+        "Backoffice.SavedFilterNameAlreadyExists",
+        "Já existe um filtro salvo com este nome para o usuário administrativo.");
 }

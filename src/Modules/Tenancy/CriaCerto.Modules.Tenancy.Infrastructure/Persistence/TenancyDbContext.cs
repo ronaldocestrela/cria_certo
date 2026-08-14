@@ -16,6 +16,8 @@ public sealed class TenancyDbContext : DbContext, ITenancyDbContext
     public DbSet<UserTenant> UserTenants => Set<UserTenant>();
     public DbSet<ProductionUnit> ProductionUnits => Set<ProductionUnit>();
     public DbSet<TeamInvite> TeamInvites => Set<TeamInvite>();
+    public DbSet<OperationalTag> OperationalTags => Set<OperationalTag>();
+    public DbSet<TenantOperationalTag> TenantOperationalTags => Set<TenantOperationalTag>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -54,6 +56,17 @@ public sealed class TenancyDbContext : DbContext, ITenancyDbContext
             builder.Property(t => t.StateRegistration).HasMaxLength(50);
             builder.Property(t => t.AreaInHectares).HasPrecision(18, 2);
             builder.Property(t => t.Type).HasMaxLength(100);
+            builder.Property(t => t.SizeSegment).HasMaxLength(20).IsRequired();
+            builder.Property(t => t.CommercialRegion).HasMaxLength(20).IsRequired();
+            builder.Property(t => t.ProductiveProfile).HasMaxLength(30).IsRequired();
+            builder.Property(t => t.ChurnRisk).HasMaxLength(20).IsRequired();
+            builder.HasIndex(t => t.CreatedAtUtc);
+            builder.HasIndex(t => t.SizeSegment);
+            builder.HasIndex(t => t.CommercialRegion);
+            builder.HasIndex(t => t.ProductiveProfile);
+            builder.HasIndex(t => t.ChurnRisk);
+            builder.HasIndex(t => t.Status);
+            builder.HasIndex(t => new { t.CreatedAtUtc, t.Id });
             builder.Property(t => t.TechnicalOwnerName).HasMaxLength(150);
             builder.Property(t => t.TechnicalOwnerEmail).HasMaxLength(150);
             builder.Property(t => t.CommercialOwnerName).HasMaxLength(150);
@@ -96,6 +109,37 @@ public sealed class TenancyDbContext : DbContext, ITenancyDbContext
             builder.HasOne(pu => pu.Tenant)
                 .WithMany(t => t.ProductionUnits)
                 .HasForeignKey(pu => pu.TenantId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<OperationalTag>(builder =>
+        {
+            builder.ToTable("OperationalTags");
+            builder.HasKey(t => t.Id);
+            builder.Property(t => t.Slug).HasMaxLength(80).IsRequired();
+            builder.HasIndex(t => t.Slug).IsUnique();
+            builder.Property(t => t.Name).HasMaxLength(100).IsRequired();
+            builder.Property(t => t.ColorHex).HasMaxLength(7).IsRequired();
+            builder.Property(t => t.Category).HasMaxLength(30).IsRequired();
+            builder.Property(t => t.IsActive).IsRequired();
+            builder.Property(t => t.CreatedAtUtc).IsRequired();
+        });
+
+        modelBuilder.Entity<TenantOperationalTag>(builder =>
+        {
+            builder.ToTable("TenantOperationalTags");
+            builder.HasKey(t => new { t.TenantId, t.TagId });
+            builder.Property(t => t.AssignedAtUtc).IsRequired();
+            builder.HasIndex(t => t.TagId);
+
+            builder.HasOne(t => t.Tenant)
+                .WithMany(tenant => tenant.OperationalTags)
+                .HasForeignKey(t => t.TenantId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            builder.HasOne(t => t.Tag)
+                .WithMany(tag => tag.TenantTags)
+                .HasForeignKey(t => t.TagId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

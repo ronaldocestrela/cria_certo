@@ -10,6 +10,8 @@ public interface ITenancyDbContext
     DbSet<UserTenant> UserTenants { get; }
     DbSet<ProductionUnit> ProductionUnits { get; }
     DbSet<TeamInvite> TeamInvites { get; }
+    DbSet<OperationalTag> OperationalTags { get; }
+    DbSet<TenantOperationalTag> TenantOperationalTags { get; }
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 
 }

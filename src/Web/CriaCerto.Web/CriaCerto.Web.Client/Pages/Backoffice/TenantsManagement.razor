@@ -5,6 +5,7 @@
 @using CriaCerto.Web.Client.Components.Backoffice
 @using CriaCerto.Web.Client.Services
 @inject IBackofficeApiClient ApiClient
+@inject IJSRuntime JS
 
 <PermissionGuard Permission="@BackofficePermissions.TenantsRead">
     <Authorized>
@@ -12,16 +13,19 @@
             <header class="page-header">
                 <div>
                     <span class="badge-tenant">Tenants & Clientes</span>
-                    <h1 class="page-title">Cadastro e Visão 360 do Tenant</h1>
-                    <p class="page-subtitle">Busca, filtros avançados e visão consolidada por tenant com dados fiscais, limites e owners operacionais.</p>
+                    <h1 class="page-title">Gestão de Clientes e Segmentação Operacional</h1>
+                    <p class="page-subtitle">Listas segmentadas, filtros salvos, exportação de recortes e visão 360 com taxonomias operacionais.</p>
                 </div>
-                <PermissionGuard Permission="@BackofficePermissions.TenantsWrite">
+                <div class="header-actions">
+                    <button class="btn btn-secondary" @onclick="ExportCsv">Exportar CSV</button>
+                    <PermissionGuard Permission="@BackofficePermissions.TenantsWrite">
                     <Authorized>
                         <button class="btn btn-primary" @onclick="OpenCreateModal">
                             <span class="icon">+</span> Novo Tenant
                         </button>
                     </Authorized>
                 </PermissionGuard>
+                </div>
             </header>
 
             <div class="kpis-grid">
@@ -69,6 +73,57 @@
                         <option value="Enterprise">Enterprise</option>
                     </select>
                     <input type="text" class="filter-select" placeholder="UF" maxlength="2" @bind="StateFilter" @bind:after="LoadData" />
+                    <select class="filter-select" @bind="SizeSegmentFilter" @bind:after="LoadData">
+                        <option value="">Porte</option>
+                        <option value="Micro">Micro</option>
+                        <option value="Small">Small</option>
+                        <option value="Medium">Medium</option>
+                        <option value="Large">Large</option>
+                    </select>
+                    <select class="filter-select" @bind="CommercialRegionFilter" @bind:after="LoadData">
+                        <option value="">Região</option>
+                        <option value="Norte">Norte</option>
+                        <option value="Nordeste">Nordeste</option>
+                        <option value="CentroOeste">Centro-Oeste</option>
+                        <option value="Sudeste">Sudeste</option>
+                        <option value="Sul">Sul</option>
+                    </select>
+                    <select class="filter-select" @bind="ProductiveProfileFilter" @bind:after="LoadData">
+                        <option value="">Perfil</option>
+                        <option value="Corte">Corte</option>
+                        <option value="Leite">Leite</option>
+                        <option value="Misto">Misto</option>
+                        <option value="Cria">Cria</option>
+                        <option value="Recria">Recria</option>
+                        <option value="Engorda">Engorda</option>
+                        <option value="Confinamento">Confinamento</option>
+                    </select>
+                    <select class="filter-select" @bind="ChurnRiskFilter" @bind:after="LoadData">
+                        <option value="">Churn</option>
+                        <option value="None">None</option>
+                        <option value="Low">Low</option>
+                        <option value="Medium">Medium</option>
+                        <option value="High">High</option>
+                        <option value="Critical">Critical</option>
+                    </select>
+                    <select class="filter-select tag-filter" multiple @onchange="HandleTagFilterChange">
+                        @foreach (var tag in AvailableTags)
+                        {
+                            <option value="@tag.Id" selected="@SelectedTagIds.Contains(tag.Id)">@tag.Name</option>
+                        }
+                    </select>
+                    <select class="filter-select" @bind="SelectedSavedFilterId" @bind:after="ApplySelectedSavedFilter">
+                        <option value="">Filtros salvos</option>
+                        @foreach (var filter in SavedFilters)
+                        {
+                            <option value="@filter.Id">@filter.Name @(filter.IsDefault ? "★" : "")</option>
+                        }
+                    </select>
+                    <button class="btn btn-secondary btn-sm" @onclick="OpenSaveFilterPrompt">Salvar recorte</button>
+                    @if (!string.IsNullOrWhiteSpace(SelectedSavedFilterId))
+                    {
+                        <button class="btn btn-secondary btn-sm" @onclick="DeleteSelectedSavedFilter">Excluir recorte</button>
+                    }
                 </div>
             </div>
 
@@ -96,6 +151,9 @@
                                         <th>Status</th>
                                         <th>Plano</th>
                                         <th>UF</th>
+                                        <th>Porte</th>
+                                        <th>Região</th>
+                                        <th>Tags</th>
                                         <th>Capacidade</th>
                                     </tr>
                                 </thead>
@@ -112,6 +170,16 @@
                                             <td><span class="status-badge status-@tenant.Status.ToLower()">@tenant.Status</span></td>
                                             <td>@tenant.SubscribedPlan</td>
                                             <td>@tenant.State</td>
+                                            <td>@tenant.SizeSegment</td>
+                                            <td>@tenant.CommercialRegion</td>
+                                            <td>
+                                                <div class="tag-chips">
+                                                    @foreach (var tag in tenant.Tags.Take(3))
+                                                    {
+                                                        <span class="tag-chip" style="border-color:@tag.ColorHex;color:@tag.ColorHex">@tag.Name</span>
+                                                    }
+                                                </div>
+                                            </td>
                                             <td>@tenant.Capacity.ToString("N0")</td>
                                         </tr>
                                     }
@@ -206,6 +274,81 @@
                             </dl>
                         </div>
                         <div class="detail-section">
+                            <h3>Segmentação Operacional</h3>
+                            <dl class="detail-grid">
+                                <dt>Porte</dt><dd>@SelectedTenant.SizeSegment</dd>
+                                <dt>Região</dt><dd>@SelectedTenant.CommercialRegion</dd>
+                                <dt>Perfil Produtivo</dt><dd>@SelectedTenant.ProductiveProfile</dd>
+                                <dt>Risco de Churn</dt><dd>@SelectedTenant.ChurnRisk</dd>
+                            </dl>
+                            <PermissionGuard Permission="@BackofficePermissions.TenantsWrite">
+                                <Authorized>
+                                    <div class="segmentation-edit">
+                                        <select class="filter-select" @bind="EditSizeSegment">
+                                            <option value="Micro">Micro</option>
+                                            <option value="Small">Small</option>
+                                            <option value="Medium">Medium</option>
+                                            <option value="Large">Large</option>
+                                        </select>
+                                        <select class="filter-select" @bind="EditCommercialRegion">
+                                            <option value="Norte">Norte</option>
+                                            <option value="Nordeste">Nordeste</option>
+                                            <option value="CentroOeste">Centro-Oeste</option>
+                                            <option value="Sudeste">Sudeste</option>
+                                            <option value="Sul">Sul</option>
+                                        </select>
+                                        <select class="filter-select" @bind="EditProductiveProfile">
+                                            <option value="Corte">Corte</option>
+                                            <option value="Leite">Leite</option>
+                                            <option value="Misto">Misto</option>
+                                            <option value="Cria">Cria</option>
+                                            <option value="Recria">Recria</option>
+                                            <option value="Engorda">Engorda</option>
+                                            <option value="Confinamento">Confinamento</option>
+                                        </select>
+                                        <select class="filter-select" @bind="EditChurnRisk">
+                                            <option value="None">None</option>
+                                            <option value="Low">Low</option>
+                                            <option value="Medium">Medium</option>
+                                            <option value="High">High</option>
+                                            <option value="Critical">Critical</option>
+                                        </select>
+                                        <button class="btn btn-secondary btn-sm" @onclick="SaveSegmentation">Atualizar segmentação</button>
+                                    </div>
+                                </Authorized>
+                            </PermissionGuard>
+                        </div>
+                        <div class="detail-section">
+                            <h3>Etiquetas Operacionais</h3>
+                            <div class="tag-chips">
+                                @if (SelectedTenant.Tags.Any())
+                                {
+                                    @foreach (var tag in SelectedTenant.Tags)
+                                    {
+                                        <span class="tag-chip" style="border-color:@tag.ColorHex;color:@tag.ColorHex">@tag.Name</span>
+                                    }
+                                }
+                                else
+                                {
+                                    <span class="tenant-meta">Nenhuma etiqueta atribuída.</span>
+                                }
+                            </div>
+                            <PermissionGuard Permission="@BackofficePermissions.TenantsWrite">
+                                <Authorized>
+                                    <div class="segmentation-edit">
+                                        <select class="filter-select tag-filter" multiple @onchange="HandleTenantTagSelectionChange">
+                                            @foreach (var tag in AvailableTags)
+                                            {
+                                                <option value="@tag.Id" selected="@EditTagIds.Contains(tag.Id)">@tag.Name</option>
+                                            }
+                                        </select>
+                                        <button class="btn btn-secondary btn-sm" @onclick="SaveTenantTags">Salvar etiquetas</button>
+                                        <button class="btn btn-secondary btn-sm" @onclick="() => IsTagModalOpen = true">Nova etiqueta</button>
+                                    </div>
+                                </Authorized>
+                            </PermissionGuard>
+                        </div>
+                        <div class="detail-section">
                             <h3>Consolidado</h3>
                             <dl class="detail-grid">
                                 <dt>Membros do Time</dt><dd>@SelectedTenant.TeamMemberCount</dd>
@@ -256,6 +399,11 @@
             ErrorMessage="@LifecycleErrorMessage"
             OnClose="CloseLifecycleModal"
             OnConfirm="HandleLifecycleConfirm" />
+
+        <OperationalTagModal
+            IsOpen="IsTagModalOpen"
+            OnClose="CloseTagModal"
+            OnCreate="HandleCreateTag" />
     </Authorized>
     <NotAuthorized>
         <div class="access-denied-container">
@@ -267,7 +415,8 @@
 
 <style>
     .tenants-page { padding: 1.5rem; color: #f8fafc; display: flex; flex-direction: column; gap: 1.5rem; }
-    .page-header { display: flex; justify-content: space-between; align-items: flex-start; }
+    .page-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; }
+    .header-actions { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
     .badge-tenant { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; background: #4ade80; color: #0f172a; padding: 0.2rem 0.5rem; border-radius: 9999px; }
     .page-title { font-size: 1.5rem; font-weight: 800; margin: 0.3rem 0; color: #f1f5f9; }
     .page-subtitle { color: #94a3b8; font-size: 0.9rem; margin: 0; }
@@ -281,6 +430,11 @@
     .search-box input { background: transparent; border: none; color: #f8fafc; width: 100%; outline: none; font-size: 0.85rem; }
     .filters-group { display: flex; gap: 0.5rem; flex-wrap: wrap; }
     .filter-select { background: #0f172a; border: 1px solid #334155; color: #f8fafc; padding: 0.5rem 0.75rem; border-radius: 0.5rem; font-size: 0.85rem; outline: none; min-width: 120px; }
+    .tag-filter { min-width: 160px; min-height: 72px; }
+    .tag-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+    .tag-chip { border: 1px solid; border-radius: 9999px; padding: 0.15rem 0.5rem; font-size: 0.7rem; font-weight: 700; background: rgba(15, 23, 42, 0.6); }
+    .segmentation-edit { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.75rem; }
+    .btn-sm { padding: 0.35rem 0.65rem; font-size: 0.8rem; }
     .content-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; min-height: 400px; }
     @@media (max-width: 1024px) { .content-grid { grid-template-columns: 1fr; } }
     .list-panel, .detail-panel { background: #1e293b; border-radius: 0.75rem; border: 1px solid #334155; overflow: hidden; }
@@ -338,6 +492,21 @@
     private string StatusFilter = string.Empty;
     private string PlanFilter = string.Empty;
     private string StateFilter = string.Empty;
+    private string SizeSegmentFilter = string.Empty;
+    private string CommercialRegionFilter = string.Empty;
+    private string ProductiveProfileFilter = string.Empty;
+    private string ChurnRiskFilter = string.Empty;
+    private List<Guid> SelectedTagIds = new();
+    private List<OperationalTagAdminDto> AvailableTags = new();
+    private List<AdminSavedFilterDto> SavedFilters = new();
+    private string SelectedSavedFilterId = string.Empty;
+
+    private string EditSizeSegment = "Small";
+    private string EditCommercialRegion = "CentroOeste";
+    private string EditProductiveProfile = "Corte";
+    private string EditChurnRisk = "None";
+    private List<Guid> EditTagIds = new();
+    private bool IsTagModalOpen;
 
     private bool IsModalOpen;
     private bool IsModalEdit;
@@ -362,16 +531,45 @@
     private TenantLifecycleModal.LifecycleAction LifecycleAction;
     private string? LifecycleErrorMessage;
 
-    protected override async Task OnInitializedAsync() => await LoadData();
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTagsAndFilters();
+        await LoadData();
+    }
+
+    private async Task LoadTagsAndFilters()
+    {
+        AvailableTags = (await ApiClient.GetOperationalTagsAsync())?.ToList() ?? new List<OperationalTagAdminDto>();
+        SavedFilters = (await ApiClient.GetSavedFiltersAsync())?.ToList() ?? new List<AdminSavedFilterDto>();
+    }
+
+    private TenantAdminFilterDto BuildCurrentFilter() => new(
+        string.IsNullOrWhiteSpace(SearchTerm) ? null : SearchTerm,
+        string.IsNullOrWhiteSpace(StatusFilter) ? null : StatusFilter,
+        string.IsNullOrWhiteSpace(PlanFilter) ? null : PlanFilter,
+        string.IsNullOrWhiteSpace(StateFilter) ? null : StateFilter.ToUpperInvariant(),
+        null,
+        string.IsNullOrWhiteSpace(SizeSegmentFilter) ? null : SizeSegmentFilter,
+        string.IsNullOrWhiteSpace(CommercialRegionFilter) ? null : CommercialRegionFilter,
+        string.IsNullOrWhiteSpace(ProductiveProfileFilter) ? null : ProductiveProfileFilter,
+        string.IsNullOrWhiteSpace(ChurnRiskFilter) ? null : ChurnRiskFilter,
+        SelectedTagIds.Count == 0 ? null : SelectedTagIds);
 
     private async Task LoadData()
     {
         IsLoading = true;
+        var filter = BuildCurrentFilter();
         PagedTenants = await ApiClient.GetTenantsAsync(
-            string.IsNullOrWhiteSpace(SearchTerm) ? null : SearchTerm,
-            string.IsNullOrWhiteSpace(StatusFilter) ? null : StatusFilter,
-            string.IsNullOrWhiteSpace(PlanFilter) ? null : PlanFilter,
-            string.IsNullOrWhiteSpace(StateFilter) ? null : StateFilter.ToUpperInvariant());
+            filter.SearchTerm,
+            filter.Status,
+            filter.SubscribedPlan,
+            filter.State,
+            filter.OwnerSearch,
+            filter.SizeSegment,
+            filter.CommercialRegion,
+            filter.ProductiveProfile,
+            filter.ChurnRisk,
+            filter.TagIds);
         IsLoading = false;
     }
 
@@ -381,7 +579,160 @@
     {
         SelectedTenantId = id;
         SelectedTenant = await ApiClient.GetTenantByIdAsync(id);
+        if (SelectedTenant != null)
+        {
+            EditSizeSegment = SelectedTenant.SizeSegment;
+            EditCommercialRegion = SelectedTenant.CommercialRegion;
+            EditProductiveProfile = SelectedTenant.ProductiveProfile;
+            EditChurnRisk = SelectedTenant.ChurnRisk;
+            EditTagIds = SelectedTenant.Tags.Select(t => t.Id).ToList();
+        }
     }
+
+    private async Task HandleTagFilterChange(ChangeEventArgs e)
+    {
+        SelectedTagIds = ParseSelectedGuids(e);
+        await LoadData();
+    }
+
+    private async Task HandleTenantTagSelectionChange(ChangeEventArgs e)
+    {
+        EditTagIds = ParseSelectedGuids(e);
+        await Task.CompletedTask;
+    }
+
+    private static List<Guid> ParseSelectedGuids(ChangeEventArgs e)
+    {
+        if (e.Value is not string[] values)
+        {
+            return new List<Guid>();
+        }
+
+        return values
+            .Where(v => Guid.TryParse(v, out _))
+            .Select(Guid.Parse)
+            .ToList();
+    }
+
+    private async Task ApplySelectedSavedFilter()
+    {
+        if (string.IsNullOrWhiteSpace(SelectedSavedFilterId))
+        {
+            return;
+        }
+
+        if (!Guid.TryParse(SelectedSavedFilterId, out var filterId))
+        {
+            return;
+        }
+
+        var saved = SavedFilters.FirstOrDefault(f => f.Id == filterId);
+        if (saved == null)
+        {
+            return;
+        }
+
+        SearchTerm = saved.Filter.SearchTerm ?? string.Empty;
+        StatusFilter = saved.Filter.Status ?? string.Empty;
+        PlanFilter = saved.Filter.SubscribedPlan ?? string.Empty;
+        StateFilter = saved.Filter.State ?? string.Empty;
+        SizeSegmentFilter = saved.Filter.SizeSegment ?? string.Empty;
+        CommercialRegionFilter = saved.Filter.CommercialRegion ?? string.Empty;
+        ProductiveProfileFilter = saved.Filter.ProductiveProfile ?? string.Empty;
+        ChurnRiskFilter = saved.Filter.ChurnRisk ?? string.Empty;
+        SelectedTagIds = saved.Filter.TagIds?.ToList() ?? new List<Guid>();
+        await LoadData();
+    }
+
+    private async Task OpenSaveFilterPrompt()
+    {
+        var name = $"Recorte {DateTime.Now:yyyyMMdd-HHmm}";
+        var saved = await ApiClient.SaveFilterAsync(new SaveAdminFilterRequest(name, BuildCurrentFilter(), false));
+        if (saved != null)
+        {
+            await LoadTagsAndFilters();
+            SelectedSavedFilterId = saved.Id.ToString();
+        }
+    }
+
+    private async Task DeleteSelectedSavedFilter()
+    {
+        if (string.IsNullOrWhiteSpace(SelectedSavedFilterId) || !Guid.TryParse(SelectedSavedFilterId, out var filterId))
+        {
+            return;
+        }
+
+        if (await ApiClient.DeleteSavedFilterAsync(filterId))
+        {
+            SelectedSavedFilterId = string.Empty;
+            await LoadTagsAndFilters();
+        }
+    }
+
+    private async Task ExportCsv()
+    {
+        var result = await ApiClient.ExportTenantsCsvAsync(BuildCurrentFilter());
+        if (result == null || !result.IsSuccess)
+        {
+            return;
+        }
+
+        await JS.InvokeVoidAsync("downloadFileFromByteArray", result.FileName, "text/csv", result.Content);
+    }
+
+    private async Task SaveSegmentation()
+    {
+        if (SelectedTenant == null)
+        {
+            return;
+        }
+
+        var updated = await ApiClient.UpdateTenantSegmentationAsync(
+            SelectedTenant.Id,
+            new UpdateTenantSegmentationAdminRequest(
+                EditSizeSegment,
+                EditCommercialRegion,
+                EditProductiveProfile,
+                EditChurnRisk));
+
+        if (updated != null)
+        {
+            SelectedTenant = updated;
+            await LoadData();
+        }
+    }
+
+    private async Task SaveTenantTags()
+    {
+        if (SelectedTenant == null)
+        {
+            return;
+        }
+
+        var updated = await ApiClient.ReplaceTenantTagsAsync(
+            SelectedTenant.Id,
+            new ReplaceTenantTagsAdminRequest(EditTagIds));
+
+        if (updated != null)
+        {
+            SelectedTenant = updated;
+            await LoadData();
+        }
+    }
+
+    private async Task HandleCreateTag(CreateOperationalTagAdminRequest request)
+    {
+        var created = await ApiClient.CreateOperationalTagAsync(request);
+        if (created == null)
+        {
+            return;
+        }
+
+        IsTagModalOpen = false;
+        await LoadTagsAndFilters();
+    }
+
+    private void CloseTagModal() => IsTagModalOpen = false;
 
     private void OpenCreateModal()
     {

@@ -111,7 +111,7 @@ As entregas estão organizadas em **6 Fases Sequenciais**, cobrindo fundação d
 * **TDD & Validação:**
   * Testes de transição de estados válidos/invalidos e obrigatoriedade de justificativa.
 
-#### Sub-fase 2.3: Gestão de Clientes e Segmentação Operacional [PLANEJADA]
+#### Sub-fase 2.3: Gestão de Clientes e Segmentação Operacional [CONCLUÍDA]
 * **Backend:**
   * Taxonomias para segmentação (porte, região, perfil produtivo, risco de churn).
   * Etiquetas operacionais (`Tags`) para campanhas de suporte, sucesso do cliente e retenção.

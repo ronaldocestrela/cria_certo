@@ -155,6 +155,7 @@ public sealed class CreateTenantForAdminCommandHandler : IRequestHandler<CreateT
             CreatedAtUtc = now,
             UpdatedAtUtc = now
         };
+        tenant.ApplyDefaultSegmentation();
 
         _dbContext.Tenants.Add(tenant);
 

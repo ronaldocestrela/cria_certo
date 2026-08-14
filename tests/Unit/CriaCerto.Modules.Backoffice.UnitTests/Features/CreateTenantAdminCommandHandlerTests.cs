@@ -1,6 +1,7 @@
 using CriaCerto.BuildingBlocks.Abstractions.Results;
 using CriaCerto.Modules.Backoffice.Application.Domain.Entities;
 using CriaCerto.Modules.Backoffice.Application.Features.Tenants.Commands;
+using CriaCerto.Modules.Backoffice.UnitTests.TestData;
 using CriaCerto.Modules.Tenancy.Application.Contracts;
 using CriaCerto.Modules.Tenancy.Application.Features.BackofficeTenants;
 using CriaCerto.Modules.Backoffice.Infrastructure.Persistence;
@@ -40,10 +41,7 @@ public class CreateTenantAdminCommandHandlerTests : IDisposable
     {
         var tenantId = Guid.NewGuid();
         _sender.Send(Arg.Any<CreateTenantForAdminCommand>(), Arg.Any<CancellationToken>())
-            .Returns(Result.Success(new TenantBackofficeDetailDto(
-                tenantId, "Fazenda", null, "12.345.678/0001-90", null, "Active", "Starter",
-                500, 500, false, "MT", "Sinop", "IE", 1000, "Corte",
-                null, null, null, null, false, null, null, 0, 0, DateTime.UtcNow, DateTime.UtcNow)));
+            .Returns(Result.Success(TenantBackofficeTestData.CreateDetail(tenantId)));
 
         var handler = new CreateTenantAdminCommandHandler(_sender, _dbContext);
         var result = await handler.Handle(new CreateTenantAdminCommand(

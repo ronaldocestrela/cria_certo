@@ -28,6 +28,8 @@ O módulo adota a diretiva **Default Deny**: qualquer requisição para a rota `
 | **Suspensão de Tenants** | `tenants.suspend` | ✅ | ❌ | ❌ | ❌ | ❌ |
 
 > `tenants.suspend` também cobre reativação, cancelamento, arquivamento e proteção/desproteção de tenants.
+
+> **Sub-fase 2.3:** `tenants.read` cobre listagem segmentada, filtros salvos e exportação CSV. `tenants.write` cobre atualização de taxonomias e etiquetas operacionais. Não há permissões novas.
 | **Leitura de Planos** | `plans.read` | ✅ | ❌ | ❌ | ✅ | ✅ |
 | **Edição de Planos** | `plans.write` | ✅ | ❌ | ❌ | ✅ | ❌ |
 | **Publicação de Planos** | `plans.publish` | ✅ | ❌ | ❌ | ✅ | ❌ |

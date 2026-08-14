@@ -1,6 +1,7 @@
 using CriaCerto.BuildingBlocks.Abstractions.Results;
 using CriaCerto.Modules.Backoffice.Application.Domain.Entities;
 using CriaCerto.Modules.Backoffice.Application.Features.Tenants.Commands;
+using CriaCerto.Modules.Backoffice.UnitTests.TestData;
 using CriaCerto.Modules.Tenancy.Application.Contracts;
 using CriaCerto.Modules.Tenancy.Application.Features.BackofficeTenants;
 using CriaCerto.Modules.Backoffice.Infrastructure.Persistence;
@@ -86,8 +87,5 @@ public class SuspendTenantAdminCommandHandlerTests : IDisposable
     }
 
     private static TenantBackofficeDetailDto CreateDetail(Guid tenantId, string status) =>
-        new(
-            tenantId, "Fazenda", null, "12.345.678/0001-90", null, status, "Starter",
-            500, 500, false, "MT", "Sinop", "IE", 1000, "Corte",
-            null, null, null, null, false, null, null, 0, 0, DateTime.UtcNow, DateTime.UtcNow);
+        TenantBackofficeTestData.CreateDetail(tenantId, status);
 }

@@ -19,6 +19,10 @@ public sealed class Tenant
     public string StateRegistration { get; set; } = string.Empty;
     public decimal AreaInHectares { get; set; }
     public string Type { get; set; } = string.Empty;
+    public string SizeSegment { get; set; } = TenantSegmentationCatalog.SizeSegments.Small;
+    public string CommercialRegion { get; set; } = TenantSegmentationCatalog.CommercialRegions.CentroOeste;
+    public string ProductiveProfile { get; set; } = TenantSegmentationCatalog.ProductiveProfiles.Corte;
+    public string ChurnRisk { get; set; } = TenantSegmentationCatalog.ChurnRisks.None;
     public string? TechnicalOwnerName { get; set; }
     public string? TechnicalOwnerEmail { get; set; }
     public string? CommercialOwnerName { get; set; }
@@ -30,6 +34,41 @@ public sealed class Tenant
     public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
     public List<UserTenant> UserTenants { get; set; } = new();
     public List<ProductionUnit> ProductionUnits { get; set; } = new();
+    public List<TenantOperationalTag> OperationalTags { get; set; } = new();
+
+    public void ApplyDefaultSegmentation()
+    {
+        SizeSegment = TenantSegmentationCatalog.ResolveSizeSegmentFromCapacity(Capacity);
+        CommercialRegion = TenantSegmentationCatalog.ResolveCommercialRegionFromState(State);
+        ProductiveProfile = TenantSegmentationCatalog.ProductiveProfiles.Corte;
+        ChurnRisk = TenantSegmentationCatalog.ChurnRisks.None;
+    }
+
+    public Result UpdateSegmentation(string sizeSegment, string commercialRegion, string productiveProfile, string churnRisk)
+    {
+        var validations = new[]
+        {
+            TenantSegmentationCatalog.ValidateSizeSegment(sizeSegment),
+            TenantSegmentationCatalog.ValidateCommercialRegion(commercialRegion),
+            TenantSegmentationCatalog.ValidateProductiveProfile(productiveProfile),
+            TenantSegmentationCatalog.ValidateChurnRisk(churnRisk)
+        };
+
+        foreach (var validation in validations)
+        {
+            if (validation.IsFailure)
+            {
+                return validation;
+            }
+        }
+
+        SizeSegment = TenantSegmentationCatalog.NormalizeSegmentValue(sizeSegment, TenantSegmentationCatalog.SizeSegments.All);
+        CommercialRegion = TenantSegmentationCatalog.NormalizeSegmentValue(commercialRegion, TenantSegmentationCatalog.CommercialRegions.All);
+        ProductiveProfile = TenantSegmentationCatalog.NormalizeSegmentValue(productiveProfile, TenantSegmentationCatalog.ProductiveProfiles.All);
+        ChurnRisk = TenantSegmentationCatalog.NormalizeSegmentValue(churnRisk, TenantSegmentationCatalog.ChurnRisks.All);
+        UpdatedAtUtc = DateTime.UtcNow;
+        return Result.Success();
+    }
 
     public TenantStatus GetStatusEnum() => TenantLifecycle.ParseStatus(Status);
 

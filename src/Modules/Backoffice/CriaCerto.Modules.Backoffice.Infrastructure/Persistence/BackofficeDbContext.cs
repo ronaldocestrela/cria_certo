@@ -10,6 +10,7 @@ public class BackofficeDbContext : DbContext
     public DbSet<Permission> Permissions => Set<Permission>();
     public DbSet<AdminSession> AdminSessions => Set<AdminSession>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    public DbSet<AdminSavedFilter> AdminSavedFilters => Set<AdminSavedFilter>();
 
     public BackofficeDbContext(DbContextOptions<BackofficeDbContext> options)
         : base(options)
@@ -70,6 +71,19 @@ public class BackofficeDbContext : DbContext
             builder.HasKey(a => a.Id);
             builder.Property(a => a.Action).IsRequired().HasMaxLength(100);
             builder.Property(a => a.Resource).IsRequired().HasMaxLength(200);
+        });
+
+        modelBuilder.Entity<AdminSavedFilter>(builder =>
+        {
+            builder.ToTable("AdminSavedFilters");
+            builder.HasKey(f => f.Id);
+            builder.Property(f => f.Name).IsRequired().HasMaxLength(100);
+            builder.Property(f => f.FilterJson).IsRequired();
+            builder.Property(f => f.IsDefault).IsRequired();
+            builder.Property(f => f.CreatedAtUtc).IsRequired();
+            builder.Property(f => f.UpdatedAtUtc).IsRequired();
+            builder.HasIndex(f => new { f.AdminUserId, f.Name }).IsUnique();
+            builder.HasIndex(f => f.AdminUserId);
         });
     }
 }

@@ -137,6 +137,11 @@ public sealed class UpdateTenantForAdminCommandHandler : IRequestHandler<UpdateT
         tenant.CommercialOwnerName = TrimOrNull(request.CommercialOwnerName);
         tenant.CommercialOwnerEmail = TrimOrNull(request.CommercialOwnerEmail);
         tenant.UpdatedAtUtc = DateTime.UtcNow;
+        tenant.CommercialRegion = TenantSegmentationCatalog.ResolveCommercialRegionFromState(tenant.State);
+        if (tenant.SizeSegment == TenantSegmentationCatalog.SizeSegments.Small && tenant.Capacity != request.Capacity)
+        {
+            tenant.SizeSegment = TenantSegmentationCatalog.ResolveSizeSegmentFromCapacity(request.Capacity);
+        }
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 

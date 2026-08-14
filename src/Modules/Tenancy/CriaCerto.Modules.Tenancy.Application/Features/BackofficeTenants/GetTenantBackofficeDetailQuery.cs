@@ -35,6 +35,12 @@ public sealed class GetTenantBackofficeDetailQueryHandler
         var teamCount = await _dbContext.UserTenants.CountAsync(ut => ut.TenantId == tenant.Id, cancellationToken);
         var unitCount = await _dbContext.ProductionUnits.CountAsync(pu => pu.TenantId == tenant.Id, cancellationToken);
 
-        return Result.Success(TenantBackofficeMapper.ToDetailDto(tenant, teamCount, unitCount));
+        var tags = await _dbContext.TenantOperationalTags
+            .AsNoTracking()
+            .Where(t => t.TenantId == tenant.Id && t.Tag.IsActive)
+            .Select(t => new TenantOperationalTagDto(t.Tag.Id, t.Tag.Slug, t.Tag.Name, t.Tag.ColorHex, t.Tag.Category))
+            .ToListAsync(cancellationToken);
+
+        return Result.Success(TenantBackofficeMapper.ToDetailDto(tenant, teamCount, unitCount, tags));
     }
 }

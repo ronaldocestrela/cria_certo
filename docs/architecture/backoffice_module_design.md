@@ -25,6 +25,14 @@ O módulo `Modules.Backoffice` é o núcleo administrativo isolado da plataforma
 * `DetailsJson` inclui `FromStatus`, `ToStatus`, `Reason`, `IsProtected`.
 * Enforcement de acesso produtor via `LoginCommand`, `SelectTenantCommand` e `TenantAccessMiddleware`.
 
+## 4.2 Segmentação Operacional e Filtros Salvos (Sub-fase 2.3)
+* Taxonomias persistidas no Tenancy (`SizeSegment`, `CommercialRegion`, `ProductiveProfile`, `ChurnRisk`) com catálogo em `TenantSegmentationCatalog`.
+* Etiquetas operacionais (`OperationalTag`, `TenantOperationalTag`) no schema `tenancy` para consultas indexáveis em uma única query.
+* Filtros salvos (`AdminSavedFilter`) no schema `backoffice`, escopo por `AdminUserId`.
+* Facades Backoffice delegam segmentação/tags/export para Tenancy via MediatR; auditoria local:
+  * `Tenant.SegmentationUpdated`, `Tenant.TagsReplaced`, `Tenant.TagCreated`, `Tenant.TagDeactivated`, `Tenant.Exported`.
+* Exportação CSV UTF-8 com BOM, teto de 10.000 registros por recorte.
+
 ## 5. Política de Segurança Default Deny
 Todas as requisições destinadas ao prefixo `/api/v1/backoffice/*` passam pelo middleware de segurança `BackofficeAccessMiddleware`.
 * Se o usuário não possuir credenciais autenticadas ou a claim/permissão administrativa correspondente, a requisição é bloqueada imediatamente com status `401 Unauthorized` ou `403 Forbidden`.

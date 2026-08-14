@@ -144,8 +144,9 @@ public class Result<TValue> : Result
   * Individual/Lot medical treatments with slaughter withdrawal period (período de carência) blocks.
 
 ### 5.6 Tenant & Licensing Module (`Modules.Tenancy`)
-* **Entities:** `Tenant`, `SubscriptionPlan`, `ModuleAccess`.
+* **Entities:** `Tenant`, `SubscriptionPlan`, `ModuleAccess`, `OperationalTag`, `TenantOperationalTag`.
 * **Tenant lifecycle states:** `Trial`, `Active`, `PastDue`, `Suspended`, `Cancelled`, `Archived` — governed via `TenantLifecycle` with mandatory admin justification for transitions.
+* **Operational segmentation (Backoffice 2.3):** `SizeSegment`, `CommercialRegion`, `ProductiveProfile`, `ChurnRisk` on `Tenant`; operational tags for support/CS/retention campaigns.
 * **Features:**
   * Middleware for module availability verification per tenant.
   * Feature toggling and usage limits (e.g., max head of cattle supported per plan).

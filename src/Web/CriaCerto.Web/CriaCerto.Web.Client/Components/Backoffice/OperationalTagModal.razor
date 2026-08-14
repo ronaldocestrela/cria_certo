@@ -1,0 +1,90 @@
+@using CriaCerto.Modules.Backoffice.Application.Features.Tenants.Dtos
+
+@if (IsOpen)
+{
+    <div class="modal-overlay" @onclick="Close">
+        <div class="modal-card" @onclick:stopPropagation="true">
+            <header class="modal-header">
+                <h3>Nova Etiqueta Operacional</h3>
+                <button type="button" class="btn-close" @onclick="Close">×</button>
+            </header>
+            <div class="modal-body">
+                <label>Nome</label>
+                <input class="form-control" @bind="Name" maxlength="100" />
+                <label>Categoria</label>
+                <select class="form-control" @bind="Category">
+                    <option value="Support">Suporte</option>
+                    <option value="CustomerSuccess">Sucesso do Cliente</option>
+                    <option value="Retention">Retenção</option>
+                </select>
+                <label>Cor</label>
+                <input class="form-control" type="color" @bind="ColorHex" />
+                @if (!string.IsNullOrWhiteSpace(ErrorMessage))
+                {
+                    <p class="error-text">@ErrorMessage</p>
+                }
+            </div>
+            <footer class="modal-footer">
+                <button type="button" class="btn btn-secondary" @onclick="Close">Cancelar</button>
+                <button type="button" class="btn btn-primary" @onclick="Submit" disabled="@IsSaving">
+                    @(IsSaving ? "Salvando..." : "Criar Etiqueta")
+                </button>
+            </footer>
+        </div>
+    </div>
+}
+
+<style>
+    .modal-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.75); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+    .modal-card { background: #1e293b; border: 1px solid #334155; border-radius: 0.75rem; width: min(420px, 92vw); color: #f8fafc; }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.25rem; border-bottom: 1px solid #334155; }
+    .modal-header h3 { margin: 0; font-size: 1rem; }
+    .modal-body { display: flex; flex-direction: column; gap: 0.5rem; padding: 1rem 1.25rem; }
+    .modal-body label { font-size: 0.75rem; font-weight: 700; color: #94a3b8; text-transform: uppercase; }
+    .form-control { background: #0f172a; border: 1px solid #334155; color: #f8fafc; border-radius: 0.5rem; padding: 0.5rem 0.75rem; }
+    .modal-footer { display: flex; justify-content: flex-end; gap: 0.5rem; padding: 1rem 1.25rem; border-top: 1px solid #334155; }
+    .btn-close { background: transparent; border: none; color: #94a3b8; font-size: 1.25rem; cursor: pointer; }
+    .error-text { color: #f87171; font-size: 0.85rem; margin: 0.25rem 0 0; }
+    .btn-primary { background: #0284c7; color: #fff; padding: 0.5rem 0.9rem; border: none; border-radius: 0.5rem; font-weight: 700; cursor: pointer; }
+    .btn-secondary { background: #334155; color: #f8fafc; padding: 0.5rem 0.9rem; border: none; border-radius: 0.5rem; font-weight: 600; cursor: pointer; }
+</style>
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback<CreateOperationalTagAdminRequest> OnCreate { get; set; }
+
+    private string Name { get; set; } = string.Empty;
+    private string Category { get; set; } = "Support";
+    private string ColorHex { get; set; } = "#6366f1";
+    private string? ErrorMessage;
+    private bool IsSaving;
+
+    protected override void OnParametersSet()
+    {
+        if (IsOpen)
+        {
+            Name = string.Empty;
+            Category = "Support";
+            ColorHex = "#6366f1";
+            ErrorMessage = null;
+            IsSaving = false;
+        }
+    }
+
+    private async Task Close() => await OnClose.InvokeAsync();
+
+    private async Task Submit()
+    {
+        if (string.IsNullOrWhiteSpace(Name))
+        {
+            ErrorMessage = "Informe o nome da etiqueta.";
+            return;
+        }
+
+        IsSaving = true;
+        ErrorMessage = null;
+        await OnCreate.InvokeAsync(new CreateOperationalTagAdminRequest(Name.Trim(), Category, ColorHex));
+        IsSaving = false;
+    }
+}

@@ -13,6 +13,14 @@ public record GetTenantsBackofficeQuery(
     string? SubscribedPlan = null,
     string? State = null,
     string? OwnerSearch = null,
+    string? SizeSegment = null,
+    string? CommercialRegion = null,
+    string? ProductiveProfile = null,
+    string? ChurnRisk = null,
+    IReadOnlyCollection<Guid>? TagIds = null,
+    bool IncludeInactiveTags = false,
+    DateTime? AfterCreatedAtUtc = null,
+    Guid? AfterId = null,
     int Page = 1,
     int PageSize = 20
 ) : IRequest<Result<PagedTenantBackofficeResult<TenantBackofficeSummaryDto>>>;
@@ -31,59 +39,62 @@ public sealed class GetTenantsBackofficeQueryHandler
         GetTenantsBackofficeQuery request,
         CancellationToken cancellationToken)
     {
-        var query = _dbContext.Tenants.AsNoTracking().AsQueryable();
+        var pageSize = TenantSegmentationCatalog.ClampPageSize(request.PageSize);
+        var page = request.Page <= 0 ? 1 : request.Page;
 
-        if (!string.IsNullOrWhiteSpace(request.SearchTerm))
-        {
-            var term = request.SearchTerm.Trim().ToLower();
-            var cnpjDigits = CnpjNormalizer.Normalize(request.SearchTerm);
-            query = query.Where(t =>
-                t.Name.ToLower().Contains(term)
-                || (t.LegalName != null && t.LegalName.ToLower().Contains(term))
-                || t.CNPJ.ToLower().Contains(term)
-                || t.CnpjNormalized.Contains(cnpjDigits)
-                || (t.ExternalIdentifier != null && t.ExternalIdentifier.ToLower().Contains(term)));
-        }
-
-        if (!string.IsNullOrWhiteSpace(request.Status))
-        {
-            var status = request.Status.Trim();
-            query = query.Where(t => t.Status == status);
-        }
-
-        if (!string.IsNullOrWhiteSpace(request.SubscribedPlan))
-        {
-            var plan = request.SubscribedPlan.Trim();
-            query = query.Where(t => t.SubscribedPlan == plan);
-        }
-
-        if (!string.IsNullOrWhiteSpace(request.State))
-        {
-            var state = request.State.Trim().ToUpperInvariant();
-            query = query.Where(t => t.State == state);
-        }
-
-        if (!string.IsNullOrWhiteSpace(request.OwnerSearch))
-        {
-            var ownerTerm = request.OwnerSearch.Trim().ToLower();
-            query = query.Where(t =>
-                (t.TechnicalOwnerName != null && t.TechnicalOwnerName.ToLower().Contains(ownerTerm))
-                || (t.TechnicalOwnerEmail != null && t.TechnicalOwnerEmail.ToLower().Contains(ownerTerm))
-                || (t.CommercialOwnerName != null && t.CommercialOwnerName.ToLower().Contains(ownerTerm))
-                || (t.CommercialOwnerEmail != null && t.CommercialOwnerEmail.ToLower().Contains(ownerTerm)));
-        }
+        var query = TenantBackofficeQueryBuilder.ApplyFilters(
+            _dbContext.Tenants.AsNoTracking(),
+            request.SearchTerm,
+            request.Status,
+            request.SubscribedPlan,
+            request.State,
+            request.OwnerSearch,
+            request.SizeSegment,
+            request.CommercialRegion,
+            request.ProductiveProfile,
+            request.ChurnRisk,
+            request.TagIds,
+            request.IncludeInactiveTags,
+            _dbContext.TenantOperationalTags);
 
         var totalCount = await query.CountAsync(cancellationToken);
 
-        var tenants = await query
+        query = query
             .OrderByDescending(t => t.CreatedAtUtc)
-            .Skip((request.Page - 1) * request.PageSize)
-            .Take(request.PageSize)
+            .ThenByDescending(t => t.Id);
+
+        if (request.AfterCreatedAtUtc.HasValue && request.AfterId.HasValue)
+        {
+            var cursorCreatedAt = request.AfterCreatedAtUtc.Value;
+            var cursorId = request.AfterId.Value;
+            query = query.Where(t =>
+                t.CreatedAtUtc < cursorCreatedAt
+                || (t.CreatedAtUtc == cursorCreatedAt && t.Id.CompareTo(cursorId) < 0));
+        }
+        else if (page > 1)
+        {
+            query = query.Skip((page - 1) * pageSize);
+        }
+
+        var tenants = await query
+            .Take(pageSize)
             .ToListAsync(cancellationToken);
 
-        var items = tenants.Select(TenantBackofficeMapper.ToSummaryDto).ToList();
+        var tenantIds = tenants.Select(t => t.Id).ToList();
+        var tagsByTenant = await TenantBackofficeMapper.LoadTagsByTenantIdsAsync(
+            _dbContext.TenantOperationalTags,
+            tenantIds,
+            cancellationToken);
+
+        var items = tenants
+            .Select(t =>
+            {
+                tagsByTenant.TryGetValue(t.Id, out var tags);
+                return TenantBackofficeMapper.ToSummaryDto(t, tags);
+            })
+            .ToList();
 
         return Result.Success(new PagedTenantBackofficeResult<TenantBackofficeSummaryDto>(
-            items, totalCount, request.Page, request.PageSize));
+            items, totalCount, page, pageSize));
     }
 }
