@@ -539,6 +539,21 @@ backoffice.MapDelete("/tenants/saved-filters/{filterId:guid}", async (Guid filte
     return result.IsSuccess ? Results.Ok() : Results.Json(result.Error, statusCode: ToStatusCode(result.Error.Type));
 }).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.TenantsRead)).WithTags("Backoffice Tenants");
 
+backoffice.MapGet("/tenants/{id:guid}/plan-preview", async (Guid id, Guid targetPlanVersionId, ISender sender) =>
+{
+    var query = new PreviewTenantPlanChangeQuery(id, targetPlanVersionId);
+    var result = await sender.Send(query);
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.TenantsRead)).WithTags("Backoffice Subscriptions");
+
+backoffice.MapPost("/tenants/{id:guid}/plan", async (Guid id, ChangeTenantPlanRequestDto req, HttpContext ctx, ISender sender) =>
+{
+    var (callerId, _, _) = GetBackofficeActor(ctx);
+    var command = new ChangeTenantPlanCommand(id, req.TargetPlanVersionId, callerId, req.Justification, req.ForceImmediate);
+    var result = await sender.Send(command);
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.TenantsWrite)).WithTags("Backoffice Subscriptions");
+
 // --- BACKOFFICE PLAN CATALOG ENDPOINTS ---
 backoffice.MapGet("/plans", async (bool? includeArchived, ISender sender) =>
 {
@@ -597,7 +612,7 @@ app.MapPost("/api/v1/backoffice/auth/login", async (BackofficeLoginRequest req, 
     var ua = ctx.Request.Headers.UserAgent.ToString() ?? "Unknown";
     var command = new AuthenticateAdminUserCommand(req.Email, req.Password, req.MfaCode, ip, ua);
     var result = await sender.Send(command);
-    return ToHttpResult(result);
+    return ToBackofficeLoginHttpResult(result);
 }).AllowAnonymous().WithTags("Backoffice Auth");
 
 app.MapPost("/api/v1/backoffice/auth/refresh", async (RefreshSessionRequest req, HttpContext ctx, ISender sender) =>
@@ -1129,6 +1144,23 @@ static IResult ToHttpResult<TValue>(Result<TValue> result, int successStatusCode
     }
 
     return Results.Json(result.Error, statusCode: ToStatusCode(result.Error.Type));
+}
+
+static IResult ToBackofficeLoginHttpResult(Result<AdminAuthResultDto> result)
+{
+    if (result.IsSuccess)
+    {
+        return ToHttpResult(result);
+    }
+
+    var statusCode = result.Error.Code switch
+    {
+        "Backoffice.InvalidCredentials" => StatusCodes.Status401Unauthorized,
+        "Backoffice.MfaRequired" => StatusCodes.Status401Unauthorized,
+        _ => ToStatusCode(result.Error.Type)
+    };
+
+    return Results.Json(result.Error, statusCode: statusCode);
 }
 
 static int ToStatusCode(ErrorType errorType) => errorType switch

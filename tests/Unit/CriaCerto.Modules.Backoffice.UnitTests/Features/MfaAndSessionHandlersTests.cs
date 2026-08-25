@@ -45,6 +45,54 @@ public class MfaAndSessionHandlersTests
     }
 
     [Fact]
+    public async Task AuthenticateAdminUser_WhenEmailNotFound_ShouldReturnInvalidCredentials()
+    {
+        var (dbContext, connection) = GetInMemoryDbContext();
+        using (connection)
+        using (dbContext)
+        {
+            var handler = CreateAuthHandler(dbContext);
+            var command = new AuthenticateAdminUserCommand(
+                "missing@criacerto.com.br",
+                "AnyPassword123!",
+                null,
+                "127.0.0.1",
+                "UnitTestAgent");
+
+            var result = await handler.Handle(command, CancellationToken.None);
+
+            result.IsFailure.Should().BeTrue();
+            result.Error.Code.Should().Be("Backoffice.InvalidCredentials");
+        }
+    }
+
+    [Fact]
+    public async Task AuthenticateAdminUser_WhenPasswordWrong_ShouldReturnInvalidCredentials()
+    {
+        var (dbContext, connection) = GetInMemoryDbContext();
+        using (connection)
+        using (dbContext)
+        {
+            var user = AdminUser.Create("Support N1", "support@criacerto.com.br", "hash_Password123!").Value;
+            dbContext.AdminUsers.Add(user);
+            await dbContext.SaveChangesAsync();
+
+            var handler = CreateAuthHandler(dbContext);
+            var command = new AuthenticateAdminUserCommand(
+                "support@criacerto.com.br",
+                "WrongPassword123!",
+                null,
+                "127.0.0.1",
+                "UnitTestAgent");
+
+            var result = await handler.Handle(command, CancellationToken.None);
+
+            result.IsFailure.Should().BeTrue();
+            result.Error.Code.Should().Be("Backoffice.InvalidCredentials");
+        }
+    }
+
+    [Fact]
     public async Task AuthenticateAdminUser_WithValidCredentialsNoMfa_ShouldReturnAuthResult()
     {
         // Arrange

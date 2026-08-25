@@ -1,0 +1,200 @@
+@using CriaCerto.Modules.Backoffice.Application.Features.Plans.Dtos
+@using CriaCerto.Modules.Backoffice.Application.Features.Tenants.Dtos
+@using CriaCerto.Web.Client.Services
+@inject IBackofficeApiClient ApiClient
+
+@if (IsOpen)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,0.6);" role="dialog">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content shadow-lg border-0">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title fw-bold">
+                        <i class="bi bi-box-seam me-2"></i>Alterar Plano de Assinatura — @TenantName
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="Close"></button>
+                </div>
+                <div class="modal-body p-4">
+                    @if (isLoadingPlans)
+                    {
+                        <div class="text-center py-4">
+                            <div class="spinner-border text-primary" role="status"></div>
+                            <p class="text-muted mt-2">Carregando catálogo de planos diponíveis...</p>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Selecione o Novo Plano / Versão Publicada</label>
+                            <select class="form-select" @onchange="OnPlanSelected">
+                                <option value="">-- Selecione uma versão de plano publicada --</option>
+                                @if (availablePlans != null)
+                                {
+                                    @foreach (var plan in availablePlans)
+                                    {
+                                        @foreach (var version in plan.Versions.Where(v => v.Status == "Published"))
+                                        {
+                                            <option value="@version.Id">
+                                                @plan.Name — @version.VersionName (Limite: @version.HeadCapacityLimit cabeças | R$ @version.MonthlyPrice/mês)
+                                            </option>
+                                        }
+                                    }
+                                }
+                            </select>
+                        </div>
+
+                        @if (isLoadingPreview)
+                        {
+                            <div class="alert alert-info py-2 text-center">
+                                <span class="spinner-border spinner-border-sm me-2"></span> Calculando impacto e deltas de capacidade...
+                            </div>
+                        }
+                        else if (preview != null)
+                        {
+                            <div class="card bg-light border-0 mb-3">
+                                <div class="card-body">
+                                    <h6 class="fw-bold text-dark border-bottom pb-2">Impacto da Alteração</h6>
+                                    <div class="row text-center my-3">
+                                        <div class="col-md-4">
+                                            <small class="text-muted d-block">Plano Atual</small>
+                                            <span class="badge bg-secondary fs-6">@preview.CurrentPlanName (@preview.CurrentHeadCapacity cabeças)</span>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <small class="text-muted d-block">Novo Plano</small>
+                                            <span class="badge bg-success fs-6">@preview.TargetPlanName (@preview.TargetHeadCapacity cabeças)</span>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <small class="text-muted d-block">Variação de Capacidade</small>
+                                            <span class="badge @(preview.DeltaHeadCapacity >= 0 ? "bg-primary" : "bg-warning text-dark") fs-6">
+                                                @(preview.DeltaHeadCapacity >= 0 ? $"+{preview.DeltaHeadCapacity}" : preview.DeltaHeadCapacity.ToString())
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    @if (preview.RequiresGracePeriod)
+                                    {
+                                        <div class="alert alert-warning border-start border-4 border-warning my-2">
+                                            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                                            <strong>Aviso de Grace Period (@preview.GracePeriodDays dias):</strong> O uso atual do tenant excede o limite do plano selecionado. A alteração ativará um Grace Period para adequação do rebanho/usuários.
+                                        </div>
+                                    }
+
+                                    @if (preview.AddedFeatures.Any())
+                                    {
+                                        <div class="mt-2">
+                                            <small class="fw-bold text-success"><i class="bi bi-plus-circle me-1"></i>Recursos Adicionados:</small>
+                                            <div class="d-flex flex-wrap gap-1 mt-1">
+                                                @foreach (var feat in preview.AddedFeatures)
+                                                {
+                                                    <span class="badge bg-success-subtle text-success border border-success">@feat</span>
+                                                }
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Justificativa Administrativa (Obrigatória, mín. 15 caracteres)</label>
+                            <textarea class="form-control" rows="3" placeholder="Informe a razão da alteração de plano para fins de auditoria..." @bind="justification"></textarea>
+                            @if (!string.IsNullOrEmpty(errorMessage))
+                            {
+                                <div class="text-danger small mt-1">@errorMessage</div>
+                            }
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" @onclick="Close">Cancelar</button>
+                    <button type="button" class="btn btn-primary" disabled="@(!CanSubmit || isSubmitting)" @onclick="Submit">
+                        @if (isSubmitting)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                        }
+                        Confirmar Alteração de Plano
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public Guid TenantId { get; set; }
+    [Parameter] public string TenantName { get; set; } = string.Empty;
+    [Parameter] public EventCallback OnClosed { get; set; }
+    [Parameter] public EventCallback<ChangeTenantPlanResponseDto> OnPlanChanged { get; set; }
+
+    private IReadOnlyCollection<PlanCatalogDto>? availablePlans;
+    private TenantPlanPreviewDto? preview;
+    private Guid selectedVersionId;
+    private string justification = string.Empty;
+    private string? errorMessage;
+    private bool isLoadingPlans;
+    private bool isLoadingPreview;
+    private bool isSubmitting;
+
+    private bool CanSubmit => selectedVersionId != Guid.Empty && justification.Trim().Length >= 15;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsOpen && availablePlans == null)
+        {
+            isLoadingPlans = true;
+            availablePlans = await ApiClient.GetPlansAsync(includeArchived: false);
+            isLoadingPlans = false;
+        }
+    }
+
+    private async Task OnPlanSelected(ChangeEventArgs e)
+    {
+        errorMessage = null;
+        if (Guid.TryParse(e.Value?.ToString(), out var versionId) && versionId != Guid.Empty)
+        {
+            selectedVersionId = versionId;
+            isLoadingPreview = true;
+            preview = await ApiClient.PreviewPlanChangeAsync(TenantId, selectedVersionId);
+            isLoadingPreview = false;
+        }
+        else
+        {
+            selectedVersionId = Guid.Empty;
+            preview = null;
+        }
+    }
+
+    private async Task Submit()
+    {
+        if (!CanSubmit) return;
+
+        isSubmitting = true;
+        errorMessage = null;
+
+        var request = new ChangeTenantPlanRequestDto(selectedVersionId, justification.Trim());
+        var result = await ApiClient.ChangeTenantPlanAsync(TenantId, request);
+
+        isSubmitting = false;
+
+        if (result != null)
+        {
+            await OnPlanChanged.InvokeAsync(result);
+            await Close();
+        }
+        else
+        {
+            errorMessage = "Falha ao alterar plano. Verifique as permissões e justificativa.";
+        }
+    }
+
+    private async Task Close()
+    {
+        IsOpen = false;
+        justification = string.Empty;
+        preview = null;
+        selectedVersionId = Guid.Empty;
+        errorMessage = null;
+        await OnClosed.InvokeAsync();
+    }
+}

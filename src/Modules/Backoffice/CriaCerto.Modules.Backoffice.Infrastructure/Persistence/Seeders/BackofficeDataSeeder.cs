@@ -1,3 +1,4 @@
+using CriaCerto.BuildingBlocks.Abstractions.Results;
 using CriaCerto.Modules.Backoffice.Application.Domain.Entities;
 using CriaCerto.Modules.Backoffice.Application.Security;
 using CriaCerto.Modules.Backoffice.Infrastructure.Persistence;
@@ -17,6 +18,41 @@ public static class BackofficeDataSeeder
         BackofficeDbContext dbContext,
         IPasswordHasherService passwordHasher,
         ILogger? logger = null,
+        bool resetBootstrapAdminPassword = false,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(dbContext);
+        ArgumentNullException.ThrowIfNull(passwordHasher);
+
+        var iamResult = await SeedIamAsync(
+            dbContext,
+            passwordHasher,
+            resetBootstrapAdminPassword,
+            cancellationToken);
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        var plansCreated = await SeedPlansAsync(dbContext, logger, cancellationToken);
+
+        if (plansCreated > 0)
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+
+        logger?.LogInformation(
+            "Backoffice seed completed. PermissionsCreated={PermissionsCreated}, RolesCreated={RolesCreated}, AdminCreated={AdminCreated}, AdminRoleRepaired={AdminRoleRepaired}, AdminPasswordReset={AdminPasswordReset}, PlansCreated={PlansCreated}.",
+            iamResult.PermissionsCreated,
+            iamResult.RolesCreated,
+            iamResult.AdminCreated,
+            iamResult.AdminRoleRepaired,
+            iamResult.AdminPasswordReset,
+            plansCreated);
+    }
+
+    public static async Task<IamSeedResult> SeedIamAsync(
+        BackofficeDbContext dbContext,
+        IPasswordHasherService passwordHasher,
+        bool resetBootstrapAdminPassword = false,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(dbContext);
@@ -24,24 +60,27 @@ public static class BackofficeDataSeeder
 
         var (permissionsCreated, permissionsMap) = await SeedPermissionsAsync(dbContext, cancellationToken);
         var (rolesCreated, rolesMap) = await SeedRolesAsync(dbContext, permissionsMap, cancellationToken);
-        var (adminCreated, adminRoleRepaired) = await SeedMasterAdminAsync(
+        var (adminCreated, adminRoleRepaired, adminPasswordReset) = await SeedMasterAdminAsync(
             dbContext,
             passwordHasher,
             rolesMap,
+            resetBootstrapAdminPassword,
             cancellationToken);
 
-        var plansCreated = await SeedPlansAsync(dbContext, cancellationToken);
-
-        await dbContext.SaveChangesAsync(cancellationToken);
-
-        logger?.LogInformation(
-            "Backoffice seed completed. PermissionsCreated={PermissionsCreated}, RolesCreated={RolesCreated}, AdminCreated={AdminCreated}, AdminRoleRepaired={AdminRoleRepaired}, PlansCreated={PlansCreated}.",
+        return new IamSeedResult(
             permissionsCreated,
             rolesCreated,
             adminCreated,
             adminRoleRepaired,
-            plansCreated);
+            adminPasswordReset);
     }
+
+    public sealed record IamSeedResult(
+        int PermissionsCreated,
+        int RolesCreated,
+        bool AdminCreated,
+        bool AdminRoleRepaired,
+        bool AdminPasswordReset);
 
     private static async Task<(int Created, Dictionary<string, Permission> PermissionsMap)> SeedPermissionsAsync(
         BackofficeDbContext dbContext,
@@ -129,10 +168,11 @@ public static class BackofficeDataSeeder
         return (created, rolesMap);
     }
 
-    private static async Task<(bool AdminCreated, bool AdminRoleRepaired)> SeedMasterAdminAsync(
+    private static async Task<(bool AdminCreated, bool AdminRoleRepaired, bool AdminPasswordReset)> SeedMasterAdminAsync(
         BackofficeDbContext dbContext,
         IPasswordHasherService passwordHasher,
         IReadOnlyDictionary<string, AdminRole> rolesMap,
+        bool resetBootstrapAdminPassword,
         CancellationToken cancellationToken)
     {
         if (!rolesMap.TryGetValue(BackofficeRoles.PlatformOwner, out var platformOwnerRole))
@@ -148,6 +188,14 @@ public static class BackofficeDataSeeder
 
         if (existingAdmin is not null)
         {
+            var adminRoleRepaired = false;
+            var adminPasswordReset = false;
+
+            if (!existingAdmin.IsActive)
+            {
+                existingAdmin.Activate();
+            }
+
             var hasPlatformOwner = existingAdmin.Roles.Any(r =>
                 r.Name.Equals(BackofficeRoles.PlatformOwner, StringComparison.OrdinalIgnoreCase));
 
@@ -160,17 +208,30 @@ public static class BackofficeDataSeeder
                         $"Failed to repair bootstrap admin role: {assignResult.Error.Message}");
                 }
 
-                return (false, true);
+                adminRoleRepaired = true;
             }
 
-            return (false, false);
+            if (resetBootstrapAdminPassword)
+            {
+                var passwordHash = passwordHasher.HashPassword(MasterAdminPassword);
+                var updateResult = existingAdmin.UpdatePasswordHash(passwordHash);
+                if (updateResult.IsFailure)
+                {
+                    throw new InvalidOperationException(
+                        $"Failed to reset bootstrap admin password: {updateResult.Error.Message}");
+                }
+
+                adminPasswordReset = true;
+            }
+
+            return (false, adminRoleRepaired, adminPasswordReset);
         }
 
-        var passwordHash = passwordHasher.HashPassword(MasterAdminPassword);
+        var newPasswordHash = passwordHasher.HashPassword(MasterAdminPassword);
         var userResult = AdminUser.Create(
             name: MasterAdminName,
             email: MasterAdminEmail,
-            passwordHash: passwordHash,
+            passwordHash: newPasswordHash,
             mustChangePasswordOnNextLogin: false);
 
         if (userResult.IsFailure)
@@ -188,7 +249,7 @@ public static class BackofficeDataSeeder
         }
 
         dbContext.AdminUsers.Add(adminUser);
-        return (true, false);
+        return (true, false, false);
     }
 
     private static string GetPermissionDescription(string permissionName) => permissionName switch
@@ -218,100 +279,159 @@ public static class BackofficeDataSeeder
         _ => $"Função administrativa {roleName}"
     };
 
-    private static async Task<int> SeedPlansAsync(BackofficeDbContext dbContext, CancellationToken cancellationToken)
+    private static async Task<int> SeedPlansAsync(
+        BackofficeDbContext dbContext,
+        ILogger? logger,
+        CancellationToken cancellationToken)
     {
         var existingPlans = await dbContext.PlanCatalogs.ToListAsync(cancellationToken);
-        if (existingPlans.Any()) return 0;
+        if (existingPlans.Count > 0)
+        {
+            return 0;
+        }
 
         var bootstrapAdminId = Guid.NewGuid();
         var created = 0;
 
-        // 1. Starter Plan
-        var starterResult = PlanCatalog.Create("starter", "Plano Starter", "Ideal para pequenas propriedades com controle inicial de reprodução e parto.", "PeDistributed");
-        if (starterResult.IsSuccess)
-        {
-            var plan = starterResult.Value;
-            var v1 = plan.CreateVersion(
-                "v1.0 - Lançamento",
-                149.90m,
-                119.90m,
-                500,
-                3,
-                1,
-                new[]
-                {
-                    PlanFeature.Create("Modules.Breeding", "Módulo de Reprodução & IATF", true),
-                    PlanFeature.Create("Modules.Calving", "Módulo de Partos & Bezerreiro", true)
-                },
-                new[]
-                {
-                    PlanLimit.Create("MaxCattleHeads", 500, "cabeças")
-                }).Value;
-            plan.PublishVersion(v1.Id, bootstrapAdminId, "Seed inicial de produção");
-            dbContext.PlanCatalogs.Add(plan);
-            created++;
-        }
+        created += TrySeedPlan(
+            dbContext,
+            logger,
+            PlanCatalog.Create(
+                "starter",
+                "Plano Starter",
+                "Ideal para pequenas propriedades com controle inicial de reprodução e parto.",
+                "PeDistributed"),
+            bootstrapAdminId,
+            "v1.0 - Lançamento",
+            149.90m,
+            119.90m,
+            500,
+            3,
+            1,
+            new[]
+            {
+                PlanFeature.Create("Modules.Breeding", "Módulo de Reprodução & IATF", true),
+                PlanFeature.Create("Modules.Calving", "Módulo de Partos & Bezerreiro", true)
+            },
+            new[]
+            {
+                PlanLimit.Create("MaxCattleHeads", 500, "cabeças")
+            });
 
-        // 2. Pro Plan
-        var proResult = PlanCatalog.Create("pro", "Plano Profissional", "Para médias e grandes fazendas com controle sanitário, nutricional e crescimento.", "PeDistributed");
-        if (proResult.IsSuccess)
-        {
-            var plan = proResult.Value;
-            var v1 = plan.CreateVersion(
-                "v1.0 - Lançamento",
-                349.90m,
-                299.90m,
-                2500,
-                10,
-                5,
-                new[]
-                {
-                    PlanFeature.Create("Modules.Breeding", "Módulo de Reprodução & IATF", true),
-                    PlanFeature.Create("Modules.Calving", "Módulo de Partos & Bezerreiro", true),
-                    PlanFeature.Create("Modules.Growth", "Módulo de Manejo & Pesagem", true),
-                    PlanFeature.Create("Modules.Sanitary", "Módulo Sanitário & Vacinação", true),
-                    PlanFeature.Create("Modules.Nutrition", "Módulo Nutricional & Suplementação", true)
-                },
-                new[]
-                {
-                    PlanLimit.Create("MaxCattleHeads", 2500, "cabeças")
-                }).Value;
-            plan.PublishVersion(v1.Id, bootstrapAdminId, "Seed inicial de produção");
-            dbContext.PlanCatalogs.Add(plan);
-            created++;
-        }
+        created += TrySeedPlan(
+            dbContext,
+            logger,
+            PlanCatalog.Create(
+                "pro",
+                "Plano Profissional",
+                "Para médias e grandes fazendas com controle sanitário, nutricional e crescimento.",
+                "PeDistributed"),
+            bootstrapAdminId,
+            "v1.0 - Lançamento",
+            349.90m,
+            299.90m,
+            2500,
+            10,
+            5,
+            new[]
+            {
+                PlanFeature.Create("Modules.Breeding", "Módulo de Reprodução & IATF", true),
+                PlanFeature.Create("Modules.Calving", "Módulo de Partos & Bezerreiro", true),
+                PlanFeature.Create("Modules.Growth", "Módulo de Manejo & Pesagem", true),
+                PlanFeature.Create("Modules.Sanitary", "Módulo Sanitário & Vacinação", true),
+                PlanFeature.Create("Modules.Nutrition", "Módulo Nutricional & Suplementação", true)
+            },
+            new[]
+            {
+                PlanLimit.Create("MaxCattleHeads", 2500, "cabeças")
+            });
 
-        // 3. Enterprise Plan
-        var entResult = PlanCatalog.Create("enterprise", "Plano Enterprise", "Solução completa para grandes grupos pecuários com cabeças ilimitadas e analytics.", "Enterprise");
-        if (entResult.IsSuccess)
-        {
-            var plan = entResult.Value;
-            var v1 = plan.CreateVersion(
-                "v1.0 - Lançamento",
-                799.90m,
-                699.90m,
-                999999,
-                50,
-                20,
-                new[]
-                {
-                    PlanFeature.Create("Modules.Breeding", "Módulo de Reprodução & IATF", true),
-                    PlanFeature.Create("Modules.Calving", "Módulo de Partos & Bezerreiro", true),
-                    PlanFeature.Create("Modules.Growth", "Módulo de Manejo & Pesagem", true),
-                    PlanFeature.Create("Modules.Sanitary", "Módulo Sanitário & Vacinação", true),
-                    PlanFeature.Create("Modules.Nutrition", "Módulo Nutricional & Suplementação", true),
-                    PlanFeature.Create("Modules.Analytics", "Zootecnia Avançada & Indicadores", true),
-                    PlanFeature.Create("PwaOfflineMode", "Modo Offline PWA em Curral", true)
-                },
-                new[]
-                {
-                    PlanLimit.Create("MaxCattleHeads", 999999, "cabeças")
-                }).Value;
-            plan.PublishVersion(v1.Id, bootstrapAdminId, "Seed inicial de produção");
-            dbContext.PlanCatalogs.Add(plan);
-            created++;
-        }
+        created += TrySeedPlan(
+            dbContext,
+            logger,
+            PlanCatalog.Create(
+                "enterprise",
+                "Plano Enterprise",
+                "Solução completa para grandes grupos pecuários com cabeças ilimitadas e analytics.",
+                "Enterprise"),
+            bootstrapAdminId,
+            "v1.0 - Lançamento",
+            799.90m,
+            699.90m,
+            999999,
+            50,
+            20,
+            new[]
+            {
+                PlanFeature.Create("Modules.Breeding", "Módulo de Reprodução & IATF", true),
+                PlanFeature.Create("Modules.Calving", "Módulo de Partos & Bezerreiro", true),
+                PlanFeature.Create("Modules.Growth", "Módulo de Manejo & Pesagem", true),
+                PlanFeature.Create("Modules.Sanitary", "Módulo Sanitário & Vacinação", true),
+                PlanFeature.Create("Modules.Nutrition", "Módulo Nutricional & Suplementação", true),
+                PlanFeature.Create("Modules.Analytics", "Zootecnia Avançada & Indicadores", true),
+                PlanFeature.Create("PwaOfflineMode", "Modo Offline PWA em Curral", true)
+            },
+            new[]
+            {
+                PlanLimit.Create("MaxCattleHeads", 999999, "cabeças")
+            });
 
         return created;
+    }
+
+    private static int TrySeedPlan(
+        BackofficeDbContext dbContext,
+        ILogger? logger,
+        Result<PlanCatalog> planResult,
+        Guid bootstrapAdminId,
+        string versionName,
+        decimal monthlyPrice,
+        decimal annualPriceMonthly,
+        int headCapacityLimit,
+        int? maxUsers,
+        int? maxProductionUnits,
+        IEnumerable<PlanFeature> features,
+        IEnumerable<PlanLimit> limits)
+    {
+        if (planResult.IsFailure)
+        {
+            logger?.LogWarning(
+                "Skipping backoffice plan seed: catalog creation failed with {ErrorCode}.",
+                planResult.Error.Code);
+            return 0;
+        }
+
+        var plan = planResult.Value;
+        var versionResult = plan.CreateVersion(
+            versionName,
+            monthlyPrice,
+            annualPriceMonthly,
+            headCapacityLimit,
+            maxUsers,
+            maxProductionUnits,
+            features,
+            limits);
+
+        if (versionResult.IsFailure)
+        {
+            logger?.LogWarning(
+                "Skipping backoffice plan seed for catalog {PlanCode}: version creation failed with {ErrorCode}.",
+                plan.Code,
+                versionResult.Error.Code);
+            return 0;
+        }
+
+        var publishResult = plan.PublishVersion(versionResult.Value.Id, bootstrapAdminId, "Seed inicial de produção");
+        if (publishResult.IsFailure)
+        {
+            logger?.LogWarning(
+                "Skipping backoffice plan seed for catalog {PlanCode}: publish failed with {ErrorCode}.",
+                plan.Code,
+                publishResult.Error.Code);
+            return 0;
+        }
+
+        dbContext.PlanCatalogs.Add(plan);
+        return 1;
     }
 }

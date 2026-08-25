@@ -152,7 +152,10 @@ public class Result<TValue> : Result
   * Feature toggling and usage limits (e.g., max head of cattle supported per plan).
   * Producer access enforcement for blocked tenant statuses (`Suspended`, `Cancelled`, `Archived`).
 
----
+### 5.7 Backoffice Module (`Modules.Backoffice`)
+* **Bootstrap admin (seed):** `admin@criacerto.com.br` / `AdminPassword123!` — created by `BackofficeDataSeeder` on API startup.
+* **Dev reset:** set `Backoffice:ResetBootstrapAdminPassword=true` in `appsettings.Development.json` to re-sync the bootstrap password on existing databases (never enable in production without explicit ops approval).
+* **Login endpoint:** `POST /api/v1/backoffice/auth/login` returns `401` for invalid credentials (`Backoffice.InvalidCredentials`), not RBAC `403`.
 
 ## 6. Software Engineering Practices & AI Agent Guidelines
 

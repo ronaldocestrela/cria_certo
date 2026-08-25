@@ -5,6 +5,7 @@ using CriaCerto.Modules.Backoffice.Application.Features.AdminUsers.Dtos;
 using CriaCerto.Modules.Backoffice.Application.Security;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace CriaCerto.Modules.Backoffice.Application.Features.AdminUsers.Commands;
 
@@ -22,17 +23,20 @@ public class AuthenticateAdminUserCommandHandler : IRequestHandler<AuthenticateA
     private readonly IPasswordHasherService? _passwordHasher;
     private readonly IBackofficeTokenService? _tokenService;
     private readonly ITotpService? _totpService;
+    private readonly ILogger<AuthenticateAdminUserCommandHandler>? _logger;
 
     public AuthenticateAdminUserCommandHandler(
         DbContext dbContext,
         IPasswordHasherService? passwordHasher = null,
         IBackofficeTokenService? tokenService = null,
-        ITotpService? totpService = null)
+        ITotpService? totpService = null,
+        ILogger<AuthenticateAdminUserCommandHandler>? logger = null)
     {
         _dbContext = dbContext;
         _passwordHasher = passwordHasher;
         _tokenService = tokenService;
         _totpService = totpService;
+        _logger = logger;
     }
 
     public async Task<Result<AdminAuthResultDto>> Handle(AuthenticateAdminUserCommand request, CancellationToken cancellationToken)
@@ -45,11 +49,19 @@ public class AuthenticateAdminUserCommandHandler : IRequestHandler<AuthenticateA
 
         if (user is null)
         {
-            return Result.Failure<AdminAuthResultDto>(BackofficeErrors.UnauthorizedAccess);
+            _logger?.LogWarning(
+                "Backoffice login failed for {Email}: reason={Reason}",
+                normalizedEmail,
+                "not_found");
+            return Result.Failure<AdminAuthResultDto>(BackofficeErrors.InvalidCredentials);
         }
 
         if (!user.IsActive)
         {
+            _logger?.LogWarning(
+                "Backoffice login failed for {Email}: reason={Reason}",
+                normalizedEmail,
+                "user_disabled");
             return Result.Failure<AdminAuthResultDto>(BackofficeErrors.UserDisabled);
         }
 
@@ -66,7 +78,11 @@ public class AuthenticateAdminUserCommandHandler : IRequestHandler<AuthenticateA
 
         if (!isPasswordValid)
         {
-            return Result.Failure<AdminAuthResultDto>(BackofficeErrors.UnauthorizedAccess);
+            _logger?.LogWarning(
+                "Backoffice login failed for {Email}: reason={Reason}",
+                normalizedEmail,
+                "bad_password");
+            return Result.Failure<AdminAuthResultDto>(BackofficeErrors.InvalidCredentials);
         }
 
         if (user.MfaEnabled)

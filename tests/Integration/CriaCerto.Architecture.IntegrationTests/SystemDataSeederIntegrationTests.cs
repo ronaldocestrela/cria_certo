@@ -79,7 +79,7 @@ public class SystemDataSeederIntegrationTests : IDisposable
     public async Task SeedAsync_WhenDatabaseIsEmpty_ShouldPopulateBreedsVaccinesAndBackofficeData()
     {
         // Act
-        await SystemDataSeeder.SeedDataAsync(_foundationDb, _sanitaryDb, _backofficeDb, _passwordHasher, null, CancellationToken.None);
+        await SystemDataSeeder.SeedDataAsync(_foundationDb, _sanitaryDb, _backofficeDb, _passwordHasher, null, cancellationToken: CancellationToken.None);
 
         // Assert - Breeds
         var breeds = await _foundationDb.BovineBreeds.ToListAsync();
@@ -126,7 +126,7 @@ public class SystemDataSeederIntegrationTests : IDisposable
         _backofficeDb.AdminUsers.Add(otherAdmin);
         await _backofficeDb.SaveChangesAsync();
 
-        await SystemDataSeeder.SeedDataAsync(_foundationDb, _sanitaryDb, _backofficeDb, _passwordHasher, null, CancellationToken.None);
+        await SystemDataSeeder.SeedDataAsync(_foundationDb, _sanitaryDb, _backofficeDb, _passwordHasher, null, cancellationToken: CancellationToken.None);
 
         var adminUsers = await _backofficeDb.AdminUsers
             .Include(u => u.Roles)
@@ -142,7 +142,7 @@ public class SystemDataSeederIntegrationTests : IDisposable
     public async Task SeedAsync_WhenExecutedMultipleTimes_ShouldBeIdempotentWithoutDuplicates()
     {
         // First seed
-        await SystemDataSeeder.SeedDataAsync(_foundationDb, _sanitaryDb, _backofficeDb, _passwordHasher, null, CancellationToken.None);
+        await SystemDataSeeder.SeedDataAsync(_foundationDb, _sanitaryDb, _backofficeDb, _passwordHasher, null, cancellationToken: CancellationToken.None);
         var breedsInitialCount = await _foundationDb.BovineBreeds.CountAsync();
         var vaccinesInitialCount = await _sanitaryDb.VaccineReferences.CountAsync();
         var permissionsInitialCount = await _backofficeDb.Permissions.CountAsync();
@@ -150,8 +150,8 @@ public class SystemDataSeederIntegrationTests : IDisposable
         var usersInitialCount = await _backofficeDb.AdminUsers.CountAsync();
 
         // Second & Third seeds
-        await SystemDataSeeder.SeedDataAsync(_foundationDb, _sanitaryDb, _backofficeDb, _passwordHasher, null, CancellationToken.None);
-        await SystemDataSeeder.SeedDataAsync(_foundationDb, _sanitaryDb, _backofficeDb, _passwordHasher, null, CancellationToken.None);
+        await SystemDataSeeder.SeedDataAsync(_foundationDb, _sanitaryDb, _backofficeDb, _passwordHasher, null, cancellationToken: CancellationToken.None);
+        await SystemDataSeeder.SeedDataAsync(_foundationDb, _sanitaryDb, _backofficeDb, _passwordHasher, null, cancellationToken: CancellationToken.None);
 
         // Assert
         (await _foundationDb.BovineBreeds.CountAsync()).Should().Be(breedsInitialCount);
@@ -164,7 +164,7 @@ public class SystemDataSeederIntegrationTests : IDisposable
     [Fact]
     public async Task GetReferenceBreedsQuery_ShouldReturnPopulatedBreedsWithResultSuccess()
     {
-        await SystemDataSeeder.SeedDataAsync(_foundationDb, _sanitaryDb, _backofficeDb, _passwordHasher, null, CancellationToken.None);
+        await SystemDataSeeder.SeedDataAsync(_foundationDb, _sanitaryDb, _backofficeDb, _passwordHasher, null, cancellationToken: CancellationToken.None);
 
         var handler = new GetReferenceBreedsQueryHandler(_foundationDb);
         var result = await handler.Handle(new GetReferenceBreedsQuery(), CancellationToken.None);
@@ -177,7 +177,7 @@ public class SystemDataSeederIntegrationTests : IDisposable
     [Fact]
     public async Task GetVaccineCalendarQuery_ShouldReturnPopulatedCalendarWithResultSuccess()
     {
-        await SystemDataSeeder.SeedDataAsync(_foundationDb, _sanitaryDb, _backofficeDb, _passwordHasher, null, CancellationToken.None);
+        await SystemDataSeeder.SeedDataAsync(_foundationDb, _sanitaryDb, _backofficeDb, _passwordHasher, null, cancellationToken: CancellationToken.None);
 
         var handler = new GetVaccineCalendarQueryHandler(_sanitaryDb);
         var result = await handler.Handle(new GetVaccineCalendarQuery(), CancellationToken.None);

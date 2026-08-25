@@ -28,6 +28,10 @@ public static class BackofficeErrors
         "Backoffice.InvalidScopeData",
         "O escopo fornecido para a permissão administrativa é inválido.");
 
+    public static readonly Error InvalidCredentials = Error.Unauthorized(
+        "Backoffice.InvalidCredentials",
+        "E-mail ou senha inválidos. Verifique suas credenciais e tente novamente.");
+
     public static readonly Error UnauthorizedAccess = Error.Unauthorized(
         "Backoffice.UnauthorizedAccess",
         "Acesso negado. Credenciais administrativas ou permissões insuficientes.");

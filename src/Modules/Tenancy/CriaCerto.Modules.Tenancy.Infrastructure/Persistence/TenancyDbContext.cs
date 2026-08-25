@@ -66,7 +66,7 @@ public sealed class TenancyDbContext : DbContext, ITenancyDbContext
             builder.HasIndex(t => t.ProductiveProfile);
             builder.HasIndex(t => t.ChurnRisk);
             builder.HasIndex(t => t.Status);
-            builder.HasIndex(t => new { t.CreatedAtUtc, t.Id });
+            builder.HasIndex(t => new { t.ChurnRisk, t.CommercialRegion, t.CreatedAtUtc, t.Id });
             builder.Property(t => t.TechnicalOwnerName).HasMaxLength(150);
             builder.Property(t => t.TechnicalOwnerEmail).HasMaxLength(150);
             builder.Property(t => t.CommercialOwnerName).HasMaxLength(150);

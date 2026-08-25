@@ -3,6 +3,7 @@
 @using CriaCerto.Modules.Backoffice.Application.Features.Tenants.Dtos
 @using CriaCerto.Modules.Backoffice.Application.Security
 @using CriaCerto.Web.Client.Components.Backoffice
+@using CriaCerto.Web.Client.Pages.Backoffice.Components
 @using CriaCerto.Web.Client.Services
 @inject IBackofficeApiClient ApiClient
 @inject IJSRuntime JS
@@ -204,6 +205,7 @@
                                 <PermissionGuard Permission="@BackofficePermissions.TenantsWrite">
                                     <Authorized>
                                         <button class="btn btn-secondary" @onclick="OpenEditModal">Editar</button>
+                                        <button class="btn btn-primary ms-1" @onclick="OpenPlanChangeModal">Alterar Plano</button>
                                     </Authorized>
                                 </PermissionGuard>
                                 <PermissionGuard Permission="@BackofficePermissions.TenantsSuspend">
@@ -404,6 +406,13 @@
             IsOpen="IsTagModalOpen"
             OnClose="CloseTagModal"
             OnCreate="HandleCreateTag" />
+
+        <TenantPlanChangeModal
+            IsOpen="IsPlanModalOpen"
+            TenantId="@(SelectedTenant?.Id ?? Guid.Empty)"
+            TenantName="@(SelectedTenant?.Name ?? string.Empty)"
+            OnClosed="() => IsPlanModalOpen = false"
+            OnPlanChanged="HandlePlanChanged" />
     </Authorized>
     <NotAuthorized>
         <div class="access-denied-container">
@@ -864,5 +873,22 @@
         IsLifecycleModalOpen = false;
         LifecycleErrorMessage = null;
         await LoadData();
+    }
+
+    private bool IsPlanModalOpen;
+
+    private void OpenPlanChangeModal()
+    {
+        if (SelectedTenant == null) return;
+        IsPlanModalOpen = true;
+    }
+
+    private async Task HandlePlanChanged(ChangeTenantPlanResponseDto response)
+    {
+        IsPlanModalOpen = false;
+        if (SelectedTenant != null)
+        {
+            await SelectTenant(SelectedTenant.Id);
+        }
     }
 }

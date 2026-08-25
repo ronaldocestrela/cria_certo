@@ -134,7 +134,7 @@ As entregas estão organizadas em **6 Fases Sequenciais**, cobrindo fundação d
 * **TDD & Validação:**
   * Testes garantindo imutabilidade de versões publicadas e migração controlada.
 
-#### Sub-fase 3.2: Assinaturas, Upgrade/Downgrade e Regras de Capacidade [PLANEJADA]
+#### Sub-fase 3.2: Assinaturas, Upgrade/Downgrade e Regras de Capacidade [CONCLUÍDA]
 * **Backend:**
   * `ChangeTenantPlanCommand` com regras de elegibilidade e impacto em módulos habilitados.
   * Jobs para enforcement de limites por plano (ex.: capacidade de cabeças, usuários, unidades).

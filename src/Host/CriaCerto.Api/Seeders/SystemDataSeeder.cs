@@ -5,6 +5,7 @@ using CriaCerto.Modules.Backoffice.Infrastructure.Persistence.Seeders;
 using CriaCerto.Modules.Backoffice.Application.Security;
 using CriaCerto.Modules.Sanitary.Infrastructure.Persistence;
 using CriaCerto.Modules.Sanitary.Infrastructure.Persistence.Seeders;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace CriaCerto.Api.Seeders;
@@ -22,8 +23,17 @@ public static class SystemDataSeeder
             var sanitaryDb = scope.ServiceProvider.GetRequiredService<SanitaryDbContext>();
             var backofficeDb = scope.ServiceProvider.GetRequiredService<BackofficeDbContext>();
             var passwordHasher = scope.ServiceProvider.GetRequiredService<IPasswordHasherService>();
+            var configuration = scope.ServiceProvider.GetRequiredService<IConfiguration>();
+            var resetBootstrapAdminPassword = configuration.GetValue<bool>("Backoffice:ResetBootstrapAdminPassword");
 
-            await SeedDataAsync(foundationDb, sanitaryDb, backofficeDb, passwordHasher, logger, cancellationToken);
+            await SeedDataAsync(
+                foundationDb,
+                sanitaryDb,
+                backofficeDb,
+                passwordHasher,
+                logger,
+                resetBootstrapAdminPassword,
+                cancellationToken);
             logger?.LogInformation("[SystemDataSeeder] Reference and backoffice data seeded successfully.");
         }
         catch (Exception ex)
@@ -39,6 +49,7 @@ public static class SystemDataSeeder
         BackofficeDbContext backofficeDb,
         IPasswordHasherService passwordHasher,
         ILogger? logger = null,
+        bool resetBootstrapAdminPassword = false,
         CancellationToken cancellationToken = default)
     {
         logger?.LogInformation("[SystemDataSeeder] Seeding bovine breeds...");
@@ -50,7 +61,12 @@ public static class SystemDataSeeder
         logger?.LogInformation("[SystemDataSeeder] Vaccine references seeded.");
 
         logger?.LogInformation("[SystemDataSeeder] Seeding backoffice IAM data...");
-        await BackofficeDataSeeder.SeedAsync(backofficeDb, passwordHasher, logger, cancellationToken);
+        await BackofficeDataSeeder.SeedAsync(
+            backofficeDb,
+            passwordHasher,
+            logger,
+            resetBootstrapAdminPassword,
+            cancellationToken);
         logger?.LogInformation("[SystemDataSeeder] Backoffice IAM data seeded.");
     }
 }

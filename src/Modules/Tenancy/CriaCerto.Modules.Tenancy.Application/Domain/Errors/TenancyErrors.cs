@@ -75,4 +75,24 @@ public static class TenancyErrors
     public static readonly Error ExportLimitExceeded = Error.Validation(
         "Tenant.ExportLimitExceeded",
         "O recorte de exportação excede o limite máximo de 10.000 registros. Refine os filtros.");
+
+    public static readonly Error PlanVersionNotFound = Error.NotFound(
+        "Tenant.PlanVersionNotFound",
+        "A versão do plano solicitada não foi encontrada.");
+
+    public static readonly Error PlanVersionNotPublished = Error.Validation(
+        "Tenant.PlanVersionNotPublished",
+        "Apenas versões de plano publicadas podem ser assinadas.");
+
+    public static readonly Error AlreadySubscribedToPlanVersion = Error.Conflict(
+        "Tenant.AlreadySubscribedToPlanVersion",
+        "O tenant já está inscrito na versão do plano informada.");
+
+    public static readonly Error GracePeriodActive = Error.Conflict(
+        "Tenant.GracePeriodActive",
+        "O tenant já se encontra em Grace Period para alteração de plano.");
+
+    public static readonly Error UsageExceedsCapacityRequiresGracePeriod = Error.Validation(
+        "Tenant.UsageExceedsCapacityRequiresGracePeriod",
+        "O uso atual excede os limites do novo plano. A alteração iniciará um Grace Period de 14 dias.");
 }

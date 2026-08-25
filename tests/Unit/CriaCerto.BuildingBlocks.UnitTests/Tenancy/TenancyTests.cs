@@ -168,8 +168,8 @@ public class TenancyTests : IDisposable
             FullName = "User Two",
             PasswordHash = PasswordHasher.Hash("Pass123!")
         };
-        var tenant1 = new Tenant { Id = Guid.NewGuid(), Name = "Granja Santa Fé", CNPJ = "1", State = "RS", Type = "Matriz" };
-        var tenant2 = new Tenant { Id = Guid.NewGuid(), Name = "Unidade Terminação III", CNPJ = "2", State = "SC", Type = "Engorda" };
+        var tenant1 = new Tenant { Id = Guid.NewGuid(), Name = "Granja Santa Fé", CNPJ = "1", CnpjNormalized = "1", State = "RS", Type = "Matriz" };
+        var tenant2 = new Tenant { Id = Guid.NewGuid(), Name = "Unidade Terminação III", CNPJ = "2", CnpjNormalized = "2", State = "SC", Type = "Engorda" };
 
         _dbContext.Users.Add(user);
         _dbContext.Tenants.AddRange(tenant1, tenant2);

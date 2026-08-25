@@ -1,6 +1,7 @@
 using CriaCerto.Api.Seeders;
 using CriaCerto.BuildingBlocks.Infrastructure.Persistence;
 using CriaCerto.Modules.Backoffice.Application.Domain.Entities;
+using CriaCerto.Modules.Backoffice.Application.Features.AdminUsers.Commands;
 using CriaCerto.Modules.Backoffice.Application.Security;
 using CriaCerto.Modules.Backoffice.Infrastructure.Persistence;
 using CriaCerto.Modules.Backoffice.Infrastructure.Persistence.Seeders;
@@ -8,6 +9,7 @@ using CriaCerto.Modules.Backoffice.Infrastructure.Security;
 using CriaCerto.Modules.Sanitary.Infrastructure.Persistence;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Testcontainers.MsSql;
 
@@ -158,5 +160,42 @@ public sealed class BackofficeSeedSqlServerIntegrationTests : IAsyncLifetime
             .SingleAsync(u => u.Email == BackofficeDataSeeder.MasterAdminEmail);
 
         repairedAdmin.Roles.Should().Contain(r => r.Name == BackofficeRoles.PlatformOwner);
+    }
+
+    [Fact]
+    public async Task SeedIamAsync_OnSqlServer_AllowsLoginBeforePlansAreSeeded()
+    {
+        var backofficeOptions = MigrationTestSupport.CreateSqlServerOptions<BackofficeDbContext>(
+            _connectionString,
+            MigrationBaselineMetadata.Backoffice.Schema);
+
+        await using var backofficeDb = new BackofficeDbContext(backofficeOptions);
+        DatabaseMigrationRunner.ApplyMigrations(backofficeDb, NullLogger.Instance);
+
+        await BackofficeDataSeeder.SeedIamAsync(backofficeDb, _passwordHasher);
+        await backofficeDb.SaveChangesAsync();
+
+        (await backofficeDb.PlanCatalogs.CountAsync()).Should().Be(0);
+
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>())
+            .Build();
+
+        var handler = new AuthenticateAdminUserCommandHandler(
+            backofficeDb,
+            _passwordHasher,
+            new BackofficeTokenService(configuration),
+            new TotpService());
+
+        var result = await handler.Handle(
+            new AuthenticateAdminUserCommand(
+                BackofficeDataSeeder.MasterAdminEmail,
+                BackofficeDataSeeder.MasterAdminPassword,
+                null,
+                "127.0.0.1",
+                "IntegrationTestAgent"),
+            CancellationToken.None);
+
+        result.IsSuccess.Should().BeTrue();
     }
 }

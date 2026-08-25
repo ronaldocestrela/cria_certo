@@ -38,7 +38,7 @@ public class ImportWeighingFileCommandHandlerTests
         var tenantId = Guid.NewGuid();
 
         // Seed previous weighing for BR-101
-        var prevDate = DateTime.UtcNow.AddDays(-30);
+        var prevDate = new DateTime(2026, 6, 20, 0, 0, 0, DateTimeKind.Utc);
         var prevWeighing = Weighing.Create(tenantId, "BR-101", null, prevDate, 400.0m, 50.0m).Value;
         dbContext.Weighings.Add(prevWeighing);
         await dbContext.SaveChangesAsync();

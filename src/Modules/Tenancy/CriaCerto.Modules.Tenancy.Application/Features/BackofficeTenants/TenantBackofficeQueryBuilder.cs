@@ -87,10 +87,10 @@ internal static class TenantBackofficeQueryBuilder
         if (tagIds is { Count: > 0 })
         {
             var ids = tagIds.Distinct().ToList();
-            query = query.Where(t => tenantTags.Any(tt =>
-                tt.TenantId == t.Id
-                && ids.Contains(tt.TagId)
-                && (includeInactiveTags || tt.Tag.IsActive)));
+            var matchingTenantIds = tenantTags
+                .Where(tt => ids.Contains(tt.TagId) && (includeInactiveTags || tt.Tag.IsActive))
+                .Select(tt => tt.TenantId);
+            query = query.Where(t => matchingTenantIds.Contains(t.Id));
         }
 
         return query;

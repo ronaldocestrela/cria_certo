@@ -58,6 +58,10 @@ public interface IBackofficeApiClient
     Task<LifecycleActionResult> ArchiveTenantAsync(Guid id, string reason, CancellationToken cancellationToken = default);
     Task<LifecycleActionResult> SetTenantProtectionAsync(Guid id, bool isProtected, string reason, CancellationToken cancellationToken = default);
 
+    // Subscription Plan Methods
+    Task<TenantPlanPreviewDto?> PreviewPlanChangeAsync(Guid tenantId, Guid targetPlanVersionId, CancellationToken cancellationToken = default);
+    Task<ChangeTenantPlanResponseDto?> ChangeTenantPlanAsync(Guid tenantId, ChangeTenantPlanRequestDto request, CancellationToken cancellationToken = default);
+
     // Plan Catalog Methods
     Task<IReadOnlyCollection<PlanCatalogDto>?> GetPlansAsync(bool includeArchived = false, CancellationToken cancellationToken = default);
     Task<PlanCatalogDto?> GetPlanByIdAsync(Guid id, CancellationToken cancellationToken = default);
@@ -474,5 +478,18 @@ public class BackofficeApiClient : IBackofficeApiClient
     {
         await AttachTokenAsync();
         return await _httpClient.GetFromJsonAsync<PlanVersionComparisonDto>($"api/v1/backoffice/plans/versions/compare?baseVersionId={baseVersionId}&targetVersionId={targetVersionId}", cancellationToken);
+    }
+
+    public async Task<TenantPlanPreviewDto?> PreviewPlanChangeAsync(Guid tenantId, Guid targetPlanVersionId, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        return await _httpClient.GetFromJsonAsync<TenantPlanPreviewDto>($"api/v1/backoffice/tenants/{tenantId}/plan-preview?targetPlanVersionId={targetPlanVersionId}", cancellationToken);
+    }
+
+    public async Task<ChangeTenantPlanResponseDto?> ChangeTenantPlanAsync(Guid tenantId, ChangeTenantPlanRequestDto request, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.PostAsJsonAsync($"api/v1/backoffice/tenants/{tenantId}/plan", request, cancellationToken);
+        return response.IsSuccessStatusCode ? await response.Content.ReadFromJsonAsync<ChangeTenantPlanResponseDto>(cancellationToken: cancellationToken) : null;
     }
 }
