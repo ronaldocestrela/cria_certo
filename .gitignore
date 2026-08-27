@@ -91,3 +91,6 @@ Thumbs.db
 *.bak
 *.orig
 *~
+
+# keys
+src/Web/CriaCerto.Web/CriaCerto.Web/dataprotection-keys/
