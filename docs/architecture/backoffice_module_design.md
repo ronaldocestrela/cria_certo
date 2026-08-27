@@ -33,6 +33,12 @@ O módulo `Modules.Backoffice` é o núcleo administrativo isolado da plataforma
   * `Tenant.SegmentationUpdated`, `Tenant.TagsReplaced`, `Tenant.TagCreated`, `Tenant.TagDeactivated`, `Tenant.Exported`.
 * Exportação CSV UTF-8 com BOM, teto de 10.000 registros por recorte.
 
+## 4.3 Faturamento Operacional e Eventos de Cobrança (Sub-fase 3.3)
+* Entidades no schema `backoffice`: `BillingInvoice`, `BillingEvent`.
+* Régua de aging de inadimplência (1-30d, 31-60d, 61-90d, >90d) e job periódico `ProcessBillingDelinquencyJob`.
+* Conciliação financeira automática e assistida: quitação de fatura ou anistia com justificativa restaura o status do tenant de `PastDue` / `Suspended` para `Active`.
+* Ações auditadas: `Billing.PaymentRecorded`, `Billing.InvoiceRegularized`.
+
 ## 5. Política de Segurança Default Deny
 Todas as requisições destinadas ao prefixo `/api/v1/backoffice/*` passam pelo middleware de segurança `BackofficeAccessMiddleware`.
 * Se o usuário não possuir credenciais autenticadas ou a claim/permissão administrativa correspondente, a requisição é bloqueada imediatamente com status `401 Unauthorized` ou `403 Forbidden`.

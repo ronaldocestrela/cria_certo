@@ -144,14 +144,16 @@ As entregas estão organizadas em **6 Fases Sequenciais**, cobrindo fundação d
 * **TDD & Validação:**
   * Testes de integração para upgrade, downgrade, bloqueios por limite e grace period.
 
-#### Sub-fase 3.3: Faturamento Operacional e Eventos de Cobrança [PLANEJADA]
+#### Sub-fase 3.3: Faturamento Operacional e Eventos de Cobrança [CONCLUÍDA]
 * **Backend:**
-  * Registro de eventos de assinatura (ativação, renovação, atraso, cancelamento).
-  * Conciliação de status de cobrança e sincronização com módulo de tenancy/licensing.
+  * Registro de eventos de assinatura e histórico financeiro (`BillingInvoice`, `BillingEvent`).
+  * Conciliação de status de cobrança e sincronização com módulo de tenancy/licensing (`Active` ↔ `PastDue` ↔ `Suspended`).
+  * Endpoints de overview financeiro (MRR, inadimplência), baixa de pagamentos e anistia assistida com auditoria em `AuditLog`.
 * **Frontend:**
-  * Painel financeiro com aging de inadimplência e ações de regularização.
+  * Painel financeiro `BillingManagement.razor` com aging de inadimplência (0-30d, 31-60d, 61-90d, >90d).
+  * Modais interativos `RecordPaymentModal.razor`, `RegularizeBillingModal.razor` e `TenantBillingHistoryModal.razor`.
 * **TDD & Validação:**
-  * Testes de consistência entre estado da assinatura e acesso a features.
+  * Testes unitários e de integração validando ciclo completo de cobrança, conciliação e acesso a features (`BillingInvoiceDomainTests`, `BillingFeaturesTests`, `BillingLifecycleIntegrationTests`).
 
 ---
 
