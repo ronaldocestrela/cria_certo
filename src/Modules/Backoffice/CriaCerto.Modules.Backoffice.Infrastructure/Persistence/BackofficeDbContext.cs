@@ -15,6 +15,7 @@ public class BackofficeDbContext : DbContext
     public DbSet<PlanVersion> PlanVersions => Set<PlanVersion>();
     public DbSet<PlanFeature> PlanFeatures => Set<PlanFeature>();
     public DbSet<PlanLimit> PlanLimits => Set<PlanLimit>();
+    public DbSet<ImpersonationSession> ImpersonationSessions => Set<ImpersonationSession>();
 
     public BackofficeDbContext(DbContextOptions<BackofficeDbContext> options)
         : base(options)
@@ -130,6 +131,25 @@ public class BackofficeDbContext : DbContext
             builder.Property(l => l.LimitKey).IsRequired().HasMaxLength(100);
             builder.Property(l => l.LimitValue).HasPrecision(18, 2);
             builder.Property(l => l.Unit).IsRequired().HasMaxLength(50);
+        });
+
+        modelBuilder.Entity<ImpersonationSession>(builder =>
+        {
+            builder.ToTable("ImpersonationSessions");
+            builder.HasKey(s => s.Id);
+            builder.Property(s => s.AdminUserEmail).IsRequired().HasMaxLength(200);
+            builder.Property(s => s.TargetTenantName).IsRequired().HasMaxLength(200);
+            builder.Property(s => s.TargetUserEmail).HasMaxLength(200);
+            builder.Property(s => s.SupportTicket).IsRequired().HasMaxLength(50);
+            builder.Property(s => s.Justification).IsRequired().HasMaxLength(1000);
+            builder.Property(s => s.Status).HasConversion<string>().IsRequired().HasMaxLength(30);
+            builder.Property(s => s.IpAddress).IsRequired().HasMaxLength(100);
+            builder.Property(s => s.UserAgent).IsRequired().HasMaxLength(500);
+            builder.Property(s => s.RevocationReason).HasMaxLength(500);
+            builder.HasIndex(s => s.AdminUserId);
+            builder.HasIndex(s => s.TargetTenantId);
+            builder.HasIndex(s => s.Status);
+            builder.HasIndex(s => s.ExpiresAtUtc);
         });
     }
 }

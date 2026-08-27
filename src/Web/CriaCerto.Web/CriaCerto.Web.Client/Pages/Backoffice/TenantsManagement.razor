@@ -208,6 +208,16 @@
                                         <button class="btn btn-primary ms-1" @onclick="OpenPlanChangeModal">Alterar Plano</button>
                                     </Authorized>
                                 </PermissionGuard>
+                                <PermissionGuard Permission="@BackofficePermissions.ImpersonationStart">
+                                    <Authorized>
+                                        @if (CanImpersonate(SelectedTenant))
+                                        {
+                                            <button class="btn btn-impersonate ms-1" @onclick="OpenImpersonationModal" title="Acessar tenant em modo de suporte seguro com dupla salvaguarda">
+                                                <span>🔑 Impersonar</span>
+                                            </button>
+                                        }
+                                    </Authorized>
+                                </PermissionGuard>
                                 <PermissionGuard Permission="@BackofficePermissions.TenantsSuspend">
                                     <Authorized>
                                         @if (CanSuspend(SelectedTenant))
@@ -413,6 +423,14 @@
             TenantName="@(SelectedTenant?.Name ?? string.Empty)"
             OnClosed="() => IsPlanModalOpen = false"
             OnPlanChanged="HandlePlanChanged" />
+
+        <StartImpersonationModal
+            IsOpen="IsImpersonationModalOpen"
+            TenantId="@(SelectedTenant?.Id ?? Guid.Empty)"
+            TenantName="@(SelectedTenant?.Name ?? string.Empty)"
+            TenantPlan="@(SelectedTenant?.SubscribedPlan ?? string.Empty)"
+            TenantStatus="@(SelectedTenant?.Status ?? string.Empty)"
+            OnClose="() => IsImpersonationModalOpen = false" />
     </Authorized>
     <NotAuthorized>
         <div class="access-denied-container">
@@ -488,6 +506,23 @@
     .detail-placeholder, .loading-state, .empty-state { text-align: center; padding: 3rem; color: #94a3b8; }
     .btn-primary { background: #0284c7; color: #fff; padding: 0.6rem 1rem; border-radius: 0.5rem; border: none; font-weight: 700; cursor: pointer; }
     .btn-secondary { background: #334155; color: #f8fafc; padding: 0.4rem 0.8rem; border-radius: 0.5rem; border: none; font-weight: 600; cursor: pointer; }
+    .btn-impersonate {
+        background: linear-gradient(135deg, #d97706, #b45309);
+        color: #fff;
+        padding: 0.4rem 0.85rem;
+        border-radius: 0.5rem;
+        border: none;
+        font-weight: 700;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        box-shadow: 0 2px 6px rgba(217, 119, 6, 0.3);
+    }
+    .btn-impersonate:hover {
+        background: linear-gradient(135deg, #f59e0b, #d97706);
+        box-shadow: 0 4px 10px rgba(217, 119, 6, 0.45);
+    }
     .access-denied-container { text-align: center; padding: 4rem; color: #ef4444; }
 </style>
 
@@ -890,5 +925,19 @@
         {
             await SelectTenant(SelectedTenant.Id);
         }
+    }
+
+    private bool IsImpersonationModalOpen;
+
+    private void OpenImpersonationModal()
+    {
+        if (SelectedTenant == null) return;
+        IsImpersonationModalOpen = true;
+    }
+
+    private static bool CanImpersonate(TenantAdminDetailDto? tenant)
+    {
+        if (tenant == null) return false;
+        return tenant.Status is "Active" or "Trial" && !tenant.IsProtected;
     }
 }

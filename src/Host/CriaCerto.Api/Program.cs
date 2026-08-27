@@ -76,6 +76,9 @@ using CriaCerto.Modules.Backoffice.Application.Features.Tenants.Queries;
 using CriaCerto.Modules.Backoffice.Application.Features.Plans.Commands;
 using CriaCerto.Modules.Backoffice.Application.Features.Plans.Queries;
 using CriaCerto.Modules.Backoffice.Application.Features.Plans.Dtos;
+using CriaCerto.Modules.Backoffice.Application.Features.Impersonation.Commands;
+using CriaCerto.Modules.Backoffice.Application.Features.Impersonation.Queries;
+using CriaCerto.Modules.Backoffice.Application.Features.Impersonation.Dtos;
 using CriaCerto.Modules.Backoffice.Application.Security;
 using CriaCerto.Modules.Backoffice.Infrastructure;
 using CriaCerto.Modules.Backoffice.Infrastructure.Persistence;
@@ -605,6 +608,47 @@ backoffice.MapPost("/plans/versions/{versionId:guid}/publish", async (Guid versi
     return ToHttpResult(result);
 }).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.PlansPublish)).WithTags("Backoffice Plans");
 
+// --- BACKOFFICE IMPERSONATION ENDPOINTS ---
+backoffice.MapPost("/impersonation/start", async (StartImpersonationRequest req, HttpContext ctx, ISender sender) =>
+{
+    var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var ua = ctx.Request.Headers.UserAgent.ToString() ?? "Unknown";
+    var command = new StartImpersonationSessionCommand(
+        req.TargetTenantId,
+        req.TargetUserId,
+        req.SupportTicket,
+        req.Justification,
+        req.DurationMinutes,
+        callerId,
+        callerEmail,
+        ip,
+        ua);
+    var result = await sender.Send(command);
+    return ToHttpResult(result, StatusCodes.Status201Created);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ImpersonationStart)).WithTags("Backoffice Impersonation");
+
+backoffice.MapPost("/impersonation/stop", async (StopImpersonationRequest req, HttpContext ctx, ISender sender) =>
+{
+    var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var isPlatformOwner = ctx.User.HasClaim("is_platform_owner", "true") || ctx.User.IsInRole(BackofficeRoles.PlatformOwner);
+    var command = new StopImpersonationSessionCommand(req.SessionId, callerId, callerEmail, ip, isPlatformOwner);
+    var result = await sender.Send(command);
+    return ToCommandHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ImpersonationStop)).WithTags("Backoffice Impersonation");
+
+backoffice.MapGet("/impersonation/active", async (HttpContext ctx, ISender sender) =>
+{
+    var (callerId, _, _) = GetBackofficeActor(ctx);
+    var result = await sender.Send(new GetActiveImpersonationSessionQuery(callerId));
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.TenantsRead)).WithTags("Backoffice Impersonation");
+
+backoffice.MapGet("/impersonation/history", async (Guid? tenantId, Guid? adminUserId, int? page, int? pageSize, ISender sender) =>
+{
+    var result = await sender.Send(new GetImpersonationHistoryQuery(tenantId, adminUserId, page ?? 1, pageSize ?? 20));
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.AuditRead)).WithTags("Backoffice Impersonation");
+
 // Backoffice Auth Endpoints (Anonymous / Credentials + MFA)
 app.MapPost("/api/v1/backoffice/auth/login", async (BackofficeLoginRequest req, HttpContext ctx, ISender sender) =>
 {
@@ -1132,6 +1176,18 @@ static void ApplyMigrations(WebApplication app)
     {
         DatabaseMigrationRunner.ApplyMigrations(dbContext, logger);
     }
+}
+
+static IResult ToCommandHttpResult(Result result, int successStatusCode = StatusCodes.Status200OK)
+{
+    if (result.IsSuccess)
+    {
+        return successStatusCode == StatusCodes.Status200OK
+            ? Results.Ok()
+            : Results.StatusCode(successStatusCode);
+    }
+
+    return Results.Json(result.Error, statusCode: ToStatusCode(result.Error.Type));
 }
 
 static IResult ToHttpResult<TValue>(Result<TValue> result, int successStatusCode = StatusCodes.Status200OK)

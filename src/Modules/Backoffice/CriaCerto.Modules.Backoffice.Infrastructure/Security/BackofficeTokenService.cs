@@ -33,6 +33,41 @@ public sealed class BackofficeTokenService : IBackofficeTokenService
     public string GenerateRefreshToken() =>
         Guid.NewGuid().ToString("N") + Guid.NewGuid().ToString("N");
 
+    public string GenerateImpersonationToken(
+        Guid adminUserId,
+        string adminUserEmail,
+        Guid tenantId,
+        string tenantName,
+        Guid? targetUserId,
+        string? targetUserEmail,
+        Guid sessionId,
+        string supportTicket,
+        TimeSpan duration)
+    {
+        var subject = targetUserId.HasValue && targetUserId.Value != Guid.Empty
+            ? targetUserId.Value.ToString()
+            : adminUserId.ToString();
+
+        var claims = new List<Claim>
+        {
+            new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString("N")),
+            new(JwtRegisteredClaimNames.Sub, subject),
+            new(JwtRegisteredClaimNames.Email, targetUserEmail ?? adminUserEmail),
+            new("FullName", $"[Suporte] {adminUserEmail}"),
+            new("TenantId", tenantId.ToString()),
+            new("TenantName", tenantName),
+            new(ClaimTypes.Role, "Admin"),
+            new("Role", "Admin"),
+            new("is_impersonation", "true"),
+            new("impersonated_by_admin_id", adminUserId.ToString()),
+            new("impersonated_by_admin_email", adminUserEmail),
+            new("impersonation_session_id", sessionId.ToString()),
+            new("impersonation_ticket", supportTicket)
+        };
+
+        return CreateSignedToken(claims, duration);
+    }
+
     public string? GetTokenId(string accessToken)
     {
         if (string.IsNullOrWhiteSpace(accessToken))

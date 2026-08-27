@@ -1,0 +1,309 @@
+@using CriaCerto.Modules.Backoffice.Application.Features.Impersonation.Dtos
+@using CriaCerto.Web.Client.Services
+@inject IBackofficeApiClient ApiClient
+@inject IImpersonationStateService ImpersonationService
+
+@if (IsOpen)
+{
+    <div class="modal-backdrop" @onclick="Close">
+        <div class="modal-card" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <div class="modal-header-title">
+                    <span class="security-badge">🔑 Dupla Salvaguarda</span>
+                    <h3>Iniciar Acesso por Impersonação</h3>
+                </div>
+                <button class="close-btn" @onclick="Close" title="Fechar">✕</button>
+            </div>
+
+            <div class="modal-body">
+                <div class="tenant-summary-card">
+                    <div class="tenant-info">
+                        <span class="tenant-label">Tenant Alvo</span>
+                        <strong class="tenant-name">@TenantName</strong>
+                        <span class="tenant-meta">Plano: <strong>@TenantPlan</strong> · Status: <span class="status-pill status-@TenantStatus.ToLower()">@TenantStatus</span></span>
+                    </div>
+                </div>
+
+                <div class="safeguard-alert-box">
+                    <div class="safeguard-icon">🛡️</div>
+                    <div class="safeguard-text">
+                        <strong>Salvaguarda de Compliance & Auditoria</strong>
+                        <p>Esta sessão é estritamente efêmera, com tempo de vida (TTL) pré-determinado e não renovável. Todas as consultas e operações executadas serão vinculadas ao seu usuário administrativo e ao ticket informado.</p>
+                    </div>
+                </div>
+
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="ticket-input">Ticket / Chamado de Suporte <span class="required">*</span></label>
+                        <input id="ticket-input"
+                               type="text"
+                               class="form-control"
+                               placeholder="Ex: SUP-2041, INC-882"
+                               @bind="SupportTicket"
+                               @bind:event="oninput"
+                               maxlength="30" />
+                        <small class="hint-text">Referência do chamado registrado no sistema de atendimento.</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="duration-select">Duração da Sessão (TTL)</label>
+                        <select id="duration-select" class="form-control" @bind="DurationMinutes">
+                            <option value="15">15 minutos (Recomendado)</option>
+                            <option value="30">30 minutos</option>
+                            <option value="45">45 minutos</option>
+                            <option value="60">60 minutos (Máximo permitido)</option>
+                        </select>
+                        <small class="hint-text">Após este período, a sessão encerra automaticamente.</small>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="justification-input">Justificativa Técnica Operacional <span class="required">*</span></label>
+                    <textarea id="justification-input"
+                              class="form-control"
+                              rows="3"
+                              placeholder="Descreva detalhadamente o diagnóstico ou assistência que será prestada neste acesso..."
+                              @bind="Justification"
+                              @bind:event="oninput"></textarea>
+                    <div class="justification-footer">
+                        <small class="char-count @(IsJustificationValid ? "text-success" : "text-muted")">
+                            @(Justification?.Trim().Length ?? 0) / 10 caracteres mínimos
+                        </small>
+                    </div>
+                </div>
+
+                @if (!string.IsNullOrWhiteSpace(ErrorMessage))
+                {
+                    <div class="error-banner">
+                        <span class="error-icon">⚠️</span>
+                        <span>@ErrorMessage</span>
+                    </div>
+                }
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" @onclick="Close" disabled="@IsSubmitting">Cancelar</button>
+                <button type="button" class="btn btn-impersonate" disabled="@(!CanSubmit || IsSubmitting)" @onclick="HandleStartImpersonation">
+                    @if (IsSubmitting)
+                    {
+                        <span class="spinner-small"></span>
+                        <span>Iniciando sessão...</span>
+                    }
+                    else
+                    {
+                        <span>🔑 Iniciar Impersonação Segura</span>
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .modal-backdrop {
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(15, 23, 42, 0.85);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1200;
+        backdrop-filter: blur(6px);
+    }
+    .modal-card {
+        background: #1e293b;
+        color: #f8fafc;
+        border-radius: 1rem;
+        width: 100%;
+        max-width: 600px;
+        border: 1px solid #38bdf840;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1.25rem 1.5rem;
+        background: #0f172a;
+        border-bottom: 1px solid #334155;
+    }
+    .modal-header-title { display: flex; flex-direction: column; gap: 0.25rem; }
+    .security-badge {
+        display: inline-block;
+        font-size: 0.65rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #38bdf8;
+        background: rgba(56, 189, 248, 0.12);
+        padding: 0.15rem 0.5rem;
+        border-radius: 9999px;
+        width: fit-content;
+    }
+    .modal-header h3 { margin: 0; font-size: 1.2rem; font-weight: 800; color: #f8fafc; }
+    .close-btn { background: none; border: none; color: #94a3b8; font-size: 1.3rem; cursor: pointer; padding: 0.25rem; }
+    .close-btn:hover { color: #f8fafc; }
+    .modal-body { padding: 1.5rem; display: flex; flex-direction: column; gap: 1.2rem; }
+    .tenant-summary-card {
+        background: #0f172a;
+        border: 1px solid #334155;
+        border-radius: 0.75rem;
+        padding: 0.9rem 1.2rem;
+    }
+    .tenant-info { display: flex; flex-direction: column; gap: 0.2rem; }
+    .tenant-label { font-size: 0.7rem; font-weight: 700; color: #94a3b8; text-transform: uppercase; }
+    .tenant-name { font-size: 1.1rem; color: #f8fafc; }
+    .tenant-meta { font-size: 0.8rem; color: #cbd5e1; margin-top: 0.2rem; }
+    .status-pill {
+        padding: 0.1rem 0.45rem;
+        border-radius: 9999px;
+        font-size: 0.7rem;
+        font-weight: 700;
+    }
+    .status-active { background: rgba(74, 222, 128, 0.15); color: #4ade80; }
+    .status-trial { background: rgba(56, 189, 248, 0.15); color: #38bdf8; }
+    .status-suspended { background: rgba(251, 191, 36, 0.15); color: #fbbf24; }
+    .status-pastdue { background: rgba(248, 113, 113, 0.15); color: #f87171; }
+    .safeguard-alert-box {
+        display: flex;
+        gap: 0.85rem;
+        background: rgba(245, 158, 11, 0.1);
+        border: 1px solid rgba(245, 158, 11, 0.35);
+        border-radius: 0.75rem;
+        padding: 0.9rem 1rem;
+        font-size: 0.85rem;
+    }
+    .safeguard-icon { font-size: 1.4rem; line-height: 1; }
+    .safeguard-text strong { color: #f59e0b; display: block; margin-bottom: 0.2rem; }
+    .safeguard-text p { margin: 0; color: #cbd5e1; line-height: 1.35; font-size: 0.8rem; }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    @@media (max-width: 600px) { .form-grid { grid-template-columns: 1fr; } }
+    .form-group { display: flex; flex-direction: column; gap: 0.35rem; }
+    .form-group label { font-size: 0.85rem; font-weight: 700; color: #cbd5e1; }
+    .required { color: #f87171; }
+    .form-control {
+        background: #0f172a;
+        border: 1px solid #334155;
+        color: #f8fafc;
+        padding: 0.6rem 0.85rem;
+        border-radius: 0.5rem;
+        font-size: 0.9rem;
+        outline: none;
+        transition: border-color 0.2s;
+    }
+    .form-control:focus { border-color: #38bdf8; box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2); }
+    .hint-text { font-size: 0.75rem; color: #64748b; }
+    .justification-footer { display: flex; justify-content: flex-end; }
+    .char-count { font-size: 0.75rem; }
+    .text-success { color: #4ade80 !important; font-weight: 700; }
+    .text-muted { color: #94a3b8; }
+    .error-banner {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        background: rgba(239, 68, 68, 0.15);
+        border: 1px solid rgba(239, 68, 68, 0.4);
+        border-radius: 0.5rem;
+        padding: 0.65rem 0.85rem;
+        color: #fca5a5;
+        font-size: 0.85rem;
+    }
+    .modal-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.75rem;
+        padding: 1.2rem 1.5rem;
+        background: #0f172a;
+        border-top: 1px solid #334155;
+    }
+    .btn {
+        padding: 0.6rem 1.2rem;
+        border-radius: 0.5rem;
+        font-weight: 700;
+        font-size: 0.9rem;
+        cursor: pointer;
+        border: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        transition: all 0.2s;
+    }
+    .btn-secondary { background: #334155; color: #f8fafc; }
+    .btn-secondary:hover:not(:disabled) { background: #475569; }
+    .btn-impersonate {
+        background: linear-gradient(135deg, #d97706, #b45309);
+        color: #ffffff;
+        box-shadow: 0 4px 12px rgba(217, 119, 6, 0.35);
+    }
+    .btn-impersonate:hover:not(:disabled) {
+        background: linear-gradient(135deg, #f59e0b, #d97706);
+        box-shadow: 0 6px 16px rgba(217, 119, 6, 0.5);
+    }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .spinner-small {
+        width: 14px;
+        height: 14px;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        border-top-color: #ffffff;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+    }
+    @@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public Guid TenantId { get; set; }
+    [Parameter] public string TenantName { get; set; } = string.Empty;
+    [Parameter] public string TenantPlan { get; set; } = "Starter";
+    [Parameter] public string TenantStatus { get; set; } = "Active";
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private string SupportTicket { get; set; } = string.Empty;
+    private string Justification { get; set; } = string.Empty;
+    private int DurationMinutes { get; set; } = 15;
+    private string? ErrorMessage { get; set; }
+    private bool IsSubmitting { get; set; }
+
+    private bool IsJustificationValid => !string.IsNullOrWhiteSpace(Justification) && Justification.Trim().Length >= 10;
+    private bool IsTicketValid => !string.IsNullOrWhiteSpace(SupportTicket) && SupportTicket.Trim().Length >= 3;
+    private bool CanSubmit => IsTicketValid && IsJustificationValid && !IsSubmitting;
+
+    private async Task Close()
+    {
+        ErrorMessage = null;
+        await OnClose.InvokeAsync();
+    }
+
+    private async Task HandleStartImpersonation()
+    {
+        if (!CanSubmit) return;
+
+        IsSubmitting = true;
+        ErrorMessage = null;
+
+        var request = new StartImpersonationRequest(
+            TenantId,
+            null,
+            SupportTicket.Trim(),
+            Justification.Trim(),
+            DurationMinutes);
+
+        var result = await ApiClient.StartImpersonationAsync(request);
+
+        if (result.IsSuccess && result.Session != null)
+        {
+            await ImpersonationService.StartSessionAsync(result.Session);
+            await Close();
+        }
+        else
+        {
+            ErrorMessage = result.ErrorMessage ?? "Erro ao iniciar a sessão de impersonação.";
+        }
+
+        IsSubmitting = false;
+    }
+}

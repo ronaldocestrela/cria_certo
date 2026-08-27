@@ -1,0 +1,222 @@
+@using CriaCerto.Web.Client.Services
+@inject IImpersonationStateService ImpersonationService
+@implements IDisposable
+
+@if (ImpersonationService.IsImpersonating && ImpersonationService.CurrentSession != null)
+{
+    <div class="impersonation-banner-wrapper">
+        <div class="impersonation-banner">
+            <div class="banner-section banner-left">
+                <span class="pulse-indicator"></span>
+                <span class="banner-badge">MODO DE IMPERSONAÇÃO ATIVO</span>
+                <div class="banner-divider"></div>
+                <div class="tenant-details">
+                    <span class="tenant-tag">Tenant:</span>
+                    <strong class="tenant-name">@ImpersonationService.CurrentSession.TargetTenantName</strong>
+                </div>
+            </div>
+
+            <div class="banner-section banner-center">
+                <div class="meta-item">
+                    <span class="meta-label">Chamado:</span>
+                    <span class="meta-value ticket-badge">@ImpersonationService.CurrentSession.SupportTicket</span>
+                </div>
+                <div class="meta-item">
+                    <span class="meta-label">Operador:</span>
+                    <span class="meta-value operator-name">@ImpersonationService.CurrentSession.Justification</span>
+                </div>
+            </div>
+
+            <div class="banner-section banner-right">
+                <div class="countdown-timer @(ImpersonationService.RemainingSeconds < 180 ? "timer-warning" : "")">
+                    <span class="timer-icon">⏳</span>
+                    <span class="timer-text">Expira em: <strong>@ImpersonationService.FormattedRemainingTime</strong></span>
+                </div>
+                <button type="button"
+                        class="btn-stop-session"
+                        disabled="@_isStopping"
+                        @onclick="HandleStopSession"
+                        title="Encerrar a sessão de impersonação e retornar ao Backoffice">
+                    @if (_isStopping)
+                    {
+                        <span class="spinner-tiny"></span>
+                        <span>Encerrando...</span>
+                    }
+                    else
+                    {
+                        <span>🚪 Encerrar Sessão</span>
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .impersonation-banner-wrapper {
+        position: sticky;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 9999;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    }
+    .impersonation-banner {
+        background: linear-gradient(90deg, #78350f, #92400e, #b45309);
+        border-bottom: 2px solid #f59e0b;
+        color: #fef3c7;
+        padding: 0.5rem 1.5rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        font-size: 0.85rem;
+    }
+    .banner-section { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+    .banner-left { flex-shrink: 0; }
+    .banner-center {
+        flex: 1;
+        justify-content: center;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .banner-right { flex-shrink: 0; }
+    .pulse-indicator {
+        width: 10px;
+        height: 10px;
+        background-color: #fbbf24;
+        border-radius: 50%;
+        box-shadow: 0 0 10px #fbbf24;
+        animation: pulse 1.2s infinite ease-in-out;
+    }
+    @@keyframes pulse {
+        0% { transform: scale(0.95); opacity: 0.8; }
+        50% { transform: scale(1.3); opacity: 1; box-shadow: 0 0 14px #fbbf24; }
+        100% { transform: scale(0.95); opacity: 0.8; }
+    }
+    .banner-badge {
+        font-size: 0.75rem;
+        font-weight: 900;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        background: rgba(0, 0, 0, 0.35);
+        color: #fef08a;
+        padding: 0.2rem 0.6rem;
+        border-radius: 0.35rem;
+        border: 1px solid rgba(254, 240, 138, 0.3);
+    }
+    .banner-divider {
+        width: 1px;
+        height: 18px;
+        background: rgba(254, 243, 199, 0.25);
+    }
+    .tenant-details { display: flex; align-items: center; gap: 0.35rem; }
+    .tenant-tag { color: #fde68a; font-size: 0.75rem; text-transform: uppercase; }
+    .tenant-name { color: #ffffff; font-weight: 800; font-size: 0.95rem; }
+    .meta-item { display: flex; align-items: center; gap: 0.35rem; font-size: 0.8rem; }
+    .meta-label { color: #fde68a; }
+    .meta-value { color: #ffffff; }
+    .ticket-badge {
+        background: rgba(0, 0, 0, 0.3);
+        padding: 0.15rem 0.5rem;
+        border-radius: 9999px;
+        font-weight: 700;
+        font-size: 0.75rem;
+        color: #fef08a;
+    }
+    .operator-name {
+        max-width: 300px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-style: italic;
+    }
+    .countdown-timer {
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        background: rgba(0, 0, 0, 0.4);
+        padding: 0.3rem 0.75rem;
+        border-radius: 0.5rem;
+        border: 1px solid rgba(254, 243, 199, 0.2);
+        color: #ffffff;
+        font-size: 0.85rem;
+    }
+    .timer-warning {
+        background: rgba(220, 38, 38, 0.45);
+        border-color: #ef4444;
+        animation: blink 1s infinite;
+    }
+    @@keyframes blink {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.75; }
+    }
+    .btn-stop-session {
+        background: #dc2626;
+        color: #ffffff;
+        border: 1px solid #ef4444;
+        padding: 0.4rem 0.9rem;
+        border-radius: 0.5rem;
+        font-weight: 800;
+        font-size: 0.8rem;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        transition: all 0.2s;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    }
+    .btn-stop-session:hover:not(:disabled) {
+        background: #b91c1c;
+        box-shadow: 0 4px 12px rgba(220, 38, 38, 0.5);
+    }
+    .btn-stop-session:disabled { opacity: 0.6; cursor: not-allowed; }
+    .spinner-tiny {
+        width: 12px;
+        height: 12px;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        border-top-color: #ffffff;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+    }
+    @@media (max-width: 900px) {
+        .impersonation-banner {
+            flex-direction: column;
+            align-items: flex-start;
+            padding: 0.75rem 1rem;
+        }
+        .banner-center { display: none; }
+        .banner-right { width: 100%; justify-content: space-between; }
+    }
+</style>
+
+@code {
+    private bool _isStopping;
+
+    protected override async Task OnInitializedAsync()
+    {
+        ImpersonationService.OnSessionChanged += HandleStateChanged;
+        ImpersonationService.OnTimerTick += HandleStateChanged;
+        await ImpersonationService.InitializeAsync();
+    }
+
+    private void HandleStateChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    private async Task HandleStopSession()
+    {
+        _isStopping = true;
+        await ImpersonationService.StopSessionAsync();
+        _isStopping = false;
+    }
+
+    public void Dispose()
+    {
+        ImpersonationService.OnSessionChanged -= HandleStateChanged;
+        ImpersonationService.OnTimerTick -= HandleStateChanged;
+    }
+}

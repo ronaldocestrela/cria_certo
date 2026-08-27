@@ -7,6 +7,8 @@ using CriaCerto.Modules.Backoffice.Application.Features.Tenants.Dtos;
 using CriaCerto.Modules.Backoffice.Application.Features.Plans.Dtos;
 using CriaCerto.Modules.Backoffice.Application.Features.Plans.Commands;
 using CriaCerto.Modules.Backoffice.Application.Features.Plans.Queries;
+using CriaCerto.Modules.Backoffice.Application.Features.Impersonation.Dtos;
+using CriaCerto.Modules.Backoffice.Application.Features.Impersonation.Queries;
 using CriaCerto.Web.Client.Models;
 using Microsoft.JSInterop;
 
@@ -70,6 +72,19 @@ public interface IBackofficeApiClient
     Task<PlanVersionDto?> UpdateDraftPlanVersionAsync(Guid versionId, UpdateDraftPlanVersionCommand command, CancellationToken cancellationToken = default);
     Task<PlanVersionDto?> PublishPlanVersionAsync(Guid versionId, string? approvalNotes = null, CancellationToken cancellationToken = default);
     Task<PlanVersionComparisonDto?> ComparePlanVersionsAsync(Guid baseVersionId, Guid targetVersionId, CancellationToken cancellationToken = default);
+
+    // Impersonation Methods
+    Task<ImpersonationResult> StartImpersonationAsync(StartImpersonationRequest request, CancellationToken cancellationToken = default);
+    Task<bool> StopImpersonationAsync(Guid sessionId, string? reason = null, CancellationToken cancellationToken = default);
+    Task<ImpersonationSessionDto?> GetActiveImpersonationAsync(CancellationToken cancellationToken = default);
+    Task<PagedImpersonationAuditResult?> GetImpersonationHistoryAsync(Guid? tenantId = null, Guid? adminUserId = null, int page = 1, int pageSize = 20, CancellationToken cancellationToken = default);
+}
+
+public sealed class ImpersonationResult
+{
+    public ImpersonationSessionDto? Session { get; init; }
+    public string? ErrorMessage { get; init; }
+    public bool IsSuccess => Session is not null && string.IsNullOrWhiteSpace(ErrorMessage);
 }
 
 public sealed class LifecycleActionResult
@@ -491,5 +506,60 @@ public class BackofficeApiClient : IBackofficeApiClient
         await AttachTokenAsync();
         var response = await _httpClient.PostAsJsonAsync($"api/v1/backoffice/tenants/{tenantId}/plan", request, cancellationToken);
         return response.IsSuccessStatusCode ? await response.Content.ReadFromJsonAsync<ChangeTenantPlanResponseDto>(cancellationToken: cancellationToken) : null;
+    }
+
+    public async Task<ImpersonationResult> StartImpersonationAsync(StartImpersonationRequest request, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.PostAsJsonAsync("api/v1/backoffice/impersonation/start", request, cancellationToken);
+        if (response.IsSuccessStatusCode)
+        {
+            var session = await response.Content.ReadFromJsonAsync<ImpersonationSessionDto>(cancellationToken: cancellationToken);
+            return new ImpersonationResult { Session = session };
+        }
+
+        Error? error = null;
+        try
+        {
+            error = await response.Content.ReadFromJsonAsync<Error>(cancellationToken: cancellationToken);
+        }
+        catch
+        {
+            // Ignore parse failures
+        }
+
+        return new ImpersonationResult
+        {
+            ErrorMessage = error?.Message ?? "Não foi possível iniciar a sessão de impersonação. Verifique as credenciais e permissões."
+        };
+    }
+
+    public async Task<bool> StopImpersonationAsync(Guid sessionId, string? reason = null, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.PostAsJsonAsync("api/v1/backoffice/impersonation/stop", new StopImpersonationRequest(sessionId, reason), cancellationToken);
+        return response.IsSuccessStatusCode;
+    }
+
+    public async Task<ImpersonationSessionDto?> GetActiveImpersonationAsync(CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.GetAsync("api/v1/backoffice/impersonation/active", cancellationToken);
+        if (response.IsSuccessStatusCode && response.StatusCode != System.Net.HttpStatusCode.NoContent)
+        {
+            return await response.Content.ReadFromJsonAsync<ImpersonationSessionDto>(cancellationToken: cancellationToken);
+        }
+
+        return null;
+    }
+
+    public async Task<PagedImpersonationAuditResult?> GetImpersonationHistoryAsync(Guid? tenantId = null, Guid? adminUserId = null, int page = 1, int pageSize = 20, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var url = $"api/v1/backoffice/impersonation/history?page={page}&pageSize={pageSize}";
+        if (tenantId.HasValue) url += $"&tenantId={tenantId.Value}";
+        if (adminUserId.HasValue) url += $"&adminUserId={adminUserId.Value}";
+
+        return await _httpClient.GetFromJsonAsync<PagedImpersonationAuditResult>(url, cancellationToken);
     }
 }

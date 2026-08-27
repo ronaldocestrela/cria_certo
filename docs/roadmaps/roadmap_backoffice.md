@@ -159,16 +159,18 @@ As entregas estão organizadas em **6 Fases Sequenciais**, cobrindo fundação d
 
 ### Phase 4: Impersonação Segura, Suporte e Operações Assistidas
 
-#### Sub-fase 4.1: Acesso por Impersonação com Dupla Salvaguarda [PLANEJADA]
+#### Sub-fase 4.1: Acesso por Impersonação com Dupla Salvaguarda [CONCLUÍDA]
 * **Backend:**
-  * `StartImpersonationSessionCommand` e `StopImpersonationSessionCommand`.
-  * Exigir justificativa, ticket de suporte vinculado e permissão específica (`impersonation.start`).
-  * Sessões de impersonação com TTL curto, escopo mínimo e trilha completa em `AuditLog`.
+  * Entidade de domínio rica `ImpersonationSession` com status (`Active`, `Ended`, `Expired`, `Revoked`) e TTL delimitado (5 a 60 min, default 15 min).
+  * `StartImpersonationSessionCommand` e `StopImpersonationSessionCommand` implementados com **Result Pattern** e proteção via permissões granulares (`impersonation.start`, `impersonation.stop`).
+  * Salvaguardas duplas: validação de justificativa detalhada (mín. 10 caracteres), vínculo obrigatório de ticket de suporte (ex: `SUP-1042`), e rejeição automática para tenants suspensos, cancelados, arquivados ou protegidos (`IsProtected`).
+  * Emissão de token JWT efêmero com claims explícitas de auditoria (`is_impersonation`, `impersonated_by_admin_id`, `impersonated_by_admin_email`, `impersonation_session_id`, `impersonation_ticket`) e registro imutável em `AuditLog` (`Impersonation.Started` e `Impersonation.Stopped`).
 * **Frontend:**
-  * Banner persistente de sessão impersonada + contador regressivo + botão de encerramento.
-  * Modal com justificativa obrigatória e referência de chamado.
+  * Componente `StartImpersonationModal.razor` com formulário de dupla salvaguarda, avisos de compliance e validação em tempo real.
+  * Componente persistente `ImpersonationBanner.razor` exibido no topo de todos os layouts com badge pulsante âmbar, informações do tenant/chamado, contador regressivo ao vivo (mm:ss) e botão para encerramento instantâneo com restauração do token de admin.
+  * Botão de acesso por impersonação integrado ao painel 360 de `TenantsManagement.razor`.
 * **TDD & Validação:**
-  * Testes de segurança para impedir impersonação em tenants bloqueados ou sensíveis.
+  * Testes de domínio `ImpersonationSessionDomainTests`, testes de features `StartImpersonationSessionCommandTests`, `StopImpersonationSessionCommandTests` e testes de segurança de claims `ImpersonationSecurityTests` aprovados com 100% de sucesso.
 
 #### Sub-fase 4.2: Workbench de Suporte N1/N2 [PLANEJADA]
 * **Backend:**

@@ -86,3 +86,24 @@ Contas administrativas que possuam permissões sensíveis (`impersonation.start`
 - **TTL de Refresh**: 8 horas por refresh token (`RefreshToken`) com rotação automática (*Refresh Token Rotation*).
 - **Revogação em Tempo Real**: Desativação de conta ou alteração de senha revoga imediatamente todas as sessões ativas do usuário.
 - **Trilha de Auditoria**: Todas as operações de login, rotação de credenciais, MFA e revogação de sessões geram registros imutáveis em `AuditLog`.
+
+---
+
+## 7. Impersonação Segura com Dupla Salvaguarda (`ImpersonationSession`)
+
+A impersonação permite que operadores com permissão `impersonation.start` (`PlatformOwner`, `SupportN2`) assumam temporariamente a visualização operacional de um tenant sob rígidas salvaguardas:
+
+### Salvaguardas Mandatórias:
+1. **Ticket de Suporte Obrigatório**: Código alfanumérico do chamado de atendimento (ex: `SUP-1042`).
+2. **Justificativa Detalhada**: Mínimo de 10 caracteres descrevendo a finalidade do acesso.
+3. **Bloqueio de Tenants Inelegíveis**: Bloqueio total em tenants com status `Suspended`, `Cancelled`, `Archived` ou com proteção de salvaguarda (`IsProtected = true`).
+4. **TTL Estrito e Não Renovável**: Duração limitada entre 5 e 60 minutos (padrão: 15 minutos).
+5. **Token Efêmero e Identificação Explícita**:
+   - `is_impersonation`: `"true"`
+   - `impersonated_by_admin_id`: Guid do operador admin
+   - `impersonated_by_admin_email`: Email do operador admin
+   - `impersonation_session_id`: Guid da sessão
+   - `impersonation_ticket`: Número do chamado
+6. **Banner Persistente com Kill Switch**: Alerta visual contínuo com contador regressivo ao vivo e botão de encerramento instantâneo no frontend Blazor.
+7. **Trilha Imutável de Auditoria**: Registro imediato de `Impersonation.Started` e `Impersonation.Stopped` em `AuditLog`.
+
