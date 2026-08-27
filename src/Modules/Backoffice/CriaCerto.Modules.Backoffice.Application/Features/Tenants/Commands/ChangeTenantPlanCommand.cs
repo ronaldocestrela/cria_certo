@@ -1,10 +1,13 @@
 using CriaCerto.BuildingBlocks.Abstractions.Results;
 using CriaCerto.Modules.Backoffice.Application.Domain.Entities;
 using CriaCerto.Modules.Backoffice.Application.Features.Tenants.Dtos;
+using CriaCerto.Modules.Tenancy.Application.Abstractions;
 using CriaCerto.Modules.Tenancy.Application.Domain;
 using CriaCerto.Modules.Tenancy.Application.Domain.Errors;
 using FluentValidation;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace CriaCerto.Modules.Backoffice.Application.Features.Tenants.Commands;
 
@@ -37,9 +40,20 @@ public sealed class ChangeTenantPlanCommandValidator : AbstractValidator<ChangeT
 
 public sealed class ChangeTenantPlanCommandHandler : IRequestHandler<ChangeTenantPlanCommand, Result<ChangeTenantPlanResponseDto>>
 {
-    private readonly Func<Guid, Task<Tenant?>> _tenantLookup;
-    private readonly Func<Guid, Task<PlanVersion?>> _planVersionLookup;
-    private readonly Func<TenantSubscriptionHistory, Task> _saveHistory;
+    private readonly ITenancyDbContext? _tenancyDbContext;
+    private readonly DbContext? _backofficeDbContext;
+    private readonly Func<Guid, Task<Tenant?>>? _tenantLookup;
+    private readonly Func<Guid, Task<PlanVersion?>>? _planVersionLookup;
+    private readonly Func<TenantSubscriptionHistory, Task>? _saveHistory;
+
+    [ActivatorUtilitiesConstructor]
+    public ChangeTenantPlanCommandHandler(
+        ITenancyDbContext tenancyDbContext,
+        DbContext backofficeDbContext)
+    {
+        _tenancyDbContext = tenancyDbContext;
+        _backofficeDbContext = backofficeDbContext;
+    }
 
     public ChangeTenantPlanCommandHandler(
         Func<Guid, Task<Tenant?>> tenantLookup,
@@ -53,13 +67,19 @@ public sealed class ChangeTenantPlanCommandHandler : IRequestHandler<ChangeTenan
 
     public async Task<Result<ChangeTenantPlanResponseDto>> Handle(ChangeTenantPlanCommand request, CancellationToken cancellationToken)
     {
-        var tenant = await _tenantLookup(request.TenantId);
+        Tenant? tenant = _tenantLookup != null
+            ? await _tenantLookup(request.TenantId)
+            : await _tenancyDbContext!.Tenants.FirstOrDefaultAsync(t => t.Id == request.TenantId, cancellationToken);
+
         if (tenant is null)
         {
             return Result.Failure<ChangeTenantPlanResponseDto>(TenancyErrors.TenantNotFound);
         }
 
-        var targetVersion = await _planVersionLookup(request.TargetPlanVersionId);
+        PlanVersion? targetVersion = _planVersionLookup != null
+            ? await _planVersionLookup(request.TargetPlanVersionId)
+            : await _backofficeDbContext!.Set<PlanVersion>().FirstOrDefaultAsync(v => v.Id == request.TargetPlanVersionId, cancellationToken);
+
         if (targetVersion is null)
         {
             return Result.Failure<ChangeTenantPlanResponseDto>(TenancyErrors.PlanVersionNotFound);
@@ -96,10 +116,18 @@ public sealed class ChangeTenantPlanCommandHandler : IRequestHandler<ChangeTenan
             actionType: actionType,
             snapshotHeadCount: tenant.Capacity,
             snapshotUserCount: 1,
-            snapshotUnitCount: tenant.ProductionUnits.Count
+            snapshotUnitCount: tenant.ProductionUnits?.Count ?? 0
         );
 
-        await _saveHistory(history);
+        if (_saveHistory != null)
+        {
+            await _saveHistory(history);
+        }
+        else if (_tenancyDbContext != null)
+        {
+            _tenancyDbContext.SubscriptionHistories.Add(history);
+            await _tenancyDbContext.SaveChangesAsync(cancellationToken);
+        }
 
         string message = isGracePeriodActivated
             ? "Grace Period de 14 dias ativado para adequação do uso do tenant aos limites do novo plano."

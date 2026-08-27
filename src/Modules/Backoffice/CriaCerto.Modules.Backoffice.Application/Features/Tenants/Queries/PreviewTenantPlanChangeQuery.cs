@@ -2,9 +2,12 @@ using CriaCerto.BuildingBlocks.Abstractions.Results;
 using CriaCerto.Modules.Backoffice.Application.Domain.Entities;
 using CriaCerto.Modules.Backoffice.Application.Domain.Errors;
 using CriaCerto.Modules.Backoffice.Application.Features.Tenants.Dtos;
+using CriaCerto.Modules.Tenancy.Application.Abstractions;
 using CriaCerto.Modules.Tenancy.Application.Domain;
 using CriaCerto.Modules.Tenancy.Application.Domain.Errors;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace CriaCerto.Modules.Backoffice.Application.Features.Tenants.Queries;
 
@@ -15,8 +18,19 @@ public sealed record PreviewTenantPlanChangeQuery(
 
 public sealed class PreviewTenantPlanChangeQueryHandler : IRequestHandler<PreviewTenantPlanChangeQuery, Result<TenantPlanPreviewDto>>
 {
-    private readonly Func<Guid, Task<Tenant?>> _tenantLookup;
-    private readonly Func<Guid, Task<PlanVersion?>> _planVersionLookup;
+    private readonly ITenancyDbContext? _tenancyDbContext;
+    private readonly DbContext? _backofficeDbContext;
+    private readonly Func<Guid, Task<Tenant?>>? _tenantLookup;
+    private readonly Func<Guid, Task<PlanVersion?>>? _planVersionLookup;
+
+    [ActivatorUtilitiesConstructor]
+    public PreviewTenantPlanChangeQueryHandler(
+        ITenancyDbContext tenancyDbContext,
+        DbContext backofficeDbContext)
+    {
+        _tenancyDbContext = tenancyDbContext;
+        _backofficeDbContext = backofficeDbContext;
+    }
 
     public PreviewTenantPlanChangeQueryHandler(
         Func<Guid, Task<Tenant?>> tenantLookup,
@@ -28,13 +42,21 @@ public sealed class PreviewTenantPlanChangeQueryHandler : IRequestHandler<Previe
 
     public async Task<Result<TenantPlanPreviewDto>> Handle(PreviewTenantPlanChangeQuery request, CancellationToken cancellationToken)
     {
-        var tenant = await _tenantLookup(request.TenantId);
+        Tenant? tenant = _tenantLookup != null
+            ? await _tenantLookup(request.TenantId)
+            : await _tenancyDbContext!.Tenants.FirstOrDefaultAsync(t => t.Id == request.TenantId, cancellationToken);
+
         if (tenant is null)
         {
             return Result.Failure<TenantPlanPreviewDto>(TenancyErrors.TenantNotFound);
         }
 
-        var targetVersion = await _planVersionLookup(request.TargetPlanVersionId);
+        PlanVersion? targetVersion = _planVersionLookup != null
+            ? await _planVersionLookup(request.TargetPlanVersionId)
+            : await _backofficeDbContext!.Set<PlanVersion>()
+                .Include(v => v.Features)
+                .FirstOrDefaultAsync(v => v.Id == request.TargetPlanVersionId, cancellationToken);
+
         if (targetVersion is null)
         {
             return Result.Failure<TenantPlanPreviewDto>(TenancyErrors.PlanVersionNotFound);
@@ -53,11 +75,14 @@ public sealed class PreviewTenantPlanChangeQueryHandler : IRequestHandler<Previe
         var addedFeatures = new List<string>();
         var removedFeatures = new List<string>();
 
-        foreach (var feature in targetVersion.Features)
+        if (targetVersion.Features != null)
         {
-            if (feature.IsEnabled)
+            foreach (var feature in targetVersion.Features)
             {
-                addedFeatures.Add(feature.DisplayName);
+                if (feature.IsEnabled)
+                {
+                    addedFeatures.Add(feature.DisplayName);
+                }
             }
         }
 

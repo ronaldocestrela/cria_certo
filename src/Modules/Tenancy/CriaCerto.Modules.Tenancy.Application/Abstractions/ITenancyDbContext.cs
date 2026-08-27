@@ -12,6 +12,7 @@ public interface ITenancyDbContext
     DbSet<TeamInvite> TeamInvites { get; }
     DbSet<OperationalTag> OperationalTags { get; }
     DbSet<TenantOperationalTag> TenantOperationalTags { get; }
+    DbSet<TenantSubscriptionHistory> SubscriptionHistories { get; }
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 
 }

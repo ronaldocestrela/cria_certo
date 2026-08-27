@@ -18,6 +18,7 @@ public sealed class TenancyDbContext : DbContext, ITenancyDbContext
     public DbSet<TeamInvite> TeamInvites => Set<TeamInvite>();
     public DbSet<OperationalTag> OperationalTags => Set<OperationalTag>();
     public DbSet<TenantOperationalTag> TenantOperationalTags => Set<TenantOperationalTag>();
+    public DbSet<TenantSubscriptionHistory> SubscriptionHistories => Set<TenantSubscriptionHistory>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -158,6 +159,16 @@ public sealed class TenancyDbContext : DbContext, ITenancyDbContext
                 .WithMany()
                 .HasForeignKey(ti => ti.TenantId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<TenantSubscriptionHistory>(builder =>
+        {
+            builder.ToTable("TenantSubscriptionHistories");
+            builder.HasKey(h => h.Id);
+            builder.Property(h => h.Justification).HasMaxLength(1000).IsRequired();
+            builder.Property(h => h.ActionType).HasConversion<string>().HasMaxLength(50).IsRequired();
+            builder.Property(h => h.ChangedAtUtc).IsRequired();
+            builder.HasIndex(h => h.TenantId);
         });
     }
 }
