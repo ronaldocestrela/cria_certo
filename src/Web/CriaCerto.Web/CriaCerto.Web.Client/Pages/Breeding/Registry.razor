@@ -289,7 +289,7 @@
                         <div class="modal-footer mt-4 px-0 pb-0">
                             <button type="button" class="btn btn-secondary" @onclick="CloseCreateModal">Cancelar</button>
                             <button type="submit" class="btn btn-primary" disabled="@_isSaving">
-                                @_isSaving ? "Salvando..." : "Salvar Animal"
+                                @(_isSaving ? "Salvando..." : "Salvar Animal")
                             </button>
                         </div>
                     </EditForm>
