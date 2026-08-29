@@ -38,7 +38,7 @@
                                 <div class="d-flex align-items-center gap-2">
                                     <h2 class="mb-0 fw-bold">@_animal.EarTag</h2>
                                     <span class="badge bg-primary fs-6">@_animal.Category</span>
-                                    <span class="status-badge">@_animal.Status</span>
+                                    <span class="badge bg-success fs-6">@GetStatusLabel(_animal)</span>
                                 </div>
                                 <p class="text-muted mb-0">
                                     <strong>Apelido:</strong> @(_animal.Nickname ?? "Sem apelido") |
@@ -73,20 +73,40 @@
                         <small class="text-muted">Condição atual</small>
                     </div>
                 </div>
-                <div class="col-md-3">
-                    <div class="card border-0 shadow-sm p-3">
-                        <span class="text-muted small">Paridade de Partos</span>
-                        <h4 class="fw-bold mb-0 text-info">@_animal.ParityCount partos</h4>
-                        <small class="text-muted">Último: @(_animal.LastCalvingDate?.ToString("dd/MM/yyyy") ?? "-")</small>
+                @if (IsBull(_animal.Category))
+                {
+                    <div class="col-md-3">
+                        <div class="card border-0 shadow-sm p-3">
+                            <span class="text-muted small">Aptidão Reprodutiva</span>
+                            <h4 class="fw-bold mb-0 text-success">Reprodutor Apto</h4>
+                            <small class="text-muted">Exame Andrológico Vigente</small>
+                        </div>
                     </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="card border-0 shadow-sm p-3">
-                        <span class="text-muted small">IEP Estimado</span>
-                        <h4 class="fw-bold mb-0 text-warning">@(_animal.IepMonths?.ToString("0.0") ?? "-") meses</h4>
-                        <small class="text-muted">Intervalo entre Partos</small>
+                    <div class="col-md-3">
+                        <div class="card border-0 shadow-sm p-3">
+                            <span class="text-muted small">Finalidade Reprodutiva</span>
+                            <h4 class="fw-bold mb-0 text-primary">Monta / Coleta</h4>
+                            <small class="text-muted">Touro Ativo no Plantel</small>
+                        </div>
                     </div>
-                </div>
+                }
+                else
+                {
+                    <div class="col-md-3">
+                        <div class="card border-0 shadow-sm p-3">
+                            <span class="text-muted small">Paridade de Partos</span>
+                            <h4 class="fw-bold mb-0 text-info">@_animal.ParityCount partos</h4>
+                            <small class="text-muted">Último: @(_animal.LastCalvingDate?.ToString("dd/MM/yyyy") ?? "-")</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card border-0 shadow-sm p-3">
+                            <span class="text-muted small">IEP Estimado</span>
+                            <h4 class="fw-bold mb-0 text-warning">@(_animal.IepMonths?.ToString("0.0") ?? "-") meses</h4>
+                            <small class="text-muted">Intervalo entre Partos</small>
+                        </div>
+                    </div>
+                }
             </div>
 
             <!-- Dados Genealógicos e Origem -->
@@ -183,6 +203,36 @@
         if (!birthDate.HasValue) return null;
         var now = DateTime.Today;
         return ((now.Year - birthDate.Value.Year) * 12) + now.Month - birthDate.Value.Month;
+    }
+
+    private static bool IsBull(string? category) =>
+        string.Equals(category, "Reprodutor", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(category, "Touro", StringComparison.OrdinalIgnoreCase);
+
+    private string GetStatusLabel(CowDetailDto animal)
+    {
+        if (IsBull(animal.Category))
+        {
+            return animal.Status switch
+            {
+                ReproductiveStatus.Culled => "Descartado",
+                ReproductiveStatus.Sold => "Vendido",
+                _ => "Apto / Ativo"
+            };
+        }
+
+        return animal.Status switch
+        {
+            ReproductiveStatus.Open => "Vazia",
+            ReproductiveStatus.InIatfProtocol => "Em IATF",
+            ReproductiveStatus.Inseminated => "Inseminada",
+            ReproductiveStatus.Pregnant => "Prenhe",
+            ReproductiveStatus.Lactating => "Lactante",
+            ReproductiveStatus.Culled => "Descartada",
+            ReproductiveStatus.Sold => "Vendida",
+            ReproductiveStatus.Active => "Ativa",
+            _ => animal.Status.ToString()
+        };
     }
 
     private void GoBack()

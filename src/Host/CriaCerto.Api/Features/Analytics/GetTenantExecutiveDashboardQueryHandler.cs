@@ -68,7 +68,7 @@ public sealed class GetTenantExecutiveDashboardQueryHandler : IRequestHandler<Ge
         // 2. Breeding KPIs
         var totalActiveCows = await _breedingDbContext.Cows
             .AsNoTracking()
-            .CountAsync(c => c.Status != ReproductiveStatus.Culled && c.Status != ReproductiveStatus.Sold, cancellationToken);
+            .CountAsync(c => c.Category != "Reprodutor" && c.Category != "Touro" && c.Status != ReproductiveStatus.Culled && c.Status != ReproductiveStatus.Sold, cancellationToken);
 
         var pregnantCows = await _breedingDbContext.Cows
             .AsNoTracking()

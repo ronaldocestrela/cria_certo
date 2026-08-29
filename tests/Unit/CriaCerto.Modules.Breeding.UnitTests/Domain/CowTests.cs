@@ -109,4 +109,38 @@ public class CowTests
         cow.Nickname.Should().Be("Mimosa");
         cow.BodyConditionScore.Should().Be(4.0m);
     }
+
+    [Fact]
+    public void Create_WithReprodutorCategory_ShouldInitializeWithStatusActive()
+    {
+        var result = Cow.Create("TOURO-01", "Nelore", DateTime.UtcNow.AddYears(-4), _tenantId, category: "Reprodutor");
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Category.Should().Be("Reprodutor");
+        result.Value.Status.Should().Be(ReproductiveStatus.Active);
+    }
+
+    [Fact]
+    public void StartIatfProtocol_WhenReprodutor_ShouldReturnFailure()
+    {
+        var bull = Cow.Create("TOURO-02", "Nelore", DateTime.UtcNow.AddYears(-4), _tenantId, category: "Reprodutor").Value;
+
+        var result = bull.StartIatfProtocol(Guid.NewGuid());
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("Cow.IsBull");
+    }
+
+    [Fact]
+    public void Update_ChangingCategoryToReprodutor_ShouldUpdateStatusToActive()
+    {
+        var animal = Cow.Create("BR-108", "Nelore", DateTime.UtcNow.AddYears(-3), _tenantId, category: "Matriz").Value;
+        animal.Status.Should().Be(ReproductiveStatus.Open);
+
+        var updateResult = animal.Update("BR-108", "Nelore", animal.BirthDate, category: "Reprodutor");
+
+        updateResult.IsSuccess.Should().BeTrue();
+        animal.Category.Should().Be("Reprodutor");
+        animal.Status.Should().Be(ReproductiveStatus.Active);
+    }
 }

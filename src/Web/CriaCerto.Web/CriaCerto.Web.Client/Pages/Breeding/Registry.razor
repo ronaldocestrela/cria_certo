@@ -48,12 +48,12 @@
 
         <!-- METRICS SUMMARY CARDS -->
         <div class="row g-3 mb-4">
-            <div class="col-12 col-md-4">
-                <div class="card border-0 shadow-sm p-3 bg-white rounded-3">
+            <div class="col-12 col-sm-6 col-xl-3">
+                <div class="card border-0 shadow-sm p-3 bg-white rounded-3 h-100">
                     <div class="d-flex align-items-center justify-content-between">
                         <div>
                             <span class="text-muted small text-uppercase font-weight-bold">Total Fêmeas Ativas</span>
-                            <h3 class="h3 font-weight-bold mb-0 text-dark">@_cows.Count</h3>
+                            <h3 class="h3 font-weight-bold mb-0 text-dark">@ActiveFemalesCount</h3>
                         </div>
                         <div class="p-3 bg-light-success text-success rounded-circle d-flex align-items-center justify-content-center" style="width: 48px; height: 48px;">
                             <BovineIcon Size="26" />
@@ -61,28 +61,41 @@
                     </div>
                 </div>
             </div>
-            <div class="col-12 col-md-4">
-                <div class="card border-0 shadow-sm p-3 bg-white rounded-3">
+            <div class="col-12 col-sm-6 col-xl-3">
+                <div class="card border-0 shadow-sm p-3 bg-white rounded-3 h-100">
                     <div class="d-flex align-items-center justify-content-between">
                         <div>
-                            <span class="text-muted small text-uppercase font-weight-bold">Matrizes Prenhes</span>
-                            <h3 class="h3 font-weight-bold mb-0 text-primary">@PregnantCount</h3>
+                            <span class="text-muted small text-uppercase font-weight-bold">Touros / Reprodutores</span>
+                            <h3 class="h3 font-weight-bold mb-0 text-primary">@ActiveBullsCount</h3>
                         </div>
-                        <div class="p-3 bg-light-primary text-primary rounded-circle">
-                            <span class="material-symbols-outlined">pregnancy</span>
+                        <div class="p-3 bg-light-primary text-primary rounded-circle d-flex align-items-center justify-content-center" style="width: 48px; height: 48px;">
+                            <span class="material-symbols-outlined fs-4">male</span>
                         </div>
                     </div>
                 </div>
             </div>
-            <div class="col-12 col-md-4">
-                <div class="card border-0 shadow-sm p-3 bg-white rounded-3">
+            <div class="col-12 col-sm-6 col-xl-3">
+                <div class="card border-0 shadow-sm p-3 bg-white rounded-3 h-100">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <span class="text-muted small text-uppercase font-weight-bold">Matrizes Prenhes</span>
+                            <h3 class="h3 font-weight-bold mb-0 text-success">@PregnantCount</h3>
+                        </div>
+                        <div class="p-3 bg-light-success text-success rounded-circle d-flex align-items-center justify-content-center" style="width: 48px; height: 48px;">
+                            <span class="material-symbols-outlined fs-4">pregnancy</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12 col-sm-6 col-xl-3">
+                <div class="card border-0 shadow-sm p-3 bg-white rounded-3 h-100">
                     <div class="d-flex align-items-center justify-content-between">
                         <div>
                             <span class="text-muted small text-uppercase font-weight-bold">Média IEP Estimada</span>
-                            <h3 class="h3 font-weight-bold mb-0 text-warning">@AverageIep.ToString("F1") <span class="fs-6 font-weight-normal text-muted">meses</span></h3>
+                            <h3 class="h3 font-weight-bold mb-0 text-warning">@(AverageIep > 0 ? AverageIep.ToString("F1") : "-") <span class="fs-6 font-weight-normal text-muted">meses</span></h3>
                         </div>
-                        <div class="p-3 bg-light-warning text-warning rounded-circle">
-                            <span class="material-symbols-outlined">event_repeat</span>
+                        <div class="p-3 bg-light-warning text-warning rounded-circle d-flex align-items-center justify-content-center" style="width: 48px; height: 48px;">
+                            <span class="material-symbols-outlined fs-4">event_repeat</span>
                         </div>
                     </div>
                 </div>
@@ -92,7 +105,7 @@
         <!-- SEARCH & FILTER BAR -->
         <div class="card border-0 shadow-sm p-3 mb-4 bg-white rounded-3">
             <div class="row g-3">
-                <div class="col-12 col-md-6">
+                <div class="col-12 col-md-5">
                     <div class="input-group">
                         <span class="input-group-text bg-white border-end-0">
                             <span class="material-symbols-outlined text-muted">search</span>
@@ -100,12 +113,13 @@
                         <input type="text" class="form-control border-start-0 ps-0" placeholder="Buscar por brinco, nome, chip ou SISBOV..." @bind="_search" @bind:event="oninput" @bind:after="LoadCowsAsync" />
                     </div>
                 </div>
-                <div class="col-12 col-md-6 d-flex flex-wrap gap-2 justify-content-md-end align-items-center">
-                    <button class="btn btn-sm btn-outline-secondary @FilterClass(null)" @onclick="() => SetFilter(null)">Todos</button>
-                    <button class="btn btn-sm btn-outline-secondary @FilterClass(ReproductiveStatus.Open)" @onclick="() => SetFilter(ReproductiveStatus.Open)">Vazias</button>
-                    <button class="btn btn-sm btn-outline-secondary @FilterClass(ReproductiveStatus.InIatfProtocol)" @onclick="() => SetFilter(ReproductiveStatus.InIatfProtocol)">Em IATF</button>
-                    <button class="btn btn-sm btn-outline-secondary @FilterClass(ReproductiveStatus.Pregnant)" @onclick="() => SetFilter(ReproductiveStatus.Pregnant)">Prenhes</button>
-                    <button class="btn btn-sm btn-outline-secondary @FilterClass(ReproductiveStatus.Lactating)" @onclick="() => SetFilter(ReproductiveStatus.Lactating)">Lactantes</button>
+                <div class="col-12 col-md-7 d-flex flex-wrap gap-2 justify-content-md-end align-items-center">
+                    <button class="btn btn-sm btn-outline-secondary @FilterClass(null, false, false)" @onclick="() => SetFilter(null, false, false)">Todos</button>
+                    <button class="btn btn-sm btn-outline-secondary @FilterClass(null, true, false)" @onclick="() => SetFilter(null, true, false)">Matrizes</button>
+                    <button class="btn btn-sm btn-outline-secondary @FilterClass(null, false, true)" @onclick="() => SetFilter(null, false, true)">Reprodutores</button>
+                    <button class="btn btn-sm btn-outline-secondary @FilterClass(ReproductiveStatus.Open, true, false)" @onclick="() => SetFilter(ReproductiveStatus.Open, true, false)">Vazias</button>
+                    <button class="btn btn-sm btn-outline-secondary @FilterClass(ReproductiveStatus.InIatfProtocol, true, false)" @onclick="() => SetFilter(ReproductiveStatus.InIatfProtocol, true, false)">Em IATF</button>
+                    <button class="btn btn-sm btn-outline-secondary @FilterClass(ReproductiveStatus.Pregnant, true, false)" @onclick="() => SetFilter(ReproductiveStatus.Pregnant, true, false)">Prenhes</button>
                 </div>
             </div>
         </div>
@@ -156,16 +170,20 @@
                                     <span class="badge bg-light text-dark border extra-small">@cow.Category</span>
                                 </td>
                                 <td>
-                                    <span class="badge bg-primary">@cow.Status</span>
+                                    @GetStatusBadge(cow)
                                 </td>
                                 <td>
                                     <span class="fw-bold">@(cow.BodyConditionScore?.ToString("F1") ?? "-")</span>
                                 </td>
                                 <td>
-                                    @if (cow.LastCalvingDate.HasValue)
+                                    @if (!IsBull(cow.Category) && cow.LastCalvingDate.HasValue)
                                     {
                                         <div>@cow.LastCalvingDate.Value.ToString("dd/MM/yyyy")</div>
                                         <div class="text-muted extra-small">IEP: @(cow.IepMonths?.ToString("F1") ?? "-") meses</div>
+                                    }
+                                    else if (IsBull(cow.Category))
+                                    {
+                                        <span class="text-muted extra-small">N/A (Reprodutor)</span>
                                     }
                                     else
                                     {
@@ -331,14 +349,94 @@
         await LoadCowsAsync();
     }
 
+    private bool _onlyFemales;
+    private bool _onlyBulls;
+
+    private static bool IsBull(string? category) =>
+        string.Equals(category, "Reprodutor", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(category, "Touro", StringComparison.OrdinalIgnoreCase);
+
+    private int ActiveFemalesCount => _cows.Count(c => !IsBull(c.Category) && c.Status != ReproductiveStatus.Culled && c.Status != ReproductiveStatus.Sold);
+    private int ActiveBullsCount => _cows.Count(c => IsBull(c.Category) && c.Status != ReproductiveStatus.Culled && c.Status != ReproductiveStatus.Sold);
+    private int PregnantCount => _cows.Count(c => !IsBull(c.Category) && c.Status == ReproductiveStatus.Pregnant);
+    private double AverageIep
+    {
+        get
+        {
+            var valid = _cows.Where(c => !IsBull(c.Category) && c.IepMonths.HasValue).Select(c => c.IepMonths!.Value).ToList();
+            return valid.Count > 0 ? valid.Average() : 0.0;
+        }
+    }
+
     private IEnumerable<CowSummaryDto> FilteredCows => _cows.Where(c =>
         (!_status.HasValue || c.Status == _status.Value) &&
+        (!_onlyFemales || !IsBull(c.Category)) &&
+        (!_onlyBulls || IsBull(c.Category)) &&
         (string.IsNullOrWhiteSpace(_search) ||
             c.EarTag.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
-            (c.Nickname != null && c.Nickname.Contains(_search, StringComparison.OrdinalIgnoreCase))));
+            (c.Nickname != null && c.Nickname.Contains(_search, StringComparison.OrdinalIgnoreCase)) ||
+            (c.SisbovId != null && c.SisbovId.Contains(_search, StringComparison.OrdinalIgnoreCase))));
 
-    private double AverageIep => _cows.Where(c => c.IepMonths.HasValue).Select(c => c.IepMonths!.Value).DefaultIfEmpty(12.5).Average();
-    private int PregnantCount => _cows.Count(c => c.Status == ReproductiveStatus.Pregnant);
+    private void SetFilter(ReproductiveStatus? status, bool onlyFemales, bool onlyBulls)
+    {
+        _status = status;
+        _onlyFemales = onlyFemales;
+        _onlyBulls = onlyBulls;
+    }
+
+    private string FilterClass(ReproductiveStatus? status, bool onlyFemales, bool onlyBulls)
+    {
+        if (_status == status && _onlyFemales == onlyFemales && _onlyBulls == onlyBulls)
+            return "active btn-primary text-white";
+        return string.Empty;
+    }
+
+    private RenderFragment GetStatusBadge(CowSummaryDto cow) => builder =>
+    {
+        if (IsBull(cow.Category))
+        {
+            if (cow.Status == ReproductiveStatus.Culled)
+            {
+                builder.OpenElement(0, "span");
+                builder.AddAttribute(1, "class", "badge bg-danger");
+                builder.AddContent(2, "Descartado");
+                builder.CloseElement();
+            }
+            else if (cow.Status == ReproductiveStatus.Sold)
+            {
+                builder.OpenElement(0, "span");
+                builder.AddAttribute(1, "class", "badge bg-secondary");
+                builder.AddContent(2, "Vendido");
+                builder.CloseElement();
+            }
+            else
+            {
+                builder.OpenElement(0, "span");
+                builder.AddAttribute(1, "class", "badge bg-success");
+                builder.AddContent(2, "Apto / Ativo");
+                builder.CloseElement();
+            }
+            return;
+        }
+
+        var (css, text) = cow.Status switch
+        {
+            ReproductiveStatus.Open => ("bg-secondary", "Vazia"),
+            ReproductiveStatus.InIatfProtocol => ("bg-info text-dark", "Em IATF"),
+            ReproductiveStatus.Inseminated => ("bg-primary", "Inseminada"),
+            ReproductiveStatus.Pregnant => ("bg-success", "Prenhe"),
+            ReproductiveStatus.Lactating => ("bg-warning text-dark", "Lactante"),
+            ReproductiveStatus.Culled => ("bg-danger", "Descartada"),
+            ReproductiveStatus.Sold => ("bg-secondary", "Vendida"),
+            ReproductiveStatus.Active => ("bg-success", "Ativa"),
+            _ => ("bg-primary", cow.Status.ToString())
+        };
+
+        builder.OpenElement(0, "span");
+        builder.AddAttribute(1, "class", $"badge {css}");
+        builder.AddContent(2, text);
+        builder.CloseElement();
+    };
 
     private Guid _tenantId = Guid.Empty;
 
@@ -361,7 +459,7 @@
     {
         try
         {
-            var response = await PlantelApi.ListCowsAsync(_search, _status);
+            var response = await PlantelApi.ListCowsAsync(_search, null);
             _cows.Clear();
             if (response?.Items.Count > 0)
             {
@@ -375,20 +473,6 @@
             _offlineMode = true;
         }
     }
-
-    private async Task OnSearchChanged(string? value)
-    {
-        _search = value;
-        await LoadCowsAsync();
-    }
-
-    private async Task SetFilter(ReproductiveStatus? status)
-    {
-        _status = status;
-        await LoadCowsAsync();
-    }
-
-    private string FilterClass(ReproductiveStatus? status) => _status == status ? "active" : string.Empty;
 
     private void OpenCreateModal()
     {

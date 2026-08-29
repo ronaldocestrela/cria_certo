@@ -10,7 +10,8 @@ public enum ReproductiveStatus
     Sold = 6,
     Empty = 7,
     Bred = 8,
-    Lactating = 9
+    Lactating = 9,
+    Active = 10
 }
 
 public enum LifecycleStatus
