@@ -1086,21 +1086,45 @@ sanitary.MapGet("/slaughter-validation/{animalId:guid}", async (Guid animalId, I
 // --- EXECUTIVE ANALYTICS ENDPOINTS ---
 var analytics = app.MapGroup("/api/analytics").RequireAuthorization();
 
+analytics.MapGet("/dashboard", async (ISender sender, Guid? tenantId) =>
+{
+    var result = await sender.Send(new GetTenantExecutiveDashboardQuery(tenantId));
+    return ToHttpResult(result);
+});
+
 analytics.MapGet("/executive-scorecard", async (
-    int totalCows,
-    int pregnantCows,
-    int calvesWeaned,
-    decimal totalPastureHectares,
-    decimal totalAnimalUnits,
-    decimal averageGpdKg,
-    decimal averageCostPerArroba,
-    int animalsUnderWithdrawal,
+    int? totalCows,
+    int? pregnantCows,
+    int? calvesWeaned,
+    decimal? totalPastureHectares,
+    decimal? totalAnimalUnits,
+    decimal? averageGpdKg,
+    decimal? averageCostPerArroba,
+    int? animalsUnderWithdrawal,
+    Guid? tenantId,
     ISender sender) =>
 {
-    var query = new GetExecutiveAnalyticsQuery(
-        totalCows, pregnantCows, calvesWeaned, totalPastureHectares, totalAnimalUnits, averageGpdKg, averageCostPerArroba, animalsUnderWithdrawal);
-    var result = await sender.Send(query);
-    return ToHttpResult(result);
+    if (totalCows.HasValue && pregnantCows.HasValue && calvesWeaned.HasValue)
+    {
+        var query = new GetExecutiveAnalyticsQuery(
+            totalCows.Value,
+            pregnantCows.Value,
+            calvesWeaned.Value,
+            totalPastureHectares ?? 0m,
+            totalAnimalUnits ?? 0m,
+            averageGpdKg ?? 0m,
+            averageCostPerArroba ?? 0m,
+            animalsUnderWithdrawal ?? 0);
+        var result = await sender.Send(query);
+        return ToHttpResult(result);
+    }
+
+    var dashboardResult = await sender.Send(new GetTenantExecutiveDashboardQuery(tenantId));
+    if (dashboardResult.IsSuccess)
+    {
+        return Results.Ok(dashboardResult.Value.Scorecard);
+    }
+    return ToHttpResult(dashboardResult);
 });
 
 analytics.MapPost("/export", async (ExportBovineReportQuery query, ISender sender) =>

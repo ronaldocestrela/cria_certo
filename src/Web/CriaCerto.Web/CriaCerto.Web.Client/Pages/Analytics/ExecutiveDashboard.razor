@@ -1,136 +1,237 @@
 @page "/analytics/executive-dashboard"
 @using CriaCerto.Modules.Analytics.Application.Contracts
 @using CriaCerto.Web.Client.Components.Analytics
+@using CriaCerto.Web.Client.Services
+@inject AnalyticsApiClient AnalyticsApi
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Navigation
 @attribute [Authorize]
 
 <PageTitle>Dashboard Executivo Zootécnico | CriaCerto</PageTitle>
 
 <div class="container-fluid py-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <!-- CABECALHO DO DASHBOARD -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
         <div>
-            <h3 class="fw-bold text-dark mb-1">
+            <div class="d-flex align-items-center gap-2">
+                <span class="badge bg-success-subtle text-success border border-success-subtle px-3 py-1 rounded-pill">
+                    <i class="bi bi-building me-1"></i> @(dashboardData?.FarmName ?? "Carregando Fazenda...")
+                </span>
+                @if (dashboardData != null && dashboardData.FarmAreaHectares > 0)
+                {
+                    <span class="badge bg-light text-muted border px-2 py-1 rounded-pill">
+                        <i class="bi bi-geo-alt me-1"></i> @dashboardData.FarmAreaHectares.ToString("N0") ha
+                    </span>
+                }
+            </div>
+            <h3 class="fw-bold text-dark mt-2 mb-1">
                 <i class="bi bi-graph-up-arrow me-2 text-success"></i>Dashboard Executivo Zootécnico & KPIs
             </h3>
-            <p class="text-muted mb-0">Consolidação multi-fazenda de reprodução, desmame, ganho de peso, lotação de pastos e custos por arroba (@@).</p>
+            <p class="text-muted mb-0">
+                Consolidação de reprodução, desmame, ganho de peso, lotação de pastos e custos por arroba (@@) para o tenant autenticado.
+            </p>
         </div>
-        <button class="btn btn-dark shadow-sm px-3 fw-bold" @onclick="() => showExportModal = true">
-            <i class="bi bi-download me-2"></i> Exportar Relatórios (CSV / Excel / PDF)
-        </button>
-    </div>
-
-    <!-- CARDS DE METRICAS CHAVE -->
-    <div class="row g-3 mb-4">
-        <div class="col-md-3">
-            <div class="card border-0 shadow-sm rounded-3 p-3 bg-white">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <span class="text-muted small text-uppercase">Taxa de Prenhez (IATF)</span>
-                        <h2 class="fw-bold text-success mb-0">@scorecard.PregnancyRatePercentage%</h2>
-                        <small class="text-muted">Meta: > 80%</small>
-                    </div>
-                    <div class="bg-success-subtle p-3 rounded-circle text-success">
-                        <i class="bi bi-heart-pulse fs-2"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card border-0 shadow-sm rounded-3 p-3 bg-white">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <span class="text-muted small text-uppercase">Lotação (UA/ha)</span>
-                        <h2 class="fw-bold text-primary mb-0">@scorecard.StockingRateUAPerHa</h2>
-                        <small class="text-muted">Capacidade Ideal: 1.8 UA/ha</small>
-                    </div>
-                    <div class="bg-primary-subtle p-3 rounded-circle text-primary">
-                        <i class="bi bi-bounding-box-circles fs-2"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card border-0 shadow-sm rounded-3 p-3 bg-white">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <span class="text-muted small text-uppercase">GPD Médio (kg/dia)</span>
-                        <h2 class="fw-bold text-warning mb-0">@scorecard.AverageGpdKg kg</h2>
-                        <small class="text-muted">Ganho de peso diário</small>
-                    </div>
-                    <div class="bg-warning-subtle p-3 rounded-circle text-warning">
-                        <i class="bi bi-speedometer fs-2"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card border-0 shadow-sm rounded-3 p-3 bg-white">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <span class="text-muted small text-uppercase">Custo por Arroba (@@)</span>
-                        <h2 class="fw-bold text-dark mb-0">R$ @scorecard.CostPerArrobaProduced</h2>
-                        <small class="text-muted">Custo de produção / @@</small>
-                    </div>
-                    <div class="bg-light p-3 rounded-circle text-dark border">
-                        <i class="bi bi-currency-dollar fs-2"></i>
-                    </div>
-                </div>
-            </div>
+        <div class="d-flex gap-2">
+            <button class="btn btn-outline-secondary shadow-sm px-3 fw-bold" @onclick="LoadDashboardDataAsync" disabled="@isLoading">
+                <i class="bi bi-arrow-clockwise me-1 @(isLoading ? "spin" : "")"></i> Atualizar
+            </button>
+            <button class="btn btn-dark shadow-sm px-3 fw-bold" @onclick="() => showExportModal = true" disabled="@isLoading">
+                <i class="bi bi-download me-2"></i> Exportar Relatórios (CSV / Excel / PDF)
+            </button>
         </div>
     </div>
 
-    <!-- SECAO GRAFICA INTERATIVA -->
-    <div class="row g-4 mb-4">
-        <div class="col-lg-8">
-            <div class="card border-0 shadow-sm rounded-3">
-                <div class="card-header bg-white py-3">
-                    <h6 class="m-0 fw-bold text-dark"><i class="bi bi-bar-chart-line me-2 text-success"></i>Evolução de Ganho de Peso Médio Diário (GPD) por Lote</h6>
+    @if (isLoading)
+    {
+        <div class="card border-0 shadow-sm rounded-4 p-5 text-center my-4 bg-white">
+            <div class="spinner-border text-success mx-auto mb-3" role="status" style="width: 3rem; height: 3rem;">
+                <span class="visually-hidden">Carregando dados zootécnicos do tenant...</span>
+            </div>
+            <h5 class="fw-bold text-dark mb-1">Carregando Indicadores do Tenant</h5>
+            <p class="text-muted mb-0">Consultando rebanho, pesagens, piquetes e histórico sanitário da fazenda...</p>
+        </div>
+    }
+    else if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="alert alert-danger border-0 shadow-sm rounded-3 p-4 mb-4 d-flex align-items-center justify-content-between">
+            <div class="d-flex align-items-center">
+                <i class="bi bi-exclamation-octagon-fill fs-2 me-3 text-danger"></i>
+                <div>
+                    <h6 class="fw-bold mb-1">Falha ao obter dados do tenant</h6>
+                    <p class="mb-0 small">@errorMessage</p>
                 </div>
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-end h-100 p-4 border rounded bg-light" style="min-height: 200px;">
-                        <div class="text-center flex-fill">
-                            <div class="bg-success rounded-top mx-auto" style="height: 100px; width: 40px;"></div>
-                            <span class="small text-muted mt-2 d-block">Jan (0.75kg)</span>
+            </div>
+            <button class="btn btn-danger btn-sm px-3 fw-bold" @onclick="LoadDashboardDataAsync">
+                <i class="bi bi-arrow-clockwise me-1"></i> Tentar Novamente
+            </button>
+        </div>
+    }
+    else
+    {
+        <!-- CARDS DE METRICAS CHAVE -->
+        <div class="row g-3 mb-4">
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm rounded-3 p-3 bg-white h-100">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <span class="text-muted small text-uppercase fw-semibold">Taxa de Prenhez</span>
+                            <h2 class="fw-bold text-success mb-0">@scorecard.PregnancyRatePercentage.ToString("N1")%</h2>
+                            <small class="text-muted">
+                                @dashboardData?.PregnantCows prenhes de @dashboardData?.TotalActiveCows matrizes
+                            </small>
                         </div>
-                        <div class="text-center flex-fill">
-                            <div class="bg-success rounded-top mx-auto" style="height: 120px; width: 40px;"></div>
-                            <span class="small text-muted mt-2 d-block">Fev (0.82kg)</span>
+                        <div class="bg-success-subtle p-3 rounded-circle text-success">
+                            <i class="bi bi-heart-pulse fs-2"></i>
                         </div>
-                        <div class="text-center flex-fill">
-                            <div class="bg-success rounded-top mx-auto" style="height: 110px; width: 40px;"></div>
-                            <span class="small text-muted mt-2 d-block">Mar (0.79kg)</span>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm rounded-3 p-3 bg-white h-100">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <span class="text-muted small text-uppercase fw-semibold">Lotação (UA/ha)</span>
+                            <h2 class="fw-bold text-primary mb-0">@scorecard.StockingRateUAPerHa.ToString("N2")</h2>
+                            <small class="text-muted">
+                                @(dashboardData?.TotalAnimalUnits.ToString("N1") ?? "0") UA em @(dashboardData?.TotalPastureHectares.ToString("N0") ?? "0") ha
+                            </small>
                         </div>
-                        <div class="text-center flex-fill">
-                            <div class="bg-success rounded-top mx-auto" style="height: 140px; width: 40px;"></div>
-                            <span class="small text-muted mt-2 d-block">Abr (0.88kg)</span>
+                        <div class="bg-primary-subtle p-3 rounded-circle text-primary">
+                            <i class="bi bi-bounding-box-circles fs-2"></i>
                         </div>
-                        <div class="text-center flex-fill">
-                            <div class="bg-success rounded-top mx-auto" style="height: 155px; width: 40px;"></div>
-                            <span class="small text-muted mt-2 d-block">Mai (0.92kg)</span>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm rounded-3 p-3 bg-white h-100">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <span class="text-muted small text-uppercase fw-semibold">GPD Médio (kg/dia)</span>
+                            <h2 class="fw-bold text-warning mb-0">@scorecard.AverageGpdKg.ToString("N3") kg</h2>
+                            <small class="text-muted">Ganho de peso diário médio</small>
+                        </div>
+                        <div class="bg-warning-subtle p-3 rounded-circle text-warning">
+                            <i class="bi bi-speedometer fs-2"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm rounded-3 p-3 bg-white h-100">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <span class="text-muted small text-uppercase fw-semibold">Custo por Arroba (@@)</span>
+                            <h2 class="fw-bold text-dark mb-0">R$ @scorecard.CostPerArrobaProduced.ToString("N2")</h2>
+                            <small class="text-muted">Custo nutricional / @@ produzida</small>
+                        </div>
+                        <div class="bg-light p-3 rounded-circle text-dark border">
+                            <i class="bi bi-currency-dollar fs-2"></i>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div class="col-lg-4">
-            <div class="card border-0 shadow-sm rounded-3 h-100">
-                <div class="card-header bg-white py-3">
-                    <h6 class="m-0 fw-bold text-dark"><i class="bi bi-shield-check me-2 text-primary"></i>Conformidade Sanitária Executiva</h6>
-                </div>
-                <div class="card-body d-flex flex-column justify-content-center text-center">
-                    <div class="mb-3">
-                        <i class="bi bi-check-circle-fill text-success" style="font-size: 4rem;"></i>
+        <!-- SECAO GRAFICA INTERATIVA E SANITARIA -->
+        <div class="row g-4 mb-4">
+            <div class="col-lg-8">
+                <div class="card border-0 shadow-sm rounded-3 h-100">
+                    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                        <h6 class="m-0 fw-bold text-dark">
+                            <i class="bi bi-bar-chart-line me-2 text-success"></i>Evolução de Ganho de Peso Médio Diário (GPD) Mensal
+                        </h6>
+                        <span class="badge bg-light text-muted border">Últimos 5 meses</span>
                     </div>
-                    <h5 class="fw-bold text-dark mb-1">Status da Fazenda: @scorecard.OverallHealthStatus</h5>
-                    <p class="text-muted small">Nenhum lote com carência vencida e vacinações de Aftosa e Brucelose em dia.</p>
-                    <div class="alert alert-light border text-start mb-0">
-                        <small class="d-block text-muted"><strong>Animais em Carência Sanitária:</strong> @scorecard.AnimalsUnderSlaughterWithdrawal</small>
-                        <small class="d-block text-muted"><strong>Bloqueios Ativos de Abate:</strong> 0 Alertas Críticos</small>
+                    <div class="card-body d-flex flex-column justify-content-center">
+                        @if (dashboardData?.GpdEvolution != null && dashboardData.GpdEvolution.Any(p => p.AverageGpdKg > 0))
+                        {
+                            var maxGpd = Math.Max(1.0m, dashboardData.GpdEvolution.Max(p => p.AverageGpdKg));
+                            <div class="d-flex justify-content-around align-items-end p-4 border rounded bg-light" style="min-height: 220px;">
+                                @foreach (var point in dashboardData.GpdEvolution)
+                                {
+                                    var barHeight = point.AverageGpdKg > 0
+                                        ? Math.Max(30, (int)((point.AverageGpdKg / maxGpd) * 140))
+                                        : 10;
+                                    var barColorClass = point.AverageGpdKg >= 0.8m ? "bg-success" : point.AverageGpdKg > 0 ? "bg-warning" : "bg-secondary-subtle";
+
+                                    <div class="text-center flex-fill px-2">
+                                        <div class="small fw-bold text-dark mb-1">
+                                            @(point.AverageGpdKg > 0 ? $"{point.AverageGpdKg.ToString("N2")}kg" : "-")
+                                        </div>
+                                        <div class="@barColorClass rounded-top mx-auto shadow-sm transition-all" 
+                                             style="height: @(barHeight)px; width: 44px;"
+                                             title="@point.MonthLabel: @point.AverageGpdKg.ToString("N3") kg/dia (@point.WeighingsCount pesagens)">
+                                        </div>
+                                        <span class="small text-muted mt-2 d-block fw-semibold">@point.MonthLabel</span>
+                                        <span class="badge bg-white border text-muted px-1 mt-1" style="font-size: 0.65rem;">@point.WeighingsCount pesagens</span>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="border rounded bg-light p-4 text-center">
+                                <div class="mb-2 text-muted">
+                                    <i class="bi bi-clipboard2-pulse fs-1"></i>
+                                </div>
+                                <h6 class="fw-bold text-dark">Nenhuma pesagem com GPD calculada no período</h6>
+                                <p class="text-muted small mb-3">
+                                    Cadastre pesagens individuais ou importe arquivos de balança para visualizar a evolução mensal do ganho de peso.
+                                </p>
+                                <a href="/growth/weighings" class="btn btn-outline-success btn-sm px-3 fw-bold">
+                                    <i class="bi bi-speedometer2 me-1"></i> Registrar Pesagens
+                                </a>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-4">
+                <div class="card border-0 shadow-sm rounded-3 h-100">
+                    <div class="card-header bg-white py-3">
+                        <h6 class="m-0 fw-bold text-dark">
+                            <i class="bi bi-shield-check me-2 text-primary"></i>Conformidade Sanitária Executiva
+                        </h6>
+                    </div>
+                    <div class="card-body d-flex flex-column justify-content-center text-center p-4">
+                        <div class="mb-3">
+                            @if (scorecard.AnimalsUnderSlaughterWithdrawal == 0)
+                            {
+                                <i class="bi bi-check-circle-fill text-success" style="font-size: 3.8rem;"></i>
+                            }
+                            else if (scorecard.AnimalsUnderSlaughterWithdrawal <= 10)
+                            {
+                                <i class="bi bi-shield-exclamation text-warning" style="font-size: 3.8rem;"></i>
+                            }
+                            else
+                            {
+                                <i class="bi bi-exclamation-triangle-fill text-danger" style="font-size: 3.8rem;"></i>
+                            }
+                        </div>
+                        <h5 class="fw-bold text-dark mb-1">Status da Fazenda: @scorecard.OverallHealthStatus</h5>
+                        <p class="text-muted small mb-3">
+                            @(dashboardData?.HealthStatusDetails ?? "Conformidade sanitária e controle de medicamentos veterinários.")
+                        </p>
+                        <div class="alert alert-light border text-start mb-0">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <small class="text-muted"><strong>Em Carência de Abate:</strong></small>
+                                <span class="badge @(scorecard.AnimalsUnderSlaughterWithdrawal > 0 ? "bg-warning text-dark" : "bg-success")">
+                                    @scorecard.AnimalsUnderSlaughterWithdrawal animal(is)
+                                </span>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <small class="text-muted"><strong>Bloqueios Ativos de Abate:</strong></small>
+                                <span class="badge @((dashboardData?.ActiveSlaughterBlocks ?? 0) > 0 ? "bg-danger" : "bg-light text-muted border")">
+                                    @(dashboardData?.ActiveSlaughterBlocks ?? 0) Alertas
+                                </span>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
-    </div>
+    }
 </div>
 
 @if (showExportModal)
@@ -138,16 +239,62 @@
     <ExportReportModal Scorecard="@scorecard" OnClose="() => showExportModal = false" />
 }
 
+<style>
+    .spin {
+        animation: spin 1s linear infinite;
+    }
+    @@keyframes spin {
+        100% { transform: rotate(360deg); }
+    }
+    .transition-all {
+        transition: all 0.3s ease;
+    }
+</style>
+
 @code {
+    private bool isLoading = true;
+    private string? errorMessage = null;
     private bool showExportModal = false;
+    private ExecutiveDashboardDto? dashboardData;
 
     private ExecutiveScorecardDto scorecard = new ExecutiveScorecardDto(
-        PregnancyRatePercentage: 83.5m,
-        WeaningRatePercentage: 79.2m,
-        StockingRateUAPerHa: 1.55m,
-        AverageGpdKg: 0.890m,
-        CostPerArrobaProduced: 182.00m,
-        AnimalsUnderSlaughterWithdrawal: 4,
-        OverallHealthStatus: "Ótimo");
-}
+        PregnancyRatePercentage: 0m,
+        WeaningRatePercentage: 0m,
+        StockingRateUAPerHa: 0m,
+        AverageGpdKg: 0m,
+        CostPerArrobaProduced: 0m,
+        AnimalsUnderSlaughterWithdrawal: 0,
+        OverallHealthStatus: "Excelente");
 
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDashboardDataAsync();
+    }
+
+    private async Task LoadDashboardDataAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            dashboardData = await AnalyticsApi.GetExecutiveDashboardAsync();
+            if (dashboardData != null)
+            {
+                scorecard = dashboardData.Scorecard;
+            }
+            else
+            {
+                errorMessage = "Não foi possível carregar os dados zootécnicos do tenant.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Erro de comunicação com o servidor: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+}
