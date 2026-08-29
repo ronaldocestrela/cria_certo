@@ -840,17 +840,9 @@ breeding.MapPut("/cows/{id:guid}", async (Guid id, UpdateCowCommand command, ISe
     return ToHttpResult(result);
 });
 
-breeding.MapGet("/bulls", async (Guid? tenantId, ISender sender, HttpContext httpContext) =>
+breeding.MapGet("/bulls", async (Guid tenantId, ISender sender) =>
 {
-    var effectiveTenantId = tenantId;
-    if (!effectiveTenantId.HasValue || effectiveTenantId.Value == Guid.Empty)
-    {
-        var tenantClaim = httpContext.User.FindFirst("TenantId")?.Value;
-        if (Guid.TryParse(tenantClaim, out var parsedTenantId))
-            effectiveTenantId = parsedTenantId;
-    }
-
-    var result = await sender.Send(new ListBullsQuery(effectiveTenantId));
+    var result = await sender.Send(new ListBullsQuery(tenantId));
     return ToHttpResult(result);
 });
 

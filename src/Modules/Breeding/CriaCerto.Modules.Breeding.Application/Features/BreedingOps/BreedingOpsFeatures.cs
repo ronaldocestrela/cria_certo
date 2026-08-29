@@ -59,23 +59,16 @@ public sealed class RegisterIatfProtocolCommandHandler : IRequestHandler<Registe
         string? bullName = null;
         if (request.BullId.HasValue && request.BullId.Value != Guid.Empty)
         {
-            var bull = await _dbContext.Bulls.AsNoTracking()
-                .FirstOrDefaultAsync(b => b.Id == request.BullId.Value, cancellationToken);
+            var bull = await _dbContext.Cows
+                .AsNoTracking()
+                .FirstOrDefaultAsync(c => c.Id == request.BullId.Value &&
+                                          (request.TenantId == Guid.Empty || c.TenantId == request.TenantId || c.TenantId == Guid.Empty), cancellationToken);
 
-            if (bull != null)
+            if (bull is not null)
             {
-                bullName = string.IsNullOrWhiteSpace(bull.Name) ? bull.EarTag : $"{bull.EarTag} - {bull.Name}";
-            }
-            else
-            {
-                var cowBull = await _dbContext.Cows.AsNoTracking()
-                    .FirstOrDefaultAsync(c => c.Id == request.BullId.Value, cancellationToken);
-                if (cowBull != null)
-                {
-                    bullName = !string.IsNullOrWhiteSpace(cowBull.Nickname)
-                        ? $"{cowBull.EarTag} - {cowBull.Nickname}"
-                        : cowBull.EarTag;
-                }
+                bullName = !string.IsNullOrWhiteSpace(bull.Nickname)
+                    ? $"{bull.EarTag} - {bull.Nickname} ({bull.Breed})"
+                    : $"{bull.EarTag} ({bull.Breed})";
             }
         }
 

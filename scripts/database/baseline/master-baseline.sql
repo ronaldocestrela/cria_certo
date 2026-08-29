@@ -122,10 +122,11 @@ IF EXISTS (
     WHERE s.name = 'breeding' AND t.name = 'Cows'
       AND c.name = 'BirthDate' AND c.is_nullable = 0)
     ALTER TABLE [breeding].[Cows] ALTER COLUMN [BirthDate] datetime2 NULL;
-IF COL_LENGTH('breeding.IatfProtocols', 'BullId') IS NULL
+IF COL_LENGTH('[breeding].[IatfProtocols]', 'BullId') IS NULL
     ALTER TABLE [breeding].[IatfProtocols] ADD [BullId] uniqueidentifier NULL;
-IF COL_LENGTH('breeding.IatfProtocols', 'BullName') IS NULL
+IF COL_LENGTH('[breeding].[IatfProtocols]', 'BullName') IS NULL
     ALTER TABLE [breeding].[IatfProtocols] ADD [BullName] nvarchar(150) NULL;
+UPDATE [breeding].[Cows] SET [Status] = 'Active' WHERE [Category] IN ('Reprodutor', 'Touro') AND [Status] = 'Open';
 
 IF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = 'breeding') EXEC(N'CREATE SCHEMA [breeding]');
 IF OBJECT_ID(N'[breeding].[__EFMigrationsHistory]') IS NULL

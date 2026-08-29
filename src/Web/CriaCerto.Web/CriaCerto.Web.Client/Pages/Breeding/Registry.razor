@@ -476,7 +476,10 @@
 
     private void OpenCreateModal()
     {
-        _createRequest = new CreateAnimalRequest();
+        _createRequest = new CreateAnimalRequest
+        {
+            TenantId = _tenantId
+        };
         _showCreateModal = true;
     }
 
@@ -490,6 +493,7 @@
         _isSaving = true;
         _errorMessage = null;
         _successMessage = null;
+        _createRequest.TenantId = _tenantId;
 
         try
         {

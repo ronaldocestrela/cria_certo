@@ -9,11 +9,10 @@ public class IatfProtocol
     public DateTime StartDate { get; private set; }
     public DateTime InseminationDate { get; private set; }
     public Guid SemenBatchId { get; private set; }
-    public List<Guid> CowIds { get; private set; } = new();
-    public Guid TenantId { get; private set; }
-
     public Guid? BullId { get; private set; }
     public string? BullName { get; private set; }
+    public List<Guid> CowIds { get; private set; } = new();
+    public Guid TenantId { get; private set; }
 
     private IatfProtocol() { }
 
@@ -43,10 +42,10 @@ public class IatfProtocol
             StartDate = startDate,
             InseminationDate = inseminationDate,
             SemenBatchId = semenBatchId,
-            CowIds = cowIds.Distinct().ToList(),
-            TenantId = tenantId,
             BullId = bullId,
-            BullName = string.IsNullOrWhiteSpace(bullName) ? null : bullName.Trim()
+            BullName = bullName?.Trim(),
+            CowIds = cowIds.Distinct().ToList(),
+            TenantId = tenantId
         };
 
         return Result.Success(protocol);

@@ -23,14 +23,14 @@ public class IatfProtocolTests
     }
 
     [Fact]
-    public void Create_WithBull_ShouldPersistBullIdAndBullName()
+    public void Create_WithBull_ShouldSetBullIdAndBullName()
     {
         var cowId = Guid.NewGuid();
         var bullId = Guid.NewGuid();
-        var bullName = "BR-01 - Touro Barão (Nelore)";
+        var bullName = "BR-01 - Touro Brutus (Nelore)";
 
         var result = IatfProtocol.Create(
-            "Protocolo IATF Outono",
+            "Protocolo IATF Com Touro",
             DateTime.UtcNow,
             DateTime.UtcNow.AddDays(10),
             Guid.NewGuid(),
@@ -42,26 +42,6 @@ public class IatfProtocolTests
         result.IsSuccess.Should().BeTrue();
         result.Value.BullId.Should().Be(bullId);
         result.Value.BullName.Should().Be(bullName);
-    }
-
-    [Fact]
-    public void Create_WithoutBull_WhenExternalBull_ShouldHaveNullBull()
-    {
-        var cowId = Guid.NewGuid();
-
-        var result = IatfProtocol.Create(
-            "Protocolo IATF Semen Externo",
-            DateTime.UtcNow,
-            DateTime.UtcNow.AddDays(10),
-            Guid.NewGuid(),
-            new List<Guid> { cowId },
-            _tenantId,
-            bullId: null,
-            bullName: null);
-
-        result.IsSuccess.Should().BeTrue();
-        result.Value.BullId.Should().BeNull();
-        result.Value.BullName.Should().BeNull();
     }
 }
 

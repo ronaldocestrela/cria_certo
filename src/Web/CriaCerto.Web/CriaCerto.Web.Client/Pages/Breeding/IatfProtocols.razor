@@ -217,7 +217,9 @@
                                         <option value="">Nenhum (Touro externo / Não cadastrado na propriedade)</option>
                                         @foreach (var bull in _availableBulls)
                                         {
-                                            <option value="@bull.Id">@bull.EarTag - @bull.Name (@bull.Breed)</option>
+                                            <option value="@bull.Id">
+                                                @(string.IsNullOrWhiteSpace(bull.Name) || bull.Name == bull.EarTag ? bull.EarTag : $"{bull.EarTag} ({bull.Name})") - @bull.Breed
+                                            </option>
                                         }
                                     </InputSelect>
                                     <div class="form-text">
@@ -227,10 +229,10 @@
 
                                 <div class="col-md-12">
                                     <label class="form-label fw-semibold">Selecione as Matrizes do Plantel *</label>
-                                    @if (_availableCows.Any())
+                                    @if (AvailableFemaleCows.Any())
                                     {
                                         <div class="border rounded p-2" style="max-height: 180px; overflow-y: auto;">
-                                            @foreach (var cow in _availableCows)
+                                            @foreach (var cow in AvailableFemaleCows)
                                             {
                                                 <div class="form-check">
                                                     <input class="form-check-input" type="checkbox" id="cow_@cow.Id" 
@@ -285,6 +287,13 @@
     private bool _showCreateModal = false;
     private ProtocolFormModel _form = new();
 
+    private static bool IsBull(string? category) =>
+        string.Equals(category, "Reprodutor", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(category, "Touro", StringComparison.OrdinalIgnoreCase);
+
+    private IEnumerable<CowSummaryDto> AvailableFemaleCows =>
+        _availableCows.Where(c => !IsBull(c.Category));
+
     protected override async Task OnInitializedAsync()
     {
         var authState = await AuthStateProvider.GetAuthenticationStateAsync();
@@ -320,6 +329,13 @@
             }
 
             _availableBulls = await PlantelApi.ListBullsAsync(_tenantId);
+            if (!_availableBulls.Any() && _availableCows.Any())
+            {
+                _availableBulls = _availableCows
+                    .Where(c => IsBull(c.Category) && c.Status != ReproductiveStatus.Culled && c.Status != ReproductiveStatus.Sold)
+                    .Select(c => new BullSummaryDto(c.Id, c.EarTag, c.Nickname ?? c.EarTag, c.Breed, c.SisbovId, true))
+                    .ToList();
+            }
         }
         catch (Exception ex)
         {

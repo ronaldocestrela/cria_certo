@@ -116,27 +116,21 @@ internal static class ExistingDatabaseBaseline
                         ALTER COLUMN [BirthDate] datetime2 NULL;
                 END;
 
-                IF COL_LENGTH('breeding.IatfProtocols', 'BullId') IS NULL
+                IF COL_LENGTH('[breeding].[IatfProtocols]', 'BullId') IS NULL
                 BEGIN
                     ALTER TABLE [breeding].[IatfProtocols]
                         ADD [BullId] uniqueidentifier NULL;
                 END;
 
-                IF COL_LENGTH('breeding.IatfProtocols', 'BullName') IS NULL
+                IF COL_LENGTH('[breeding].[IatfProtocols]', 'BullName') IS NULL
                 BEGIN
                     ALTER TABLE [breeding].[IatfProtocols]
                         ADD [BullName] nvarchar(150) NULL;
                 END;
 
-                IF EXISTS (
-                    SELECT 1 FROM sys.tables t
-                    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-                    WHERE s.name = 'breeding' AND t.name = 'Cows')
-                BEGIN
-                    UPDATE [breeding].[Cows]
-                    SET [Status] = 'Active'
-                    WHERE [Category] IN ('Reprodutor', 'Touro') AND [Status] = 'Open';
-                END;
+                UPDATE [breeding].[Cows]
+                SET [Status] = 'Active'
+                WHERE [Category] IN ('Reprodutor', 'Touro') AND [Status] = 'Open';
                 """,
             "backoffice" => """
                 IF COL_LENGTH('backoffice.AdminUsers', 'MfaSecretKey') IS NULL
