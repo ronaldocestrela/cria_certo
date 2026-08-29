@@ -130,7 +130,21 @@
                                 <tr>
                                     <td>
                                         <div class="fw-bold text-dark">@p.Name</div>
-                                        <small class="text-muted">ID Sêmen: @p.SemenBatchId.ToString().Substring(0, 8)</small>
+                                        <div class="d-flex flex-wrap gap-1 align-items-center mt-1">
+                                            @if (!string.IsNullOrWhiteSpace(p.BullName))
+                                            {
+                                                <span class="badge bg-primary-subtle text-primary border border-primary-subtle small">
+                                                    <i class="bi bi-gender-male me-1"></i>Touro: @p.BullName
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-light text-muted border small">
+                                                    <i class="bi bi-dash-circle me-1"></i>Touro Externo
+                                                </span>
+                                            }
+                                            <small class="text-muted ms-1">ID Sêmen: @p.SemenBatchId.ToString().Substring(0, 8)</small>
+                                        </div>
                                     </td>
                                     <td>
                                         <div class="fw-semibold">@p.StartDate.ToString("dd/MM/yyyy")</div>
@@ -198,6 +212,20 @@
                                 </div>
 
                                 <div class="col-md-12">
+                                    <label class="form-label fw-semibold">Touro Reprodutor</label>
+                                    <InputSelect class="form-select" @bind-Value="_form.BullId">
+                                        <option value="">Nenhum (Touro externo / Não cadastrado na propriedade)</option>
+                                        @foreach (var bull in _availableBulls)
+                                        {
+                                            <option value="@bull.Id">@bull.EarTag - @bull.Name (@bull.Breed)</option>
+                                        }
+                                    </InputSelect>
+                                    <div class="form-text">
+                                        Selecione o touro da propriedade utilizado nesta inseminação ou mantenha em branco caso utilize sêmen externo.
+                                    </div>
+                                </div>
+
+                                <div class="col-md-12">
                                     <label class="form-label fw-semibold">Selecione as Matrizes do Plantel *</label>
                                     @if (_availableCows.Any())
                                     {
@@ -251,6 +279,7 @@
 
     private List<IatfProtocolDto> _protocols = new();
     private List<CowSummaryDto> _availableCows = new();
+    private List<BullSummaryDto> _availableBulls = new();
     private HashSet<Guid> _selectedCowIds = new();
 
     private bool _showCreateModal = false;
@@ -289,6 +318,8 @@
             {
                 _availableCows = cowsResponse.Items;
             }
+
+            _availableBulls = await PlantelApi.ListBullsAsync(_tenantId);
         }
         catch (Exception ex)
         {
@@ -313,7 +344,8 @@
         {
             StartDate = DateTime.Today,
             InseminationDate = DateTime.Today.AddDays(10),
-            SemenBatchId = Guid.NewGuid()
+            SemenBatchId = Guid.NewGuid(),
+            BullId = null
         };
         _selectedCowIds.Clear();
         _showCreateModal = true;
@@ -334,7 +366,8 @@
 
     private void SelectProtocol(IatfProtocolDto protocol)
     {
-        _successMessage = $"Protocolo '{protocol.Name}' selecionado com {protocol.CowCount} matrizes.";
+        var touroInfo = !string.IsNullOrWhiteSpace(protocol.BullName) ? $" (Touro: {protocol.BullName})" : " (Touro Externo)";
+        _successMessage = $"Protocolo '{protocol.Name}'{touroInfo} selecionado com {protocol.CowCount} matrizes.";
     }
 
     private async Task HandleCreateProtocol()
@@ -356,11 +389,13 @@
                 _form.InseminationDate,
                 _form.SemenBatchId,
                 _selectedCowIds.ToList(),
-                _tenantId);
+                _tenantId,
+                _form.BullId);
 
             if (result != null)
             {
-                _successMessage = $"Protocolo '{result.Name}' criado com sucesso para {result.CowCount} matrizes!";
+                var touroInfo = !string.IsNullOrWhiteSpace(result.BullName) ? $" com touro '{result.BullName}'" : "";
+                _successMessage = $"Protocolo '{result.Name}' criado com sucesso para {result.CowCount} matrizes{touroInfo}!";
                 _showCreateModal = false;
                 await LoadProtocolsAsync();
             }
@@ -385,5 +420,6 @@
         public DateTime StartDate { get; set; } = DateTime.Today;
         public DateTime InseminationDate { get; set; } = DateTime.Today.AddDays(10);
         public Guid SemenBatchId { get; set; } = Guid.NewGuid();
+        public Guid? BullId { get; set; }
     }
 }

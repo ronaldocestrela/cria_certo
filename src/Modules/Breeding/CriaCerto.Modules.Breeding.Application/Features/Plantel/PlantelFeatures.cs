@@ -55,6 +55,9 @@ public sealed record GetCowQuery(Guid Id) : IQuery<CowDetailDto>;
 [RequiresModule("Breeding")]
 public sealed record ListCowsQuery(string? Search, ReproductiveStatus? Status, int Page = 1, int PageSize = 25) : IQuery<CattleListResponse<CowSummaryDto>>;
 
+[RequiresModule("Breeding")]
+public sealed record ListBullsQuery(Guid? TenantId = null) : IQuery<List<BullSummaryDto>>;
+
 public sealed class CreateCowCommandValidator : AbstractValidator<CreateCowCommand>
 {
     public CreateCowCommandValidator()
@@ -239,6 +242,53 @@ public sealed class ListCowsQueryHandler : IRequestHandler<ListCowsQuery, Result
             .ToListAsync(cancellationToken);
 
         return Result.Success(new CattleListResponse<CowSummaryDto>(items, total, page, pageSize));
+    }
+}
+
+public sealed class ListBullsQueryHandler : IRequestHandler<ListBullsQuery, Result<List<BullSummaryDto>>>
+{
+    private readonly IBreedingDbContext _dbContext;
+
+    public ListBullsQueryHandler(IBreedingDbContext dbContext) => _dbContext = dbContext;
+
+    public async Task<Result<List<BullSummaryDto>>> Handle(ListBullsQuery request, CancellationToken cancellationToken)
+    {
+        var bullsQuery = _dbContext.Bulls.AsNoTracking().Where(b => b.IsActive);
+        if (request.TenantId.HasValue && request.TenantId.Value != Guid.Empty)
+        {
+            bullsQuery = bullsQuery.Where(b => b.TenantId == request.TenantId.Value);
+        }
+        var bulls = await bullsQuery.ToListAsync(cancellationToken);
+
+        var cowBullsQuery = _dbContext.Cows.AsNoTracking()
+            .Where(c => c.Category == "Reprodutor" || c.Category == "Touro");
+        if (request.TenantId.HasValue && request.TenantId.Value != Guid.Empty)
+        {
+            cowBullsQuery = cowBullsQuery.Where(c => c.TenantId == request.TenantId.Value);
+        }
+        var cowBulls = await cowBullsQuery.ToListAsync(cancellationToken);
+
+        var result = new List<BullSummaryDto>();
+        foreach (var b in bulls)
+        {
+            result.Add(new BullSummaryDto(b.Id, b.EarTag, b.Name, b.Breed, b.RegistryNumber, b.IsActive));
+        }
+
+        foreach (var cb in cowBulls)
+        {
+            if (!result.Any(r => r.Id == cb.Id || r.EarTag.Equals(cb.EarTag, StringComparison.OrdinalIgnoreCase)))
+            {
+                result.Add(new BullSummaryDto(
+                    cb.Id,
+                    cb.EarTag,
+                    !string.IsNullOrWhiteSpace(cb.Nickname) ? cb.Nickname : $"Touro {cb.EarTag}",
+                    cb.Breed,
+                    cb.RegistryNumber,
+                    true));
+            }
+        }
+
+        return Result.Success(result.OrderBy(b => b.EarTag).ToList());
     }
 }
 

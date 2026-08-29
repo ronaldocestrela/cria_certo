@@ -34,6 +34,23 @@ public sealed class PlantelApiClient
         return await _httpClient.GetFromJsonAsync<CattleListResponse<CowSummaryDto>>(url, cancellationToken);
     }
 
+    public async Task<List<BullSummaryDto>> ListBullsAsync(Guid? tenantId = null, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        try
+        {
+            var url = tenantId.HasValue && tenantId.Value != Guid.Empty
+                ? $"api/breeding/bulls?tenantId={tenantId.Value}"
+                : "api/breeding/bulls";
+            var result = await _httpClient.GetFromJsonAsync<List<BullSummaryDto>>(url, cancellationToken);
+            return result ?? new List<BullSummaryDto>();
+        }
+        catch
+        {
+            return new List<BullSummaryDto>();
+        }
+    }
+
     public async Task<CowDetailDto?> GetCowAsync(Guid id, CancellationToken cancellationToken = default)
     {
         await AttachTokenAsync();

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
@@ -75,7 +75,9 @@ namespace CriaCerto.Modules.Breeding.Infrastructure.Persistence.Migrations
                     InseminationDate = table.Column<DateTime>(type: "datetime2", nullable: false),
                     SemenBatchId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     CowIds = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    TenantId = table.Column<Guid>(type: "uniqueidentifier", nullable: false)
+                    TenantId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    BullId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    BullName = table.Column<string>(type: "nvarchar(150)", maxLength: 150, nullable: true)
                 },
                 constraints: table =>
                 {

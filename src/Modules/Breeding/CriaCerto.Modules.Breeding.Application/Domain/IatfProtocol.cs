@@ -12,6 +12,9 @@ public class IatfProtocol
     public List<Guid> CowIds { get; private set; } = new();
     public Guid TenantId { get; private set; }
 
+    public Guid? BullId { get; private set; }
+    public string? BullName { get; private set; }
+
     private IatfProtocol() { }
 
     public static Result<IatfProtocol> Create(
@@ -20,7 +23,9 @@ public class IatfProtocol
         DateTime inseminationDate,
         Guid semenBatchId,
         List<Guid> cowIds,
-        Guid tenantId)
+        Guid tenantId,
+        Guid? bullId = null,
+        string? bullName = null)
     {
         if (string.IsNullOrWhiteSpace(name))
             return Result.Failure<IatfProtocol>(Error.Validation("IatfProtocol.NameRequired", "Nome do protocolo IATF é obrigatório."));
@@ -39,7 +44,9 @@ public class IatfProtocol
             InseminationDate = inseminationDate,
             SemenBatchId = semenBatchId,
             CowIds = cowIds.Distinct().ToList(),
-            TenantId = tenantId
+            TenantId = tenantId,
+            BullId = bullId,
+            BullName = string.IsNullOrWhiteSpace(bullName) ? null : bullName.Trim()
         };
 
         return Result.Success(protocol);

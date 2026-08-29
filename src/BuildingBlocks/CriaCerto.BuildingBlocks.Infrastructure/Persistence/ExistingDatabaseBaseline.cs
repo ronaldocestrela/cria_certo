@@ -115,6 +115,18 @@ internal static class ExistingDatabaseBaseline
                     ALTER TABLE [breeding].[Cows]
                         ALTER COLUMN [BirthDate] datetime2 NULL;
                 END;
+
+                IF COL_LENGTH('breeding.IatfProtocols', 'BullId') IS NULL
+                BEGIN
+                    ALTER TABLE [breeding].[IatfProtocols]
+                        ADD [BullId] uniqueidentifier NULL;
+                END;
+
+                IF COL_LENGTH('breeding.IatfProtocols', 'BullName') IS NULL
+                BEGIN
+                    ALTER TABLE [breeding].[IatfProtocols]
+                        ADD [BullName] nvarchar(150) NULL;
+                END;
                 """,
             "backoffice" => """
                 IF COL_LENGTH('backoffice.AdminUsers', 'MfaSecretKey') IS NULL
