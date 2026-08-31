@@ -11,7 +11,9 @@ using CriaCerto.Modules.Backoffice.Application.Features.Impersonation.Dtos;
 using CriaCerto.Modules.Backoffice.Application.Features.Impersonation.Queries;
 using CriaCerto.Modules.Backoffice.Application.Features.Support.Dtos;
 using CriaCerto.Modules.Backoffice.Application.Domain.Entities;
+using CriaCerto.Modules.Backoffice.Application.Domain.Enums;
 using CriaCerto.Modules.Backoffice.Application.Features.Approvals.Dtos;
+using CriaCerto.Modules.Backoffice.Application.Features.Audit.Dtos;
 using CriaCerto.Web.Client.Models;
 using Microsoft.JSInterop;
 
@@ -103,6 +105,26 @@ public interface IBackofficeApiClient
     Task<ApprovalActionResult> ApproveRequestAsync(Guid id, string? reviewNotes = null, CancellationToken cancellationToken = default);
     Task<ApprovalActionResult> RejectRequestAsync(Guid id, string rejectionReason, CancellationToken cancellationToken = default);
     Task<ApprovalActionResult> CancelRequestAsync(Guid id, string? cancelReason = null, CancellationToken cancellationToken = default);
+
+    // Forensic Audit & Retention Methods
+    Task<PagedAuditLogsDto?> GetAuditLogsAsync(
+        int pageNumber = 1,
+        int pageSize = 25,
+        string? searchTerm = null,
+        string? actorEmail = null,
+        Guid? targetTenantId = null,
+        string? action = null,
+        AuditCategory? category = null,
+        AuditSeverity? severity = null,
+        DateTime? dateFromUtc = null,
+        DateTime? dateToUtc = null,
+        bool includeArchived = false,
+        CancellationToken cancellationToken = default);
+
+    Task<AuditStatsDto?> GetAuditStatsAsync(CancellationToken cancellationToken = default);
+    Task<AuditTrailVerificationResultDto?> VerifyAuditTrailIntegrityAsync(int maxRecords = 500, CancellationToken cancellationToken = default);
+    Task<AuditLogDetailDto?> GetAuditLogByIdAsync(Guid id, CancellationToken cancellationToken = default);
+    Task<AuditRetentionExecutionResultDto?> ApplyAuditRetentionPolicyAsync(ApplyAuditRetentionRequest request, CancellationToken cancellationToken = default);
 }
 
 public sealed class ApprovalActionResult
@@ -719,4 +741,79 @@ public class BackofficeApiClient : IBackofficeApiClient
             ErrorMessage = error?.Message ?? "Falha na operação de aprovação administrativa."
         };
     }
+
+    public async Task<PagedAuditLogsDto?> GetAuditLogsAsync(
+        int pageNumber = 1,
+        int pageSize = 25,
+        string? searchTerm = null,
+        string? actorEmail = null,
+        Guid? targetTenantId = null,
+        string? action = null,
+        AuditCategory? category = null,
+        AuditSeverity? severity = null,
+        DateTime? dateFromUtc = null,
+        DateTime? dateToUtc = null,
+        bool includeArchived = false,
+        CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var queryParams = new List<string>
+        {
+            $"pageNumber={pageNumber}",
+            $"pageSize={pageSize}",
+            $"includeArchived={includeArchived}"
+        };
+
+        if (!string.IsNullOrWhiteSpace(searchTerm)) queryParams.Add($"searchTerm={Uri.EscapeDataString(searchTerm)}");
+        if (!string.IsNullOrWhiteSpace(actorEmail)) queryParams.Add($"actorEmail={Uri.EscapeDataString(actorEmail)}");
+        if (targetTenantId.HasValue) queryParams.Add($"targetTenantId={targetTenantId.Value}");
+        if (!string.IsNullOrWhiteSpace(action)) queryParams.Add($"action={Uri.EscapeDataString(action)}");
+        if (category.HasValue) queryParams.Add($"category={category.Value}");
+        if (severity.HasValue) queryParams.Add($"severity={severity.Value}");
+        if (dateFromUtc.HasValue) queryParams.Add($"dateFromUtc={Uri.EscapeDataString(dateFromUtc.Value.ToString("O"))}");
+        if (dateToUtc.HasValue) queryParams.Add($"dateToUtc={Uri.EscapeDataString(dateToUtc.Value.ToString("O"))}");
+
+        var url = $"api/v1/backoffice/audit?{string.Join("&", queryParams)}";
+        var response = await _httpClient.GetAsync(url, cancellationToken);
+        if (!response.IsSuccessStatusCode) return null;
+
+        return await response.Content.ReadFromJsonAsync<PagedAuditLogsDto>(cancellationToken: cancellationToken);
+    }
+
+    public async Task<AuditStatsDto?> GetAuditStatsAsync(CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.GetAsync("api/v1/backoffice/audit/stats", cancellationToken);
+        if (!response.IsSuccessStatusCode) return null;
+
+        return await response.Content.ReadFromJsonAsync<AuditStatsDto>(cancellationToken: cancellationToken);
+    }
+
+    public async Task<AuditTrailVerificationResultDto?> VerifyAuditTrailIntegrityAsync(int maxRecords = 500, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.GetAsync($"api/v1/backoffice/audit/verify?maxRecords={maxRecords}", cancellationToken);
+        if (!response.IsSuccessStatusCode) return null;
+
+        return await response.Content.ReadFromJsonAsync<AuditTrailVerificationResultDto>(cancellationToken: cancellationToken);
+    }
+
+    public async Task<AuditLogDetailDto?> GetAuditLogByIdAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.GetAsync($"api/v1/backoffice/audit/{id}", cancellationToken);
+        if (!response.IsSuccessStatusCode) return null;
+
+        return await response.Content.ReadFromJsonAsync<AuditLogDetailDto>(cancellationToken: cancellationToken);
+    }
+
+    public async Task<AuditRetentionExecutionResultDto?> ApplyAuditRetentionPolicyAsync(ApplyAuditRetentionRequest request, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.PostAsJsonAsync("api/v1/backoffice/audit/retention/apply", request, cancellationToken);
+        if (!response.IsSuccessStatusCode) return null;
+
+        return await response.Content.ReadFromJsonAsync<AuditRetentionExecutionResultDto>(cancellationToken: cancellationToken);
+    }
 }
+

@@ -211,14 +211,26 @@ As entregas estão organizadas em **6 Fases Sequenciais**, cobrindo fundação d
 
 ### Phase 5: Compliance, Auditoria, Risco e Observabilidade
 
-#### Sub-fase 5.1: Auditoria Forense e Retenção de Logs [PLANEJADA]
+#### Sub-fase 5.1: Auditoria Forense e Retenção de Logs [CONCLUÍDA]
 * **Backend:**
-  * Auditoria estruturada para toda ação administrativa (quem, quando, onde, antes/depois).
-  * Assinatura de integridade e política de retenção por criticidade.
+  * Entidade de domínio `AuditLog` com modelo forense estruturado: quem (`AdminUserId`, `AdminUserEmail`, `ActorRole`), quando (`TimestampUtc`), onde (`IpAddress`, `UserAgent`), alvo (`Resource`, `TargetTenantId`, `TargetTenantName`), categorização (`AuditCategory`), severidade (`AuditSeverity`) e mutação antes/depois (`OldValuesJson`, `NewValuesJson`).
+  * Assinatura criptográfica SHA-256 canônica (`RecordHash`) e encadeamento sequencial tamper-evident (`PreviousRecordHash`) para detecção automática de adulteração ou deleção indevida.
+  * Verificação de integridade canônica via `VerifyIntegrity()`, queries de varredura `VerifyAuditTrailIntegrityQuery` e métricas em tempo real `GetAuditStatsQuery`.
+  * Política de retenção e ciclo de vida por criticidade com `ApplyAuditRetentionPolicyCommand`: expurgo físico seguro de logs de severidade `Low` (>90d), arquivamento lógico a frio de logs `Medium` (>1 ano) e `High` (>3 anos), e proteção perpétua para eventos `Critical` (nunca expurgados automaticamente).
+  * Suporte a simulação (`DryRun`), exportação estruturada em CSV/JSON (`ExportAuditTrailQuery`) e registro imutável da própria execução de retenção.
+  * Endpoints REST mapeados no grupo `/api/v1/backoffice/audit` protegidos por claims RBAC (`audit.read` e `users_admin.manage`).
+  * Migração EF Core `AddForensicAuditAndRetentionPolicy` com índices compostos de alta performance.
 * **Frontend:**
-  * Explorer de auditoria com filtros por ator, tenant, recurso e intervalo temporal.
+  * Console interativo `AuditExplorer.razor` em `/backoffice/audit` com 4 KPI cards operacionais e indicador de integridade criptográfica.
+  * Barra de filtros multifatorial: busca textual livre, filtro por Ator, Tenant, Severidade, Categoria, Período de Datas e toggle de registros arquivados.
+  * Modal forense de detalhe `AuditLogDetailModal.razor` com painel de **Diff Antes vs Depois**, metadados de rede e selo de verificação de hash.
+  * Modal `AuditRetentionModal.razor` para configuração de SLAs por criticidade, simulação `DryRun` e execução de arquivamento/expurgo.
+  * Integração completa com `BackofficeApiClient.cs`.
 * **TDD & Validação:**
-  * Testes de imutabilidade lógica e rastreabilidade de eventos críticos.
+  * Testes unitários de domínio `AuditLogDomainTests` validando hashing SHA-256, detecção de adulteração em tempo real e retrocompatibilidade.
+  * Testes de features CQRS `AuditFeaturesTests` cobrindo filtros de busca, paginação, verificação de cadeia íntegra vs corrompida, exportação CSV e aplicação de políticas de retenção (DryRun e execução física).
+  * 100% de sucesso na suíte global de testes (470 testes aprovados, incluindo testes de arquitetura com Testcontainers).
+  * Formalização arquitetural via ADR `0009-forensic-audit-trail-and-retention-policy.md`.
 
 #### Sub-fase 5.2: Observabilidade de Backoffice e Alertas [PLANEJADA]
 * **Backend & DevOps:**

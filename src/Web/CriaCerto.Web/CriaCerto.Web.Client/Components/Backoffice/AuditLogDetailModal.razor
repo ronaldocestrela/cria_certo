@@ -1,0 +1,530 @@
+@using CriaCerto.Modules.Backoffice.Application.Domain.Enums
+@using CriaCerto.Modules.Backoffice.Application.Features.Audit.Dtos
+@inject IJSRuntime JS
+
+@if (IsOpen && LogDetail is not null)
+{
+    <div class="modal-backdrop" @onclick="Close">
+        <div class="modal-content" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <div class="header-title-area">
+                    <span class="severity-badge sev-@LogDetail.Severity.ToString().ToLower()">@GetSeverityLabel(LogDetail.Severity)</span>
+                    <span class="category-badge">@GetCategoryLabel(LogDetail.Category)</span>
+                    <h3>@LogDetail.Action</h3>
+                </div>
+                <button class="btn-close" @onclick="Close" aria-label="Fechar">&times;</button>
+            </div>
+
+            <div class="modal-body">
+                <!-- Status de Integridade Forense -->
+                @if (LogDetail.IsIntegrityValid)
+                {
+                    <div class="integrity-banner valid">
+                        <span class="banner-icon">🛡️</span>
+                        <div class="banner-content">
+                            <strong>Assinatura Criptográfica Válida & Trilha Íntegra</strong>
+                            <p>O hash SHA-256 deste registro coincide com o cálculo em tempo real. Não foram detectadas adulterações em banco de dados.</p>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="integrity-banner invalid">
+                        <span class="banner-icon">🚨</span>
+                        <div class="banner-content">
+                            <strong>Alerta de Violação de Integridade Forense</strong>
+                            <p>O hash persistido difere do cálculo atual dos atributos do registro. Há indício de modificação manual ou adulteração externa.</p>
+                        </div>
+                    </div>
+                }
+
+                <!-- Informações do Evento e Contexto de Rede -->
+                <div class="meta-grid">
+                    <div class="meta-card">
+                        <span class="meta-label">Ator Administrativo</span>
+                        <span class="meta-value">@LogDetail.AdminUserEmail</span>
+                        <span class="meta-sub">Papel: @(LogDetail.ActorRole ?? "N/A")</span>
+                    </div>
+
+                    <div class="meta-card">
+                        <span class="meta-label">Timestamp</span>
+                        <span class="meta-value">@LogDetail.TimestampUtc.ToString("dd/MM/yyyy HH:mm:ss") UTC</span>
+                        <span class="meta-sub">Local: @LogDetail.TimestampUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")</span>
+                    </div>
+
+                    <div class="meta-card">
+                        <span class="meta-label">Endereço IP & Rede</span>
+                        <span class="meta-value code-font">@LogDetail.IpAddress</span>
+                        <span class="meta-sub">Agente: @(string.IsNullOrWhiteSpace(LogDetail.UserAgent) ? "Desconhecido" : Truncate(LogDetail.UserAgent, 28))</span>
+                    </div>
+
+                    <div class="meta-card">
+                        <span class="meta-label">Recurso Alvo</span>
+                        <span class="meta-value code-font">@LogDetail.Resource</span>
+                        @if (LogDetail.TargetTenantId.HasValue)
+                        {
+                            <span class="meta-sub">Tenant: @(LogDetail.TargetTenantName ?? LogDetail.TargetTenantId.Value.ToString()[..8])</span>
+                        }
+                    </div>
+                </div>
+
+                <!-- Painel Visual de Diff Antes vs Depois -->
+                @if (!string.IsNullOrWhiteSpace(LogDetail.OldValuesJson) || !string.IsNullOrWhiteSpace(LogDetail.NewValuesJson))
+                {
+                    <div class="diff-section">
+                        <div class="section-header">
+                            <span class="section-icon">🔄</span>
+                            <h4>Mutação de Estado (Diff Antes vs Depois)</h4>
+                        </div>
+
+                        <div class="diff-columns">
+                            <div class="diff-panel old-panel">
+                                <div class="diff-panel-title">
+                                    <span class="badge-sub">Estado Anterior</span>
+                                </div>
+                                <pre class="diff-code">@(string.IsNullOrWhiteSpace(LogDetail.OldValuesJson) ? "/* Sem estado prévio registrado */" : FormatJson(LogDetail.OldValuesJson))</pre>
+                            </div>
+
+                            <div class="diff-panel new-panel">
+                                <div class="diff-panel-title">
+                                    <span class="badge-sub">Novo Estado Aplicado</span>
+                                </div>
+                                <pre class="diff-code">@(string.IsNullOrWhiteSpace(LogDetail.NewValuesJson) ? "/* Sem novo estado registrado */" : FormatJson(LogDetail.NewValuesJson))</pre>
+                            </div>
+                        </div>
+                    </div>
+                }
+                else if (!string.IsNullOrWhiteSpace(LogDetail.DetailsJson))
+                {
+                    <div class="details-section">
+                        <div class="section-header">
+                            <span class="section-icon">📄</span>
+                            <h4>Carga de Dados & Detalhes</h4>
+                        </div>
+                        <pre class="diff-code">@FormatJson(LogDetail.DetailsJson)</pre>
+                    </div>
+                }
+
+                <!-- Painel Criptográfico -->
+                <div class="crypto-section">
+                    <div class="section-header">
+                        <span class="section-icon">🔐</span>
+                        <h4>Evidência Forense e Encadeamento</h4>
+                    </div>
+
+                    <div class="crypto-card">
+                        <div class="crypto-field">
+                            <span class="crypto-label">Hash Canônico SHA-256 do Registro:</span>
+                            <div class="hash-box">
+                                <code class="hash-value">@LogDetail.RecordHash</code>
+                                <button class="btn-copy" @onclick="CopyHash" title="Copiar Hash">📋</button>
+                            </div>
+                        </div>
+
+                        @if (!string.IsNullOrWhiteSpace(LogDetail.PreviousRecordHash))
+                        {
+                            <div class="crypto-field">
+                                <span class="crypto-label">Hash do Registro Anterior (Cadeia):</span>
+                                <div class="hash-box">
+                                    <code class="hash-value">@LogDetail.PreviousRecordHash</code>
+                                </div>
+                            </div>
+                        }
+
+                        <div class="crypto-meta">
+                            <span>ID do Registro: <code>@LogDetail.Id</code></span>
+                            <span>Arquivado: <strong>@(LogDetail.IsArchived ? "Sim (A Frio)" : "Não (Ativo)")</strong></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="Close">Fechar</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public AuditLogDetailDto? LogDetail { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private async Task Close()
+    {
+        await OnClose.InvokeAsync();
+    }
+
+    private async Task CopyHash()
+    {
+        if (LogDetail is not null)
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", LogDetail.RecordHash);
+        }
+    }
+
+    private static string GetSeverityLabel(AuditSeverity severity) => severity switch
+    {
+        AuditSeverity.Critical => "Crítico",
+        AuditSeverity.High => "Alto",
+        AuditSeverity.Medium => "Médio",
+        AuditSeverity.Low => "Baixo",
+        _ => severity.ToString()
+    };
+
+    private static string GetCategoryLabel(AuditCategory category) => category switch
+    {
+        AuditCategory.Security => "Segurança & IAM",
+        AuditCategory.TenantManagement => "Gestão de Tenants",
+        AuditCategory.Billing => "Faturamento & Planos",
+        AuditCategory.PlanCatalog => "Catálogo de Produtos",
+        AuditCategory.Support => "Suporte & Diagnóstico",
+        AuditCategory.Governance => "Governança (4-Eyes)",
+        AuditCategory.System => "Sistema",
+        _ => category.ToString()
+    };
+
+    private static string Truncate(string val, int max)
+    {
+        if (string.IsNullOrWhiteSpace(val) || val.Length <= max) return val;
+        return val[..max] + "...";
+    }
+
+    private static string FormatJson(string json)
+    {
+        try
+        {
+            var parsed = System.Text.Json.JsonDocument.Parse(json);
+            return System.Text.Json.JsonSerializer.Serialize(parsed.RootElement, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+        }
+        catch
+        {
+            return json;
+        }
+    }
+}
+
+<style>
+    .modal-backdrop {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: rgba(15, 23, 42, 0.75);
+        backdrop-filter: blur(6px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1050;
+    }
+
+    .modal-content {
+        background: #1e293b;
+        color: #f8fafc;
+        border: 1px solid #334155;
+        border-radius: 12px;
+        width: 90%;
+        max-width: 900px;
+        max-height: 90vh;
+        overflow-y: auto;
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
+        display: flex;
+        flex-direction: column;
+    }
+
+    .modal-header {
+        padding: 1.25rem 1.5rem;
+        border-bottom: 1px solid #334155;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: #0f172a;
+        border-radius: 12px 12px 0 0;
+    }
+
+    .header-title-area {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+    }
+
+    .header-title-area h3 {
+        margin: 0;
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: #f8fafc;
+    }
+
+    .btn-close {
+        background: transparent;
+        border: none;
+        color: #94a3b8;
+        font-size: 1.5rem;
+        cursor: pointer;
+        line-height: 1;
+        transition: color 0.2s;
+    }
+
+    .btn-close:hover {
+        color: #f8fafc;
+    }
+
+    .modal-body {
+        padding: 1.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1.25rem;
+    }
+
+    .integrity-banner {
+        display: flex;
+        align-items: flex-start;
+        gap: 1rem;
+        padding: 1rem;
+        border-radius: 8px;
+        font-size: 0.9rem;
+    }
+
+    .integrity-banner.valid {
+        background: rgba(16, 185, 129, 0.1);
+        border: 1px solid rgba(16, 185, 129, 0.3);
+        color: #6ee7b7;
+    }
+
+    .integrity-banner.invalid {
+        background: rgba(239, 68, 68, 0.15);
+        border: 1px solid rgba(239, 68, 68, 0.4);
+        color: #fca5a5;
+    }
+
+    .banner-icon {
+        font-size: 1.5rem;
+    }
+
+    .banner-content strong {
+        display: block;
+        margin-bottom: 0.25rem;
+        font-size: 0.95rem;
+    }
+
+    .banner-content p {
+        margin: 0;
+        opacity: 0.9;
+    }
+
+    .meta-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+    }
+
+    .meta-card {
+        background: #0f172a;
+        padding: 0.85rem 1rem;
+        border-radius: 8px;
+        border: 1px solid #334155;
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+
+    .meta-label {
+        font-size: 0.75rem;
+        color: #94a3b8;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .meta-value {
+        font-size: 0.95rem;
+        font-weight: 500;
+        color: #f8fafc;
+        word-break: break-all;
+    }
+
+    .meta-sub {
+        font-size: 0.75rem;
+        color: #64748b;
+    }
+
+    .code-font {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    .diff-section, .details-section, .crypto-section {
+        background: #0f172a;
+        border: 1px solid #334155;
+        border-radius: 8px;
+        padding: 1rem;
+    }
+
+    .section-header {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 0.75rem;
+    }
+
+    .section-header h4 {
+        margin: 0;
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: #e2e8f0;
+    }
+
+    .diff-columns {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+    }
+
+    @@media (max-width: 768px) {
+        .diff-columns {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .diff-panel {
+        background: #1e293b;
+        border-radius: 6px;
+        overflow: hidden;
+        border: 1px solid #334155;
+    }
+
+    .diff-panel-title {
+        padding: 0.5rem 0.75rem;
+        background: #0f172a;
+        border-bottom: 1px solid #334155;
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
+
+    .old-panel .diff-panel-title {
+        color: #f87171;
+    }
+
+    .new-panel .diff-panel-title {
+        color: #4ade80;
+    }
+
+    .diff-code {
+        margin: 0;
+        padding: 0.75rem;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-size: 0.8rem;
+        color: #e2e8f0;
+        overflow-x: auto;
+        white-space: pre-wrap;
+        max-height: 250px;
+    }
+
+    .crypto-card {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+    .crypto-field {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+
+    .crypto-label {
+        font-size: 0.75rem;
+        color: #94a3b8;
+    }
+
+    .hash-box {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        background: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 6px;
+        padding: 0.4rem 0.6rem;
+    }
+
+    .hash-value {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-size: 0.8rem;
+        color: #38bdf8;
+        word-break: break-all;
+        flex: 1;
+    }
+
+    .btn-copy {
+        background: transparent;
+        border: none;
+        cursor: pointer;
+        font-size: 0.9rem;
+        opacity: 0.7;
+        transition: opacity 0.2s;
+    }
+
+    .btn-copy:hover {
+        opacity: 1;
+    }
+
+    .crypto-meta {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.75rem;
+        color: #64748b;
+        padding-top: 0.5rem;
+        border-top: 1px solid #334155;
+    }
+
+    .modal-footer {
+        padding: 1rem 1.5rem;
+        border-top: 1px solid #334155;
+        display: flex;
+        justify-content: flex-end;
+        background: #0f172a;
+        border-radius: 0 0 12px 12px;
+    }
+
+    .btn {
+        padding: 0.5rem 1rem;
+        border-radius: 6px;
+        font-weight: 500;
+        font-size: 0.875rem;
+        cursor: pointer;
+        border: none;
+        transition: all 0.2s;
+    }
+
+    .btn-secondary {
+        background: #334155;
+        color: #f8fafc;
+    }
+
+    .btn-secondary:hover {
+        background: #475569;
+    }
+
+    .severity-badge {
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+
+    .sev-critical { background: #ef4444; color: #fff; }
+    .sev-high { background: #f97316; color: #fff; }
+    .sev-medium { background: #3b82f6; color: #fff; }
+    .sev-low { background: #64748b; color: #fff; }
+
+    .category-badge {
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-weight: 500;
+        background: #334155;
+        color: #cbd5e1;
+    }
+</style>

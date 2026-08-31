@@ -157,6 +157,7 @@ public class Result<TValue> : Result
 * **Dev reset:** set `Backoffice:ResetBootstrapAdminPassword=true` in `appsettings.Development.json` to re-sync the bootstrap password on existing databases (never enable in production without explicit ops approval).
 * **Login endpoint:** `POST /api/v1/backoffice/auth/login` returns `401` for invalid credentials (`Backoffice.InvalidCredentials`), not RBAC `403`.
 * **Administrative Approvals (4-Eyes Principle):** Critical platform actions (`PublishPlanVersion`, `MassTenantSuspension`, `ExtendedAccessGrant`) must follow the dual-control principle (`AdminApprovalRequest`). The requester cannot self-approve (`ApprovalErrors.CannotSelfApprove`). Requests carry automatic TTL expiration (default 48h), mandatory justification (min 10 chars), execution payloads and visual diffs with full audit logging in `AuditLog`.
+* **Forensic Audit & Tamper-Evident Hashing (Backoffice 5.1):** All administrative actions are recorded in structured `AuditLog` records with actor context, network metadata (IP, user agent), target tenants and before/after diffs (`OldValuesJson`, `NewValuesJson`). Every entry includes a canonical SHA-256 integrity hash (`RecordHash`) chained to the previous entry (`PreviousRecordHash`). Data retention policies are tiered by severity (`Critical`: permanent/1825d without auto-purge; `High`: 1095d archive; `Medium`: 365d archive; `Low`: 90d purge).
 
 ## 6. Software Engineering Practices & AI Agent Guidelines
 

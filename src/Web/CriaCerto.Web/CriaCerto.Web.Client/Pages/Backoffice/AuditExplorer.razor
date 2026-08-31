@@ -1,0 +1,970 @@
+@page "/backoffice/audit"
+@using CriaCerto.Modules.Backoffice.Application.Domain.Enums
+@using CriaCerto.Modules.Backoffice.Application.Features.Audit.Dtos
+@using CriaCerto.Modules.Backoffice.Application.Security
+@using CriaCerto.Web.Client.Components.Backoffice
+@using CriaCerto.Web.Client.Services
+@inject IBackofficeApiClient ApiClient
+@inject IJSRuntime JS
+
+<div class="audit-page">
+    <div class="page-header">
+        <div class="header-titles">
+            <h2>📜 Trilha Forense de Auditoria</h2>
+            <p class="subtitle">Rastreabilidade completa, integridade tamper-evident com encadeamento criptográfico SHA-256 e políticas de retenção.</p>
+        </div>
+
+        <div class="header-actions">
+            <button class="btn btn-outline" @onclick="VerifyChainAsync" disabled="@isVerifyingChain">
+                <span class="btn-icon">🛡️</span>
+                <span>@(isVerifyingChain ? "Verificando..." : "Verificar Cadeia Criptográfica")</span>
+            </button>
+
+            <PermissionGuard Permission="@BackofficePermissions.UsersAdminManage">
+                <button class="btn btn-outline" @onclick="OpenRetentionModal">
+                    <span class="btn-icon">🧹</span>
+                    <span>Política de Retenção</span>
+                </button>
+            </PermissionGuard>
+
+            <button class="btn btn-primary" @onclick="ExportCsvAsync" disabled="@isExporting">
+                <span class="btn-icon">📥</span>
+                <span>@(isExporting ? "Exportando..." : "Exportar CSV")</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Banner de resultado da verificação de integridade -->
+    @if (verificationResult is not null)
+    {
+        <div class="verification-banner @(verificationResult.IsChainValid ? "valid" : "invalid")">
+            <div class="banner-left">
+                <span class="banner-icon">@(verificationResult.IsChainValid ? "✅" : "🚨")</span>
+                <div>
+                    <strong>@(verificationResult.IsChainValid ? "Cadeia Forense 100% Autêntica" : "Violação de Integridade Detectada!")</strong>
+                    <p>@verificationResult.Message</p>
+                </div>
+            </div>
+            <button class="btn-dismiss" @onclick="() => verificationResult = null">&times;</button>
+        </div>
+    }
+
+    <!-- KPI Cards -->
+    <div class="kpi-grid">
+        <div class="kpi-card">
+            <div class="kpi-info">
+                <span class="kpi-label">Total de Eventos</span>
+                <span class="kpi-value">@(stats?.TotalLogs.ToString("N0") ?? "—")</span>
+            </div>
+            <div class="kpi-icon blue">📜</div>
+        </div>
+
+        <div class="kpi-card">
+            <div class="kpi-info">
+                <span class="kpi-label">Ações Últimas 24h</span>
+                <span class="kpi-value">@(stats?.LogsLast24Hours.ToString("N0") ?? "—")</span>
+            </div>
+            <div class="kpi-icon green">⚡</div>
+        </div>
+
+        <div class="kpi-card">
+            <div class="kpi-info">
+                <span class="kpi-label">Eventos Críticos</span>
+                <span class="kpi-value">@(stats?.CriticalEventsCount.ToString("N0") ?? "—")</span>
+            </div>
+            <div class="kpi-icon orange">🛡️</div>
+        </div>
+
+        <div class="kpi-card">
+            <div class="kpi-info">
+                <span class="kpi-label">Status Criptográfico</span>
+                @if (stats is not null)
+                {
+                    <span class="kpi-status @(stats.IsChainIntegrityValid ? "status-ok" : "status-bad")">
+                        @(stats.IsChainIntegrityValid ? "Íntegro (SHA-256)" : "Atenção: Adulterado")
+                    </span>
+                }
+                else
+                {
+                    <span class="kpi-value">—</span>
+                }
+            </div>
+            <div class="kpi-icon purple">🔐</div>
+        </div>
+    </div>
+
+    <!-- Barra de Filtros -->
+    <div class="filter-card">
+        <div class="filter-row">
+            <div class="filter-field search-field">
+                <input type="text" class="input-control" placeholder="Buscar por ação, recurso, ator ou tenant..." @bind="searchTerm" @bind:event="oninput" @onkeyup="OnSearchKeyUp" />
+            </div>
+
+            <div class="filter-field">
+                <select class="input-control" @bind="selectedSeverity">
+                    <option value="">Todas as Severidades</option>
+                    <option value="@AuditSeverity.Critical">Crítica (Critical)</option>
+                    <option value="@AuditSeverity.High">Alta (High)</option>
+                    <option value="@AuditSeverity.Medium">Média (Medium)</option>
+                    <option value="@AuditSeverity.Low">Baixa (Low)</option>
+                </select>
+            </div>
+
+            <div class="filter-field">
+                <select class="input-control" @bind="selectedCategory">
+                    <option value="">Todas as Categorias</option>
+                    <option value="@AuditCategory.Security">Segurança & IAM</option>
+                    <option value="@AuditCategory.TenantManagement">Gestão de Tenants</option>
+                    <option value="@AuditCategory.Governance">Governança (4-Eyes)</option>
+                    <option value="@AuditCategory.Billing">Faturamento</option>
+                    <option value="@AuditCategory.PlanCatalog">Catálogo de Planos</option>
+                    <option value="@AuditCategory.Support">Suporte</option>
+                    <option value="@AuditCategory.System">Sistema</option>
+                </select>
+            </div>
+
+            <div class="filter-actions">
+                <button class="btn btn-primary" @onclick="SearchAsync">Filtrar</button>
+                <button class="btn btn-secondary" @onclick="ClearFiltersAsync">Limpar</button>
+            </div>
+        </div>
+
+        <div class="filter-subrow">
+            <div class="date-field">
+                <label>Data De:</label>
+                <input type="date" class="input-control date-input" @bind="dateFrom" />
+            </div>
+
+            <div class="date-field">
+                <label>Data Até:</label>
+                <input type="date" class="input-control date-input" @bind="dateTo" />
+            </div>
+
+            <div class="checkbox-field">
+                <label class="check-container">
+                    <input type="checkbox" @bind="includeArchived" />
+                    <span>Incluir Arquivados (A Frio)</span>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabela de Auditoria -->
+    <div class="table-container">
+        @if (isLoading)
+        {
+            <div class="table-loading">
+                <div class="spinner"></div>
+                <span>Carregando registros forenses...</span>
+            </div>
+        }
+        else if (logs is null || logs.Items.Count == 0)
+        {
+            <div class="table-empty">
+                <span class="empty-icon">🔍</span>
+                <p>Nenhum registro de auditoria encontrado com os filtros aplicados.</p>
+            </div>
+        }
+        else
+        {
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Data/Hora (UTC)</th>
+                        <th>Ator</th>
+                        <th>Ação & Categoria</th>
+                        <th>Alvo / Tenant</th>
+                        <th>Severidade</th>
+                        <th>IP</th>
+                        <th>Integridade</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var log in logs.Items)
+                    {
+                        <tr class="@(log.IsArchived ? "row-archived" : "")">
+                            <td class="col-date">
+                                <span class="date-primary">@log.TimestampUtc.ToString("dd/MM/yyyy HH:mm:ss")</span>
+                                <span class="date-sub">@log.TimestampUtc.ToLocalTime().ToString("HH:mm:ss") local</span>
+                            </td>
+
+                            <td>
+                                <span class="actor-email">@log.AdminUserEmail</span>
+                                <span class="actor-role">@(log.ActorRole ?? "Administrator")</span>
+                            </td>
+
+                            <td>
+                                <div class="action-wrap">
+                                    <span class="action-name">@log.Action</span>
+                                    <span class="category-tag">@GetCategoryLabel(log.Category)</span>
+                                </div>
+                            </td>
+
+                            <td class="col-target">
+                                <span class="target-res">@log.Resource</span>
+                                @if (log.TargetTenantId.HasValue)
+                                {
+                                    <span class="target-tenant">🏢 @(log.TargetTenantName ?? log.TargetTenantId.Value.ToString()[..8])</span>
+                                }
+                            </td>
+
+                            <td>
+                                <span class="sev-badge sev-@log.Severity.ToString().ToLower()">
+                                    @GetSeverityLabel(log.Severity)
+                                </span>
+                            </td>
+
+                            <td class="col-ip">
+                                <code>@log.IpAddress</code>
+                            </td>
+
+                            <td class="col-integrity">
+                                @if (log.IsIntegrityValid)
+                                {
+                                    <span class="integrity-tag valid" title="Assinatura SHA-256 válida">🛡️ Íntegro</span>
+                                }
+                                else
+                                {
+                                    <span class="integrity-tag invalid" title="Alerta: Hash não coincide com os dados">🚨 Violado</span>
+                                }
+                            </td>
+
+                            <td>
+                                <button class="btn-table-action" @onclick="() => OpenDetailModalAsync(log.Id)">
+                                    Ver Detalhes
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+
+            <!-- Paginação -->
+            <div class="pagination-bar">
+                <span class="page-info">
+                    Exibindo página @logs.PageNumber de @(logs.TotalPages == 0 ? 1 : logs.TotalPages) (@logs.TotalCount registros)
+                </span>
+
+                <div class="page-buttons">
+                    <button class="btn-page" @onclick="() => ChangePageAsync(logs.PageNumber - 1)" disabled="@(logs.PageNumber <= 1)">
+                        &laquo; Anterior
+                    </button>
+
+                    <button class="btn-page" @onclick="() => ChangePageAsync(logs.PageNumber + 1)" disabled="@(logs.PageNumber >= logs.TotalPages)">
+                        Próxima &raquo;
+                    </button>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+<!-- Modal de Detalhe Forense com Diff -->
+<AuditLogDetailModal
+    IsOpen="@isDetailModalOpen"
+    LogDetail="@selectedDetail"
+    OnClose="@CloseDetailModal" />
+
+<!-- Modal de Retenção de Logs -->
+<AuditRetentionModal
+    IsOpen="@isRetentionModalOpen"
+    OnClose="@CloseRetentionModal"
+    OnExecuted="@LoadDataAsync" />
+
+@code {
+    private PagedAuditLogsDto? logs;
+    private AuditStatsDto? stats;
+    private AuditTrailVerificationResultDto? verificationResult;
+    private AuditLogDetailDto? selectedDetail;
+
+    private bool isLoading = true;
+    private bool isVerifyingChain;
+    private bool isExporting;
+    private bool isDetailModalOpen;
+    private bool isRetentionModalOpen;
+
+    private string? searchTerm;
+    private AuditSeverity? selectedSeverity;
+    private AuditCategory? selectedCategory;
+    private DateTime? dateFrom;
+    private DateTime? dateTo;
+    private bool includeArchived;
+    private int currentPage = 1;
+    private const int pageSize = 25;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        isLoading = true;
+        try
+        {
+            var statsTask = ApiClient.GetAuditStatsAsync();
+            var logsTask = ApiClient.GetAuditLogsAsync(
+                pageNumber: currentPage,
+                pageSize: pageSize,
+                searchTerm: searchTerm,
+                category: selectedCategory,
+                severity: selectedSeverity,
+                dateFromUtc: dateFrom?.ToUniversalTime(),
+                dateToUtc: dateTo?.ToUniversalTime().AddDays(1).AddTicks(-1),
+                includeArchived: includeArchived);
+
+            await Task.WhenAll(statsTask, logsTask);
+
+            stats = await statsTask;
+            logs = await logsTask;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Erro ao carregar dados de auditoria: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task SearchAsync()
+    {
+        currentPage = 1;
+        await LoadDataAsync();
+    }
+
+    private async Task ClearFiltersAsync()
+    {
+        searchTerm = null;
+        selectedSeverity = null;
+        selectedCategory = null;
+        dateFrom = null;
+        dateTo = null;
+        includeArchived = false;
+        currentPage = 1;
+        await LoadDataAsync();
+    }
+
+    private async Task OnSearchKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await SearchAsync();
+        }
+    }
+
+    private async Task ChangePageAsync(int page)
+    {
+        if (page < 1 || (logs is not null && page > logs.TotalPages)) return;
+        currentPage = page;
+        await LoadDataAsync();
+    }
+
+    private async Task VerifyChainAsync()
+    {
+        isVerifyingChain = true;
+        verificationResult = null;
+        try
+        {
+            verificationResult = await ApiClient.VerifyAuditTrailIntegrityAsync(500);
+            stats = await ApiClient.GetAuditStatsAsync();
+        }
+        catch (Exception ex)
+        {
+            verificationResult = new AuditTrailVerificationResultDto(
+                false, 0, 0, 0, null, $"Erro ao verificar integridade: {ex.Message}", DateTime.UtcNow);
+        }
+        finally
+        {
+            isVerifyingChain = false;
+        }
+    }
+
+    private async Task ExportCsvAsync()
+    {
+        isExporting = true;
+        try
+        {
+            var url = "api/v1/backoffice/audit/export";
+            await JS.InvokeVoidAsync("open", url, "_blank");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Erro ao exportar CSV: {ex.Message}");
+        }
+        finally
+        {
+            isExporting = false;
+        }
+    }
+
+    private async Task OpenDetailModalAsync(Guid id)
+    {
+        try
+        {
+            selectedDetail = await ApiClient.GetAuditLogByIdAsync(id);
+            if (selectedDetail is not null)
+            {
+                isDetailModalOpen = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Erro ao obter detalhe: {ex.Message}");
+        }
+    }
+
+    private void CloseDetailModal()
+    {
+        isDetailModalOpen = false;
+        selectedDetail = null;
+    }
+
+    private void OpenRetentionModal()
+    {
+        isRetentionModalOpen = true;
+    }
+
+    private void CloseRetentionModal()
+    {
+        isRetentionModalOpen = false;
+    }
+
+    private static string GetSeverityLabel(AuditSeverity severity) => severity switch
+    {
+        AuditSeverity.Critical => "Crítico",
+        AuditSeverity.High => "Alto",
+        AuditSeverity.Medium => "Médio",
+        AuditSeverity.Low => "Baixo",
+        _ => severity.ToString()
+    };
+
+    private static string GetCategoryLabel(AuditCategory category) => category switch
+    {
+        AuditCategory.Security => "Segurança",
+        AuditCategory.TenantManagement => "Tenants",
+        AuditCategory.Billing => "Faturamento",
+        AuditCategory.PlanCatalog => "Planos",
+        AuditCategory.Support => "Suporte",
+        AuditCategory.Governance => "4-Eyes",
+        AuditCategory.System => "Sistema",
+        _ => category.ToString()
+    };
+}
+
+<style>
+    .audit-page {
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+        padding: 1.5rem;
+        background: #0b1329;
+        min-height: 100vh;
+        color: #f8fafc;
+    }
+
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+
+    .header-titles h2 {
+        margin: 0 0 0.25rem 0;
+        font-size: 1.75rem;
+        font-weight: 700;
+        color: #f8fafc;
+    }
+
+    .subtitle {
+        margin: 0;
+        color: #94a3b8;
+        font-size: 0.9rem;
+    }
+
+    .header-actions {
+        display: flex;
+        gap: 0.75rem;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+
+    .verification-banner {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem 1.25rem;
+        border-radius: 8px;
+        font-size: 0.9rem;
+    }
+
+    .verification-banner.valid {
+        background: rgba(16, 185, 129, 0.12);
+        border: 1px solid #10b981;
+        color: #6ee7b7;
+    }
+
+    .verification-banner.invalid {
+        background: rgba(239, 68, 68, 0.15);
+        border: 1px solid #ef4444;
+        color: #fca5a5;
+    }
+
+    .banner-left {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .banner-left strong {
+        display: block;
+        font-size: 0.95rem;
+    }
+
+    .banner-left p {
+        margin: 0;
+        opacity: 0.9;
+    }
+
+    .btn-dismiss {
+        background: transparent;
+        border: none;
+        color: inherit;
+        font-size: 1.25rem;
+        cursor: pointer;
+        opacity: 0.7;
+    }
+
+    .btn-dismiss:hover {
+        opacity: 1;
+    }
+
+    /* KPI Grid */
+    .kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 1rem;
+    }
+
+    .kpi-card {
+        background: #131d38;
+        border: 1px solid #1e293b;
+        border-radius: 10px;
+        padding: 1.25rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+    }
+
+    .kpi-info {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+
+    .kpi-label {
+        font-size: 0.8rem;
+        color: #94a3b8;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .kpi-value {
+        font-size: 1.6rem;
+        font-weight: 700;
+        color: #f8fafc;
+    }
+
+    .kpi-status {
+        font-size: 0.95rem;
+        font-weight: 600;
+        margin-top: 0.25rem;
+    }
+
+    .status-ok {
+        color: #34d399;
+    }
+
+    .status-bad {
+        color: #f87171;
+    }
+
+    .kpi-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+    }
+
+    .kpi-icon.blue { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
+    .kpi-icon.green { background: rgba(16, 185, 129, 0.15); color: #34d399; }
+    .kpi-icon.orange { background: rgba(249, 115, 22, 0.15); color: #fb923c; }
+    .kpi-icon.purple { background: rgba(168, 85, 247, 0.15); color: #c084fc; }
+
+    /* Filtros */
+    .filter-card {
+        background: #131d38;
+        border: 1px solid #1e293b;
+        border-radius: 10px;
+        padding: 1.25rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .filter-row {
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+
+    .search-field {
+        flex: 2;
+        min-width: 250px;
+    }
+
+    .filter-field {
+        flex: 1;
+        min-width: 180px;
+    }
+
+    .filter-actions {
+        display: flex;
+        gap: 0.5rem;
+    }
+
+    .filter-subrow {
+        display: flex;
+        gap: 1.5rem;
+        align-items: center;
+        flex-wrap: wrap;
+        padding-top: 0.75rem;
+        border-top: 1px solid #1e293b;
+    }
+
+    .date-field {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .date-field label {
+        font-size: 0.8rem;
+        color: #94a3b8;
+    }
+
+    .date-input {
+        width: 150px;
+    }
+
+    .checkbox-field {
+        margin-left: auto;
+    }
+
+    .check-container {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.85rem;
+        color: #94a3b8;
+        cursor: pointer;
+    }
+
+    .input-control {
+        width: 100%;
+        background: #0b1329;
+        border: 1px solid #334155;
+        border-radius: 6px;
+        padding: 0.5rem 0.75rem;
+        color: #f8fafc;
+        font-size: 0.875rem;
+    }
+
+    .input-control:focus {
+        outline: none;
+        border-color: #3b82f6;
+    }
+
+    /* Tabela */
+    .table-container {
+        background: #131d38;
+        border: 1px solid #1e293b;
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+    }
+
+    .table-loading, .table-empty {
+        padding: 4rem;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 1rem;
+        color: #94a3b8;
+    }
+
+    .spinner {
+        width: 36px;
+        height: 36px;
+        border: 3px solid rgba(59, 130, 246, 0.2);
+        border-top-color: #3b82f6;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+
+    @@keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+
+    .empty-icon {
+        font-size: 2.5rem;
+    }
+
+    .data-table {
+        width: 100%;
+        border-collapse: collapse;
+        text-align: left;
+    }
+
+    .data-table th {
+        background: #0f172a;
+        padding: 0.85rem 1rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: #94a3b8;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        border-bottom: 1px solid #1e293b;
+    }
+
+    .data-table td {
+        padding: 0.9rem 1rem;
+        border-bottom: 1px solid #1e293b;
+        font-size: 0.875rem;
+        vertical-align: middle;
+    }
+
+    .data-table tr:hover {
+        background: rgba(30, 41, 59, 0.5);
+    }
+
+    .row-archived {
+        opacity: 0.6;
+    }
+
+    .col-date {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .date-primary {
+        font-weight: 500;
+        color: #f8fafc;
+    }
+
+    .date-sub {
+        font-size: 0.75rem;
+        color: #64748b;
+    }
+
+    .actor-email {
+        display: block;
+        font-weight: 500;
+        color: #f8fafc;
+    }
+
+    .actor-role {
+        display: block;
+        font-size: 0.75rem;
+        color: #64748b;
+    }
+
+    .action-wrap {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+
+    .action-name {
+        font-weight: 600;
+        color: #e2e8f0;
+    }
+
+    .category-tag {
+        font-size: 0.7rem;
+        padding: 0.15rem 0.4rem;
+        border-radius: 4px;
+        background: #1e293b;
+        color: #94a3b8;
+        display: inline-block;
+        width: fit-content;
+    }
+
+    .col-target {
+        display: flex;
+        flex-direction: column;
+        gap: 0.2rem;
+    }
+
+    .target-res {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-size: 0.8rem;
+        color: #cbd5e1;
+    }
+
+    .target-tenant {
+        font-size: 0.75rem;
+        color: #38bdf8;
+    }
+
+    .col-ip code {
+        font-size: 0.8rem;
+        color: #94a3b8;
+    }
+
+    .sev-badge {
+        display: inline-block;
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+
+    .sev-critical { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); }
+    .sev-high { background: rgba(249, 115, 22, 0.2); color: #fb923c; border: 1px solid rgba(249, 115, 22, 0.4); }
+    .sev-medium { background: rgba(59, 130, 246, 0.2); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.4); }
+    .sev-low { background: rgba(100, 116, 139, 0.2); color: #94a3b8; border: 1px solid rgba(100, 116, 139, 0.4); }
+
+    .integrity-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        padding: 0.2rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-weight: 500;
+    }
+
+    .integrity-tag.valid {
+        background: rgba(16, 185, 129, 0.15);
+        color: #34d399;
+    }
+
+    .integrity-tag.invalid {
+        background: rgba(239, 68, 68, 0.2);
+        color: #f87171;
+    }
+
+    .btn-table-action {
+        background: transparent;
+        border: 1px solid #334155;
+        color: #38bdf8;
+        padding: 0.35rem 0.75rem;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .btn-table-action:hover {
+        background: rgba(56, 189, 248, 0.1);
+        border-color: #38bdf8;
+    }
+
+    .pagination-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem 1.25rem;
+        background: #0f172a;
+        border-top: 1px solid #1e293b;
+    }
+
+    .page-info {
+        font-size: 0.8rem;
+        color: #94a3b8;
+    }
+
+    .page-buttons {
+        display: flex;
+        gap: 0.5rem;
+    }
+
+    .btn-page {
+        background: #1e293b;
+        border: 1px solid #334155;
+        color: #f8fafc;
+        padding: 0.35rem 0.75rem;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        cursor: pointer;
+        transition: background 0.2s;
+    }
+
+    .btn-page:hover:not(:disabled) {
+        background: #334155;
+    }
+
+    .btn-page:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 1rem;
+        border-radius: 6px;
+        font-size: 0.875rem;
+        font-weight: 500;
+        cursor: pointer;
+        border: none;
+        transition: all 0.2s;
+    }
+
+    .btn-primary {
+        background: #2563eb;
+        color: #fff;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+        background: #1d4ed8;
+    }
+
+    .btn-secondary {
+        background: #334155;
+        color: #f8fafc;
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+        background: #475569;
+    }
+
+    .btn-outline {
+        background: transparent;
+        border: 1px solid #334155;
+        color: #f8fafc;
+    }
+
+    .btn-outline:hover:not(:disabled) {
+        background: #1e293b;
+        border-color: #475569;
+    }
+
+    .btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+</style>

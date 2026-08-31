@@ -75,8 +75,28 @@ public class BackofficeDbContext : DbContext
         {
             builder.ToTable("AuditLogs");
             builder.HasKey(a => a.Id);
+            builder.Property(a => a.AdminUserEmail).IsRequired().HasMaxLength(200);
+            builder.Property(a => a.ActorRole).HasMaxLength(100);
             builder.Property(a => a.Action).IsRequired().HasMaxLength(100);
+            builder.Property(a => a.Category).HasConversion<string>().IsRequired().HasMaxLength(50);
+            builder.Property(a => a.Severity).HasConversion<string>().IsRequired().HasMaxLength(30);
             builder.Property(a => a.Resource).IsRequired().HasMaxLength(200);
+            builder.Property(a => a.TargetTenantName).HasMaxLength(200);
+            builder.Property(a => a.IpAddress).IsRequired().HasMaxLength(100);
+            builder.Property(a => a.UserAgent).HasMaxLength(500);
+            builder.Property(a => a.RecordHash).IsRequired().HasMaxLength(128);
+            builder.Property(a => a.PreviousRecordHash).HasMaxLength(128);
+            builder.Property(a => a.IsArchived).IsRequired();
+            builder.Property(a => a.TimestampUtc).IsRequired();
+
+            builder.HasIndex(a => a.TimestampUtc);
+            builder.HasIndex(a => a.AdminUserId);
+            builder.HasIndex(a => a.TargetTenantId);
+            builder.HasIndex(a => a.Action);
+            builder.HasIndex(a => a.Category);
+            builder.HasIndex(a => a.Severity);
+            builder.HasIndex(a => a.RecordHash);
+            builder.HasIndex(a => new { a.TimestampUtc, a.Severity });
         });
 
         modelBuilder.Entity<AdminSavedFilter>(builder =>

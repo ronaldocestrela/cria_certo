@@ -83,9 +83,13 @@ using CriaCerto.Modules.Backoffice.Application.Features.Support.Commands;
 using CriaCerto.Modules.Backoffice.Application.Features.Support.Queries;
 using CriaCerto.Modules.Backoffice.Application.Features.Support.Dtos;
 using CriaCerto.Modules.Backoffice.Application.Domain.Entities;
+using CriaCerto.Modules.Backoffice.Application.Domain.Enums;
 using CriaCerto.Modules.Backoffice.Application.Features.Approvals.Commands;
 using CriaCerto.Modules.Backoffice.Application.Features.Approvals.Queries;
 using CriaCerto.Modules.Backoffice.Application.Features.Approvals.Dtos;
+using CriaCerto.Modules.Backoffice.Application.Features.Audit.Commands;
+using CriaCerto.Modules.Backoffice.Application.Features.Audit.Queries;
+using CriaCerto.Modules.Backoffice.Application.Features.Audit.Dtos;
 using CriaCerto.Modules.Backoffice.Application.Security;
 using CriaCerto.Modules.Backoffice.Infrastructure;
 using CriaCerto.Modules.Backoffice.Infrastructure.Persistence;
@@ -770,6 +774,96 @@ backoffice.MapPost("/approvals/{id:guid}/cancel", async (Guid id, CancelApproval
     var result = await sender.Send(command);
     return ToHttpResult(result);
 }).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ApprovalsRequest)).WithTags("Backoffice Approvals");
+
+// Backoffice Forensic Audit Endpoints
+backoffice.MapGet("/audit", async (
+    int? pageNumber,
+    int? pageSize,
+    string? searchTerm,
+    string? actorEmail,
+    Guid? targetTenantId,
+    string? action,
+    AuditCategory? category,
+    AuditSeverity? severity,
+    DateTime? dateFromUtc,
+    DateTime? dateToUtc,
+    bool? includeArchived,
+    ISender sender) =>
+{
+    var query = new GetAuditLogsQuery(
+        pageNumber ?? 1,
+        pageSize ?? 25,
+        searchTerm,
+        actorEmail,
+        targetTenantId,
+        action,
+        category,
+        severity,
+        dateFromUtc,
+        dateToUtc,
+        includeArchived ?? false);
+    var result = await sender.Send(query);
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.AuditRead)).WithTags("Backoffice Audit");
+
+backoffice.MapGet("/audit/stats", async (ISender sender) =>
+{
+    var result = await sender.Send(new GetAuditStatsQuery());
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.AuditRead)).WithTags("Backoffice Audit");
+
+backoffice.MapGet("/audit/verify", async (int? maxRecords, ISender sender) =>
+{
+    var result = await sender.Send(new VerifyAuditTrailIntegrityQuery(maxRecords ?? 500));
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.AuditRead)).WithTags("Backoffice Audit");
+
+backoffice.MapGet("/audit/export", async (
+    string? searchTerm,
+    string? actorEmail,
+    Guid? targetTenantId,
+    AuditCategory? category,
+    AuditSeverity? severity,
+    DateTime? dateFromUtc,
+    DateTime? dateToUtc,
+    string? format,
+    ISender sender) =>
+{
+    var query = new ExportAuditTrailQuery(
+        searchTerm,
+        actorEmail,
+        targetTenantId,
+        category,
+        severity,
+        dateFromUtc,
+        dateToUtc,
+        format ?? "csv");
+    var result = await sender.Send(query);
+    if (result.IsFailure) return ToHttpResult(result);
+    return Results.File(result.Value.Content, result.Value.ContentType, result.Value.FileName);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.AuditRead)).WithTags("Backoffice Audit");
+
+backoffice.MapGet("/audit/{id:guid}", async (Guid id, ISender sender) =>
+{
+    var result = await sender.Send(new GetAuditLogByIdQuery(id));
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.AuditRead)).WithTags("Backoffice Audit");
+
+backoffice.MapPost("/audit/retention/apply", async (ApplyAuditRetentionRequest req, HttpContext ctx, ISender sender) =>
+{
+    var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var command = new ApplyAuditRetentionPolicyCommand(
+        callerId,
+        callerEmail,
+        ip,
+        req.DryRun,
+        req.CriticalRetentionDays,
+        req.HighRetentionDays,
+        req.MediumRetentionDays,
+        req.LowRetentionDays);
+    var result = await sender.Send(command);
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.UsersAdminManage)).WithTags("Backoffice Audit");
 
 // Backoffice Auth Endpoints (Anonymous / Credentials + MFA)
 app.MapPost("/api/v1/backoffice/auth/login", async (BackofficeLoginRequest req, HttpContext ctx, ISender sender) =>
