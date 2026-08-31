@@ -8,5 +8,6 @@ public enum AuditCategory
     Billing = 4,
     PlanCatalog = 5,
     Support = 6,
-    Governance = 7
+    Governance = 7,
+    Compliance = 8
 }

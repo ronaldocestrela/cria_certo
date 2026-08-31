@@ -48,4 +48,40 @@ public class BackofficePermissionTests
         removeResult.IsSuccess.Should().BeTrue();
         role.Permissions.Should().BeEmpty();
     }
+
+    [Fact]
+    public void BackofficePermissions_AllPermissions_ShouldIncludeCompliancePermissions()
+    {
+        // Assert
+        BackofficePermissions.AllPermissions.Should().Contain(new[]
+        {
+            BackofficePermissions.ComplianceRead,
+            BackofficePermissions.ComplianceExport,
+            BackofficePermissions.ComplianceUnmask
+        });
+    }
+
+    [Fact]
+    public void BackofficeRoles_ReadOnlyAuditor_ShouldHaveComplianceReadAndExport_ButNotUnmask()
+    {
+        // Act
+        var permissions = BackofficeRoles.GetDefaultPermissionsForRole(BackofficeRoles.ReadOnlyAuditor);
+
+        // Assert
+        permissions.Should().Contain(BackofficePermissions.ComplianceRead);
+        permissions.Should().Contain(BackofficePermissions.ComplianceExport);
+        permissions.Should().NotContain(BackofficePermissions.ComplianceUnmask);
+    }
+
+    [Fact]
+    public void BackofficeRoles_SupportN1_ShouldNotHaveAnyCompliancePermissions()
+    {
+        // Act
+        var permissions = BackofficeRoles.GetDefaultPermissionsForRole(BackofficeRoles.SupportN1);
+
+        // Assert
+        permissions.Should().NotContain(BackofficePermissions.ComplianceRead);
+        permissions.Should().NotContain(BackofficePermissions.ComplianceExport);
+        permissions.Should().NotContain(BackofficePermissions.ComplianceUnmask);
+    }
 }

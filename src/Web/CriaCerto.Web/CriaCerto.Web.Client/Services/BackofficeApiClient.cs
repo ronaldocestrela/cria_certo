@@ -15,6 +15,7 @@ using CriaCerto.Modules.Backoffice.Application.Domain.Enums;
 using CriaCerto.Modules.Backoffice.Application.Features.Approvals.Dtos;
 using CriaCerto.Modules.Backoffice.Application.Features.Audit.Dtos;
 using CriaCerto.Modules.Backoffice.Application.Features.Observability.Dtos;
+using CriaCerto.Modules.Backoffice.Application.Features.Compliance.Dtos;
 using CriaCerto.Web.Client.Models;
 using Microsoft.JSInterop;
 
@@ -141,6 +142,20 @@ public interface IBackofficeApiClient
     Task<AuditTrailVerificationResultDto?> VerifyAuditTrailIntegrityAsync(int maxRecords = 500, CancellationToken cancellationToken = default);
     Task<AuditLogDetailDto?> GetAuditLogByIdAsync(Guid id, CancellationToken cancellationToken = default);
     Task<AuditRetentionExecutionResultDto?> ApplyAuditRetentionPolicyAsync(ApplyAuditRetentionRequest request, CancellationToken cancellationToken = default);
+
+    // Compliance & LGPD Data Governance Methods
+    Task<ComplianceOverviewDto?> GetComplianceOverviewAsync(CancellationToken cancellationToken = default);
+    Task<PagedAccessTrailDto?> GetAccessTrailAsync(
+        Guid? targetTenantId = null,
+        string? actorEmail = null,
+        string? eventType = null,
+        DateTime? dateFromUtc = null,
+        DateTime? dateToUtc = null,
+        int pageNumber = 1,
+        int pageSize = 25,
+        CancellationToken cancellationToken = default);
+    Task<RevealedDataResultDto?> RevealSensitiveDataAsync(RevealSensitiveDataRequest request, CancellationToken cancellationToken = default);
+    Task<ComplianceDossierExportDto?> ExportAccessTrailAsync(ExportAccessTrailRequest request, CancellationToken cancellationToken = default);
 }
 
 public sealed class ApprovalActionResult
@@ -904,6 +919,74 @@ public class BackofficeApiClient : IBackofficeApiClient
         if (!response.IsSuccessStatusCode) return null;
 
         return await response.Content.ReadFromJsonAsync<BackofficeAlertDto>(cancellationToken: cancellationToken);
+    }
+
+    public async Task<ComplianceOverviewDto?> GetComplianceOverviewAsync(CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.GetAsync("api/v1/backoffice/compliance/overview", cancellationToken);
+        if (!response.IsSuccessStatusCode) return null;
+        return await response.Content.ReadFromJsonAsync<ComplianceOverviewDto>(cancellationToken: cancellationToken);
+    }
+
+    public async Task<PagedAccessTrailDto?> GetAccessTrailAsync(
+        Guid? targetTenantId = null,
+        string? actorEmail = null,
+        string? eventType = null,
+        DateTime? dateFromUtc = null,
+        DateTime? dateToUtc = null,
+        int pageNumber = 1,
+        int pageSize = 25,
+        CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var qb = new List<string>
+        {
+            $"pageNumber={pageNumber}",
+            $"pageSize={pageSize}"
+        };
+
+        if (targetTenantId.HasValue) qb.Add($"targetTenantId={targetTenantId.Value}");
+        if (!string.IsNullOrWhiteSpace(actorEmail)) qb.Add($"actorEmail={Uri.EscapeDataString(actorEmail)}");
+        if (!string.IsNullOrWhiteSpace(eventType)) qb.Add($"eventType={Uri.EscapeDataString(eventType)}");
+        if (dateFromUtc.HasValue) qb.Add($"dateFromUtc={dateFromUtc.Value:O}");
+        if (dateToUtc.HasValue) qb.Add($"dateToUtc={dateToUtc.Value:O}");
+
+        var query = string.Join("&", qb);
+        var response = await _httpClient.GetAsync($"api/v1/backoffice/compliance/access-trail?{query}", cancellationToken);
+        if (!response.IsSuccessStatusCode) return null;
+        return await response.Content.ReadFromJsonAsync<PagedAccessTrailDto>(cancellationToken: cancellationToken);
+    }
+
+    public async Task<RevealedDataResultDto?> RevealSensitiveDataAsync(RevealSensitiveDataRequest request, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.PostAsJsonAsync("api/v1/backoffice/compliance/reveal-pii", request, cancellationToken);
+        if (!response.IsSuccessStatusCode) return null;
+        return await response.Content.ReadFromJsonAsync<RevealedDataResultDto>(cancellationToken: cancellationToken);
+    }
+
+    public async Task<ComplianceDossierExportDto?> ExportAccessTrailAsync(ExportAccessTrailRequest request, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var qb = new List<string>();
+        if (request.TargetTenantId.HasValue) qb.Add($"targetTenantId={request.TargetTenantId.Value}");
+        if (!string.IsNullOrWhiteSpace(request.ActorEmail)) qb.Add($"actorEmail={Uri.EscapeDataString(request.ActorEmail)}");
+        if (request.DateFromUtc.HasValue) qb.Add($"dateFromUtc={request.DateFromUtc.Value:O}");
+        if (request.DateToUtc.HasValue) qb.Add($"dateToUtc={request.DateToUtc.Value:O}");
+        if (!string.IsNullOrWhiteSpace(request.Purpose)) qb.Add($"purpose={Uri.EscapeDataString(request.Purpose)}");
+        if (!string.IsNullOrWhiteSpace(request.Format)) qb.Add($"format={Uri.EscapeDataString(request.Format)}");
+
+        var query = string.Join("&", qb);
+        var response = await _httpClient.GetAsync($"api/v1/backoffice/compliance/access-trail/export?{query}", cancellationToken);
+        if (!response.IsSuccessStatusCode) return null;
+
+        var content = await response.Content.ReadAsByteArrayAsync(cancellationToken);
+        var fileName = response.Content.Headers.ContentDisposition?.FileNameStar ?? response.Content.Headers.ContentDisposition?.FileName ?? "dossie-acesso-lgpd.csv";
+        fileName = fileName.Trim('\"');
+        var contentType = response.Content.Headers.ContentType?.ToString() ?? "text/csv";
+
+        return new ComplianceDossierExportDto(fileName, contentType, content, string.Empty, DateTime.UtcNow);
     }
 }
 

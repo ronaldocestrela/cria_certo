@@ -93,6 +93,9 @@ using CriaCerto.Modules.Backoffice.Application.Features.Audit.Dtos;
 using CriaCerto.Modules.Backoffice.Application.Features.Observability.Commands;
 using CriaCerto.Modules.Backoffice.Application.Features.Observability.Queries;
 using CriaCerto.Modules.Backoffice.Application.Features.Observability.Dtos;
+using CriaCerto.Modules.Backoffice.Application.Features.Compliance.Commands;
+using CriaCerto.Modules.Backoffice.Application.Features.Compliance.Queries;
+using CriaCerto.Modules.Backoffice.Application.Features.Compliance.Dtos;
 using CriaCerto.Modules.Backoffice.Application.Security;
 using CriaCerto.Modules.Backoffice.Infrastructure;
 using CriaCerto.Modules.Backoffice.Infrastructure.Persistence;
@@ -927,6 +930,79 @@ backoffice.MapPost("/observability/alerts/simulate", async (SimulateAlertRequest
     var result = await sender.Send(command);
     return ToHttpResult(result);
 }).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ObservabilityManage)).WithTags("Backoffice Observability");
+
+// Backoffice Compliance & LGPD Data Governance Endpoints
+backoffice.MapGet("/compliance/overview", async (ISender sender) =>
+{
+    var result = await sender.Send(new GetComplianceOverviewQuery());
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ComplianceRead)).WithTags("Backoffice Compliance");
+
+backoffice.MapGet("/compliance/access-trail", async (
+    Guid? targetTenantId,
+    string? actorEmail,
+    string? eventType,
+    DateTime? dateFromUtc,
+    DateTime? dateToUtc,
+    int? pageNumber,
+    int? pageSize,
+    ISender sender) =>
+{
+    var query = new GetAccessTrailQuery(
+        targetTenantId,
+        actorEmail,
+        eventType,
+        dateFromUtc,
+        dateToUtc,
+        pageNumber ?? 1,
+        pageSize ?? 25);
+    var result = await sender.Send(query);
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ComplianceRead)).WithTags("Backoffice Compliance");
+
+backoffice.MapGet("/compliance/access-trail/export", async (
+    Guid? targetTenantId,
+    string? actorEmail,
+    DateTime? dateFromUtc,
+    DateTime? dateToUtc,
+    string? purpose,
+    string? format,
+    HttpContext ctx,
+    ISender sender) =>
+{
+    var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var userAgent = ctx.Request.Headers.UserAgent.ToString();
+    var role = ctx.User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value ?? "Admin";
+
+    var request = new ExportAccessTrailRequest(
+        targetTenantId,
+        actorEmail,
+        dateFromUtc,
+        dateToUtc,
+        purpose ?? "Auditoria Externa LGPD",
+        format ?? "CSV");
+
+    var query = new ExportAccessTrailQuery(callerId, callerEmail, role, ip, userAgent, request);
+    var result = await sender.Send(query);
+
+    if (result.IsFailure)
+    {
+        return ToHttpResult(result);
+    }
+
+    return Results.File(result.Value.Content, result.Value.ContentType, result.Value.FileName);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ComplianceExport)).WithTags("Backoffice Compliance");
+
+backoffice.MapPost("/compliance/reveal-pii", async (RevealSensitiveDataRequest req, HttpContext ctx, ISender sender) =>
+{
+    var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var userAgent = ctx.Request.Headers.UserAgent.ToString();
+    var role = ctx.User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value ?? "Admin";
+
+    var command = new RevealSensitiveDataCommand(callerId, callerEmail, role, ip, userAgent, req);
+    var result = await sender.Send(command);
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ComplianceUnmask)).WithTags("Backoffice Compliance");
 
 // Backoffice Auth Endpoints (Anonymous / Credentials + MFA)
 app.MapPost("/api/v1/backoffice/auth/login", async (BackofficeLoginRequest req, HttpContext ctx, ISender sender) =>

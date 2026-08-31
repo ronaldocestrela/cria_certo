@@ -1,3 +1,4 @@
+using CriaCerto.Modules.Backoffice.Application.Domain.Services;
 using CriaCerto.Modules.Backoffice.Application.Features.Tenants.Dtos;
 using CriaCerto.Modules.Tenancy.Application.Contracts;
 
@@ -11,12 +12,12 @@ internal static class TenantAdminMapper
     public static OperationalTagAdminDto ToTagDto(OperationalTagDto dto) =>
         new(dto.Id, dto.Slug, dto.Name, dto.ColorHex, dto.Category, dto.IsActive, dto.CreatedAtUtc);
 
-    public static TenantAdminSummaryDto ToSummaryDto(TenantBackofficeSummaryDto dto) =>
+    public static TenantAdminSummaryDto ToSummaryDto(TenantBackofficeSummaryDto dto, IPiiDataMasker? masker = null) =>
         new(
             dto.Id,
             dto.Name,
             dto.LegalName,
-            dto.CNPJ,
+            masker != null ? masker.MaskDocument(dto.CNPJ) : dto.CNPJ,
             dto.ExternalIdentifier,
             dto.Status,
             dto.SubscribedPlan,
@@ -28,17 +29,17 @@ internal static class TenantAdminMapper
             dto.ProductiveProfile,
             dto.ChurnRisk,
             dto.Tags.Select(ToTagDto).ToList(),
-            dto.TechnicalOwnerName,
-            dto.CommercialOwnerName,
+            masker != null ? masker.MaskPersonName(dto.TechnicalOwnerName) : dto.TechnicalOwnerName,
+            masker != null ? masker.MaskPersonName(dto.CommercialOwnerName) : dto.CommercialOwnerName,
             dto.IsProtected,
             dto.CreatedAtUtc);
 
-    public static TenantAdminDetailDto ToDetailDto(TenantBackofficeDetailDto dto) =>
+    public static TenantAdminDetailDto ToDetailDto(TenantBackofficeDetailDto dto, IPiiDataMasker? masker = null) =>
         new(
             dto.Id,
             dto.Name,
             dto.LegalName,
-            dto.CNPJ,
+            masker != null ? masker.MaskDocument(dto.CNPJ) : dto.CNPJ,
             dto.ExternalIdentifier,
             dto.Status,
             dto.SubscribedPlan,
@@ -55,10 +56,10 @@ internal static class TenantAdminMapper
             dto.ProductiveProfile,
             dto.ChurnRisk,
             dto.Tags.Select(ToTagDto).ToList(),
-            dto.TechnicalOwnerName,
-            dto.TechnicalOwnerEmail,
-            dto.CommercialOwnerName,
-            dto.CommercialOwnerEmail,
+            masker != null ? masker.MaskPersonName(dto.TechnicalOwnerName) : dto.TechnicalOwnerName,
+            masker != null ? masker.MaskEmail(dto.TechnicalOwnerEmail) : dto.TechnicalOwnerEmail,
+            masker != null ? masker.MaskPersonName(dto.CommercialOwnerName) : dto.CommercialOwnerName,
+            masker != null ? masker.MaskEmail(dto.CommercialOwnerEmail) : dto.CommercialOwnerEmail,
             dto.IsProtected,
             dto.StatusReason,
             dto.StatusChangedAtUtc,
@@ -67,9 +68,9 @@ internal static class TenantAdminMapper
             dto.CreatedAtUtc,
             dto.UpdatedAtUtc);
 
-    public static PagedTenantAdminResult ToPagedResult(PagedTenantBackofficeResult<TenantBackofficeSummaryDto> result) =>
+    public static PagedTenantAdminResult ToPagedResult(PagedTenantBackofficeResult<TenantBackofficeSummaryDto> result, IPiiDataMasker? masker = null) =>
         new(
-            result.Items.Select(ToSummaryDto).ToList(),
+            result.Items.Select(x => ToSummaryDto(x, masker)).ToList(),
             result.TotalCount,
             result.Page,
             result.PageSize);

@@ -260,7 +260,7 @@
                             <h3>Dados Cadastrais</h3>
                             <dl class="detail-grid">
                                 <dt>Razão Social</dt><dd>@(SelectedTenant.LegalName ?? "—")</dd>
-                                <dt>CNPJ/CPF</dt><dd>@SelectedTenant.CNPJ</dd>
+                                <dt>CNPJ/CPF</dt><dd><MaskedDataField Value="@SelectedTenant.CNPJ" EntityType="Tenant" EntityId="@SelectedTenant.Id" FieldName="CNPJ" Label="CNPJ/CPF" /></dd>
                                 <dt>ID Externo</dt><dd>@(SelectedTenant.ExternalIdentifier ?? "—")</dd>
                                 <dt>Localização</dt><dd>@SelectedTenant.City / @SelectedTenant.State</dd>
                                 <dt>IE</dt><dd>@SelectedTenant.StateRegistration</dd>
@@ -289,8 +289,20 @@
                         <div class="detail-section">
                             <h3>Owners Operacionais</h3>
                             <dl class="detail-grid">
-                                <dt>Técnico</dt><dd>@(SelectedTenant.TechnicalOwnerName ?? "—") @(SelectedTenant.TechnicalOwnerEmail != null ? $"({SelectedTenant.TechnicalOwnerEmail})" : "")</dd>
-                                <dt>Comercial</dt><dd>@(SelectedTenant.CommercialOwnerName ?? "—") @(SelectedTenant.CommercialOwnerEmail != null ? $"({SelectedTenant.CommercialOwnerEmail})" : "")</dd>
+                                <dt>Técnico</dt><dd>
+                                    @(SelectedTenant.TechnicalOwnerName ?? "—")
+                                    @if (!string.IsNullOrEmpty(SelectedTenant.TechnicalOwnerEmail))
+                                    {
+                                        <span> (</span><MaskedDataField Value="@SelectedTenant.TechnicalOwnerEmail" EntityType="Tenant" EntityId="@SelectedTenant.Id" FieldName="TechnicalOwnerEmail" Label="E-mail Técnico" IsMonospace="false" /><span>)</span>
+                                    }
+                                </dd>
+                                <dt>Comercial</dt><dd>
+                                    @(SelectedTenant.CommercialOwnerName ?? "—")
+                                    @if (!string.IsNullOrEmpty(SelectedTenant.CommercialOwnerEmail))
+                                    {
+                                        <span> (</span><MaskedDataField Value="@SelectedTenant.CommercialOwnerEmail" EntityType="Tenant" EntityId="@SelectedTenant.Id" FieldName="CommercialOwnerEmail" Label="E-mail Comercial" IsMonospace="false" /><span>)</span>
+                                    }
+                                </dd>
                             </dl>
                         </div>
                         <div class="detail-section">

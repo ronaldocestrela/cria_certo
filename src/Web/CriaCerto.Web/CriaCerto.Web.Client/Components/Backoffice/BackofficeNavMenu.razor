@@ -62,6 +62,12 @@
                 <span class="nav-icon">🛰️</span> Observabilidade & Alertas
             </NavLink>
         </PermissionGuard>
+
+        <PermissionGuard Permission="@BackofficePermissions.ComplianceRead">
+            <NavLink class="nav-link" href="backoffice/compliance">
+                <span class="nav-icon">⚖️</span> Compliance & LGPD
+            </NavLink>
+        </PermissionGuard>
     </div>
 </nav>
 

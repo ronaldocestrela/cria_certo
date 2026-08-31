@@ -1,0 +1,356 @@
+@using CriaCerto.Modules.Backoffice.Application.Features.Compliance.Dtos
+@using CriaCerto.Web.Client.Services
+@inject IBackofficeApiClient ApiClient
+
+@if (IsOpen)
+{
+    <div class="modal-backdrop" @onclick="HandleClose">
+        <div class="modal-card" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <div class="header-icon">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                    </svg>
+                </div>
+                <div>
+                    <h3>Acesso a Dado Pessoal Sensível (LGPD)</h3>
+                    <p class="subtitle">Desmascaramento Just-In-Time com Rastreabilidade Forense</p>
+                </div>
+                <button type="button" class="btn-close" @onclick="HandleClose">&times;</button>
+            </div>
+
+            <div class="modal-body">
+                <div class="alert-box">
+                    <strong>Princípio da Necessidade e Prestação de Contas</strong>
+                    <p>
+                        A visualização de dados pessoais em formato original é restrita. O acesso a este campo
+                        (<code>@Label</code>) será gravado de forma imutável com <strong>carimbo de tempo UTC, seu IP e assinatura criptográfica SHA-256</strong>.
+                    </p>
+                </div>
+
+                <div class="form-group">
+                    <label for="justification-input">
+                        Justificativa Operacional Obrigatória:
+                        <span class="required">* (mínimo 10 caracteres)</span>
+                    </label>
+                    <textarea id="justification-input"
+                              class="form-control"
+                              rows="3"
+                              placeholder="Ex: Conferência cadastral formal solicitada via chamado SUP-4521 pelo titular..."
+                              @bind="justification"
+                              @bind:event="oninput"
+                              disabled="@isSubmitting"></textarea>
+                    <span class="char-counter @(justification.Trim().Length < 10 ? "invalid" : "valid")">
+                        @(justification.Trim().Length) / 10 caracteres mínimos
+                    </span>
+                </div>
+
+                @if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <div class="error-banner">
+                        @errorMessage
+                    </div>
+                }
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" @onclick="HandleClose" disabled="@isSubmitting">
+                    Cancelar
+                </button>
+                <button type="button"
+                        class="btn btn-primary"
+                        @onclick="ConfirmRevealAsync"
+                        disabled="@(isSubmitting || justification.Trim().Length < 10)">
+                    @if (isSubmitting)
+                    {
+                        <span class="spinner-border spinner-border-sm"></span>
+                        <span> Processando...</span>
+                    }
+                    else
+                    {
+                        <span>Confirmar e Revelar</span>
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public string EntityType { get; set; } = "Tenant";
+    [Parameter] public Guid EntityId { get; set; }
+    [Parameter] public string FieldName { get; set; } = "CNPJ";
+    [Parameter] public string Label { get; set; } = "Documento";
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback<RevealedDataResultDto> OnRevealed { get; set; }
+
+    private string justification = string.Empty;
+    private bool isSubmitting = false;
+    private string? errorMessage;
+
+    protected override void OnParametersSet()
+    {
+        if (!IsOpen)
+        {
+            justification = string.Empty;
+            errorMessage = null;
+            isSubmitting = false;
+        }
+    }
+
+    private async Task ConfirmRevealAsync()
+    {
+        if (justification.Trim().Length < 10)
+        {
+            errorMessage = "A justificativa operacional deve ter pelo menos 10 caracteres.";
+            return;
+        }
+
+        isSubmitting = true;
+        errorMessage = null;
+
+        try
+        {
+            var req = new RevealSensitiveDataRequest(EntityType, EntityId, FieldName, justification.Trim());
+            var result = await ApiClient.RevealSensitiveDataAsync(req);
+
+            if (result is not null)
+            {
+                await OnRevealed.InvokeAsync(result);
+            }
+            else
+            {
+                errorMessage = "Falha ao desmascarar dado pessoal. Verifique suas permissões de acesso.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Erro operacional: {ex.Message}";
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private async Task HandleClose()
+    {
+        if (!isSubmitting)
+        {
+            await OnClose.InvokeAsync();
+        }
+    }
+}
+
+<style>
+    .modal-backdrop {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.75);
+        backdrop-filter: blur(4px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+        padding: 1rem;
+    }
+
+    .modal-card {
+        background: #0f172a;
+        border: 1px solid #334155;
+        border-radius: 12px;
+        width: 100%;
+        max-width: 520px;
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+        overflow: hidden;
+        animation: modal-appear 0.2s ease-out;
+    }
+
+    @@keyframes modal-appear {
+        from { opacity: 0; transform: scale(0.95); }
+        to { opacity: 1; transform: scale(1); }
+    }
+
+    .modal-header {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 1.25rem 1.5rem;
+        background: #1e293b;
+        border-bottom: 1px solid #334155;
+    }
+
+    .header-icon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 40px;
+        height: 40px;
+        border-radius: 8px;
+        background: rgba(245, 158, 11, 0.15);
+        color: #fbbf24;
+    }
+
+    .modal-header h3 {
+        margin: 0;
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: #f8fafc;
+    }
+
+    .modal-header .subtitle {
+        margin: 0;
+        font-size: 0.75rem;
+        color: #94a3b8;
+    }
+
+    .btn-close {
+        margin-left: auto;
+        background: transparent;
+        border: none;
+        color: #94a3b8;
+        font-size: 1.5rem;
+        cursor: pointer;
+        line-height: 1;
+    }
+
+    .btn-close:hover {
+        color: #f8fafc;
+    }
+
+    .modal-body {
+        padding: 1.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1.25rem;
+    }
+
+    .alert-box {
+        background: rgba(245, 158, 11, 0.08);
+        border: 1px solid rgba(245, 158, 11, 0.25);
+        padding: 0.85rem 1rem;
+        border-radius: 8px;
+        font-size: 0.8rem;
+        color: #cbd5e1;
+    }
+
+    .alert-box strong {
+        color: #fbbf24;
+        display: block;
+        margin-bottom: 0.25rem;
+    }
+
+    .alert-box p {
+        margin: 0;
+        line-height: 1.4;
+    }
+
+    .alert-box code {
+        color: #38bdf8;
+        background: #1e293b;
+        padding: 0.1rem 0.3rem;
+        border-radius: 3px;
+    }
+
+    .form-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+    }
+
+    .form-group label {
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: #e2e8f0;
+    }
+
+    .required {
+        font-size: 0.75rem;
+        color: #94a3b8;
+        font-weight: 400;
+    }
+
+    .form-control {
+        background: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 6px;
+        padding: 0.6rem 0.8rem;
+        color: #f8fafc;
+        font-size: 0.85rem;
+        resize: vertical;
+        outline: none;
+    }
+
+    .form-control:focus {
+        border-color: #38bdf8;
+        box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+    }
+
+    .char-counter {
+        font-size: 0.7rem;
+        text-align: right;
+    }
+
+    .char-counter.invalid {
+        color: #f87171;
+    }
+
+    .char-counter.valid {
+        color: #34d399;
+    }
+
+    .error-banner {
+        background: rgba(239, 68, 68, 0.15);
+        border: 1px solid #ef4444;
+        color: #fca5a5;
+        padding: 0.6rem 0.8rem;
+        border-radius: 6px;
+        font-size: 0.8rem;
+    }
+
+    .modal-footer {
+        padding: 1rem 1.5rem;
+        background: #1e293b;
+        border-top: 1px solid #334155;
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.75rem;
+    }
+
+    .btn {
+        padding: 0.5rem 1rem;
+        border-radius: 6px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        cursor: pointer;
+        border: none;
+        transition: all 0.2s ease;
+    }
+
+    .btn-secondary {
+        background: #334155;
+        color: #f8fafc;
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+        background: #475569;
+    }
+
+    .btn-primary {
+        background: #2563eb;
+        color: #fff;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+        background: #1d4ed8;
+    }
+
+    .btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+</style>

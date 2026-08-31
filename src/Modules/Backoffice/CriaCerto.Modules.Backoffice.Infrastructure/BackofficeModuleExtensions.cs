@@ -39,6 +39,9 @@ public static class BackofficeModuleExtensions
         services.AddSingleton<ITotpService, TotpService>();
         services.AddSingleton<IBackofficeTokenService, BackofficeTokenService>();
 
+        // Register Compliance & PII Masking Services
+        services.AddSingleton<CriaCerto.Modules.Backoffice.Application.Domain.Services.IPiiDataMasker, CriaCerto.Modules.Backoffice.Application.Domain.Services.PiiDataMasker>();
+
         // Register Observability & Anomaly Services
         services.AddScoped<CriaCerto.Modules.Backoffice.Application.Features.Observability.Services.IAnomalyDetectionEngine, CriaCerto.Modules.Backoffice.Application.Features.Observability.Services.AnomalyDetectionEngine>();
         services.AddTransient(typeof(MediatR.IPipelineBehavior<,>), typeof(CriaCerto.Modules.Backoffice.Application.Telemetry.BackofficeObservabilityBehavior<,>));

@@ -254,14 +254,26 @@ As entregas estão organizadas em **6 Fases Sequenciais**, cobrindo fundação d
   * 100% de aprovação na suíte global de testes (502 testes aprovados, incluindo testes de arquitetura com Testcontainers, 196 testes no Backoffice e 20 testes no cliente Web, com zero falhas e zero warnings).
   * Formalização arquitetural via ADR `0010-backoffice-observability-and-anomaly-alerts.md`.
 
-#### Sub-fase 5.3: Compliance LGPD e Governança de Acesso [PLANEJADA]
-* **Backend:**
-  * Mascaramento de dados sensíveis no backoffice por permissão contextual.
-  * Exportação de trilha de acesso para auditorias internas/externas.
-* **Frontend:**
-  * Visualização de dados com redaction progressivo para perfis sem necessidade operacional.
+#### Sub-fase 5.3: Compliance LGPD e Governança de Acesso [CONCLUÍDA]
+* **Backend & Segurança:**
+  * Serviço de mascaramento determinístico de dados pessoais e fiscais (`IPiiDataMasker` / `PiiDataMasker`) para CPF (`***.456.789-**`), CNPJ (`12.***.***/0001-**`), e-mails (`u***a@dominio.com.br`), telefones (`(11) 9****-**21`), endereços IP e higienização de payloads JSON.
+  * Novas permissões granulares no RBAC (`compliance.read`, `compliance.export`, `compliance.unmask`) com segregação estrita de privilégios (`ReadOnlyAuditor` bloqueado para unmask, `SupportN1` sem acesso a PII em claro).
+  * Desmascaramento Just-In-Time auditado (`RevealSensitiveDataCommand`) em `POST /api/v1/backoffice/compliance/reveal-pii` com obrigatoriedade de justificativa operacional (mínimo 10 caracteres) e registro compulsório de evento forense SHA-256 encadeado em `AuditLog` (`Category = Compliance`, `Severity = High`).
+  * Emissão e exportação assinada do Dossiê Formal de Acesso LGPD (`ExportAccessTrailQuery`) em `GET /api/v1/backoffice/compliance/access-trail/export` (CSV/JSON com carimbo de tempo UTC, declaração de finalidade e auditoria com severidade crítica).
+  * Painel de visão geral de conformidade (`GetComplianceOverviewQuery`) e trilha paginada de acessos (`GetAccessTrailQuery`).
+  * Privacy by Default integrado nos mappers e handlers de tenants (`TenantAdminMapper`, `GetTenantsAdminQueryHandler`, `GetTenantAdminDetailQueryHandler`).
+* **Frontend (Blazor .NET 10):**
+  * Componente atômico reutilizável `MaskedDataField.razor` para redaction progressivo com suporte a toggle auditado e badge de conformidade.
+  * Modal de confirmação e justificativa `RevealPiiModal.razor` para captura de motivo operacional antes de qualquer revelação.
+  * Console unificado de governança `ComplianceGovernance.razor` na rota `/backoffice/compliance` com 4 KPI cards operacionais, feed interativo de trilha de acessos a PII, gerador/baixador de Dossiê Formal e matriz de privilégios dos papéis administrativos.
+  * Integração de `MaskedDataField` nas telas operacionais existentes (`TenantsManagement.razor` e `SupportWorkbench.razor`).
+  * Atualização da navegação `BackofficeNavMenu.razor` com item "Compliance & LGPD" protegido por claim.
 * **TDD & Validação:**
-  * Testes de autorização e de exposição mínima de dados.
+  * Testes unitários do mascarador `PiiDataMaskerTests` cobrindo CPFs, CNPJs, e-mails, telefones, IPs, nomes e higienização de JSON.
+  * Testes de features CQRS `ComplianceFeaturesTests` cobrindo validação de justificativa, gravação em `AuditLog` com assinatura SHA-256, cálculo de métricas de overview, filtros da trilha e exportação de dossiê em CSV.
+  * Testes de permissões e controle de acesso no cliente `BackofficePermissionServiceTests` validando regras de RBAC para os papéis operacionais.
+  * 100% de sucesso na suíte de testes (235 testes aprovados no Backoffice e 23 testes no cliente Web, zero falhas).
+  * Formalização arquitetural via ADR `0011-lgpd-compliance-contextual-masking-and-access-governance.md`.
 
 ---
 

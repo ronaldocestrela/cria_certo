@@ -36,6 +36,11 @@ public static class BackofficePermissions
     public const string ObservabilityRead = "observability.read";
     public const string ObservabilityManage = "observability.manage";
 
+    // Compliance & LGPD Data Governance
+    public const string ComplianceRead = "compliance.read";
+    public const string ComplianceExport = "compliance.export";
+    public const string ComplianceUnmask = "compliance.unmask";
+
     // Scopes
     public const string ScopeGlobal = "Global";
     public const string ScopeTenant = "Tenant";
@@ -50,7 +55,8 @@ public static class BackofficePermissions
         SupportDiagnose, SupportRemediate,
         ApprovalsRequest, ApprovalsReview,
         AuditRead, UsersAdminManage,
-        ObservabilityRead, ObservabilityManage
+        ObservabilityRead, ObservabilityManage,
+        ComplianceRead, ComplianceExport, ComplianceUnmask
     };
 
     public static bool IsValidScope(string scope) =>

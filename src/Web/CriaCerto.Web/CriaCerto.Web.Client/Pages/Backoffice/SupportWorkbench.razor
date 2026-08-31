@@ -92,7 +92,7 @@
                         </div>
                         <div class="identity-meta">
                             <span>Razão: @DiagnosticReport.Overview.LegalName</span>
-                            <span>CNPJ: @DiagnosticReport.Overview.DocumentNumber</span>
+                            <span>CNPJ/CPF: <MaskedDataField Value="@DiagnosticReport.Overview.DocumentNumber" EntityType="Tenant" EntityId="@DiagnosticReport.Overview.Id" FieldName="CNPJ" Label="CNPJ/CPF" /></span>
                             <span>Plano: <strong>@DiagnosticReport.Overview.SubscribedPlan</strong></span>
                             @if (!string.IsNullOrEmpty(DiagnosticReport.Overview.SizeSegment))
                             {

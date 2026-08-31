@@ -141,4 +141,59 @@ public class BackofficePermissionServiceTests
         readResult.Should().BeTrue();
         manageResult.Should().BeTrue();
     }
+
+    [Fact]
+    public async Task HasPermissionAsync_WhenUserIsReadOnlyAuditor_ShouldAllowComplianceReadAndExport_AndDenyUnmask()
+    {
+        // Arrange
+        var service = new BackofficePermissionService();
+        var claims = new[] { new Claim(ClaimTypes.Role, BackofficeRoles.ReadOnlyAuditor) };
+        service.SetCurrentUser(new ClaimsPrincipal(new ClaimsIdentity(claims, "TestAuth")));
+
+        // Act
+        var readResult = await service.HasPermissionAsync(BackofficePermissions.ComplianceRead);
+        var exportResult = await service.HasPermissionAsync(BackofficePermissions.ComplianceExport);
+        var unmaskResult = await service.HasPermissionAsync(BackofficePermissions.ComplianceUnmask);
+
+        // Assert
+        readResult.Should().BeTrue();
+        exportResult.Should().BeTrue();
+        unmaskResult.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task HasPermissionAsync_WhenUserIsSupportN1_ShouldDenyCompliancePermissions()
+    {
+        // Arrange
+        var service = new BackofficePermissionService();
+        var claims = new[] { new Claim(ClaimTypes.Role, BackofficeRoles.SupportN1) };
+        service.SetCurrentUser(new ClaimsPrincipal(new ClaimsIdentity(claims, "TestAuth")));
+
+        // Act
+        var readResult = await service.HasPermissionAsync(BackofficePermissions.ComplianceRead);
+        var unmaskResult = await service.HasPermissionAsync(BackofficePermissions.ComplianceUnmask);
+
+        // Assert
+        readResult.Should().BeFalse();
+        unmaskResult.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task HasPermissionAsync_WhenUserIsPlatformOwner_ShouldAllowAllCompliancePermissions()
+    {
+        // Arrange
+        var service = new BackofficePermissionService();
+        var claims = new[] { new Claim(ClaimTypes.Role, BackofficeRoles.PlatformOwner) };
+        service.SetCurrentUser(new ClaimsPrincipal(new ClaimsIdentity(claims, "TestAuth")));
+
+        // Act
+        var readResult = await service.HasPermissionAsync(BackofficePermissions.ComplianceRead);
+        var exportResult = await service.HasPermissionAsync(BackofficePermissions.ComplianceExport);
+        var unmaskResult = await service.HasPermissionAsync(BackofficePermissions.ComplianceUnmask);
+
+        // Assert
+        readResult.Should().BeTrue();
+        exportResult.Should().BeTrue();
+        unmaskResult.Should().BeTrue();
+    }
 }
