@@ -25,6 +25,8 @@ public class AuthenticateAdminUserCommandHandler : IRequestHandler<AuthenticateA
     private readonly ITotpService? _totpService;
     private readonly ILogger<AuthenticateAdminUserCommandHandler>? _logger;
 
+    private const string DummyPasswordHash = "AAAAAAAAAAAAAAAAAAAAAA==.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+
     public AuthenticateAdminUserCommandHandler(
         DbContext dbContext,
         IPasswordHasherService? passwordHasher = null,
@@ -49,6 +51,11 @@ public class AuthenticateAdminUserCommandHandler : IRequestHandler<AuthenticateA
 
         if (user is null)
         {
+            // Timing attack mitigation: run dummy PBKDF2 hash verification in constant time to prevent account enumeration
+            _passwordHasher?.VerifyPassword(request.RawPassword, DummyPasswordHash);
+
+            CriaCerto.Modules.Backoffice.Application.Telemetry.BackofficeTelemetry.RecordPolicyFailure("InvalidCredentials", "/api/v1/backoffice/auth/login", normalizedEmail);
+
             _logger?.LogWarning(
                 "Backoffice login failed for {Email}: reason={Reason}",
                 normalizedEmail,
@@ -58,6 +65,7 @@ public class AuthenticateAdminUserCommandHandler : IRequestHandler<AuthenticateA
 
         if (!user.IsActive)
         {
+            CriaCerto.Modules.Backoffice.Application.Telemetry.BackofficeTelemetry.RecordPolicyFailure("UserDisabled", "/api/v1/backoffice/auth/login", normalizedEmail);
             _logger?.LogWarning(
                 "Backoffice login failed for {Email}: reason={Reason}",
                 normalizedEmail,
@@ -78,6 +86,7 @@ public class AuthenticateAdminUserCommandHandler : IRequestHandler<AuthenticateA
 
         if (!isPasswordValid)
         {
+            CriaCerto.Modules.Backoffice.Application.Telemetry.BackofficeTelemetry.RecordPolicyFailure("InvalidCredentials", "/api/v1/backoffice/auth/login", normalizedEmail);
             _logger?.LogWarning(
                 "Backoffice login failed for {Email}: reason={Reason}",
                 normalizedEmail,
@@ -96,6 +105,7 @@ public class AuthenticateAdminUserCommandHandler : IRequestHandler<AuthenticateA
                 string.IsNullOrWhiteSpace(user.MfaSecretKey) ||
                 !_totpService.VerifyCode(user.MfaSecretKey, request.MfaCode.Trim()))
             {
+                CriaCerto.Modules.Backoffice.Application.Telemetry.BackofficeTelemetry.RecordPolicyFailure("InvalidMfa", "/api/v1/backoffice/auth/login", normalizedEmail);
                 return Result.Failure<AdminAuthResultDto>(BackofficeErrors.InvalidMfaCode);
             }
         }

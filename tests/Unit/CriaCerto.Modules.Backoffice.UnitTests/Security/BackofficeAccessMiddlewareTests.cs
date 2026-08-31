@@ -57,6 +57,69 @@ public class BackofficeAccessMiddlewareTests
     }
 
     [Fact]
+    public async Task InvokeAsync_WhenUserUsesImpersonationToken_ShouldBlockWith403Forbidden()
+    {
+        // Arrange
+        var nextCalled = false;
+        var middleware = new BackofficeAccessMiddleware(next: _ =>
+        {
+            nextCalled = true;
+            return Task.CompletedTask;
+        });
+
+        var context = new DefaultHttpContext();
+        context.Request.Path = "/api/v1/backoffice/dashboard/kpis";
+
+        var claims = new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, Guid.NewGuid().ToString()),
+            new Claim(ClaimTypes.Role, "Admin"),
+            new Claim("is_impersonation", "true"),
+            new Claim("TenantId", Guid.NewGuid().ToString())
+        };
+        var identity = new ClaimsIdentity(claims, "TestAuth");
+        context.User = new ClaimsPrincipal(identity);
+
+        // Act
+        await middleware.InvokeAsync(context, _evaluator);
+
+        // Assert
+        nextCalled.Should().BeFalse();
+        context.Response.StatusCode.Should().Be(StatusCodes.Status403Forbidden);
+    }
+
+    [Fact]
+    public async Task InvokeAsync_WhenUserIsAuthenticatedButNotAdmin_ShouldBlockWith403Forbidden()
+    {
+        // Arrange
+        var nextCalled = false;
+        var middleware = new BackofficeAccessMiddleware(next: _ =>
+        {
+            nextCalled = true;
+            return Task.CompletedTask;
+        });
+
+        var context = new DefaultHttpContext();
+        context.Request.Path = "/api/v1/backoffice/dashboard/kpis";
+
+        var claims = new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, Guid.NewGuid().ToString()),
+            new Claim(ClaimTypes.Role, "ProducerUser"),
+            new Claim("TenantId", Guid.NewGuid().ToString())
+        };
+        var identity = new ClaimsIdentity(claims, "TestAuth");
+        context.User = new ClaimsPrincipal(identity);
+
+        // Act
+        await middleware.InvokeAsync(context, _evaluator);
+
+        // Assert
+        nextCalled.Should().BeFalse();
+        context.Response.StatusCode.Should().Be(StatusCodes.Status403Forbidden);
+    }
+
+    [Fact]
     public async Task InvokeAsync_WhenRouteIsBackofficeAuthLogin_ShouldBypassMiddleware()
     {
         // Arrange

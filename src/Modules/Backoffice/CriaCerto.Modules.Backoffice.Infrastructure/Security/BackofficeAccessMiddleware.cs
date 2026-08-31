@@ -38,6 +38,21 @@ public class BackofficeAccessMiddleware
                 return;
             }
 
+            if (user.HasClaim(c => c.Type == "is_impersonation" && c.Value.Equals("true", StringComparison.OrdinalIgnoreCase)))
+            {
+                var actorEmail = user.FindFirst(ClaimTypes.Email)?.Value;
+                CriaCerto.Modules.Backoffice.Application.Telemetry.BackofficeTelemetry.RecordPolicyFailure("ImpersonationRestricted", path, actorEmail);
+                context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                context.Response.ContentType = "application/json";
+                await context.Response.WriteAsJsonAsync(new
+                {
+                    code = "Backoffice.ImpersonationRestricted",
+                    message = "Sessões de suporte assistido (impersonação) não podem acessar endpoints administrativos do backoffice.",
+                    type = "Unauthorized"
+                });
+                return;
+            }
+
             var hasAdminRole = BackofficeRoles.AllRoles.Any(role => user.IsInRole(role)) ||
                                user.HasClaim(c => c.Type == "is_backoffice_admin" && c.Value.Equals("true", StringComparison.OrdinalIgnoreCase)) ||
                                user.HasClaim(c => c.Type == "is_platform_owner" && c.Value.Equals("true", StringComparison.OrdinalIgnoreCase));

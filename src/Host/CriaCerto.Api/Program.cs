@@ -1,5 +1,7 @@
 using System.Security.Claims;
 using System.Text;
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.RateLimiting;
 using CriaCerto.Api.Middleware;
 using CriaCerto.BuildingBlocks.Application.Features.GetReferenceBreeds;
 using CriaCerto.Api.Seeders;
@@ -209,6 +211,35 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("CurralAccess", policy => policy.RequireRole(UserRole.Admin.ToString(), UserRole.Zootecnista.ToString(), UserRole.Veterinario.ToString(), UserRole.OperadorCurral.ToString()));
 });
 
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.OnRejected = async (context, token) =>
+    {
+        context.HttpContext.Response.ContentType = "application/json";
+        await context.HttpContext.Response.WriteAsJsonAsync(new
+        {
+            code = "Backoffice.RateLimitExceeded",
+            message = "Limite de requisições excedido. Por favor, aguarde alguns instantes antes de tentar novamente.",
+            type = "Failure"
+        }, cancellationToken: token);
+    };
+
+    options.AddPolicy("BackofficeAuthRateLimiter", httpContext =>
+    {
+        var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "127.0.0.1";
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: ip,
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 15,
+                Window = TimeSpan.FromMinutes(1),
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0
+            });
+    });
+});
+
 var app = builder.Build();
 
 if (app.Services.GetService<CriaCerto.BuildingBlocks.Abstractions.Tenancy.ITenantDatabaseProvisioner>() is CriaCerto.BuildingBlocks.Infrastructure.Tenancy.TenantDatabaseProvisioner provisioner)
@@ -225,6 +256,7 @@ SeedReferenceData(app);
 
 app.UseSecurityHeaders();
 app.UseCors("ProductionCorsPolicy");
+app.UseRateLimiter();
 
 if (app.Environment.IsDevelopment())
 {
@@ -1012,7 +1044,7 @@ app.MapPost("/api/v1/backoffice/auth/login", async (BackofficeLoginRequest req, 
     var command = new AuthenticateAdminUserCommand(req.Email, req.Password, req.MfaCode, ip, ua);
     var result = await sender.Send(command);
     return ToBackofficeLoginHttpResult(result);
-}).AllowAnonymous().WithTags("Backoffice Auth");
+}).RequireRateLimiting("BackofficeAuthRateLimiter").AllowAnonymous().WithTags("Backoffice Auth");
 
 app.MapPost("/api/v1/backoffice/auth/refresh", async (RefreshSessionRequest req, HttpContext ctx, ISender sender) =>
 {
@@ -1021,7 +1053,7 @@ app.MapPost("/api/v1/backoffice/auth/refresh", async (RefreshSessionRequest req,
     var command = new RefreshAdminSessionCommand(req.SessionToken, req.RefreshToken, ip, ua);
     var result = await sender.Send(command);
     return ToHttpResult(result);
-}).AllowAnonymous().WithTags("Backoffice Auth");
+}).RequireRateLimiting("BackofficeAuthRateLimiter").AllowAnonymous().WithTags("Backoffice Auth");
 
 // Auth Endpoints
 app.MapPost("/api/auth/login", async (LoginCommand command, ISender sender) =>

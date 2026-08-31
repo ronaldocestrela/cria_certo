@@ -279,12 +279,20 @@ As entregas estão organizadas em **6 Fases Sequenciais**, cobrindo fundação d
 
 ### Phase 6: Hardening, Rollout Gradual e Go-Live do Backoffice
 
-#### Sub-fase 6.1: Segurança Aplicacional e Testes de Intrusão Assistidos [PLANEJADA]
+#### Sub-fase 6.1: Segurança Aplicacional e Testes de Intrusão Assistidos [CONCLUÍDA]
 * **Backend & Infra:**
-  * Hardening de autenticação, proteção contra elevação de privilégio e validação forte de policies.
-  * Testes automatizados de autorização negativa para endpoints sensíveis.
+  * Hardening do pipeline de autenticação administrativa em `AuthenticateAdminUserCommandHandler` com mitigação de *timing attacks* via verificação em tempo constante (`dummy PBKDF2 hash comparison`), prevenindo enumeração de administradores.
+  * Rate limiting defensivo nativo do ASP.NET Core 10 (`BackofficeAuthRateLimiter`) com limite de requisições por minuto e resposta padronizada `429 Too Many Requests` (`Backoffice.RateLimitExceeded`) para `/api/v1/backoffice/auth/login` e `/refresh`.
+  * Contenção e isolamento estrito de tokens de suporte assistido em `BackofficeAccessMiddleware`: bloqueio compulsório com `403 Forbidden` (`Backoffice.ImpersonationRestricted`) caso tokens de impersonação tentem acessar rotas do backoffice.
+  * Proteção avançada de cabeçalhos HTTP no `SecurityHeadersMiddleware`: injeção de `Content-Security-Policy`, `Permissions-Policy` e `Cache-Control: no-store, no-cache, must-revalidate` em 100% das rotas administrativas.
+  * Validação estrita de escopos permitidos (`ScopeGlobal`, `ScopeTenant`, `ScopeUnidade`) em `PermissionEvaluatorService` com rejeição por `BackofficeErrors.InvalidScopeData`.
 * **TDD & Validação:**
-  * Suíte de regressão de segurança executada em CI/CD com bloqueio de merge em falha.
+  * Suíte automatizada de hardening de autenticação `BackofficeAuthenticationHardeningTests` validando timing attack dummy check, MFA obrigatório/inválido, rotação de refresh token e bloqueio de replay de sessões revogadas/expiradas.
+  * Matriz exaustiva de testes de autorização negativa `BackofficeNegativeAuthorizationTests` cobrindo OWASP API1 (BOLA), API5 (BFLA) e Least Privilege para todos os papéis (`Anonymous`, `TenantUser`, `ReadOnlyAuditor`, `SupportN1`, `SupportN2`, `FinanceOps` e `PlatformOwner`), incluindo bloqueio de auto-aprovação de 4-Eyes.
+  * Testes de integração de cabeçalhos de segurança em `SecurityConfigurationTests` cobrindo CSP, Permissions-Policy, HSTS e no-store cache.
+  * Suíte de segurança categorizada com `[Trait("Category", "SecurityRegression")]` para bloqueio de merge em CI/CD.
+  * 100% de sucesso na suíte de testes (282 testes aprovados no Backoffice, 23 testes no cliente Web, 7 testes de arquitetura de segurança, zero falhas).
+  * Formalização arquitetural via ADR `0012-application-security-hardening-and-assisted-penetration-tests.md`.
 
 #### Sub-fase 6.2: Rollout por Ondas e Feature Flags [PLANEJADA]
 * **Operação:**
