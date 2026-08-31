@@ -79,6 +79,9 @@ using CriaCerto.Modules.Backoffice.Application.Features.Plans.Dtos;
 using CriaCerto.Modules.Backoffice.Application.Features.Impersonation.Commands;
 using CriaCerto.Modules.Backoffice.Application.Features.Impersonation.Queries;
 using CriaCerto.Modules.Backoffice.Application.Features.Impersonation.Dtos;
+using CriaCerto.Modules.Backoffice.Application.Features.Support.Commands;
+using CriaCerto.Modules.Backoffice.Application.Features.Support.Queries;
+using CriaCerto.Modules.Backoffice.Application.Features.Support.Dtos;
 using CriaCerto.Modules.Backoffice.Application.Security;
 using CriaCerto.Modules.Backoffice.Infrastructure;
 using CriaCerto.Modules.Backoffice.Infrastructure.Persistence;
@@ -648,6 +651,34 @@ backoffice.MapGet("/impersonation/history", async (Guid? tenantId, Guid? adminUs
     var result = await sender.Send(new GetImpersonationHistoryQuery(tenantId, adminUserId, page ?? 1, pageSize ?? 20));
     return ToHttpResult(result);
 }).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.AuditRead)).WithTags("Backoffice Impersonation");
+
+// --- BACKOFFICE SUPPORT WORKBENCH ENDPOINTS ---
+backoffice.MapGet("/support/tenants/{id:guid}/diagnostics", async (Guid id, ISender sender) =>
+{
+    var result = await sender.Send(new GetTenantDiagnosticsQuery(id));
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.SupportDiagnose)).WithTags("Backoffice Support");
+
+backoffice.MapGet("/support/playbooks", async (ISender sender) =>
+{
+    var result = await sender.Send(new GetSupportPlaybooksQuery());
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.SupportDiagnose)).WithTags("Backoffice Support");
+
+backoffice.MapPost("/support/tenants/{id:guid}/remediation", async (Guid id, ExecuteRemediationRequest req, HttpContext ctx, ISender sender) =>
+{
+    var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var command = new ExecuteTenantRemediationCommand(
+        id,
+        req.ActionType,
+        req.SupportTicketId,
+        req.Justification,
+        callerId,
+        callerEmail,
+        ip);
+    var result = await sender.Send(command);
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.SupportRemediate)).WithTags("Backoffice Support");
 
 // Backoffice Auth Endpoints (Anonymous / Credentials + MFA)
 app.MapPost("/api/v1/backoffice/auth/login", async (BackofficeLoginRequest req, HttpContext ctx, ISender sender) =>

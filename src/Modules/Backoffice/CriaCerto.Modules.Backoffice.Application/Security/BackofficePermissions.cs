@@ -20,6 +20,10 @@ public static class BackofficePermissions
     public const string ImpersonationStart = "impersonation.start";
     public const string ImpersonationStop = "impersonation.stop";
 
+    // Support Workbench
+    public const string SupportDiagnose = "support.diagnose";
+    public const string SupportRemediate = "support.remediate";
+
     // Audit & Admin Users
     public const string AuditRead = "audit.read";
     public const string UsersAdminManage = "users_admin.manage";
@@ -35,6 +39,7 @@ public static class BackofficePermissions
         PlansRead, PlansWrite, PlansPublish,
         SubscriptionsRead, SubscriptionsManage,
         ImpersonationStart, ImpersonationStop,
+        SupportDiagnose, SupportRemediate,
         AuditRead, UsersAdminManage
     };
 

@@ -7,6 +7,7 @@
 @using CriaCerto.Web.Client.Services
 @inject IBackofficeApiClient ApiClient
 @inject IJSRuntime JS
+@inject NavigationManager Navigation
 
 <PermissionGuard Permission="@BackofficePermissions.TenantsRead">
     <Authorized>
@@ -206,6 +207,13 @@
                                     <Authorized>
                                         <button class="btn btn-secondary" @onclick="OpenEditModal">Editar</button>
                                         <button class="btn btn-primary ms-1" @onclick="OpenPlanChangeModal">Alterar Plano</button>
+                                    </Authorized>
+                                </PermissionGuard>
+                                <PermissionGuard Permission="@BackofficePermissions.SupportDiagnose">
+                                    <Authorized>
+                                        <button class="btn btn-secondary ms-1" @onclick="NavigateToSupportWorkbench" title="Abrir Raio-X e Workbench de Suporte">
+                                            <span>🛠️ Suporte</span>
+                                        </button>
                                     </Authorized>
                                 </PermissionGuard>
                                 <PermissionGuard Permission="@BackofficePermissions.ImpersonationStart">
@@ -933,6 +941,12 @@
     {
         if (SelectedTenant == null) return;
         IsImpersonationModalOpen = true;
+    }
+
+    private void NavigateToSupportWorkbench()
+    {
+        if (SelectedTenant == null) return;
+        Navigation.NavigateTo($"backoffice/support/{SelectedTenant.Id}");
     }
 
     private static bool CanImpersonate(TenantAdminDetailDto? tenant)

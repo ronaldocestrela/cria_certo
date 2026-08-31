@@ -1,0 +1,1182 @@
+@page "/backoffice/support"
+@page "/backoffice/support/{TenantIdParam:guid}"
+@layout Layout.BackofficeLayout
+@using CriaCerto.Modules.Backoffice.Application.Features.Support.Dtos
+@using CriaCerto.Modules.Backoffice.Application.Features.Tenants.Dtos
+@using CriaCerto.Modules.Backoffice.Application.Security
+@using CriaCerto.Web.Client.Components.Backoffice
+@using CriaCerto.Web.Client.Services
+@inject IBackofficeApiClient ApiClient
+@inject NavigationManager Navigation
+@inject IBackofficePermissionService PermissionService
+
+<PermissionGuard Permission="@BackofficePermissions.SupportDiagnose">
+    <Authorized>
+        <div class="support-workbench">
+            <header class="workbench-header">
+                <div class="header-titles">
+                    <div class="header-badge-row">
+                        <span class="badge-workbench">🛠️ Suporte N1/N2</span>
+                        @if (CanRemediate)
+                        {
+                            <span class="badge-n2">Nível N2: Remediação Ativa</span>
+                        }
+                        else
+                        {
+                            <span class="badge-n1">Nível N1: Diagnóstico Assistido</span>
+                        }
+                    </div>
+                    <h1 class="page-title">Workbench de Suporte e Operações Assistidas</h1>
+                    <p class="page-subtitle">Raio-X de saúde operacional do tenant, playbooks interativos e catálogo de ações remediativas seguras.</p>
+                </div>
+
+                <div class="header-controls">
+                    <div class="tenant-search-wrapper">
+                        <span class="search-icon">🔍</span>
+                        <input type="text"
+                               class="tenant-search-input"
+                               placeholder="Buscar tenant por nome ou CNPJ..."
+                               @bind="TenantSearchTerm"
+                               @bind:event="oninput"
+                               @onkeyup="HandleTenantSearch" />
+
+                        @if (MatchingTenants.Any() && IsSearchDropdownOpen)
+                        {
+                            <div class="tenant-dropdown">
+                                @foreach (var tenant in MatchingTenants)
+                                {
+                                    <div class="tenant-dropdown-item" @onclick="() => SelectTenant(tenant.Id)">
+                                        <div class="tenant-item-title">
+                                            <strong>@tenant.Name</strong>
+                                            <span class="status-pill status-@tenant.Status.ToLower()">@tenant.Status</span>
+                                        </div>
+                                        <div class="tenant-item-meta">
+                                            <span>CNPJ: @tenant.CNPJ</span>
+                                            <span>Plano: @tenant.SubscribedPlan</span>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+            </header>
+
+            @if (IsLoading)
+            {
+                <div class="loading-container">
+                    <div class="spinner"></div>
+                    <p>Carregando diagnóstico assistido do tenant...</p>
+                </div>
+            }
+            else if (SelectedTenantId is null)
+            {
+                <div class="empty-selection-state">
+                    <div class="empty-icon">🏢</div>
+                    <h3>Selecione uma Fazenda / Tenant para Iniciar o Diagnóstico</h3>
+                    <p>Utilize a barra de pesquisa acima para selecionar o produtor rural que solicitou assistência técnica ou que possui alerta operacional.</p>
+                </div>
+            }
+            else if (DiagnosticReport is not null)
+            {
+                <!-- TENANT OVERVIEW BAR -->
+                <div class="tenant-identity-bar">
+                    <div class="identity-info">
+                        <div class="identity-main">
+                            <h2>@DiagnosticReport.Overview.TradeName</h2>
+                            <span class="status-pill status-@DiagnosticReport.Overview.Status.ToLower()">@DiagnosticReport.Overview.Status</span>
+                            @if (DiagnosticReport.Overview.IsProtected)
+                            {
+                                <span class="badge-protected">🛡️ Protegido</span>
+                            }
+                        </div>
+                        <div class="identity-meta">
+                            <span>Razão: @DiagnosticReport.Overview.LegalName</span>
+                            <span>CNPJ: @DiagnosticReport.Overview.DocumentNumber</span>
+                            <span>Plano: <strong>@DiagnosticReport.Overview.SubscribedPlan</strong></span>
+                            @if (!string.IsNullOrEmpty(DiagnosticReport.Overview.SizeSegment))
+                            {
+                                <span>Porte: @DiagnosticReport.Overview.SizeSegment</span>
+                            }
+                            @if (!string.IsNullOrEmpty(DiagnosticReport.Overview.CommercialRegion))
+                            {
+                                <span>Região: @DiagnosticReport.Overview.CommercialRegion</span>
+                            }
+                        </div>
+                    </div>
+
+                    <div class="identity-actions">
+                        <PermissionGuard Permission="@BackofficePermissions.ImpersonationStart">
+                            <Authorized>
+                                <button class="btn btn-impersonate" @onclick="OpenImpersonationModal" title="Acessar com dupla salvaguarda">
+                                    🔑 Impersonar Tenant
+                                </button>
+                            </Authorized>
+                        </PermissionGuard>
+                        <button class="btn btn-refresh" @onclick="() => LoadDiagnostics(SelectedTenantId.Value)" title="Atualizar dados">
+                            🔄 Atualizar Raio-X
+                        </button>
+                    </div>
+                </div>
+
+                @if (DiagnosticReport.ActiveSupportSession is not null)
+                {
+                    <div class="active-session-banner">
+                        <span class="pulsing-dot"></span>
+                        <div>
+                            <strong>Sessão de Atendimento N2 Ativa no momento</strong>
+                            <p>Operador: @DiagnosticReport.ActiveSupportSession.AdminEmail | Chamado: <code>@DiagnosticReport.ActiveSupportSession.SupportTicket</code> | Expira em ~@DiagnosticReport.ActiveSupportSession.RemainingMinutes min</p>
+                        </div>
+                    </div>
+                }
+
+                <!-- DIAGNOSTIC KPI TILES -->
+                <div class="kpis-grid">
+                    <!-- 1. SYNC HEALTH -->
+                    <div class="diagnostic-card @GetSyncHealthClass(DiagnosticReport.SyncHealth.Status)">
+                        <div class="card-header">
+                            <span class="card-title">Sincronização & PWA (Campo)</span>
+                            <span class="badge-health badge-@DiagnosticReport.SyncHealth.Status.ToLower()">
+                                @DiagnosticReport.SyncHealth.Status
+                            </span>
+                        </div>
+                        <div class="card-body">
+                            <div class="metric-row">
+                                <span class="metric-label">Operações Pendentes:</span>
+                                <strong class="metric-val">@DiagnosticReport.SyncHealth.PendingQueueOperations</strong>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label">Conflitos Recentes:</span>
+                                <strong class="metric-val">@DiagnosticReport.SyncHealth.RecentConflictsCount</strong>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label">Último Sincronismo:</span>
+                                <span class="metric-date">@(DiagnosticReport.SyncHealth.LastSuccessfulSyncUtc?.ToLocalTime().ToString("g") ?? "N/A")</span>
+                            </div>
+                            <p class="card-summary">@DiagnosticReport.SyncHealth.HealthSummary</p>
+                        </div>
+                        <div class="card-footer">
+                            <PermissionGuard Permission="@BackofficePermissions.SupportRemediate">
+                                <Authorized>
+                                    <button class="btn-action-small" @onclick="() => OpenRemediationModal(nameof(RemediationActionType.RequestClientCacheReset))">
+                                        ⚡ Reset Cache Mobile
+                                    </button>
+                                </Authorized>
+                            </PermissionGuard>
+                        </div>
+                    </div>
+
+                    <!-- 2. REBANHO E CAPACIDADE -->
+                    <div class="diagnostic-card">
+                        <div class="card-header">
+                            <span class="card-title">Capacidade do Rebanho</span>
+                            <span class="badge-quota @(DiagnosticReport.Overview.Status == "PastDue" ? "badge-warning" : "badge-normal")">
+                                Quota Contratada
+                            </span>
+                        </div>
+                        <div class="card-body">
+                            <div class="capacity-stats">
+                                <div class="capacity-numbers">
+                                    <span class="current-count">@DiagnosticReport.Modules.FirstOrDefault()?.CurrentHeadCount</span>
+                                    <span class="limit-count">/ @DiagnosticReport.Modules.FirstOrDefault()?.HeadLimit cab</span>
+                                </div>
+                                @{
+                                    var firstMod = DiagnosticReport.Modules.FirstOrDefault();
+                                    var pct = firstMod != null && firstMod.HeadLimit > 0
+                                        ? Math.Min(100, (firstMod.CurrentHeadCount * 100) / firstMod.HeadLimit)
+                                        : 0;
+                                }
+                                <div class="progress-bar-bg">
+                                    <div class="progress-bar-fill @(pct >= 90 ? "fill-danger" : "fill-primary")" style="width: @pct%"></div>
+                                </div>
+                                <span class="progress-label">@pct% da capacidade utilizada</span>
+                            </div>
+                        </div>
+                        <div class="card-footer">
+                            <PermissionGuard Permission="@BackofficePermissions.SupportRemediate">
+                                <Authorized>
+                                    <button class="btn-action-small" @onclick="() => OpenRemediationModal(nameof(RemediationActionType.ReconcileEntitlements))">
+                                        ⚖️ Reconciliar Quotas
+                                    </button>
+                                </Authorized>
+                            </PermissionGuard>
+                        </div>
+                    </div>
+
+                    <!-- 3. FILAS E JOBS ASSÍNCRONOS -->
+                    <div class="diagnostic-card">
+                        <div class="card-header">
+                            <span class="card-title">Filas e Jobs em Background</span>
+                            <span class="badge-queue badge-@DiagnosticReport.QueueHealth.Status.ToLower()">
+                                @DiagnosticReport.QueueHealth.Status
+                            </span>
+                        </div>
+                        <div class="card-body">
+                            <div class="metric-row">
+                                <span class="metric-label">Jobs Ativos:</span>
+                                <strong class="metric-val">@DiagnosticReport.QueueHealth.ActiveJobsCount</strong>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label">Msgs Pendentes:</span>
+                                <strong class="metric-val">@DiagnosticReport.QueueHealth.PendingMessagesCount</strong>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label">Falhas Temporárias:</span>
+                                <strong class="metric-val">@DiagnosticReport.QueueHealth.FailedMessagesCount</strong>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label">Última Execução:</span>
+                                <span class="metric-date">@(DiagnosticReport.QueueHealth.LastRunUtc?.ToLocalTime().ToString("t") ?? "N/A")</span>
+                            </div>
+                        </div>
+                        <div class="card-footer">
+                            <PermissionGuard Permission="@BackofficePermissions.SupportRemediate">
+                                <Authorized>
+                                    <button class="btn-action-small" @onclick="() => OpenRemediationModal(nameof(RemediationActionType.RetryFailedQueueItems))">
+                                        🔁 Reprocessar Filas
+                                    </button>
+                                </Authorized>
+                            </PermissionGuard>
+                        </div>
+                    </div>
+
+                    <!-- 4. CACHE & LOCKS -->
+                    <div class="diagnostic-card">
+                        <div class="card-header">
+                            <span class="card-title">Sessão & Estado Transitório</span>
+                            <span class="badge-normal">Em Memória</span>
+                        </div>
+                        <div class="card-body">
+                            <p class="transient-info">
+                                Caches de permissões, resolução multi-tenant e tokens de concorrência podem ser limpos com segurança caso o cliente reporte divergências cadastrais.
+                            </p>
+                        </div>
+                        <div class="card-footer flex-actions">
+                            <PermissionGuard Permission="@BackofficePermissions.SupportRemediate">
+                                <Authorized>
+                                    <button class="btn-action-small" @onclick="() => OpenRemediationModal(nameof(RemediationActionType.EvictTenantCache))">
+                                        🧹 Limpar Cache
+                                    </button>
+                                    <button class="btn-action-small" @onclick="() => OpenRemediationModal(nameof(RemediationActionType.ResetTransientLocks))">
+                                        🔓 Destravar Locks
+                                    </button>
+                                </Authorized>
+                            </PermissionGuard>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ACTIVE MODULES GRID -->
+                <div class="section-container">
+                    <h3 class="section-title">📦 Módulos Ativos e Entitlements do Plano</h3>
+                    <div class="modules-grid">
+                        @foreach (var mod in DiagnosticReport.Modules)
+                        {
+                            <div class="module-card @(mod.IsEnabled ? "module-enabled" : "module-disabled")">
+                                <div class="module-header">
+                                    <span class="module-name">@mod.ModuleName</span>
+                                    <span class="module-status-pill @(mod.IsEnabled ? "status-enabled" : "status-disabled")">
+                                        @(mod.IsEnabled ? "Habilitado" : "Não Contratado")
+                                    </span>
+                                </div>
+                                <p class="module-notes">@mod.Notes</p>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- PLAYBOOKS ASSISTIDOS -->
+                <div class="section-container">
+                    <div class="section-header-row">
+                        <div>
+                            <h3 class="section-title">📖 Playbooks Operacionais Padronizados</h3>
+                            <p class="section-desc">Instruções passo a passo recomendadas para diagnósticos comuns de campo e saneamento assistido.</p>
+                        </div>
+                    </div>
+
+                    <div class="playbooks-accordion">
+                        @foreach (var playbook in Playbooks)
+                        {
+                            var isOpen = ExpandedPlaybookId == playbook.Id;
+                            <div class="playbook-item @(isOpen ? "playbook-open" : "")">
+                                <div class="playbook-header" @onclick="() => TogglePlaybook(playbook.Id)">
+                                    <div class="playbook-title-meta">
+                                        <span class="playbook-code">@playbook.Code</span>
+                                        <h4>@playbook.Title</h4>
+                                        <span class="playbook-category">@playbook.Category</span>
+                                    </div>
+                                    <span class="accordion-arrow">@(isOpen ? "▲" : "▼")</span>
+                                </div>
+
+                                @if (isOpen)
+                                {
+                                    <div class="playbook-content">
+                                        <p class="playbook-desc">@playbook.Description</p>
+                                        <div class="playbook-steps">
+                                            <h5>Roteiro de Verificação Diagnóstica:</h5>
+                                            <ol>
+                                                @foreach (var step in playbook.Steps.OrderBy(s => s.Order))
+                                                {
+                                                    <li>
+                                                        <div class="step-line">
+                                                            <strong>@step.Action</strong>
+                                                            <span class="expected-result">Esperado: @step.ExpectedResult</span>
+                                                        </div>
+                                                    </li>
+                                                }
+                                            </ol>
+                                        </div>
+
+                                        <div class="playbook-action-row">
+                                            <PermissionGuard Permission="@BackofficePermissions.SupportRemediate">
+                                                <Authorized>
+                                                    <button class="btn btn-remediate" @onclick="() => OpenRemediationModal(playbook.RecommendedActionType)">
+                                                        ⚡ Executar Remediação Recomendada (@playbook.RecommendedActionType)
+                                                    </button>
+                                                </Authorized>
+                                                <NotAuthorized>
+                                                    <span class="permission-hint">🔒 Execução de remediações requer papel SupportN2 ou PlatformOwner.</span>
+                                                </NotAuthorized>
+                                            </PermissionGuard>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- INCIDENTES RECENTES -->
+                @if (DiagnosticReport.RecentFailures.Any())
+                {
+                    <div class="section-container">
+                        <h3 class="section-title">⚠️ Falhas e Alertas Recentes do Tenant</h3>
+                        <div class="table-responsive">
+                            <table class="failures-table">
+                                <thead>
+                                    <tr>
+                                        <th>Timestamp</th>
+                                        <th>Severidade</th>
+                                        <th>Código</th>
+                                        <th>Origem / Serviço</th>
+                                        <th>Mensagem</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var fail in DiagnosticReport.RecentFailures)
+                                    {
+                                        <tr>
+                                            <td>@fail.TimestampUtc.ToLocalTime().ToString("g")</td>
+                                            <td>
+                                                <span class="severity-badge severity-@fail.Severity.ToLower()">@fail.Severity</span>
+                                            </td>
+                                            <td><code>@fail.ErrorCode</code></td>
+                                            <td>@fail.EndpointOrSource</td>
+                                            <td>@fail.Message</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+
+        <!-- MODAL DE REMEDIAÇÃO -->
+        <ExecuteRemediationModal
+            IsOpen="IsRemediationModalOpen"
+            TenantId="SelectedTenantId ?? Guid.Empty"
+            TenantName="@(DiagnosticReport?.Overview.TradeName ?? string.Empty)"
+            ActionType="@SelectedActionType"
+            OnClose="() => IsRemediationModalOpen = false"
+            OnRemediationExecuted="HandleRemediationExecuted" />
+
+        <!-- MODAL DE IMPERSONAÇÃO -->
+        <StartImpersonationModal
+            IsOpen="IsImpersonationModalOpen"
+            TenantId="SelectedTenantId ?? Guid.Empty"
+            TenantName="@(DiagnosticReport?.Overview.TradeName ?? string.Empty)"
+            TenantPlan="@(DiagnosticReport?.Overview.SubscribedPlan ?? string.Empty)"
+            TenantStatus="@(DiagnosticReport?.Overview.Status ?? string.Empty)"
+            OnClose="() => IsImpersonationModalOpen = false" />
+    </Authorized>
+</PermissionGuard>
+
+@code {
+    [Parameter] public Guid? TenantIdParam { get; set; }
+
+    private Guid? SelectedTenantId;
+    private string TenantSearchTerm = string.Empty;
+    private List<TenantAdminSummaryDto> MatchingTenants = new();
+    private bool IsSearchDropdownOpen;
+    private bool IsLoading;
+    private bool CanRemediate;
+    private TenantDiagnosticReportDto? DiagnosticReport;
+    private IReadOnlyCollection<SupportPlaybookDto> Playbooks = Array.Empty<SupportPlaybookDto>();
+    private string? ExpandedPlaybookId = "pb-sync-01";
+
+    private bool IsRemediationModalOpen;
+    private string SelectedActionType = string.Empty;
+    private bool IsImpersonationModalOpen;
+
+    protected override async Task OnInitializedAsync()
+    {
+        CanRemediate = await PermissionService.HasPermissionAsync(BackofficePermissions.SupportRemediate);
+        Playbooks = await ApiClient.GetSupportPlaybooksAsync() ?? Array.Empty<SupportPlaybookDto>();
+
+        if (TenantIdParam.HasValue)
+        {
+            await SelectTenant(TenantIdParam.Value);
+        }
+    }
+
+    private async Task HandleTenantSearch()
+    {
+        if (string.IsNullOrWhiteSpace(TenantSearchTerm) || TenantSearchTerm.Trim().Length < 2)
+        {
+            MatchingTenants.Clear();
+            IsSearchDropdownOpen = false;
+            return;
+        }
+
+        var result = await ApiClient.GetTenantsAsync(searchTerm: TenantSearchTerm.Trim(), pageSize: 5);
+        if (result != null)
+        {
+            MatchingTenants = result.Items.ToList();
+            IsSearchDropdownOpen = MatchingTenants.Any();
+        }
+    }
+
+    private async Task SelectTenant(Guid tenantId)
+    {
+        SelectedTenantId = tenantId;
+        IsSearchDropdownOpen = false;
+        TenantSearchTerm = string.Empty;
+        await LoadDiagnostics(tenantId);
+    }
+
+    private async Task LoadDiagnostics(Guid tenantId)
+    {
+        IsLoading = true;
+        try
+        {
+            DiagnosticReport = await ApiClient.GetTenantDiagnosticsAsync(tenantId);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Erro ao carregar diagnóstico: {ex.Message}");
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private void TogglePlaybook(string id)
+    {
+        ExpandedPlaybookId = ExpandedPlaybookId == id ? null : id;
+    }
+
+    private void OpenRemediationModal(string actionType)
+    {
+        SelectedActionType = actionType;
+        IsRemediationModalOpen = true;
+    }
+
+    private void OpenImpersonationModal()
+    {
+        IsImpersonationModalOpen = true;
+    }
+
+    private async Task HandleRemediationExecuted(RemediationExecutionResultDto result)
+    {
+        if (SelectedTenantId.HasValue)
+        {
+            await LoadDiagnostics(SelectedTenantId.Value);
+        }
+    }
+
+    private string GetSyncHealthClass(string status) => status switch
+    {
+        "Critical" => "border-danger",
+        "Warning" => "border-warning",
+        _ => "border-normal"
+    };
+}
+
+<style>
+    .support-workbench {
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+        padding: 1.5rem;
+        background: #0b1329;
+        min-height: 100vh;
+        color: #f1f5f9;
+        font-family: inherit;
+    }
+
+    .workbench-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        flex-wrap: wrap;
+        gap: 1rem;
+        padding-bottom: 1.25rem;
+        border-bottom: 1px solid #1e293b;
+    }
+
+    .header-badge-row {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+        margin-bottom: 0.4rem;
+    }
+
+    .badge-workbench {
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        background: rgba(56, 189, 248, 0.15);
+        color: #38bdf8;
+        padding: 0.2rem 0.6rem;
+        border-radius: 9999px;
+        border: 1px solid rgba(56, 189, 248, 0.3);
+    }
+
+    .badge-n2 {
+        font-size: 0.7rem;
+        font-weight: 600;
+        background: rgba(16, 185, 129, 0.15);
+        color: #34d399;
+        padding: 0.2rem 0.5rem;
+        border-radius: 9999px;
+        border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    .badge-n1 {
+        font-size: 0.7rem;
+        font-weight: 600;
+        background: rgba(245, 158, 11, 0.15);
+        color: #fbbf24;
+        padding: 0.2rem 0.5rem;
+        border-radius: 9999px;
+        border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+
+    .page-title {
+        font-size: 1.5rem;
+        font-weight: 700;
+        margin: 0;
+        color: #ffffff;
+    }
+
+    .page-subtitle {
+        font-size: 0.875rem;
+        color: #94a3b8;
+        margin: 0.25rem 0 0 0;
+    }
+
+    .tenant-search-wrapper {
+        position: relative;
+        width: 340px;
+    }
+
+    .tenant-search-input {
+        width: 100%;
+        background: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 0.5rem;
+        padding: 0.6rem 0.8rem 0.6rem 2.2rem;
+        color: #f8fafc;
+        font-size: 0.875rem;
+        transition: all 0.2s;
+    }
+
+    .tenant-search-input:focus {
+        outline: none;
+        border-color: #38bdf8;
+        box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.25);
+    }
+
+    .search-icon {
+        position: absolute;
+        left: 0.7rem;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 0.9rem;
+        pointer-events: none;
+    }
+
+    .tenant-dropdown {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        margin-top: 0.35rem;
+        background: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 0.5rem;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+        z-index: 100;
+        overflow: hidden;
+    }
+
+    .tenant-dropdown-item {
+        padding: 0.65rem 0.85rem;
+        cursor: pointer;
+        border-bottom: 1px solid #0f172a;
+        transition: background 0.15s;
+    }
+
+    .tenant-dropdown-item:hover {
+        background: #334155;
+    }
+
+    .tenant-item-title {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.875rem;
+    }
+
+    .tenant-item-meta {
+        display: flex;
+        gap: 0.75rem;
+        font-size: 0.75rem;
+        color: #94a3b8;
+        margin-top: 0.2rem;
+    }
+
+    .empty-selection-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 4rem 2rem;
+        background: #1e293b;
+        border: 2px dashed #334155;
+        border-radius: 1rem;
+        text-align: center;
+    }
+
+    .empty-icon {
+        font-size: 3.5rem;
+        margin-bottom: 1rem;
+    }
+
+    .empty-selection-state h3 {
+        font-size: 1.25rem;
+        color: #f1f5f9;
+        margin-bottom: 0.5rem;
+    }
+
+    .empty-selection-state p {
+        color: #94a3b8;
+        max-width: 500px;
+        font-size: 0.9rem;
+    }
+
+    .tenant-identity-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 1rem;
+        background: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 0.75rem;
+        padding: 1.25rem 1.5rem;
+    }
+
+    .identity-main {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .identity-main h2 {
+        margin: 0;
+        font-size: 1.35rem;
+        color: #f8fafc;
+    }
+
+    .badge-protected {
+        background: rgba(239, 68, 68, 0.15);
+        color: #f87171;
+        font-size: 0.75rem;
+        font-weight: 600;
+        padding: 0.2rem 0.5rem;
+        border-radius: 9999px;
+        border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    .identity-meta {
+        display: flex;
+        gap: 1rem;
+        font-size: 0.8rem;
+        color: #94a3b8;
+        margin-top: 0.4rem;
+        flex-wrap: wrap;
+    }
+
+    .identity-actions {
+        display: flex;
+        gap: 0.75rem;
+    }
+
+    .btn {
+        padding: 0.55rem 1rem;
+        border-radius: 0.5rem;
+        font-size: 0.875rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+        border: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+    }
+
+    .btn-impersonate {
+        background: linear-gradient(135deg, #f59e0b, #d97706);
+        color: #ffffff;
+    }
+
+    .btn-impersonate:hover {
+        background: linear-gradient(135deg, #d97706, #b45309);
+    }
+
+    .btn-refresh {
+        background: #334155;
+        color: #f8fafc;
+    }
+
+    .btn-refresh:hover {
+        background: #475569;
+    }
+
+    .active-session-banner {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        background: rgba(245, 158, 11, 0.15);
+        border: 1px solid rgba(245, 158, 11, 0.35);
+        padding: 0.75rem 1.25rem;
+        border-radius: 0.5rem;
+        color: #fde68a;
+    }
+
+    .active-session-banner p {
+        margin: 0.15rem 0 0 0;
+        font-size: 0.8rem;
+        color: #fef3c7;
+    }
+
+    .pulsing-dot {
+        width: 10px;
+        height: 10px;
+        background: #f59e0b;
+        border-radius: 50%;
+        box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7);
+        animation: pulse 1.5s infinite;
+    }
+
+    @@keyframes pulse {
+        0% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7); }
+        70% { box-shadow: 0 0 0 8px rgba(245, 158, 11, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
+    }
+
+    .kpis-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 1rem;
+    }
+
+    .diagnostic-card {
+        background: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 0.75rem;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    .border-danger { border-color: rgba(239, 68, 68, 0.6); }
+    .border-warning { border-color: rgba(245, 158, 11, 0.6); }
+    .border-normal { border-color: #334155; }
+
+    .diagnostic-card .card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.85rem 1rem;
+        background: #0f172a;
+        border-bottom: 1px solid #334155;
+    }
+
+    .card-title {
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: #e2e8f0;
+    }
+
+    .badge-health {
+        font-size: 0.7rem;
+        font-weight: 700;
+        padding: 0.2rem 0.5rem;
+        border-radius: 9999px;
+        text-transform: uppercase;
+    }
+
+    .badge-healthy { background: rgba(34, 197, 94, 0.15); color: #4ade80; }
+    .badge-warning { background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
+    .badge-critical { background: rgba(239, 68, 68, 0.15); color: #f87171; }
+
+    .diagnostic-card .card-body {
+        padding: 1rem;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+    }
+
+    .metric-row {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.8rem;
+    }
+
+    .metric-label { color: #94a3b8; }
+    .metric-val { color: #f8fafc; }
+    .metric-date { color: #cbd5e1; font-size: 0.75rem; }
+
+    .card-summary {
+        font-size: 0.75rem;
+        color: #64748b;
+        margin-top: 0.4rem;
+    }
+
+    .diagnostic-card .card-footer {
+        padding: 0.65rem 1rem;
+        background: #0f172a;
+        border-top: 1px solid #334155;
+        display: flex;
+        justify-content: flex-end;
+    }
+
+    .flex-actions {
+        display: flex;
+        gap: 0.5rem;
+        justify-content: flex-end;
+    }
+
+    .btn-action-small {
+        background: #334155;
+        color: #38bdf8;
+        border: 1px solid rgba(56, 189, 248, 0.3);
+        border-radius: 0.375rem;
+        padding: 0.35rem 0.65rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.15s;
+    }
+
+    .btn-action-small:hover {
+        background: #0284c7;
+        color: #ffffff;
+    }
+
+    .capacity-numbers {
+        display: flex;
+        align-items: baseline;
+        gap: 0.25rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .current-count { font-size: 1.5rem; font-weight: 700; color: #f8fafc; }
+    .limit-count { font-size: 0.85rem; color: #94a3b8; }
+
+    .progress-bar-bg {
+        width: 100%;
+        height: 8px;
+        background: #0f172a;
+        border-radius: 9999px;
+        overflow: hidden;
+    }
+
+    .progress-bar-fill { height: 100%; border-radius: 9999px; transition: width 0.3s; }
+    .fill-primary { background: linear-gradient(90deg, #38bdf8, #2563eb); }
+    .fill-danger { background: linear-gradient(90deg, #f59e0b, #ef4444); }
+
+    .progress-label {
+        font-size: 0.75rem;
+        color: #94a3b8;
+        display: block;
+        margin-top: 0.3rem;
+    }
+
+    .section-container {
+        background: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 0.75rem;
+        padding: 1.25rem 1.5rem;
+    }
+
+    .section-title {
+        margin: 0;
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #f8fafc;
+    }
+
+    .section-desc {
+        margin: 0.25rem 0 1rem 0;
+        font-size: 0.8rem;
+        color: #94a3b8;
+    }
+
+    .modules-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 0.75rem;
+        margin-top: 0.75rem;
+    }
+
+    .module-card {
+        padding: 0.85rem 1rem;
+        border-radius: 0.5rem;
+        border: 1px solid #334155;
+        background: #0f172a;
+    }
+
+    .module-enabled { border-color: rgba(56, 189, 248, 0.3); }
+    .module-disabled { border-color: #334155; opacity: 0.6; }
+
+    .module-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.4rem;
+    }
+
+    .module-name {
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: #f8fafc;
+    }
+
+    .module-status-pill {
+        font-size: 0.65rem;
+        font-weight: 700;
+        padding: 0.15rem 0.45rem;
+        border-radius: 9999px;
+        text-transform: uppercase;
+    }
+
+    .status-enabled { background: rgba(34, 197, 94, 0.15); color: #4ade80; }
+    .status-disabled { background: rgba(148, 163, 184, 0.15); color: #94a3b8; }
+
+    .module-notes {
+        margin: 0;
+        font-size: 0.75rem;
+        color: #64748b;
+    }
+
+    .playbooks-accordion {
+        display: flex;
+        flex-direction: column;
+        gap: 0.65rem;
+    }
+
+    .playbook-item {
+        background: #0f172a;
+        border: 1px solid #334155;
+        border-radius: 0.5rem;
+        overflow: hidden;
+        transition: border-color 0.2s;
+    }
+
+    .playbook-open {
+        border-color: #38bdf8;
+    }
+
+    .playbook-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.85rem 1.15rem;
+        cursor: pointer;
+        user-select: none;
+    }
+
+    .playbook-title-meta {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .playbook-code {
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: #38bdf8;
+        background: rgba(56, 189, 248, 0.12);
+        padding: 0.2rem 0.5rem;
+        border-radius: 0.25rem;
+    }
+
+    .playbook-title-meta h4 {
+        margin: 0;
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: #f8fafc;
+    }
+
+    .playbook-category {
+        font-size: 0.7rem;
+        color: #94a3b8;
+        background: #1e293b;
+        padding: 0.15rem 0.5rem;
+        border-radius: 9999px;
+    }
+
+    .accordion-arrow {
+        color: #64748b;
+        font-size: 0.8rem;
+    }
+
+    .playbook-content {
+        padding: 1rem 1.15rem;
+        border-top: 1px solid #1e293b;
+        background: #0a0f1d;
+    }
+
+    .playbook-desc {
+        margin: 0 0 1rem 0;
+        font-size: 0.85rem;
+        color: #cbd5e1;
+    }
+
+    .playbook-steps h5 {
+        margin: 0 0 0.5rem 0;
+        font-size: 0.8rem;
+        color: #94a3b8;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .playbook-steps ol {
+        margin: 0 0 1.25rem 1.25rem;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .step-line {
+        display: flex;
+        flex-direction: column;
+        gap: 0.15rem;
+    }
+
+    .step-line strong {
+        font-size: 0.85rem;
+        color: #f1f5f9;
+    }
+
+    .expected-result {
+        font-size: 0.75rem;
+        color: #38bdf8;
+    }
+
+    .playbook-action-row {
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        padding-top: 0.5rem;
+    }
+
+    .permission-hint {
+        font-size: 0.75rem;
+        color: #94a3b8;
+    }
+
+    .btn-remediate {
+        background: linear-gradient(135deg, #0284c7, #2563eb);
+        color: #ffffff;
+    }
+
+    .btn-remediate:hover {
+        background: linear-gradient(135deg, #0369a1, #1d4ed8);
+        box-shadow: 0 4px 12px rgba(2, 132, 199, 0.35);
+    }
+
+    .failures-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 0.5rem;
+        font-size: 0.85rem;
+    }
+
+    .failures-table th {
+        text-align: left;
+        padding: 0.6rem 0.85rem;
+        background: #0f172a;
+        color: #94a3b8;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        border-bottom: 1px solid #334155;
+    }
+
+    .failures-table td {
+        padding: 0.6rem 0.85rem;
+        border-bottom: 1px solid #1e293b;
+        color: #cbd5e1;
+    }
+
+    .severity-badge {
+        font-size: 0.7rem;
+        font-weight: 700;
+        padding: 0.15rem 0.45rem;
+        border-radius: 9999px;
+        text-transform: uppercase;
+    }
+
+    .severity-warning { background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
+    .severity-error { background: rgba(239, 68, 68, 0.15); color: #f87171; }
+    .severity-critical { background: rgba(220, 38, 38, 0.25); color: #fca5a5; }
+
+    .status-pill {
+        font-size: 0.7rem;
+        font-weight: 600;
+        padding: 0.2rem 0.5rem;
+        border-radius: 9999px;
+        text-transform: uppercase;
+    }
+
+    .status-active { background: rgba(34, 197, 94, 0.15); color: #4ade80; }
+    .status-suspended { background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
+    .status-pastdue { background: rgba(239, 68, 68, 0.15); color: #f87171; }
+    .status-trial { background: rgba(56, 189, 248, 0.15); color: #38bdf8; }
+
+    .loading-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 4rem;
+        gap: 1rem;
+        color: #94a3b8;
+    }
+
+    .spinner {
+        width: 2.5rem;
+        height: 2.5rem;
+        border: 3px solid rgba(56, 189, 248, 0.2);
+        border-top-color: #38bdf8;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+    }
+</style>

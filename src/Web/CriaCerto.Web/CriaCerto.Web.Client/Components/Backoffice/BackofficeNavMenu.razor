@@ -33,6 +33,12 @@
             </NavLink>
         </PermissionGuard>
 
+        <PermissionGuard Permission="@BackofficePermissions.SupportDiagnose">
+            <NavLink class="nav-link" href="backoffice/support">
+                <span class="nav-icon">🛠️</span> Workbench Suporte
+            </NavLink>
+        </PermissionGuard>
+
         <PermissionGuard Permission="@BackofficePermissions.ImpersonationStart">
             <NavLink class="nav-link" href="backoffice/impersonation">
                 <span class="nav-icon">🔑</span> Impersonação

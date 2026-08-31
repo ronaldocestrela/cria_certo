@@ -9,6 +9,7 @@ using CriaCerto.Modules.Backoffice.Application.Features.Plans.Commands;
 using CriaCerto.Modules.Backoffice.Application.Features.Plans.Queries;
 using CriaCerto.Modules.Backoffice.Application.Features.Impersonation.Dtos;
 using CriaCerto.Modules.Backoffice.Application.Features.Impersonation.Queries;
+using CriaCerto.Modules.Backoffice.Application.Features.Support.Dtos;
 using CriaCerto.Web.Client.Models;
 using Microsoft.JSInterop;
 
@@ -78,6 +79,18 @@ public interface IBackofficeApiClient
     Task<bool> StopImpersonationAsync(Guid sessionId, string? reason = null, CancellationToken cancellationToken = default);
     Task<ImpersonationSessionDto?> GetActiveImpersonationAsync(CancellationToken cancellationToken = default);
     Task<PagedImpersonationAuditResult?> GetImpersonationHistoryAsync(Guid? tenantId = null, Guid? adminUserId = null, int page = 1, int pageSize = 20, CancellationToken cancellationToken = default);
+
+    // Support Workbench Methods
+    Task<TenantDiagnosticReportDto?> GetTenantDiagnosticsAsync(Guid tenantId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyCollection<SupportPlaybookDto>?> GetSupportPlaybooksAsync(CancellationToken cancellationToken = default);
+    Task<RemediationExecutionResult> ExecuteRemediationAsync(Guid tenantId, ExecuteRemediationRequest request, CancellationToken cancellationToken = default);
+}
+
+public sealed class RemediationExecutionResult
+{
+    public RemediationExecutionResultDto? Result { get; init; }
+    public string? ErrorMessage { get; init; }
+    public bool IsSuccess => Result is not null && string.IsNullOrWhiteSpace(ErrorMessage);
 }
 
 public sealed class ImpersonationResult
@@ -561,5 +574,43 @@ public class BackofficeApiClient : IBackofficeApiClient
         if (adminUserId.HasValue) url += $"&adminUserId={adminUserId.Value}";
 
         return await _httpClient.GetFromJsonAsync<PagedImpersonationAuditResult>(url, cancellationToken);
+    }
+
+    public async Task<TenantDiagnosticReportDto?> GetTenantDiagnosticsAsync(Guid tenantId, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        return await _httpClient.GetFromJsonAsync<TenantDiagnosticReportDto>($"api/v1/backoffice/support/tenants/{tenantId}/diagnostics", cancellationToken);
+    }
+
+    public async Task<IReadOnlyCollection<SupportPlaybookDto>?> GetSupportPlaybooksAsync(CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        return await _httpClient.GetFromJsonAsync<IReadOnlyCollection<SupportPlaybookDto>>("api/v1/backoffice/support/playbooks", cancellationToken);
+    }
+
+    public async Task<RemediationExecutionResult> ExecuteRemediationAsync(Guid tenantId, ExecuteRemediationRequest request, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.PostAsJsonAsync($"api/v1/backoffice/support/tenants/{tenantId}/remediation", request, cancellationToken);
+        if (response.IsSuccessStatusCode)
+        {
+            var dto = await response.Content.ReadFromJsonAsync<RemediationExecutionResultDto>(cancellationToken: cancellationToken);
+            return new RemediationExecutionResult { Result = dto };
+        }
+
+        Error? error = null;
+        try
+        {
+            error = await response.Content.ReadFromJsonAsync<Error>(cancellationToken: cancellationToken);
+        }
+        catch
+        {
+            // Ignore parse failures
+        }
+
+        return new RemediationExecutionResult
+        {
+            ErrorMessage = error?.Message ?? "Não foi possível executar a ação remediativa de suporte."
+        };
     }
 }

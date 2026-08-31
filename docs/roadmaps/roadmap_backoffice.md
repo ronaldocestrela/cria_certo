@@ -172,14 +172,20 @@ As entregas estão organizadas em **6 Fases Sequenciais**, cobrindo fundação d
 * **TDD & Validação:**
   * Testes de domínio `ImpersonationSessionDomainTests`, testes de features `StartImpersonationSessionCommandTests`, `StopImpersonationSessionCommandTests` e testes de segurança de claims `ImpersonationSecurityTests` aprovados com 100% de sucesso.
 
-#### Sub-fase 4.2: Workbench de Suporte N1/N2 [PLANEJADA]
+#### Sub-fase 4.2: Workbench de Suporte N1/N2 [CONCLUÍDA]
 * **Backend:**
-  * APIs de diagnóstico assistido (status de sync, filas, falhas recorrentes, módulos ativos).
-  * Catálogo de ações remediativas seguras por permissão.
+  * Permissões granulares de governança adicionadas: `support.diagnose` (N1, N2, PlatformOwner) e `support.remediate` (N2, PlatformOwner) com segregação estrita contra operações financeiras e suspensões destrutivas.
+  * API de diagnóstico assistido `GetTenantDiagnosticsQuery` consolidando saúde de sincronização PWA/campo, cotas de rebanho vs plano, matriz de módulos ativos, status de filas e jobs em background, alertas/falhas recentes e sessão de suporte ativa.
+  * Catálogo de playbooks operacionais padronizados `GetSupportPlaybooksQuery` (`PB-SYNC-01` a `PB-LOCK-05`) com roteiros de verificação passo a passo.
+  * Catálogo de ações remediativas seguras via `ExecuteTenantRemediationCommand` (`RequestClientCacheReset`, `EvictTenantCache`, `ReconcileEntitlements`, `RetryFailedQueueItems`, `ResetTransientLocks`) com dupla salvaguarda (ticket de suporte obrigatório e justificativa com mín. 10 caracteres) e registro imutável em `AuditLog` (`Support.RemediationExecuted`).
+  * Endpoints REST mapeados e protegidos: `GET /api/v1/backoffice/support/tenants/{id:guid}/diagnostics`, `GET /api/v1/backoffice/support/playbooks` e `POST /api/v1/backoffice/support/tenants/{id:guid}/remediation`.
 * **Frontend:**
-  * Console de suporte com playbooks operacionais e ações contextualizadas.
+  * Console operacional completo `SupportWorkbench.razor` com busca e seleção de tenants, cockpit com 4 cards de KPIs de diagnóstico, grid de módulos habilitados, accordion interativo com checklist de playbooks e disparo de ações sugeridas.
+  * Componente modal `ExecuteRemediationModal.razor` com salvaguardas, validação em tempo real e feedback de execução.
+  * Integração na navegação lateral `BackofficeNavMenu.razor` e atalho direto no painel 360 de `TenantsManagement.razor`.
 * **TDD & Validação:**
-  * Testes garantindo segregação entre suporte operacional e ações financeiras/sensíveis.
+  * Testes unitários de matriz RBAC (`BackofficeRolePermissionMatrixTests` e `BackofficePermissionServiceTests`) garantindo que N1 não executa remediação, N2 possui acesso remediativo e FinanceOps/Auditor são segregados.
+  * Testes funcionais em `SupportFeaturesTests` cobrindo diagnósticos, playbooks, validações de ticket/justificativa e auditoria forense com 100% de sucesso.
 
 #### Sub-fase 4.3: Gestão de Solicitações Administrativas (4-eyes principle) [PLANEJADA]
 * **Backend:**
