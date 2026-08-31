@@ -14,6 +14,7 @@ using CriaCerto.Modules.Backoffice.Application.Domain.Entities;
 using CriaCerto.Modules.Backoffice.Application.Domain.Enums;
 using CriaCerto.Modules.Backoffice.Application.Features.Approvals.Dtos;
 using CriaCerto.Modules.Backoffice.Application.Features.Audit.Dtos;
+using CriaCerto.Modules.Backoffice.Application.Features.Observability.Dtos;
 using CriaCerto.Web.Client.Models;
 using Microsoft.JSInterop;
 
@@ -23,6 +24,21 @@ public interface IBackofficeApiClient
 {
     Task<BackofficeLoginResponse> LoginAsync(string email, string password, string? mfaCode = null, CancellationToken cancellationToken = default);
     Task<BackofficeDashboardKpisModel?> GetDashboardKpisAsync(CancellationToken cancellationToken = default);
+    Task<OperationalHealthDto?> GetOperationalHealthAsync(CancellationToken cancellationToken = default);
+    Task<PagedAlertsDto?> GetBackofficeAlertsAsync(
+        int pageNumber = 1,
+        int pageSize = 25,
+        AlertStatus? status = null,
+        AlertSeverity? severity = null,
+        string? searchTerm = null,
+        string? ruleCode = null,
+        DateTime? dateFromUtc = null,
+        DateTime? dateToUtc = null,
+        CancellationToken cancellationToken = default);
+    Task<BackofficeMetricsSummaryDto?> GetBackofficeMetricsSummaryAsync(CancellationToken cancellationToken = default);
+    Task<bool> AcknowledgeAlertAsync(Guid id, CancellationToken cancellationToken = default);
+    Task<bool> ResolveAlertAsync(Guid id, string resolutionNotes, CancellationToken cancellationToken = default);
+    Task<BackofficeAlertDto?> SimulateAlertAsync(SimulateAlertRequest request, CancellationToken cancellationToken = default);
     Task<PagedResult<AdminUserSummaryDto>?> GetAdminUsersAsync(string? searchTerm = null, bool? isActive = null, string? roleName = null, int page = 1, int pageSize = 20, CancellationToken cancellationToken = default);
     Task<AdminUserDetailDto?> GetAdminUserByIdAsync(Guid id, CancellationToken cancellationToken = default);
     Task<bool> CreateAdminUserAsync(string name, string email, string password, List<Guid> roleIds, CancellationToken cancellationToken = default);
@@ -814,6 +830,80 @@ public class BackofficeApiClient : IBackofficeApiClient
         if (!response.IsSuccessStatusCode) return null;
 
         return await response.Content.ReadFromJsonAsync<AuditRetentionExecutionResultDto>(cancellationToken: cancellationToken);
+    }
+
+    public async Task<OperationalHealthDto?> GetOperationalHealthAsync(CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.GetAsync("api/v1/backoffice/observability/health", cancellationToken);
+        if (!response.IsSuccessStatusCode) return null;
+
+        return await response.Content.ReadFromJsonAsync<OperationalHealthDto>(cancellationToken: cancellationToken);
+    }
+
+    public async Task<PagedAlertsDto?> GetBackofficeAlertsAsync(
+        int pageNumber = 1,
+        int pageSize = 25,
+        AlertStatus? status = null,
+        AlertSeverity? severity = null,
+        string? searchTerm = null,
+        string? ruleCode = null,
+        DateTime? dateFromUtc = null,
+        DateTime? dateToUtc = null,
+        CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var queryParams = new List<string>
+        {
+            $"pageNumber={pageNumber}",
+            $"pageSize={pageSize}"
+        };
+
+        if (status.HasValue) queryParams.Add($"status={status.Value}");
+        if (severity.HasValue) queryParams.Add($"severity={severity.Value}");
+        if (!string.IsNullOrWhiteSpace(searchTerm)) queryParams.Add($"searchTerm={Uri.EscapeDataString(searchTerm)}");
+        if (!string.IsNullOrWhiteSpace(ruleCode)) queryParams.Add($"ruleCode={Uri.EscapeDataString(ruleCode)}");
+        if (dateFromUtc.HasValue) queryParams.Add($"dateFromUtc={Uri.EscapeDataString(dateFromUtc.Value.ToString("O"))}");
+        if (dateToUtc.HasValue) queryParams.Add($"dateToUtc={Uri.EscapeDataString(dateToUtc.Value.ToString("O"))}");
+
+        var url = $"api/v1/backoffice/observability/alerts?{string.Join("&", queryParams)}";
+        var response = await _httpClient.GetAsync(url, cancellationToken);
+        if (!response.IsSuccessStatusCode) return null;
+
+        return await response.Content.ReadFromJsonAsync<PagedAlertsDto>(cancellationToken: cancellationToken);
+    }
+
+    public async Task<BackofficeMetricsSummaryDto?> GetBackofficeMetricsSummaryAsync(CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.GetAsync("api/v1/backoffice/observability/metrics", cancellationToken);
+        if (!response.IsSuccessStatusCode) return null;
+
+        return await response.Content.ReadFromJsonAsync<BackofficeMetricsSummaryDto>(cancellationToken: cancellationToken);
+    }
+
+    public async Task<bool> AcknowledgeAlertAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.PostAsync($"api/v1/backoffice/observability/alerts/{id}/acknowledge", null, cancellationToken);
+        return response.IsSuccessStatusCode;
+    }
+
+    public async Task<bool> ResolveAlertAsync(Guid id, string resolutionNotes, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var request = new ResolveAlertRequest(Guid.Empty, string.Empty, resolutionNotes);
+        var response = await _httpClient.PostAsJsonAsync($"api/v1/backoffice/observability/alerts/{id}/resolve", request, cancellationToken);
+        return response.IsSuccessStatusCode;
+    }
+
+    public async Task<BackofficeAlertDto?> SimulateAlertAsync(SimulateAlertRequest request, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.PostAsJsonAsync("api/v1/backoffice/observability/alerts/simulate", request, cancellationToken);
+        if (!response.IsSuccessStatusCode) return null;
+
+        return await response.Content.ReadFromJsonAsync<BackofficeAlertDto>(cancellationToken: cancellationToken);
     }
 }
 

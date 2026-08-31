@@ -26,6 +26,7 @@ public class BackofficeAccessMiddleware
 
             if (user is null || user.Identity is null || !user.Identity.IsAuthenticated)
             {
+                CriaCerto.Modules.Backoffice.Application.Telemetry.BackofficeTelemetry.RecordPolicyFailure("Unauthenticated", path);
                 context.Response.StatusCode = StatusCodes.Status401Unauthorized;
                 context.Response.ContentType = "application/json";
                 await context.Response.WriteAsJsonAsync(new
@@ -43,6 +44,8 @@ public class BackofficeAccessMiddleware
 
             if (!hasAdminRole)
             {
+                var actorEmail = user.FindFirst(ClaimTypes.Email)?.Value;
+                CriaCerto.Modules.Backoffice.Application.Telemetry.BackofficeTelemetry.RecordPolicyFailure("MissingAdminRole", path, actorEmail);
                 context.Response.StatusCode = StatusCodes.Status403Forbidden;
                 context.Response.ContentType = "application/json";
                 await context.Response.WriteAsJsonAsync(new

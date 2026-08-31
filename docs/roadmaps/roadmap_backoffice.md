@@ -232,14 +232,27 @@ As entregas estão organizadas em **6 Fases Sequenciais**, cobrindo fundação d
   * 100% de sucesso na suíte global de testes (470 testes aprovados, incluindo testes de arquitetura com Testcontainers).
   * Formalização arquitetural via ADR `0009-forensic-audit-trail-and-retention-policy.md`.
 
-#### Sub-fase 5.2: Observabilidade de Backoffice e Alertas [PLANEJADA]
+#### Sub-fase 5.2: Observabilidade de Backoffice e Alertas [CONCLUÍDA]
 * **Backend & DevOps:**
-  * Métricas e traces para fluxos de admin: latência de consultas, falhas de policy, picos de impersonação.
-  * Alertas para comportamento anômalo (tentativas negadas em sequência, ações críticas fora de janela).
+  * Métricas nativas .NET 10 via `System.Diagnostics.Metrics.Meter` (`backoffice.admin_actions.total`, `backoffice.policy_failures.total`, `backoffice.impersonation_sessions.active`, `backoffice.operation_latency.duration_ms`, `backoffice.alerts.triggered.total`).
+  * Tracing distribuído via `System.Diagnostics.ActivitySource` e pipeline behavior MediatR `BackofficeObservabilityBehavior` para medição automática e transparente de latência e spans.
+  * Motor de detecção de anomalias `AnomalyDetectionEngine` com regras operacionais: violações consecutivas de política/acesso (`ALR_POLICY_BRUTE_FORCE`), operações críticas fora da janela regular (`ALR_OFF_HOURS_CRITICAL_ACTION`), surto anômalo de impersonações (`ALR_IMPERSONATION_BURST`) e detecção de adulteração de hash na trilha forense (`ALR_FORENSIC_TAMPER_DETECTED`).
+  * Entidade de domínio `BackofficeAlert` com deduplicação inteligente (`Fingerprint`), ciclo de vida (`Active`, `Acknowledged`, `Resolved`) e notas de resolução técnica obrigatórias.
+  * Endpoints REST mapeados sob `/api/v1/backoffice/observability` (`/health`, `/alerts`, `/metrics`, `/alerts/{id}/acknowledge`, `/alerts/{id}/resolve`, `/alerts/simulate`) protegidos por claims RBAC (`observability.read` e `observability.manage`).
+  * Migração EF Core `AddBackofficeObservabilityAndAlerts` com índices em `(Status, Severity)`, `Fingerprint`, `LastTriggeredAtUtc` e `RuleCode`.
 * **Frontend:**
-  * Painel de saúde operacional com indicadores de risco e eventos ativos.
+  * Painel de controle `OperationalHealthDashboard.razor` em `/backoffice/observability` com indicador global de saúde em tempo real (Saudável, Degradado, Crítico) e auto-refresh periódico de 30s.
+  * 4 KPI cards operacionais: status de integridade forense criptográfica, alertas críticos ativos, taxa de falhas de política nas 24h e sessões de suporte assistido ativas.
+  * Central de incidentes com grid interativa, filtros multifatoriais por status, severidade e busca textual.
+  * Modais especializados: `AlertDetailModal.razor` (triagem rápida, histórico, inspeção de JSON de contexto e formulário de encerramento) e `SimulateAlertModal.razor` (sandbox para simulação de incidentes sintéticos).
+  * Extensão do cliente de API `BackofficeApiClient.cs` e integração na navegação global `BackofficeNavMenu.razor` e `BackofficeDashboard.razor`.
 * **TDD & Validação:**
-  * Testes de contrato para eventos/telemetria e validação de regras de alerta.
+  * Testes unitários de domínio `BackofficeAlertDomainTests` validando criação, incrementação por fingerprint, transições de estado e validações de notas.
+  * Testes do motor de detecção `AnomalyDetectionEngineTests` validando disparo por threshold de política, horário noturno/fim de semana, pico de impersonação e quebra na cadeia de hash.
+  * Testes de features CQRS `ObservabilityFeaturesTests` e de pipeline de telemetria `BackofficeTelemetryTests`.
+  * Testes de permissões e controle de acesso no cliente `BackofficePermissionServiceTests`.
+  * 100% de aprovação na suíte global de testes (502 testes aprovados, incluindo testes de arquitetura com Testcontainers, 196 testes no Backoffice e 20 testes no cliente Web, com zero falhas e zero warnings).
+  * Formalização arquitetural via ADR `0010-backoffice-observability-and-anomaly-alerts.md`.
 
 #### Sub-fase 5.3: Compliance LGPD e Governança de Acesso [PLANEJADA]
 * **Backend:**

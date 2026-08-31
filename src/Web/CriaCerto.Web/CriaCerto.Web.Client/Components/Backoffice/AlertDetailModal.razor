@@ -1,0 +1,706 @@
+@using CriaCerto.Modules.Backoffice.Application.Domain.Enums
+@using CriaCerto.Modules.Backoffice.Application.Features.Observability.Dtos
+@using CriaCerto.Web.Client.Services
+@inject IBackofficeApiClient ApiClient
+@inject IToastService ToastService
+
+@if (IsOpen && Alert is not null)
+{
+    <div class="modal-backdrop" @onclick="Close">
+        <div class="modal-content" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <div class="header-title-area">
+                    <span class="severity-badge sev-@Alert.Severity.ToString().ToLower()">@GetSeverityLabel(Alert.Severity)</span>
+                    <span class="status-badge status-@Alert.Status.ToString().ToLower()">@GetStatusLabel(Alert.Status)</span>
+                    <h3>@Alert.Title</h3>
+                </div>
+                <button class="btn-close" @onclick="Close" aria-label="Fechar">&times;</button>
+            </div>
+
+            <div class="modal-body">
+                <!-- Regra e Ocorrências -->
+                <div class="rule-banner">
+                    <div class="rule-info">
+                        <span class="rule-code">@Alert.RuleCode</span>
+                        <p class="rule-desc">@Alert.Description</p>
+                    </div>
+                    <div class="occurrence-badge">
+                        <span class="count">@Alert.OccurrenceCount</span>
+                        <span class="lbl">ocorrência@(Alert.OccurrenceCount > 1 ? "s" : "")</span>
+                    </div>
+                </div>
+
+                <!-- Metadados em Grid -->
+                <div class="meta-grid">
+                    <div class="meta-card">
+                        <span class="meta-label">Primeiro Disparo</span>
+                        <span class="meta-value">@Alert.FirstTriggeredAtUtc.ToString("dd/MM/yyyy HH:mm:ss") UTC</span>
+                        <span class="meta-sub">Local: @Alert.FirstTriggeredAtUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")</span>
+                    </div>
+
+                    <div class="meta-card">
+                        <span class="meta-label">Último Disparo</span>
+                        <span class="meta-value">@Alert.LastTriggeredAtUtc.ToString("dd/MM/yyyy HH:mm:ss") UTC</span>
+                        <span class="meta-sub">Recorrência registrada</span>
+                    </div>
+
+                    <div class="meta-card">
+                        <span class="meta-label">Tenant Relacionado</span>
+                        <span class="meta-value">@(string.IsNullOrWhiteSpace(Alert.TargetTenantName) ? "Global / Plataforma" : Alert.TargetTenantName)</span>
+                        @if (Alert.TargetTenantId.HasValue)
+                        {
+                            <span class="meta-sub code-font">ID: @Alert.TargetTenantId.Value</span>
+                        }
+                    </div>
+
+                    <div class="meta-card">
+                        <span class="meta-label">Operador / Alvo</span>
+                        <span class="meta-value">@(string.IsNullOrWhiteSpace(Alert.RelatedAdminEmail) ? "Sistema Automático" : Alert.RelatedAdminEmail)</span>
+                        <span class="meta-sub">Fingerprint: <span class="code-font">@Alert.Fingerprint</span></span>
+                    </div>
+                </div>
+
+                <!-- Ciclo de Vida e Resolução -->
+                @if (Alert.Status == AlertStatus.Resolved)
+                {
+                    <div class="lifecycle-card resolved">
+                        <div class="card-header">
+                            <span class="icon">✅</span>
+                            <strong>Alerta Resolvido</strong>
+                        </div>
+                        <p class="resolution-meta">
+                            Resolvido por <strong>@(Alert.ResolvedByEmail ?? "Operador")</strong> em @Alert.ResolvedAtUtc?.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss").
+                        </p>
+                        <div class="notes-box">
+                            <span class="notes-lbl">Notas de Resolução Técnica:</span>
+                            <p class="notes-text">@Alert.ResolutionNotes</p>
+                        </div>
+                    </div>
+                }
+                else if (Alert.Status == AlertStatus.Acknowledged)
+                {
+                    <div class="lifecycle-card acknowledged">
+                        <div class="card-header">
+                            <span class="icon">👁️</span>
+                            <strong>Alerta em Análise (Reconhecido)</strong>
+                        </div>
+                        <p class="resolution-meta">
+                            Reconhecido por <strong>@(Alert.AcknowledgedByEmail ?? "Operador")</strong> em @Alert.AcknowledgedAtUtc?.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss").
+                        </p>
+
+                        <div class="resolve-form">
+                            <label class="form-label" for="res-notes">Inserir Parecer Técnico para Resolução <span class="req">*</span></label>
+                            <textarea id="res-notes" class="form-textarea" rows="3" placeholder="Descreva as medidas corretivas aplicadas (mínimo 5 caracteres)..." @bind="_resolutionNotes"></textarea>
+                            <button class="btn-resolve" @onclick="HandleResolve" disabled="@_isProcessing">
+                                @if (_isProcessing)
+                                {
+                                    <span class="spinner-small"></span>
+                                    <span>Salvando...</span>
+                                }
+                                else
+                                {
+                                    <span>Marcar Alerta como Resolvido</span>
+                                }
+                            </button>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="lifecycle-card active">
+                        <div class="card-header">
+                            <span class="icon">⚡</span>
+                            <strong>Ações Rápidas de Triagem Operacional</strong>
+                        </div>
+                        <div class="action-buttons-row">
+                            <button class="btn-ack" @onclick="HandleAcknowledge" disabled="@_isProcessing">
+                                <span>Reconhecer Alerta (Em Triagem)</span>
+                            </button>
+
+                            <button class="btn-toggle-resolve" @onclick="() => _showDirectResolve = !_showDirectResolve">
+                                <span>Resolver Imediatamente...</span>
+                            </button>
+                        </div>
+
+                        @if (_showDirectResolve)
+                        {
+                            <div class="resolve-form mt-3">
+                                <label class="form-label" for="res-notes-direct">Parecer Técnico da Resolução <span class="req">*</span></label>
+                                <textarea id="res-notes-direct" class="form-textarea" rows="3" placeholder="Descreva as ações aplicadas para conter este alerta..." @bind="_resolutionNotes"></textarea>
+                                <button class="btn-resolve" @onclick="HandleResolve" disabled="@_isProcessing">
+                                    <span>Confirmar e Encerrar Alerta</span>
+                                </button>
+                            </div>
+                        }
+                    </div>
+                }
+
+                <!-- Contexto JSON Expandível -->
+                <div class="context-section">
+                    <button class="btn-toggle-json" @onclick="() => _isJsonExpanded = !_isJsonExpanded">
+                        <span>@(_isJsonExpanded ? "▼ Ocultar Metadados de Contexto (JSON)" : "▶ Exibir Metadados de Contexto (JSON)")</span>
+                    </button>
+                    @if (_isJsonExpanded)
+                    {
+                        <pre class="json-viewer">@Alert.ContextJson</pre>
+                    }
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn-secondary" @onclick="Close">Fechar</button>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .modal-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(4, 7, 13, 0.85);
+        backdrop-filter: blur(4px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1050;
+        padding: 1.5rem;
+    }
+
+    .modal-content {
+        background: #0f172a;
+        border: 1px solid #1e293b;
+        border-radius: 1rem;
+        width: 100%;
+        max-width: 780px;
+        max-height: 90vh;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+        animation: modalFadeIn 0.2s ease-out;
+    }
+
+    @@keyframes modalFadeIn {
+        from { opacity: 0; transform: scale(0.97); }
+        to { opacity: 1; transform: scale(1); }
+    }
+
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1.25rem 1.5rem;
+        background: #131d33;
+        border-bottom: 1px solid #1e293b;
+    }
+
+    .header-title-area {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+    }
+
+    .header-title-area h3 {
+        margin: 0;
+        font-size: 1.15rem;
+        font-weight: 700;
+        color: #f8fafc;
+    }
+
+    .btn-close {
+        background: transparent;
+        border: none;
+        color: #94a3b8;
+        font-size: 1.75rem;
+        cursor: pointer;
+        line-height: 1;
+        transition: color 0.15s;
+    }
+
+    .btn-close:hover {
+        color: #f8fafc;
+    }
+
+    .modal-body {
+        padding: 1.5rem;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 1.25rem;
+    }
+
+    .rule-banner {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 0.75rem;
+        padding: 1rem 1.25rem;
+    }
+
+    .rule-code {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.8rem;
+        color: #38bdf8;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+    }
+
+    .rule-desc {
+        margin: 0.35rem 0 0 0;
+        font-size: 0.9rem;
+        color: #cbd5e1;
+        line-height: 1.4;
+    }
+
+    .occurrence-badge {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        background: rgba(56, 189, 248, 0.1);
+        border: 1px solid rgba(56, 189, 248, 0.3);
+        border-radius: 0.6rem;
+        padding: 0.4rem 0.8rem;
+        min-width: 80px;
+    }
+
+    .occurrence-badge .count {
+        font-size: 1.3rem;
+        font-weight: 800;
+        color: #38bdf8;
+    }
+
+    .occurrence-badge .lbl {
+        font-size: 0.65rem;
+        text-transform: uppercase;
+        color: #94a3b8;
+        font-weight: 600;
+    }
+
+    .meta-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.75rem;
+    }
+
+    .meta-card {
+        background: #131d33;
+        border: 1px solid #1e293b;
+        border-radius: 0.6rem;
+        padding: 0.75rem 1rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.2rem;
+    }
+
+    .meta-label {
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        font-weight: 700;
+        color: #64748b;
+        letter-spacing: 0.05em;
+    }
+
+    .meta-value {
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: #f1f5f9;
+    }
+
+    .meta-sub {
+        font-size: 0.75rem;
+        color: #94a3b8;
+    }
+
+    .code-font {
+        font-family: 'JetBrains Mono', monospace;
+    }
+
+    .lifecycle-card {
+        border-radius: 0.75rem;
+        padding: 1.15rem;
+        border: 1px solid;
+    }
+
+    .lifecycle-card.active {
+        background: rgba(245, 158, 11, 0.05);
+        border-color: rgba(245, 158, 11, 0.3);
+    }
+
+    .lifecycle-card.acknowledged {
+        background: rgba(56, 189, 248, 0.05);
+        border-color: rgba(56, 189, 248, 0.3);
+    }
+
+    .lifecycle-card.resolved {
+        background: rgba(34, 197, 94, 0.05);
+        border-color: rgba(34, 197, 94, 0.3);
+    }
+
+    .card-header {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        color: #f8fafc;
+        margin-bottom: 0.6rem;
+    }
+
+    .resolution-meta {
+        font-size: 0.85rem;
+        color: #cbd5e1;
+        margin: 0 0 0.75rem 0;
+    }
+
+    .notes-box {
+        background: #090d16;
+        border: 1px solid #1e293b;
+        border-radius: 0.5rem;
+        padding: 0.75rem;
+    }
+
+    .notes-lbl {
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        font-weight: 700;
+        color: #64748b;
+        display: block;
+        margin-bottom: 0.25rem;
+    }
+
+    .notes-text {
+        margin: 0;
+        color: #e2e8f0;
+        font-size: 0.9rem;
+        line-height: 1.4;
+    }
+
+    .action-buttons-row {
+        display: flex;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+    }
+
+    .btn-ack {
+        background: #0284c7;
+        color: #ffffff;
+        border: none;
+        padding: 0.55rem 1rem;
+        border-radius: 0.5rem;
+        font-weight: 600;
+        font-size: 0.85rem;
+        cursor: pointer;
+        transition: background 0.15s;
+    }
+
+    .btn-ack:hover:not(:disabled) {
+        background: #0369a1;
+    }
+
+    .btn-toggle-resolve {
+        background: #1e293b;
+        color: #f8fafc;
+        border: 1px solid #334155;
+        padding: 0.55rem 1rem;
+        border-radius: 0.5rem;
+        font-weight: 600;
+        font-size: 0.85rem;
+        cursor: pointer;
+        transition: all 0.15s;
+    }
+
+    .btn-toggle-resolve:hover {
+        background: #334155;
+    }
+
+    .resolve-form {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .form-label {
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: #cbd5e1;
+    }
+
+    .req {
+        color: #f87171;
+    }
+
+    .form-textarea {
+        background: #090d16;
+        border: 1px solid #334155;
+        border-radius: 0.5rem;
+        color: #f8fafc;
+        padding: 0.6rem;
+        font-size: 0.85rem;
+        font-family: inherit;
+        resize: vertical;
+    }
+
+    .form-textarea:focus {
+        outline: none;
+        border-color: #38bdf8;
+    }
+
+    .btn-resolve {
+        align-self: flex-start;
+        background: #16a34a;
+        color: #ffffff;
+        border: none;
+        padding: 0.55rem 1.1rem;
+        border-radius: 0.5rem;
+        font-weight: 600;
+        font-size: 0.85rem;
+        cursor: pointer;
+        transition: background 0.15s;
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+    }
+
+    .btn-resolve:hover:not(:disabled) {
+        background: #15803d;
+    }
+
+    .btn-resolve:disabled, .btn-ack:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+
+    .context-section {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .btn-toggle-json {
+        background: transparent;
+        border: none;
+        color: #64748b;
+        font-size: 0.8rem;
+        font-weight: 600;
+        cursor: pointer;
+        text-align: left;
+        padding: 0.2rem 0;
+        transition: color 0.15s;
+    }
+
+    .btn-toggle-json:hover {
+        color: #38bdf8;
+    }
+
+    .json-viewer {
+        background: #090d16;
+        border: 1px solid #1e293b;
+        border-radius: 0.5rem;
+        padding: 0.75rem;
+        color: #38bdf8;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.75rem;
+        max-height: 180px;
+        overflow-y: auto;
+        white-space: pre-wrap;
+    }
+
+    .modal-footer {
+        padding: 1rem 1.5rem;
+        background: #131d33;
+        border-top: 1px solid #1e293b;
+        display: flex;
+        justify-content: flex-end;
+    }
+
+    .btn-secondary {
+        background: #1e293b;
+        color: #cbd5e1;
+        border: 1px solid #334155;
+        padding: 0.5rem 1rem;
+        border-radius: 0.5rem;
+        font-weight: 600;
+        font-size: 0.85rem;
+        cursor: pointer;
+        transition: all 0.15s;
+    }
+
+    .btn-secondary:hover {
+        background: #334155;
+        color: #f8fafc;
+    }
+
+    .severity-badge {
+        font-size: 0.7rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        padding: 0.25rem 0.65rem;
+        border-radius: 9999px;
+        letter-spacing: 0.05em;
+    }
+
+    .sev-critical {
+        background: rgba(239, 68, 68, 0.15);
+        color: #f87171;
+        border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    .sev-warning {
+        background: rgba(245, 158, 11, 0.15);
+        color: #fbbf24;
+        border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+
+    .sev-info {
+        background: rgba(56, 189, 248, 0.15);
+        color: #38bdf8;
+        border: 1px solid rgba(56, 189, 248, 0.3);
+    }
+
+    .status-badge {
+        font-size: 0.7rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        padding: 0.25rem 0.65rem;
+        border-radius: 9999px;
+    }
+
+    .status-active {
+        background: rgba(239, 68, 68, 0.2);
+        color: #fca5a5;
+    }
+
+    .status-acknowledged {
+        background: rgba(245, 158, 11, 0.2);
+        color: #fde68a;
+    }
+
+    .status-resolved {
+        background: rgba(34, 197, 94, 0.2);
+        color: #86efac;
+    }
+
+    .spinner-small {
+        width: 14px;
+        height: 14px;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        border-top-color: #ffffff;
+        border-radius: 50%;
+        animation: spin 0.6s linear infinite;
+    }
+
+    @@keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+
+    .mt-3 {
+        margin-top: 0.75rem;
+    }
+</style>
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public BackofficeAlertDto? Alert { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback OnAlertUpdated { get; set; }
+
+    private bool _isProcessing = false;
+    private bool _showDirectResolve = false;
+    private bool _isJsonExpanded = false;
+    private string _resolutionNotes = string.Empty;
+
+    protected override void OnParametersSet()
+    {
+        _resolutionNotes = string.Empty;
+        _showDirectResolve = false;
+        _isJsonExpanded = false;
+    }
+
+    private async Task Close()
+    {
+        await OnClose.InvokeAsync();
+    }
+
+    private async Task HandleAcknowledge()
+    {
+        if (Alert is null) return;
+        _isProcessing = true;
+
+        try
+        {
+            var success = await ApiClient.AcknowledgeAlertAsync(Alert.Id);
+            if (success)
+            {
+                ToastService.ShowSuccess("Alerta reconhecido com sucesso e marcado em triagem.");
+                await OnAlertUpdated.InvokeAsync();
+                await Close();
+            }
+            else
+            {
+                ToastService.ShowError("Não foi possível reconhecer o alerta.");
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Erro ao reconhecer alerta: {ex.Message}");
+        }
+        finally
+        {
+            _isProcessing = false;
+        }
+    }
+
+    private async Task HandleResolve()
+    {
+        if (Alert is null) return;
+
+        if (string.IsNullOrWhiteSpace(_resolutionNotes) || _resolutionNotes.Trim().Length < 5)
+        {
+            ToastService.ShowWarning("As notas de resolução técnica são obrigatórias (mínimo 5 caracteres).");
+            return;
+        }
+
+        _isProcessing = true;
+
+        try
+        {
+            var success = await ApiClient.ResolveAlertAsync(Alert.Id, _resolutionNotes.Trim());
+            if (success)
+            {
+                ToastService.ShowSuccess("Alerta operacional resolvido e encerrado com sucesso.");
+                await OnAlertUpdated.InvokeAsync();
+                await Close();
+            }
+            else
+            {
+                ToastService.ShowError("Não foi possível resolver o alerta.");
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Erro ao resolver alerta: {ex.Message}");
+        }
+        finally
+        {
+            _isProcessing = false;
+        }
+    }
+
+    private static string GetSeverityLabel(AlertSeverity severity) => severity switch
+    {
+        AlertSeverity.Critical => "Crítico",
+        AlertSeverity.Warning => "Atenção",
+        AlertSeverity.Info => "Informativo",
+        _ => severity.ToString()
+    };
+
+    private static string GetStatusLabel(AlertStatus status) => status switch
+    {
+        AlertStatus.Active => "Ativo",
+        AlertStatus.Acknowledged => "Em Triagem",
+        AlertStatus.Resolved => "Resolvido",
+        _ => status.ToString()
+    };
+}

@@ -17,6 +17,7 @@ public class BackofficeDbContext : DbContext
     public DbSet<PlanLimit> PlanLimits => Set<PlanLimit>();
     public DbSet<ImpersonationSession> ImpersonationSessions => Set<ImpersonationSession>();
     public DbSet<AdminApprovalRequest> AdminApprovalRequests => Set<AdminApprovalRequest>();
+    public DbSet<BackofficeAlert> Alerts => Set<BackofficeAlert>();
 
     public BackofficeDbContext(DbContextOptions<BackofficeDbContext> options)
         : base(options)
@@ -196,6 +197,31 @@ public class BackofficeDbContext : DbContext
             builder.HasIndex(r => r.RequestType);
             builder.HasIndex(r => r.RequestedByAdminUserId);
             builder.HasIndex(r => r.ExpiresAtUtc);
+        });
+
+        modelBuilder.Entity<BackofficeAlert>(builder =>
+        {
+            builder.ToTable("Alerts");
+            builder.HasKey(a => a.Id);
+            builder.Property(a => a.RuleCode).IsRequired().HasMaxLength(100);
+            builder.Property(a => a.Title).IsRequired().HasMaxLength(250);
+            builder.Property(a => a.Description).IsRequired().HasMaxLength(2000);
+            builder.Property(a => a.Severity).HasConversion<string>().IsRequired().HasMaxLength(30);
+            builder.Property(a => a.Status).HasConversion<string>().IsRequired().HasMaxLength(30);
+            builder.Property(a => a.Fingerprint).IsRequired().HasMaxLength(200);
+            builder.Property(a => a.OccurrenceCount).IsRequired();
+            builder.Property(a => a.FirstTriggeredAtUtc).IsRequired();
+            builder.Property(a => a.LastTriggeredAtUtc).IsRequired();
+            builder.Property(a => a.ContextJson).IsRequired();
+            builder.Property(a => a.TargetTenantName).HasMaxLength(200);
+            builder.Property(a => a.RelatedAdminEmail).HasMaxLength(200);
+            builder.Property(a => a.AcknowledgedByEmail).HasMaxLength(200);
+            builder.Property(a => a.ResolvedByEmail).HasMaxLength(200);
+            builder.Property(a => a.ResolutionNotes).HasMaxLength(2000);
+            builder.HasIndex(a => new { a.Status, a.Severity });
+            builder.HasIndex(a => a.Fingerprint);
+            builder.HasIndex(a => a.LastTriggeredAtUtc);
+            builder.HasIndex(a => a.RuleCode);
         });
     }
 }

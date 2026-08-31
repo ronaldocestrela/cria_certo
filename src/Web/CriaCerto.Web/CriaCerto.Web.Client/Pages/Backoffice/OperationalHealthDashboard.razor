@@ -1,0 +1,948 @@
+@page "/backoffice/observability"
+@layout CriaCerto.Web.Client.Layout.BackofficeLayout
+@using CriaCerto.Modules.Backoffice.Application.Domain.Enums
+@using CriaCerto.Modules.Backoffice.Application.Features.Observability.Dtos
+@using CriaCerto.Modules.Backoffice.Application.Security
+@using CriaCerto.Web.Client.Components.Backoffice
+@using CriaCerto.Web.Client.Services
+@inject IBackofficeApiClient ApiClient
+@inject IBackofficePermissionService PermissionService
+@inject IToastService ToastService
+@inject NavigationManager Navigation
+@implements IDisposable
+
+<div class="observability-dashboard">
+    <!-- Header com Status Global e Controles -->
+    <div class="dashboard-header">
+        <div class="header-titles">
+            <div class="badge-tag">TELEMETRIA & SAÚDE OPERACIONAL</div>
+            <h1 class="page-title">Observabilidade & Central de Alertas</h1>
+            <p class="page-subtitle">
+                Monitoramento contínuo de anomalias, latência de consultas administrativas e integridade forense da plataforma.
+            </p>
+        </div>
+
+        <div class="header-actions">
+            <!-- Indicador Global de Saúde -->
+            @if (_health is not null)
+            {
+                <div class="health-pill health-@_health.Status.ToString().ToLower()">
+                    <span class="pulse-dot"></span>
+                    <span class="health-label">@GetHealthStatusLabel(_health.Status)</span>
+                </div>
+            }
+
+            <button class="btn-refresh" @onclick="RefreshDataAsync" disabled="@_isLoading">
+                <span class="@(_isLoading ? "spin-icon" : "")">🔄</span>
+                <span>Atualizar</span>
+            </button>
+
+            <PermissionGuard Permission="@BackofficePermissions.ObservabilityManage">
+                <button class="btn-simulate" @onclick="() => _isSimulateModalOpen = true">
+                    <span>⚡ Simular Alerta</span>
+                </button>
+            </PermissionGuard>
+        </div>
+    </div>
+
+    <!-- 4 Cards de Métricas Operacionais Chave -->
+    <div class="kpi-grid">
+        <!-- Card 1: Integridade Forense -->
+        <div class="kpi-card">
+            <div class="kpi-icon-wrap integrity-wrap">
+                <span>🛡️</span>
+            </div>
+            <div class="kpi-details">
+                <span class="kpi-label">Integridade Forense</span>
+                <div class="kpi-value-row">
+                    @if (_health is not null)
+                    {
+                        <span class="kpi-status-text @(_health.IsAuditChainValid ? "status-ok" : "status-err")">
+                            @(_health.IsAuditChainValid ? "100% Íntegra" : "Violação Detectada")
+                        </span>
+                    }
+                    else
+                    {
+                        <span class="kpi-value">--</span>
+                    }
+                </div>
+                <NavLink href="backoffice/audit" class="kpi-link">Ver Trilha Forense &rarr;</NavLink>
+            </div>
+        </div>
+
+        <!-- Card 2: Alertas Críticos Ativos -->
+        <div class="kpi-card">
+            <div class="kpi-icon-wrap critical-wrap">
+                <span>🚨</span>
+            </div>
+            <div class="kpi-details">
+                <span class="kpi-label">Alertas Críticos Ativos</span>
+                <div class="kpi-value-row">
+                    <span class="kpi-value @((_health?.ActiveCriticalAlerts ?? 0) > 0 ? "val-critical" : "")">
+                        @(_health?.ActiveCriticalAlerts ?? 0)
+                    </span>
+                    <span class="kpi-sub">requerem atenção</span>
+                </div>
+                <span class="kpi-meta">@(_health?.ActiveWarningAlerts ?? 0) em atenção operacional</span>
+            </div>
+        </div>
+
+        <!-- Card 3: Falhas de Política (24h) -->
+        <div class="kpi-card">
+            <div class="kpi-icon-wrap policy-wrap">
+                <span>🚫</span>
+            </div>
+            <div class="kpi-details">
+                <span class="kpi-label">Falhas de Permissão (24h)</span>
+                <div class="kpi-value-row">
+                    <span class="kpi-value @((_health?.PolicyFailuresLast24Hours ?? 0) >= 10 ? "val-warning" : "")">
+                        @(_health?.PolicyFailuresLast24Hours ?? 0)
+                    </span>
+                    <span class="kpi-sub">bloqueios RBAC</span>
+                </div>
+                <span class="kpi-meta">Tentativas 401/403 monitoradas</span>
+            </div>
+        </div>
+
+        <!-- Card 4: Sessões de Impersonação Ativas -->
+        <div class="kpi-card">
+            <div class="kpi-icon-wrap impersonation-wrap">
+                <span>🔑</span>
+            </div>
+            <div class="kpi-details">
+                <span class="kpi-label">Sessões Assistidas Ativas</span>
+                <div class="kpi-value-row">
+                    <span class="kpi-value">@(_health?.ActiveImpersonationsCount ?? 0)</span>
+                    <span class="kpi-sub">em monitoramento</span>
+                </div>
+                <NavLink href="backoffice/impersonation" class="kpi-link">Painel de Impersonação &rarr;</NavLink>
+            </div>
+        </div>
+    </div>
+
+    <!-- Painel Principal de Alertas -->
+    <div class="main-alerts-panel">
+        <div class="panel-header">
+            <div class="panel-title-group">
+                <h2>Central de Incidentes & Eventos Ativos</h2>
+                <span class="total-badge">@_totalAlerts alerta(s)</span>
+            </div>
+
+            <!-- Filtros Rápidos -->
+            <div class="filters-row">
+                <div class="filter-group">
+                    <label class="filter-lbl">Status:</label>
+                    <select class="filter-select" @onchange="OnStatusFilterChanged">
+                        <option value="">Todos</option>
+                        <option value="@AlertStatus.Active">Ativos</option>
+                        <option value="@AlertStatus.Acknowledged">Em Triagem</option>
+                        <option value="@AlertStatus.Resolved">Resolvidos</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label class="filter-lbl">Severidade:</label>
+                    <select class="filter-select" @onchange="OnSeverityFilterChanged">
+                        <option value="">Todas</option>
+                        <option value="@AlertSeverity.Critical">Crítico</option>
+                        <option value="@AlertSeverity.Warning">Atenção</option>
+                        <option value="@AlertSeverity.Info">Informativo</option>
+                    </select>
+                </div>
+
+                <div class="search-box">
+                    <input type="text" class="search-input" placeholder="Buscar por título, regra, tenant ou operador..."
+                           @bind="_searchTerm" @bind:event="oninput" @onkeyup="HandleSearchKeyUp" />
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabela de Alertas -->
+        @if (_isLoading)
+        {
+            <div class="loading-container">
+                <div class="spinner"></div>
+                <p>Carregando telemetria e alertas operacionais...</p>
+            </div>
+        }
+        else if (_alerts.Count == 0)
+        {
+            <div class="empty-state">
+                <span class="empty-icon">✨</span>
+                <h3>Nenhum incidente operacional encontrado</h3>
+                <p>O ecossistema está operando dentro dos parâmetros de normalidade e conformidade de segurança.</p>
+            </div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="alerts-table">
+                    <thead>
+                        <tr>
+                            <th>Severidade</th>
+                            <th>Incidente & Descrição</th>
+                            <th>Ocorrências</th>
+                            <th>Primeiro / Último Disparo</th>
+                            <th>Alvo Impactado</th>
+                            <th>Status</th>
+                            <th class="text-right">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var alert in _alerts)
+                        {
+                            <tr class="alert-row sev-border-@alert.Severity.ToString().ToLower()">
+                                <td>
+                                    <span class="sev-tag sev-@alert.Severity.ToString().ToLower()">
+                                        @GetSeverityLabel(alert.Severity)
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="alert-info-cell">
+                                        <span class="alert-title">@alert.Title</span>
+                                        <span class="alert-desc">@Truncate(alert.Description, 90)</span>
+                                        <span class="alert-rule code-font">@alert.RuleCode</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="occurrences-chip">@alert.OccurrenceCount&times;</span>
+                                </td>
+                                <td>
+                                    <div class="timestamp-cell">
+                                        <span class="time-main">@alert.LastTriggeredAtUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</span>
+                                        <span class="time-sub">Início: @alert.FirstTriggeredAtUtc.ToLocalTime().ToString("dd/MM HH:mm")</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="target-cell">
+                                        @if (!string.IsNullOrWhiteSpace(alert.TargetTenantName))
+                                        {
+                                            <span class="target-name">@alert.TargetTenantName</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="target-name">Global / Sistema</span>
+                                        }
+                                        @if (!string.IsNullOrWhiteSpace(alert.RelatedAdminEmail))
+                                        {
+                                            <span class="target-sub">@alert.RelatedAdminEmail</span>
+                                        }
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="status-chip status-@alert.Status.ToString().ToLower()">
+                                        @GetStatusLabel(alert.Status)
+                                    </span>
+                                </td>
+                                <td class="text-right">
+                                    <button class="btn-inspect" @onclick="() => OpenAlertDetail(alert)">
+                                        <span>🔍 Inspecionar</span>
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Paginação -->
+            @if (_totalPages > 1)
+            {
+                <div class="pagination-bar">
+                    <button class="btn-page" disabled="@(_currentPage <= 1)" @onclick="() => ChangePageAsync(_currentPage - 1)">
+                        &larr; Anterior
+                    </button>
+                    <span class="page-info">Página @_currentPage de @_totalPages</span>
+                    <button class="btn-page" disabled="@(_currentPage >= _totalPages)" @onclick="() => ChangePageAsync(_currentPage + 1)">
+                        Próxima &rarr;
+                    </button>
+                </div>
+            }
+        }
+    </div>
+</div>
+
+<!-- Modais -->
+<AlertDetailModal IsOpen="_isDetailModalOpen"
+                  Alert="_selectedAlert"
+                  OnClose="() => _isDetailModalOpen = false"
+                  OnAlertUpdated="RefreshDataAsync" />
+
+<SimulateAlertModal IsOpen="_isSimulateModalOpen"
+                    OnClose="() => _isSimulateModalOpen = false"
+                    OnAlertCreated="RefreshDataAsync" />
+
+<style>
+    .observability-dashboard {
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+        font-family: system-ui, -apple-system, sans-serif;
+    }
+
+    .dashboard-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+
+    .badge-tag {
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #38bdf8;
+    }
+
+    .page-title {
+        font-size: 1.6rem;
+        font-weight: 800;
+        color: #f8fafc;
+        margin: 0.25rem 0;
+    }
+
+    .page-subtitle {
+        color: #94a3b8;
+        font-size: 0.9rem;
+        margin: 0;
+        max-width: 650px;
+    }
+
+    .header-actions {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+    }
+
+    .health-pill {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.45rem 0.9rem;
+        border-radius: 9999px;
+        font-size: 0.8rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        border: 1px solid;
+    }
+
+    .health-healthy {
+        background: rgba(34, 197, 94, 0.1);
+        border-color: rgba(34, 197, 94, 0.3);
+        color: #4ade80;
+    }
+
+    .health-healthy .pulse-dot {
+        width: 8px;
+        height: 8px;
+        background-color: #22c55e;
+        border-radius: 50%;
+        box-shadow: 0 0 8px #22c55e;
+    }
+
+    .health-degraded {
+        background: rgba(245, 158, 11, 0.1);
+        border-color: rgba(245, 158, 11, 0.3);
+        color: #fbbf24;
+    }
+
+    .health-degraded .pulse-dot {
+        width: 8px;
+        height: 8px;
+        background-color: #f59e0b;
+        border-radius: 50%;
+        box-shadow: 0 0 8px #f59e0b;
+    }
+
+    .health-critical {
+        background: rgba(239, 68, 68, 0.15);
+        border-color: rgba(239, 68, 68, 0.4);
+        color: #f87171;
+    }
+
+    .health-critical .pulse-dot {
+        width: 8px;
+        height: 8px;
+        background-color: #ef4444;
+        border-radius: 50%;
+        animation: pulseRed 1s infinite alternate;
+    }
+
+    @@keyframes pulseRed {
+        from { box-shadow: 0 0 4px #ef4444; transform: scale(0.9); }
+        to { box-shadow: 0 0 12px #ef4444; transform: scale(1.2); }
+    }
+
+    .btn-refresh, .btn-simulate {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.5rem 0.9rem;
+        border-radius: 0.5rem;
+        font-size: 0.85rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.15s;
+    }
+
+    .btn-refresh {
+        background: #1e293b;
+        border: 1px solid #334155;
+        color: #f8fafc;
+    }
+
+    .btn-refresh:hover:not(:disabled) {
+        background: #334155;
+    }
+
+    .btn-simulate {
+        background: linear-gradient(135deg, #6366f1, #8b5cf6);
+        border: none;
+        color: #ffffff;
+    }
+
+    .btn-simulate:hover {
+        opacity: 0.9;
+    }
+
+    .kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+        gap: 1rem;
+    }
+
+    .kpi-card {
+        background: #0f172a;
+        border: 1px solid #1e293b;
+        border-radius: 0.75rem;
+        padding: 1.25rem;
+        display: flex;
+        align-items: flex-start;
+        gap: 1rem;
+        transition: transform 0.15s, border-color 0.15s;
+    }
+
+    .kpi-card:hover {
+        border-color: #334155;
+    }
+
+    .kpi-icon-wrap {
+        width: 44px;
+        height: 44px;
+        border-radius: 0.6rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.25rem;
+        flex-shrink: 0;
+    }
+
+    .integrity-wrap { background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.2); }
+    .critical-wrap { background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); }
+    .policy-wrap { background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.2); }
+    .impersonation-wrap { background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.2); }
+
+    .kpi-details {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+
+    .kpi-label {
+        font-size: 0.7rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        color: #64748b;
+        letter-spacing: 0.05em;
+    }
+
+    .kpi-value-row {
+        display: flex;
+        align-items: baseline;
+        gap: 0.4rem;
+    }
+
+    .kpi-value {
+        font-size: 1.4rem;
+        font-weight: 800;
+        color: #f8fafc;
+    }
+
+    .val-critical { color: #f87171; }
+    .val-warning { color: #fbbf24; }
+
+    .kpi-status-text {
+        font-size: 1.05rem;
+        font-weight: 700;
+    }
+
+    .status-ok { color: #4ade80; }
+    .status-err { color: #f87171; }
+
+    .kpi-sub {
+        font-size: 0.75rem;
+        color: #94a3b8;
+    }
+
+    .kpi-meta {
+        font-size: 0.75rem;
+        color: #64748b;
+    }
+
+    .kpi-link {
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: #38bdf8;
+        text-decoration: none;
+        margin-top: 0.2rem;
+    }
+
+    .kpi-link:hover {
+        text-decoration: underline;
+    }
+
+    .main-alerts-panel {
+        background: #0f172a;
+        border: 1px solid #1e293b;
+        border-radius: 0.75rem;
+        padding: 1.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1.25rem;
+    }
+
+    .panel-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+
+    .panel-title-group {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .panel-title-group h2 {
+        margin: 0;
+        font-size: 1.15rem;
+        font-weight: 700;
+        color: #f8fafc;
+    }
+
+    .total-badge {
+        background: #1e293b;
+        color: #94a3b8;
+        font-size: 0.75rem;
+        font-weight: 600;
+        padding: 0.2rem 0.6rem;
+        border-radius: 9999px;
+    }
+
+    .filters-row {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+    }
+
+    .filter-group {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+    }
+
+    .filter-lbl {
+        font-size: 0.75rem;
+        color: #94a3b8;
+        font-weight: 600;
+    }
+
+    .filter-select {
+        background: #090d16;
+        border: 1px solid #334155;
+        border-radius: 0.4rem;
+        color: #f8fafc;
+        padding: 0.35rem 0.65rem;
+        font-size: 0.8rem;
+    }
+
+    .search-box {
+        position: relative;
+    }
+
+    .search-input {
+        background: #090d16;
+        border: 1px solid #334155;
+        border-radius: 0.4rem;
+        color: #f8fafc;
+        padding: 0.35rem 0.75rem;
+        font-size: 0.8rem;
+        width: 250px;
+    }
+
+    .search-input:focus {
+        outline: none;
+        border-color: #38bdf8;
+    }
+
+    .table-responsive {
+        overflow-x: auto;
+    }
+
+    .alerts-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.85rem;
+    }
+
+    .alerts-table th {
+        background: #131d33;
+        color: #94a3b8;
+        font-weight: 700;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        padding: 0.75rem 1rem;
+        text-align: left;
+        border-bottom: 1px solid #1e293b;
+    }
+
+    .alerts-table td {
+        padding: 0.85rem 1rem;
+        border-bottom: 1px solid #1e293b;
+        color: #e2e8f0;
+    }
+
+    .alert-row:hover {
+        background: rgba(30, 41, 59, 0.4);
+    }
+
+    .sev-tag {
+        font-size: 0.65rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        padding: 0.2rem 0.55rem;
+        border-radius: 9999px;
+        letter-spacing: 0.05em;
+    }
+
+    .sev-critical { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+    .sev-warning { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+    .sev-info { background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); }
+
+    .alert-info-cell {
+        display: flex;
+        flex-direction: column;
+        gap: 0.15rem;
+    }
+
+    .alert-title {
+        font-weight: 700;
+        color: #f8fafc;
+    }
+
+    .alert-desc {
+        font-size: 0.75rem;
+        color: #94a3b8;
+    }
+
+    .alert-rule {
+        font-size: 0.7rem;
+        color: #38bdf8;
+    }
+
+    .code-font {
+        font-family: 'JetBrains Mono', monospace;
+    }
+
+    .occurrences-chip {
+        background: #1e293b;
+        color: #38bdf8;
+        font-weight: 700;
+        font-size: 0.75rem;
+        padding: 0.2rem 0.5rem;
+        border-radius: 0.4rem;
+    }
+
+    .timestamp-cell, .target-cell {
+        display: flex;
+        flex-direction: column;
+        gap: 0.15rem;
+    }
+
+    .time-main, .target-name {
+        font-weight: 600;
+        color: #f1f5f9;
+    }
+
+    .time-sub, .target-sub {
+        font-size: 0.7rem;
+        color: #64748b;
+    }
+
+    .status-chip {
+        font-size: 0.7rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        padding: 0.2rem 0.55rem;
+        border-radius: 9999px;
+    }
+
+    .status-active { background: rgba(239, 68, 68, 0.2); color: #fca5a5; }
+    .status-acknowledged { background: rgba(245, 158, 11, 0.2); color: #fde68a; }
+    .status-resolved { background: rgba(34, 197, 94, 0.2); color: #86efac; }
+
+    .btn-inspect {
+        background: #1e293b;
+        border: 1px solid #334155;
+        color: #f8fafc;
+        padding: 0.35rem 0.7rem;
+        border-radius: 0.4rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.15s;
+    }
+
+    .btn-inspect:hover {
+        background: #38bdf8;
+        color: #090d16;
+    }
+
+    .text-right {
+        text-align: right;
+    }
+
+    .pagination-bar {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 1rem;
+        padding-top: 1rem;
+        border-top: 1px solid #1e293b;
+    }
+
+    .btn-page {
+        background: #1e293b;
+        border: 1px solid #334155;
+        color: #f8fafc;
+        padding: 0.4rem 0.8rem;
+        border-radius: 0.4rem;
+        font-size: 0.8rem;
+        cursor: pointer;
+    }
+
+    .btn-page:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .page-info {
+        font-size: 0.8rem;
+        color: #94a3b8;
+    }
+
+    .loading-container, .empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 3rem 1rem;
+        gap: 0.75rem;
+        color: #94a3b8;
+    }
+
+    .empty-icon {
+        font-size: 2.5rem;
+    }
+
+    .empty-state h3 {
+        margin: 0;
+        color: #f8fafc;
+        font-size: 1.1rem;
+    }
+
+    .spinner {
+        width: 32px;
+        height: 32px;
+        border: 3px solid rgba(56, 189, 248, 0.2);
+        border-top-color: #38bdf8;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+    }
+
+    .spin-icon {
+        display: inline-block;
+        animation: spin 0.8s linear infinite;
+    }
+
+    @@keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+</style>
+
+@code {
+    private OperationalHealthDto? _health;
+    private List<BackofficeAlertDto> _alerts = new();
+    private int _totalAlerts = 0;
+    private int _currentPage = 1;
+    private int _totalPages = 1;
+    private const int PageSize = 20;
+    private bool _isLoading = true;
+
+    private AlertStatus? _selectedStatus = null;
+    private AlertSeverity? _selectedSeverity = null;
+    private string _searchTerm = string.Empty;
+
+    private bool _isDetailModalOpen = false;
+    private bool _isSimulateModalOpen = false;
+    private BackofficeAlertDto? _selectedAlert;
+
+    private PeriodicTimer? _autoRefreshTimer;
+    private CancellationTokenSource _cts = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+        StartAutoRefresh();
+    }
+
+    private void StartAutoRefresh()
+    {
+        _autoRefreshTimer = new PeriodicTimer(TimeSpan.FromSeconds(30));
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                while (await _autoRefreshTimer.WaitForNextTickAsync(_cts.Token))
+                {
+                    await InvokeAsync(async () =>
+                    {
+                        await LoadDataAsync(silent: true);
+                        StateHasChanged();
+                    });
+                }
+            }
+            catch (OperationCanceledException) { }
+        });
+    }
+
+    private async Task LoadDataAsync(bool silent = false)
+    {
+        if (!silent) _isLoading = true;
+
+        try
+        {
+            _health = await ApiClient.GetOperationalHealthAsync();
+
+            var alertsResult = await ApiClient.GetBackofficeAlertsAsync(
+                pageNumber: _currentPage,
+                pageSize: PageSize,
+                status: _selectedStatus,
+                severity: _selectedSeverity,
+                searchTerm: _searchTerm);
+
+            if (alertsResult != null)
+            {
+                _alerts = alertsResult.Items.ToList();
+                _totalAlerts = alertsResult.TotalCount;
+                _totalPages = alertsResult.TotalPages;
+            }
+        }
+        catch (Exception ex)
+        {
+            if (!silent) ToastService.ShowError($"Erro ao carregar observabilidade: {ex.Message}");
+        }
+        finally
+        {
+            if (!silent) _isLoading = false;
+        }
+    }
+
+    private async Task RefreshDataAsync()
+    {
+        await LoadDataAsync(silent: false);
+    }
+
+    private async Task OnStatusFilterChanged(ChangeEventArgs e)
+    {
+        var val = e.Value?.ToString();
+        _selectedStatus = string.IsNullOrWhiteSpace(val) ? null : Enum.Parse<AlertStatus>(val);
+        _currentPage = 1;
+        await LoadDataAsync();
+    }
+
+    private async Task OnSeverityFilterChanged(ChangeEventArgs e)
+    {
+        var val = e.Value?.ToString();
+        _selectedSeverity = string.IsNullOrWhiteSpace(val) ? null : Enum.Parse<AlertSeverity>(val);
+        _currentPage = 1;
+        await LoadDataAsync();
+    }
+
+    private async Task HandleSearchKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            _currentPage = 1;
+            await LoadDataAsync();
+        }
+    }
+
+    private async Task ChangePageAsync(int newPage)
+    {
+        if (newPage < 1 || newPage > _totalPages) return;
+        _currentPage = newPage;
+        await LoadDataAsync();
+    }
+
+    private void OpenAlertDetail(BackofficeAlertDto alert)
+    {
+        _selectedAlert = alert;
+        _isDetailModalOpen = true;
+    }
+
+    private static string GetHealthStatusLabel(OperationalHealthStatus status) => status switch
+    {
+        OperationalHealthStatus.Healthy => "Operação Normal",
+        OperationalHealthStatus.Degraded => "Degradação Parcial",
+        OperationalHealthStatus.Critical => "Atenção Crítica",
+        _ => status.ToString()
+    };
+
+    private static string GetSeverityLabel(AlertSeverity severity) => severity switch
+    {
+        AlertSeverity.Critical => "Crítico",
+        AlertSeverity.Warning => "Atenção",
+        AlertSeverity.Info => "Informativo",
+        _ => severity.ToString()
+    };
+
+    private static string GetStatusLabel(AlertStatus status) => status switch
+    {
+        AlertStatus.Active => "Ativo",
+        AlertStatus.Acknowledged => "Em Triagem",
+        AlertStatus.Resolved => "Resolvido",
+        _ => status.ToString()
+    };
+
+    private static string Truncate(string text, int maxLength)
+    {
+        if (string.IsNullOrEmpty(text)) return string.Empty;
+        return text.Length <= maxLength ? text : text[..maxLength] + "...";
+    }
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+        _autoRefreshTimer?.Dispose();
+    }
+}

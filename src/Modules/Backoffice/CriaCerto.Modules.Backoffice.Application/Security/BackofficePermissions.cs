@@ -32,6 +32,10 @@ public static class BackofficePermissions
     public const string AuditRead = "audit.read";
     public const string UsersAdminManage = "users_admin.manage";
 
+    // Observability & Alerts
+    public const string ObservabilityRead = "observability.read";
+    public const string ObservabilityManage = "observability.manage";
+
     // Scopes
     public const string ScopeGlobal = "Global";
     public const string ScopeTenant = "Tenant";
@@ -45,7 +49,8 @@ public static class BackofficePermissions
         ImpersonationStart, ImpersonationStop,
         SupportDiagnose, SupportRemediate,
         ApprovalsRequest, ApprovalsReview,
-        AuditRead, UsersAdminManage
+        AuditRead, UsersAdminManage,
+        ObservabilityRead, ObservabilityManage
     };
 
     public static bool IsValidScope(string scope) =>

@@ -56,6 +56,12 @@
                 <span class="nav-icon">📜</span> Trilha de Auditoria
             </NavLink>
         </PermissionGuard>
+
+        <PermissionGuard Permission="@BackofficePermissions.ObservabilityRead">
+            <NavLink class="nav-link" href="backoffice/observability">
+                <span class="nav-icon">🛰️</span> Observabilidade & Alertas
+            </NavLink>
+        </PermissionGuard>
     </div>
 </nav>
 

@@ -90,6 +90,9 @@ using CriaCerto.Modules.Backoffice.Application.Features.Approvals.Dtos;
 using CriaCerto.Modules.Backoffice.Application.Features.Audit.Commands;
 using CriaCerto.Modules.Backoffice.Application.Features.Audit.Queries;
 using CriaCerto.Modules.Backoffice.Application.Features.Audit.Dtos;
+using CriaCerto.Modules.Backoffice.Application.Features.Observability.Commands;
+using CriaCerto.Modules.Backoffice.Application.Features.Observability.Queries;
+using CriaCerto.Modules.Backoffice.Application.Features.Observability.Dtos;
 using CriaCerto.Modules.Backoffice.Application.Security;
 using CriaCerto.Modules.Backoffice.Infrastructure;
 using CriaCerto.Modules.Backoffice.Infrastructure.Persistence;
@@ -864,6 +867,66 @@ backoffice.MapPost("/audit/retention/apply", async (ApplyAuditRetentionRequest r
     var result = await sender.Send(command);
     return ToHttpResult(result);
 }).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.UsersAdminManage)).WithTags("Backoffice Audit");
+
+// Backoffice Observability & Anomaly Alerts Endpoints
+backoffice.MapGet("/observability/health", async (ISender sender) =>
+{
+    var result = await sender.Send(new GetOperationalHealthQuery());
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ObservabilityRead)).WithTags("Backoffice Observability");
+
+backoffice.MapGet("/observability/alerts", async (
+    int? pageNumber,
+    int? pageSize,
+    AlertStatus? status,
+    AlertSeverity? severity,
+    string? searchTerm,
+    string? ruleCode,
+    DateTime? dateFromUtc,
+    DateTime? dateToUtc,
+    ISender sender) =>
+{
+    var query = new GetBackofficeAlertsQuery(
+        pageNumber ?? 1,
+        pageSize ?? 25,
+        status,
+        severity,
+        searchTerm,
+        ruleCode,
+        dateFromUtc,
+        dateToUtc);
+    var result = await sender.Send(query);
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ObservabilityRead)).WithTags("Backoffice Observability");
+
+backoffice.MapGet("/observability/metrics", async (ISender sender) =>
+{
+    var result = await sender.Send(new GetBackofficeMetricsSummaryQuery());
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ObservabilityRead)).WithTags("Backoffice Observability");
+
+backoffice.MapPost("/observability/alerts/{id:guid}/acknowledge", async (Guid id, HttpContext ctx, ISender sender) =>
+{
+    var (callerId, callerEmail, _) = GetBackofficeActor(ctx);
+    var command = new AcknowledgeBackofficeAlertCommand(id, callerId, callerEmail);
+    var result = await sender.Send(command);
+    return ToCommandHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ObservabilityManage)).WithTags("Backoffice Observability");
+
+backoffice.MapPost("/observability/alerts/{id:guid}/resolve", async (Guid id, ResolveAlertRequest req, HttpContext ctx, ISender sender) =>
+{
+    var (callerId, callerEmail, _) = GetBackofficeActor(ctx);
+    var command = new ResolveBackofficeAlertCommand(id, callerId, callerEmail, req.ResolutionNotes);
+    var result = await sender.Send(command);
+    return ToCommandHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ObservabilityManage)).WithTags("Backoffice Observability");
+
+backoffice.MapPost("/observability/alerts/simulate", async (SimulateAlertRequest req, ISender sender) =>
+{
+    var command = new SimulateBackofficeAlertCommand(req.RuleCode, req.Severity, req.Title, req.Description, req.ContextJson);
+    var result = await sender.Send(command);
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ObservabilityManage)).WithTags("Backoffice Observability");
 
 // Backoffice Auth Endpoints (Anonymous / Credentials + MFA)
 app.MapPost("/api/v1/backoffice/auth/login", async (BackofficeLoginRequest req, HttpContext ctx, ISender sender) =>

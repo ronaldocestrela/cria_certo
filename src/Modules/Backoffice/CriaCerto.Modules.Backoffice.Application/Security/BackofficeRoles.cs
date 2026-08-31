@@ -24,7 +24,8 @@ public static class BackofficeRoles
                 BackofficePermissions.TenantsRead,
                 BackofficePermissions.SubscriptionsRead,
                 BackofficePermissions.AuditRead,
-                BackofficePermissions.SupportDiagnose
+                BackofficePermissions.SupportDiagnose,
+                BackofficePermissions.ObservabilityRead
             },
 
             SupportN2 => new[]
@@ -38,7 +39,9 @@ public static class BackofficeRoles
                 BackofficePermissions.ImpersonationStop,
                 BackofficePermissions.SupportDiagnose,
                 BackofficePermissions.SupportRemediate,
-                BackofficePermissions.ApprovalsRequest
+                BackofficePermissions.ApprovalsRequest,
+                BackofficePermissions.ObservabilityRead,
+                BackofficePermissions.ObservabilityManage
             },
 
             FinanceOps => new[]
@@ -49,7 +52,8 @@ public static class BackofficeRoles
                 BackofficePermissions.PlansPublish,
                 BackofficePermissions.SubscriptionsRead,
                 BackofficePermissions.SubscriptionsManage,
-                BackofficePermissions.ApprovalsRequest
+                BackofficePermissions.ApprovalsRequest,
+                BackofficePermissions.ObservabilityRead
             },
 
             ReadOnlyAuditor => new[]
@@ -57,7 +61,8 @@ public static class BackofficeRoles
                 BackofficePermissions.TenantsRead,
                 BackofficePermissions.PlansRead,
                 BackofficePermissions.SubscriptionsRead,
-                BackofficePermissions.AuditRead
+                BackofficePermissions.AuditRead,
+                BackofficePermissions.ObservabilityRead
             },
 
             _ => Array.Empty<string>()
