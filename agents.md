@@ -156,6 +156,7 @@ public class Result<TValue> : Result
 * **Bootstrap admin (seed):** `admin@criacerto.com.br` / `AdminPassword123!` — created by `BackofficeDataSeeder` on API startup.
 * **Dev reset:** set `Backoffice:ResetBootstrapAdminPassword=true` in `appsettings.Development.json` to re-sync the bootstrap password on existing databases (never enable in production without explicit ops approval).
 * **Login endpoint:** `POST /api/v1/backoffice/auth/login` returns `401` for invalid credentials (`Backoffice.InvalidCredentials`), not RBAC `403`.
+* **Administrative Approvals (4-Eyes Principle):** Critical platform actions (`PublishPlanVersion`, `MassTenantSuspension`, `ExtendedAccessGrant`) must follow the dual-control principle (`AdminApprovalRequest`). The requester cannot self-approve (`ApprovalErrors.CannotSelfApprove`). Requests carry automatic TTL expiration (default 48h), mandatory justification (min 10 chars), execution payloads and visual diffs with full audit logging in `AuditLog`.
 
 ## 6. Software Engineering Practices & AI Agent Guidelines
 

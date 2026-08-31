@@ -37,7 +37,8 @@ public static class BackofficeRoles
                 BackofficePermissions.ImpersonationStart,
                 BackofficePermissions.ImpersonationStop,
                 BackofficePermissions.SupportDiagnose,
-                BackofficePermissions.SupportRemediate
+                BackofficePermissions.SupportRemediate,
+                BackofficePermissions.ApprovalsRequest
             },
 
             FinanceOps => new[]
@@ -47,7 +48,8 @@ public static class BackofficeRoles
                 BackofficePermissions.PlansWrite,
                 BackofficePermissions.PlansPublish,
                 BackofficePermissions.SubscriptionsRead,
-                BackofficePermissions.SubscriptionsManage
+                BackofficePermissions.SubscriptionsManage,
+                BackofficePermissions.ApprovalsRequest
             },
 
             ReadOnlyAuditor => new[]

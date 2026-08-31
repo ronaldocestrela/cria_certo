@@ -82,6 +82,10 @@ using CriaCerto.Modules.Backoffice.Application.Features.Impersonation.Dtos;
 using CriaCerto.Modules.Backoffice.Application.Features.Support.Commands;
 using CriaCerto.Modules.Backoffice.Application.Features.Support.Queries;
 using CriaCerto.Modules.Backoffice.Application.Features.Support.Dtos;
+using CriaCerto.Modules.Backoffice.Application.Domain.Entities;
+using CriaCerto.Modules.Backoffice.Application.Features.Approvals.Commands;
+using CriaCerto.Modules.Backoffice.Application.Features.Approvals.Queries;
+using CriaCerto.Modules.Backoffice.Application.Features.Approvals.Dtos;
 using CriaCerto.Modules.Backoffice.Application.Security;
 using CriaCerto.Modules.Backoffice.Infrastructure;
 using CriaCerto.Modules.Backoffice.Infrastructure.Persistence;
@@ -679,6 +683,93 @@ backoffice.MapPost("/support/tenants/{id:guid}/remediation", async (Guid id, Exe
     var result = await sender.Send(command);
     return ToHttpResult(result);
 }).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.SupportRemediate)).WithTags("Backoffice Support");
+
+// --- BACKOFFICE 4-EYES APPROVAL ENDPOINTS ---
+backoffice.MapGet("/approvals", async (
+    ApprovalRequestStatus? status,
+    ApprovalRequestType? requestType,
+    Guid? requestedByAdminUserId,
+    Guid? reviewerId,
+    int? page,
+    int? pageSize,
+    ISender sender) =>
+{
+    var query = new GetApprovalRequestsQuery(status, requestType, requestedByAdminUserId, reviewerId, page ?? 1, pageSize ?? 20);
+    var result = await sender.Send(query);
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ApprovalsRequest, BackofficePermissions.ApprovalsReview)).WithTags("Backoffice Approvals");
+
+backoffice.MapGet("/approvals/pending-count", async (HttpContext ctx, ISender sender) =>
+{
+    var (callerId, _, _) = GetBackofficeActor(ctx);
+    var result = await sender.Send(new GetPendingApprovalsCountQuery(callerId));
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ApprovalsRequest, BackofficePermissions.ApprovalsReview)).WithTags("Backoffice Approvals");
+
+backoffice.MapGet("/approvals/{id:guid}", async (Guid id, ISender sender) =>
+{
+    var result = await sender.Send(new GetApprovalRequestByIdQuery(id));
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ApprovalsRequest, BackofficePermissions.ApprovalsReview)).WithTags("Backoffice Approvals");
+
+backoffice.MapPost("/approvals", async (CreateApprovalRequestRequest req, HttpContext ctx, ISender sender) =>
+{
+    var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var command = new CreateApprovalRequestCommand(
+        req.RequestType,
+        req.Title,
+        req.Justification,
+        req.TargetResourceId,
+        req.ImpactSummary,
+        req.PayloadJson,
+        callerId,
+        callerEmail,
+        ip,
+        req.SupportTicketId,
+        req.DiffJson,
+        req.ExpirationHours);
+    var result = await sender.Send(command);
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ApprovalsRequest)).WithTags("Backoffice Approvals");
+
+backoffice.MapPost("/approvals/{id:guid}/approve", async (Guid id, ApproveApprovalRequestRequest req, HttpContext ctx, ISender sender) =>
+{
+    var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var command = new ApproveApprovalRequestCommand(
+        id,
+        callerId,
+        callerEmail,
+        ip,
+        req.ReviewNotes);
+    var result = await sender.Send(command);
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ApprovalsReview)).WithTags("Backoffice Approvals");
+
+backoffice.MapPost("/approvals/{id:guid}/reject", async (Guid id, RejectApprovalRequestRequest req, HttpContext ctx, ISender sender) =>
+{
+    var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var command = new RejectApprovalRequestCommand(
+        id,
+        req.RejectionReason,
+        callerId,
+        callerEmail,
+        ip);
+    var result = await sender.Send(command);
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ApprovalsReview)).WithTags("Backoffice Approvals");
+
+backoffice.MapPost("/approvals/{id:guid}/cancel", async (Guid id, CancelApprovalRequestRequest req, HttpContext ctx, ISender sender) =>
+{
+    var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var command = new CancelApprovalRequestCommand(
+        id,
+        callerId,
+        callerEmail,
+        ip,
+        req.CancelReason);
+    var result = await sender.Send(command);
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ApprovalsRequest)).WithTags("Backoffice Approvals");
 
 // Backoffice Auth Endpoints (Anonymous / Credentials + MFA)
 app.MapPost("/api/v1/backoffice/auth/login", async (BackofficeLoginRequest req, HttpContext ctx, ISender sender) =>

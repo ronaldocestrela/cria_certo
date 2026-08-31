@@ -45,6 +45,12 @@
             </NavLink>
         </PermissionGuard>
 
+        <PermissionGuard Permission="@BackofficePermissions.ApprovalsRequest">
+            <NavLink class="nav-link" href="backoffice/approvals">
+                <span class="nav-icon">🛡️</span> Aprovações (4-Eyes)
+            </NavLink>
+        </PermissionGuard>
+
         <PermissionGuard Permission="@BackofficePermissions.AuditRead">
             <NavLink class="nav-link" href="backoffice/audit">
                 <span class="nav-icon">📜</span> Trilha de Auditoria

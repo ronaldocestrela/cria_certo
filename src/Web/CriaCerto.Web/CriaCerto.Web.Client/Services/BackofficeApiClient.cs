@@ -10,6 +10,8 @@ using CriaCerto.Modules.Backoffice.Application.Features.Plans.Queries;
 using CriaCerto.Modules.Backoffice.Application.Features.Impersonation.Dtos;
 using CriaCerto.Modules.Backoffice.Application.Features.Impersonation.Queries;
 using CriaCerto.Modules.Backoffice.Application.Features.Support.Dtos;
+using CriaCerto.Modules.Backoffice.Application.Domain.Entities;
+using CriaCerto.Modules.Backoffice.Application.Features.Approvals.Dtos;
 using CriaCerto.Web.Client.Models;
 using Microsoft.JSInterop;
 
@@ -84,6 +86,30 @@ public interface IBackofficeApiClient
     Task<TenantDiagnosticReportDto?> GetTenantDiagnosticsAsync(Guid tenantId, CancellationToken cancellationToken = default);
     Task<IReadOnlyCollection<SupportPlaybookDto>?> GetSupportPlaybooksAsync(CancellationToken cancellationToken = default);
     Task<RemediationExecutionResult> ExecuteRemediationAsync(Guid tenantId, ExecuteRemediationRequest request, CancellationToken cancellationToken = default);
+
+    // 4-Eyes Administrative Approvals Methods
+    Task<PagedApprovalResult?> GetApprovalsAsync(
+        ApprovalRequestStatus? status = null,
+        ApprovalRequestType? requestType = null,
+        Guid? requestedByAdminUserId = null,
+        Guid? reviewerId = null,
+        int page = 1,
+        int pageSize = 20,
+        CancellationToken cancellationToken = default);
+
+    Task<AdminApprovalRequestDetailDto?> GetApprovalByIdAsync(Guid id, CancellationToken cancellationToken = default);
+    Task<PendingApprovalsCountDto?> GetPendingApprovalsCountAsync(CancellationToken cancellationToken = default);
+    Task<ApprovalActionResult> CreateApprovalRequestAsync(CreateApprovalRequestRequest request, CancellationToken cancellationToken = default);
+    Task<ApprovalActionResult> ApproveRequestAsync(Guid id, string? reviewNotes = null, CancellationToken cancellationToken = default);
+    Task<ApprovalActionResult> RejectRequestAsync(Guid id, string rejectionReason, CancellationToken cancellationToken = default);
+    Task<ApprovalActionResult> CancelRequestAsync(Guid id, string? cancelReason = null, CancellationToken cancellationToken = default);
+}
+
+public sealed class ApprovalActionResult
+{
+    public AdminApprovalRequestDetailDto? Request { get; init; }
+    public string? ErrorMessage { get; init; }
+    public bool IsSuccess => Request is not null && string.IsNullOrWhiteSpace(ErrorMessage);
 }
 
 public sealed class RemediationExecutionResult
@@ -611,6 +637,86 @@ public class BackofficeApiClient : IBackofficeApiClient
         return new RemediationExecutionResult
         {
             ErrorMessage = error?.Message ?? "Não foi possível executar a ação remediativa de suporte."
+        };
+    }
+
+    public async Task<PagedApprovalResult?> GetApprovalsAsync(
+        ApprovalRequestStatus? status = null,
+        ApprovalRequestType? requestType = null,
+        Guid? requestedByAdminUserId = null,
+        Guid? reviewerId = null,
+        int page = 1,
+        int pageSize = 20,
+        CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var url = $"api/v1/backoffice/approvals?page={page}&pageSize={pageSize}";
+        if (status.HasValue) url += $"&status={status.Value}";
+        if (requestType.HasValue) url += $"&requestType={requestType.Value}";
+        if (requestedByAdminUserId.HasValue) url += $"&requestedByAdminUserId={requestedByAdminUserId.Value}";
+        if (reviewerId.HasValue) url += $"&reviewerId={reviewerId.Value}";
+
+        return await _httpClient.GetFromJsonAsync<PagedApprovalResult>(url, cancellationToken);
+    }
+
+    public async Task<AdminApprovalRequestDetailDto?> GetApprovalByIdAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        return await _httpClient.GetFromJsonAsync<AdminApprovalRequestDetailDto>($"api/v1/backoffice/approvals/{id}", cancellationToken);
+    }
+
+    public async Task<PendingApprovalsCountDto?> GetPendingApprovalsCountAsync(CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        return await _httpClient.GetFromJsonAsync<PendingApprovalsCountDto>("api/v1/backoffice/approvals/pending-count", cancellationToken);
+    }
+
+    public async Task<ApprovalActionResult> CreateApprovalRequestAsync(CreateApprovalRequestRequest request, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.PostAsJsonAsync("api/v1/backoffice/approvals", request, cancellationToken);
+        return await HandleApprovalResponseAsync(response, cancellationToken);
+    }
+
+    public async Task<ApprovalActionResult> ApproveRequestAsync(Guid id, string? reviewNotes = null, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.PostAsJsonAsync($"api/v1/backoffice/approvals/{id}/approve", new ApproveApprovalRequestRequest(reviewNotes), cancellationToken);
+        return await HandleApprovalResponseAsync(response, cancellationToken);
+    }
+
+    public async Task<ApprovalActionResult> RejectRequestAsync(Guid id, string rejectionReason, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.PostAsJsonAsync($"api/v1/backoffice/approvals/{id}/reject", new RejectApprovalRequestRequest(rejectionReason), cancellationToken);
+        return await HandleApprovalResponseAsync(response, cancellationToken);
+    }
+
+    public async Task<ApprovalActionResult> CancelRequestAsync(Guid id, string? cancelReason = null, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.PostAsJsonAsync($"api/v1/backoffice/approvals/{id}/cancel", new CancelApprovalRequestRequest(cancelReason), cancellationToken);
+        return await HandleApprovalResponseAsync(response, cancellationToken);
+    }
+
+    private static async Task<ApprovalActionResult> HandleApprovalResponseAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    {
+        if (response.IsSuccessStatusCode)
+        {
+            var dto = await response.Content.ReadFromJsonAsync<AdminApprovalRequestDetailDto>(cancellationToken: cancellationToken);
+            return new ApprovalActionResult { Request = dto };
+        }
+
+        Error? error = null;
+        try
+        {
+            error = await response.Content.ReadFromJsonAsync<Error>(cancellationToken: cancellationToken);
+        }
+        catch { }
+
+        return new ApprovalActionResult
+        {
+            ErrorMessage = error?.Message ?? "Falha na operação de aprovação administrativa."
         };
     }
 }

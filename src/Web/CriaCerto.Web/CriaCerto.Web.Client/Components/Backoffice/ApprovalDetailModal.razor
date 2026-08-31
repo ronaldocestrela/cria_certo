@@ -1,0 +1,540 @@
+@using CriaCerto.Modules.Backoffice.Application.Domain.Entities
+@using CriaCerto.Modules.Backoffice.Application.Features.Approvals.Dtos
+@using CriaCerto.Modules.Backoffice.Application.Security
+@using CriaCerto.Web.Client.Services
+@inject IBackofficeApiClient ApiClient
+@inject IBackofficePermissionService PermissionService
+
+@if (IsOpen && RequestDetail is not null)
+{
+    <div class="modal-backdrop" @onclick="Close">
+        <div class="modal-content" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <div class="header-title-area">
+                    <span class="type-badge @GetBadgeClass(RequestDetail.RequestType)">@GetTypeName(RequestDetail.RequestType)</span>
+                    <span class="status-badge status-@RequestDetail.Status.ToString().ToLower()">@GetStatusName(RequestDetail.Status)</span>
+                    <h3>@RequestDetail.Title</h3>
+                </div>
+                <button class="btn-close" @onclick="Close" aria-label="Fechar">&times;</button>
+            </div>
+
+            <div class="modal-body">
+                @if (IsCurrentUserRequester && RequestDetail.Status == ApprovalRequestStatus.Pending)
+                {
+                    <div class="four-eyes-alert warning">
+                        <span class="alert-icon">⚠️</span>
+                        <div class="alert-content">
+                            <strong>Salvaguarda de Governança (Princípio 4-Eyes)</strong>
+                            <p>Você é o administrador solicitante desta ação. Pelas políticas de segurança corporativa do CriaCerto, um segundo administrador qualificado deve revisar e autorizar a execução.</p>
+                        </div>
+                    </div>
+                }
+
+                @if (RequestDetail.Status == ApprovalRequestStatus.Expired)
+                {
+                    <div class="four-eyes-alert error">
+                        <span class="alert-icon">⏳</span>
+                        <div class="alert-content">
+                            <strong>Solicitação Expirada</strong>
+                            <p>O prazo de deliberação de 48h foi excedido. Esta solicitação não pode mais ser aprovada ou executada.</p>
+                        </div>
+                    </div>
+                }
+
+                <div class="meta-grid">
+                    <div class="meta-card">
+                        <span class="meta-label">Solicitante</span>
+                        <span class="meta-value">@RequestDetail.RequestedByAdminEmail</span>
+                        <span class="meta-sub">@RequestDetail.RequestedAtUtc.ToString("dd/MM/yyyy HH:mm") UTC</span>
+                    </div>
+
+                    <div class="meta-card">
+                        <span class="meta-label">Recurso Alvo</span>
+                        <span class="meta-value code-font">@RequestDetail.TargetResourceId</span>
+                        <span class="meta-sub">ID: @RequestDetail.Id.ToString()[..8]...</span>
+                    </div>
+
+                    <div class="meta-card">
+                        <span class="meta-label">Chamado / Ticket</span>
+                        <span class="meta-value">@(string.IsNullOrWhiteSpace(RequestDetail.SupportTicketId) ? "N/A" : RequestDetail.SupportTicketId)</span>
+                    </div>
+
+                    <div class="meta-card">
+                        <span class="meta-label">Expiração</span>
+                        <span class="meta-value @(IsExpired ? "text-danger" : "")">@RequestDetail.ExpiresAtUtc.ToString("dd/MM/yyyy HH:mm") UTC</span>
+                        <span class="meta-sub">@GetExpirationCountdown()</span>
+                    </div>
+                </div>
+
+                <div class="section-box">
+                    <h4 class="section-title">Justificativa Técnica</h4>
+                    <p class="section-text">@RequestDetail.Justification</p>
+                </div>
+
+                <div class="section-box">
+                    <h4 class="section-title">Resumo de Impacto Operacional</h4>
+                    <p class="section-text">@RequestDetail.ImpactSummary</p>
+                </div>
+
+                @if (!string.IsNullOrWhiteSpace(RequestDetail.DiffJson))
+                {
+                    <div class="section-box diff-box">
+                        <h4 class="section-title">Evidências & Diff de Impacto</h4>
+                        <pre class="json-code">@FormatJson(RequestDetail.DiffJson)</pre>
+                    </div>
+                }
+
+                @if (RequestDetail.Status == ApprovalRequestStatus.Approved || RequestDetail.Status == ApprovalRequestStatus.Executed)
+                {
+                    <div class="section-box success-box">
+                        <h4 class="section-title">Decisão de Aprovação (Princípio 4-Eyes Cumprido)</h4>
+                        <div class="decision-info">
+                            <div><strong>Revisor:</strong> @RequestDetail.ReviewedByAdminEmail</div>
+                            <div><strong>Data:</strong> @RequestDetail.ReviewedAtUtc?.ToString("dd/MM/yyyy HH:mm:ss") UTC</div>
+                            @if (!string.IsNullOrWhiteSpace(RequestDetail.ReviewNotes))
+                            {
+                                <div><strong>Notas:</strong> @RequestDetail.ReviewNotes</div>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(RequestDetail.ExecutionResultJson))
+                            {
+                                <div class="mt-2"><strong>Resultado da Execução:</strong></div>
+                                <pre class="json-code">@FormatJson(RequestDetail.ExecutionResultJson)</pre>
+                            }
+                        </div>
+                    </div>
+                }
+                else if (RequestDetail.Status == ApprovalRequestStatus.Rejected)
+                {
+                    <div class="section-box danger-box">
+                        <h4 class="section-title">Decisão de Rejeição</h4>
+                        <div class="decision-info">
+                            <div><strong>Revisor:</strong> @RequestDetail.ReviewedByAdminEmail</div>
+                            <div><strong>Data:</strong> @RequestDetail.ReviewedAtUtc?.ToString("dd/MM/yyyy HH:mm:ss") UTC</div>
+                            <div><strong>Motivo:</strong> @RequestDetail.RejectionReason</div>
+                        </div>
+                    </div>
+                }
+
+                @if (!string.IsNullOrWhiteSpace(ActionErrorMessage))
+                {
+                    <div class="four-eyes-alert error mt-3">
+                        <span class="alert-icon">❌</span>
+                        <div class="alert-content">@ActionErrorMessage</div>
+                    </div>
+                }
+
+                @if (IsRejecting)
+                {
+                    <div class="rejection-form mt-3">
+                        <label class="form-label font-bold">Motivo da Rejeição (Obrigatório, mín. 5 caracteres):</label>
+                        <textarea class="form-control" rows="3" placeholder="Informe o motivo detalhado para a rejeição desta solicitação..." @bind="RejectionReason"></textarea>
+                    </div>
+                }
+                else if (IsApproving)
+                {
+                    <div class="approval-form mt-3">
+                        <label class="form-label font-bold">Notas de Deliberação (Opcional):</label>
+                        <textarea class="form-control" rows="2" placeholder="Observações de compliance para a ata de execução..." @bind="ApprovalNotes"></textarea>
+                    </div>
+                }
+            </div>
+
+            <div class="modal-footer">
+                @if (RequestDetail.Status == ApprovalRequestStatus.Pending && !IsExpired)
+                {
+                    @if (IsCurrentUserRequester)
+                    {
+                        <button class="btn btn-outline-danger" @onclick="CancelRequestAsync" disabled="@IsProcessing">
+                            @(IsProcessing ? "Cancelando..." : "Cancelar Minha Solicitação")
+                        </button>
+                    }
+                    else if (CanReview)
+                    {
+                        @if (!IsApproving && !IsRejecting)
+                        {
+                            <button class="btn btn-outline-danger" @onclick="() => IsRejecting = true" disabled="@IsProcessing">
+                                Rejeitar...
+                            </button>
+                            <button class="btn btn-primary" @onclick="() => IsApproving = true" disabled="@IsProcessing">
+                                Aprovar & Executar Ação
+                            </button>
+                        }
+                        else if (IsRejecting)
+                        {
+                            <button class="btn btn-secondary" @onclick="() => IsRejecting = false" disabled="@IsProcessing">Voltar</button>
+                            <button class="btn btn-danger" @onclick="RejectRequestAsync" disabled="@(IsProcessing || string.IsNullOrWhiteSpace(RejectionReason) || RejectionReason.Trim().Length < 5)">
+                                @(IsProcessing ? "Rejeitando..." : "Confirmar Rejeição")
+                            </button>
+                        }
+                        else if (IsApproving)
+                        {
+                            <button class="btn btn-secondary" @onclick="() => IsApproving = false" disabled="@IsProcessing">Voltar</button>
+                            <button class="btn btn-success" @onclick="ApproveRequestAsync" disabled="@IsProcessing">
+                                @(IsProcessing ? "Executando..." : "Confirmar Aprovação & Executar")
+                            </button>
+                        }
+                    }
+                }
+
+                <button class="btn btn-secondary" @onclick="Close" disabled="@IsProcessing">Fechar</button>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .modal-backdrop {
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(15, 23, 42, 0.75);
+        backdrop-filter: blur(4px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1050;
+        padding: 1rem;
+    }
+    .modal-content {
+        background: #1e293b;
+        color: #f8fafc;
+        border-radius: 1rem;
+        width: 100%;
+        max-width: 800px;
+        max-height: 90vh;
+        display: flex;
+        flex-direction: column;
+        border: 1px solid #334155;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        overflow: hidden;
+    }
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        padding: 1.25rem 1.5rem;
+        border-bottom: 1px solid #334155;
+        background: #0f172a;
+    }
+    .header-title-area h3 {
+        margin: 0.5rem 0 0 0;
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: #f1f5f9;
+    }
+    .btn-close {
+        background: none;
+        border: none;
+        font-size: 1.75rem;
+        color: #94a3b8;
+        cursor: pointer;
+        line-height: 1;
+    }
+    .modal-body {
+        padding: 1.5rem;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 1.25rem;
+    }
+    .modal-footer {
+        padding: 1rem 1.5rem;
+        border-top: 1px solid #334155;
+        background: #0f172a;
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.75rem;
+    }
+    .four-eyes-alert {
+        display: flex;
+        gap: 0.75rem;
+        padding: 1rem;
+        border-radius: 0.5rem;
+        font-size: 0.9rem;
+    }
+    .four-eyes-alert.warning {
+        background: rgba(245, 158, 11, 0.15);
+        border: 1px solid #f59e0b;
+        color: #fef3c7;
+    }
+    .four-eyes-alert.error {
+        background: rgba(239, 68, 68, 0.15);
+        border: 1px solid #ef4444;
+        color: #fee2e2;
+    }
+    .meta-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+        gap: 0.75rem;
+    }
+    .meta-card {
+        background: #0f172a;
+        padding: 0.75rem 1rem;
+        border-radius: 0.5rem;
+        border: 1px solid #334155;
+        display: flex;
+        flex-direction: column;
+    }
+    .meta-label {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        color: #94a3b8;
+        font-weight: 600;
+    }
+    .meta-value {
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: #f8fafc;
+        margin-top: 0.2rem;
+    }
+    .meta-sub {
+        font-size: 0.75rem;
+        color: #64748b;
+        margin-top: 0.2rem;
+    }
+    .code-font {
+        font-family: monospace;
+        color: #38bdf8;
+    }
+    .section-box {
+        background: #0f172a;
+        padding: 1rem 1.25rem;
+        border-radius: 0.5rem;
+        border: 1px solid #334155;
+    }
+    .section-box.diff-box {
+        border-color: #6366f1;
+        background: rgba(99, 102, 241, 0.05);
+    }
+    .section-box.success-box {
+        border-color: #10b981;
+        background: rgba(16, 185, 129, 0.05);
+    }
+    .section-box.danger-box {
+        border-color: #ef4444;
+        background: rgba(239, 68, 68, 0.05);
+    }
+    .section-title {
+        font-size: 0.85rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #94a3b8;
+        margin-bottom: 0.5rem;
+    }
+    .section-text {
+        font-size: 0.95rem;
+        line-height: 1.5;
+        color: #e2e8f0;
+        margin: 0;
+    }
+    .json-code {
+        background: #020617;
+        padding: 0.75rem;
+        border-radius: 0.375rem;
+        color: #a5f3fc;
+        font-family: monospace;
+        font-size: 0.85rem;
+        overflow-x: auto;
+        margin: 0.5rem 0 0 0;
+        border: 1px solid #1e293b;
+    }
+    .type-badge {
+        font-size: 0.7rem;
+        font-weight: 700;
+        padding: 0.2rem 0.5rem;
+        border-radius: 0.25rem;
+        text-transform: uppercase;
+        margin-right: 0.5rem;
+    }
+    .type-plan { background: #3b82f6; color: white; }
+    .type-mass-suspend { background: #ef4444; color: white; }
+    .type-access { background: #8b5cf6; color: white; }
+    .type-custom { background: #64748b; color: white; }
+
+    .status-badge {
+        font-size: 0.7rem;
+        font-weight: 700;
+        padding: 0.2rem 0.5rem;
+        border-radius: 0.25rem;
+        text-transform: uppercase;
+    }
+    .status-pending { background: #f59e0b; color: #000; }
+    .status-approved { background: #3b82f6; color: #fff; }
+    .status-executed { background: #10b981; color: #fff; }
+    .status-rejected { background: #ef4444; color: #fff; }
+    .status-cancelled { background: #64748b; color: #fff; }
+    .status-expired { background: #475569; color: #cbd5e1; }
+
+    .form-control {
+        width: 100%;
+        background: #0f172a;
+        border: 1px solid #334155;
+        border-radius: 0.375rem;
+        color: #f8fafc;
+        padding: 0.5rem 0.75rem;
+        font-size: 0.9rem;
+    }
+    .form-control:focus {
+        outline: none;
+        border-color: #6366f1;
+    }
+    .text-danger { color: #f87171 !important; }
+</style>
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public AdminApprovalRequestDetailDto? RequestDetail { get; set; }
+    [Parameter] public Guid CurrentAdminUserId { get; set; }
+    [Parameter] public EventCallback OnClosed { get; set; }
+    [Parameter] public EventCallback OnActionCompleted { get; set; }
+
+    private bool CanReview = false;
+    private bool IsProcessing = false;
+    private bool IsRejecting = false;
+    private bool IsApproving = false;
+    private string? RejectionReason;
+    private string? ApprovalNotes;
+    private string? ActionErrorMessage;
+
+    private bool IsCurrentUserRequester =>
+        RequestDetail is not null && RequestDetail.RequestedByAdminUserId == CurrentAdminUserId;
+
+    private bool IsExpired =>
+        RequestDetail is not null && DateTime.UtcNow >= RequestDetail.ExpiresAtUtc;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsOpen)
+        {
+            CanReview = await PermissionService.HasPermissionAsync(BackofficePermissions.ApprovalsReview);
+            IsRejecting = false;
+            IsApproving = false;
+            RejectionReason = null;
+            ApprovalNotes = null;
+            ActionErrorMessage = null;
+        }
+    }
+
+    private async Task Close()
+    {
+        IsOpen = false;
+        await OnClosed.InvokeAsync();
+    }
+
+    private async Task ApproveRequestAsync()
+    {
+        if (RequestDetail is null) return;
+
+        IsProcessing = true;
+        ActionErrorMessage = null;
+
+        var result = await ApiClient.ApproveRequestAsync(RequestDetail.Id, ApprovalNotes);
+        IsProcessing = false;
+
+        if (result.IsSuccess)
+        {
+            await OnActionCompleted.InvokeAsync();
+            await Close();
+        }
+        else
+        {
+            ActionErrorMessage = result.ErrorMessage;
+        }
+    }
+
+    private async Task RejectRequestAsync()
+    {
+        if (RequestDetail is null || string.IsNullOrWhiteSpace(RejectionReason)) return;
+
+        IsProcessing = true;
+        ActionErrorMessage = null;
+
+        var result = await ApiClient.RejectRequestAsync(RequestDetail.Id, RejectionReason);
+        IsProcessing = false;
+
+        if (result.IsSuccess)
+        {
+            await OnActionCompleted.InvokeAsync();
+            await Close();
+        }
+        else
+        {
+            ActionErrorMessage = result.ErrorMessage;
+        }
+    }
+
+    private async Task CancelRequestAsync()
+    {
+        if (RequestDetail is null) return;
+
+        IsProcessing = true;
+        ActionErrorMessage = null;
+
+        var result = await ApiClient.CancelRequestAsync(RequestDetail.Id, "Cancelado pelo próprio solicitante.");
+        IsProcessing = false;
+
+        if (result.IsSuccess)
+        {
+            await OnActionCompleted.InvokeAsync();
+            await Close();
+        }
+        else
+        {
+            ActionErrorMessage = result.ErrorMessage;
+        }
+    }
+
+    private string GetTypeName(ApprovalRequestType type) => type switch
+    {
+        ApprovalRequestType.PublishPlanVersion => "Publicação de Plano",
+        ApprovalRequestType.MassTenantSuspension => "Suspensão Massiva",
+        ApprovalRequestType.ExtendedAccessGrant => "Acesso Ampliado",
+        _ => "Ação Crítica"
+    };
+
+    private string GetBadgeClass(ApprovalRequestType type) => type switch
+    {
+        ApprovalRequestType.PublishPlanVersion => "type-plan",
+        ApprovalRequestType.MassTenantSuspension => "type-mass-suspend",
+        ApprovalRequestType.ExtendedAccessGrant => "type-access",
+        _ => "type-custom"
+    };
+
+    private string GetStatusName(ApprovalRequestStatus status) => status switch
+    {
+        ApprovalRequestStatus.Pending => "Pendente",
+        ApprovalRequestStatus.Approved => "Aprovado",
+        ApprovalRequestStatus.Executed => "Executado",
+        ApprovalRequestStatus.Rejected => "Rejeitado",
+        ApprovalRequestStatus.Cancelled => "Cancelado",
+        ApprovalRequestStatus.Expired => "Expirado",
+        _ => status.ToString()
+    };
+
+    private string GetExpirationCountdown()
+    {
+        if (RequestDetail is null) return "";
+        if (RequestDetail.Status != ApprovalRequestStatus.Pending) return "Concluído";
+
+        var remaining = RequestDetail.ExpiresAtUtc - DateTime.UtcNow;
+        if (remaining.TotalSeconds <= 0) return "Expirou";
+
+        if (remaining.TotalHours >= 1)
+            return $"Expira em {(int)remaining.TotalHours}h {remaining.Minutes}m";
+
+        return $"Expira em {remaining.Minutes}m {remaining.Seconds}s";
+    }
+
+    private string FormatJson(string json)
+    {
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            return System.Text.Json.JsonSerializer.Serialize(doc, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+        }
+        catch
+        {
+            return json;
+        }
+    }
+}

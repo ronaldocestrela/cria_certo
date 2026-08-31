@@ -24,6 +24,10 @@ public static class BackofficePermissions
     public const string SupportDiagnose = "support.diagnose";
     public const string SupportRemediate = "support.remediate";
 
+    // 4-Eyes Administrative Approvals
+    public const string ApprovalsRequest = "approvals.request";
+    public const string ApprovalsReview = "approvals.review";
+
     // Audit & Admin Users
     public const string AuditRead = "audit.read";
     public const string UsersAdminManage = "users_admin.manage";
@@ -40,6 +44,7 @@ public static class BackofficePermissions
         SubscriptionsRead, SubscriptionsManage,
         ImpersonationStart, ImpersonationStop,
         SupportDiagnose, SupportRemediate,
+        ApprovalsRequest, ApprovalsReview,
         AuditRead, UsersAdminManage
     };
 

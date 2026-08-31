@@ -1,0 +1,287 @@
+@using CriaCerto.Modules.Backoffice.Application.Domain.Entities
+@using CriaCerto.Modules.Backoffice.Application.Features.Approvals.Dtos
+@using CriaCerto.Web.Client.Services
+@inject IBackofficeApiClient ApiClient
+
+@if (IsOpen)
+{
+    <div class="modal-backdrop" @onclick="Close">
+        <div class="modal-content" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <div class="header-title">
+                    <span class="four-eyes-tag">4-Eyes Governance</span>
+                    <h3>Nova Solicitação Administrativa Crítica</h3>
+                </div>
+                <button class="btn-close" @onclick="Close">&times;</button>
+            </div>
+
+            <div class="modal-body">
+                <p class="intro-text">
+                    Ações críticas requerem deliberação e autorização de um segundo administrador antes da execução em produção.
+                </p>
+
+                @if (!string.IsNullOrWhiteSpace(ErrorMessage))
+                {
+                    <div class="alert-error">
+                        <span>❌</span> @ErrorMessage
+                    </div>
+                }
+
+                <div class="form-group">
+                    <label class="form-label">Tipo de Ação Crítica <span class="required">*</span></label>
+                    <select class="form-control" @bind="SelectedType">
+                        <option value="@ApprovalRequestType.PublishPlanVersion">Publicação de Versão de Plano</option>
+                        <option value="@ApprovalRequestType.MassTenantSuspension">Suspensão Massiva de Tenants</option>
+                        <option value="@ApprovalRequestType.ExtendedAccessGrant">Concessão de Papel / Acesso Ampliado</option>
+                        <option value="@ApprovalRequestType.CustomCriticalAction">Outra Operação de Alta Criticidade</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Título Descritivo <span class="required">*</span></label>
+                    <input type="text" class="form-control" placeholder="Ex: Publicação do Plano Confinamento Pro v2.0" @bind="Title" />
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group col">
+                        <label class="form-label">Identificador do Recurso Alvo <span class="required">*</span></label>
+                        <input type="text" class="form-control" placeholder="Ex: PlanVersion/guid ou Batch/10-tenants" @bind="TargetResourceId" />
+                    </div>
+                    <div class="form-group col">
+                        <label class="form-label">Chamado de Suporte / Ticket (Opcional)</label>
+                        <input type="text" class="form-control" placeholder="Ex: SUP-1088" @bind="SupportTicketId" />
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <div class="label-with-counter">
+                        <label class="form-label">Justificativa Técnica <span class="required">*</span></label>
+                        <span class="char-count @(Justification.Trim().Length < 10 ? "text-danger" : "text-success")">
+                            @(Justification.Trim().Length)/10 caracteres mín.
+                        </span>
+                    </div>
+                    <textarea class="form-control" rows="3" placeholder="Descreva os motivos técnicos e operacionais que motivam esta solicitação..." @bind="Justification" @bind:event="oninput"></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Resumo de Impacto Operacional <span class="required">*</span></label>
+                    <textarea class="form-control" rows="2" placeholder="Ex: Afeta 14 fazendas em atraso financeiro; novos assinantes receberão nova tabela..." @bind="ImpactSummary"></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Payload de Execução (JSON) <span class="required">*</span></label>
+                    <textarea class="form-control code-font" rows="3" placeholder='{"VersionId":"..."}' @bind="PayloadJson"></textarea>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="Close" disabled="@IsSubmitting">Cancelar</button>
+                <button class="btn btn-primary" @onclick="SubmitAsync" disabled="@(!IsValid || IsSubmitting)">
+                    @(IsSubmitting ? "Enviando..." : "Submeter Solicitação (4-Eyes)")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .modal-backdrop {
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(15, 23, 42, 0.75);
+        backdrop-filter: blur(4px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1050;
+        padding: 1rem;
+    }
+    .modal-content {
+        background: #1e293b;
+        color: #f8fafc;
+        border-radius: 1rem;
+        width: 100%;
+        max-width: 650px;
+        max-height: 90vh;
+        display: flex;
+        flex-direction: column;
+        border: 1px solid #334155;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    }
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        padding: 1.25rem 1.5rem;
+        border-bottom: 1px solid #334155;
+        background: #0f172a;
+    }
+    .four-eyes-tag {
+        font-size: 0.7rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        background: #6366f1;
+        color: white;
+        padding: 0.2rem 0.5rem;
+        border-radius: 0.25rem;
+    }
+    .header-title h3 {
+        margin: 0.35rem 0 0 0;
+        font-size: 1.15rem;
+        font-weight: 700;
+    }
+    .btn-close {
+        background: none;
+        border: none;
+        font-size: 1.75rem;
+        color: #94a3b8;
+        cursor: pointer;
+    }
+    .modal-body {
+        padding: 1.5rem;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+    .intro-text {
+        font-size: 0.85rem;
+        color: #94a3b8;
+        margin: 0;
+    }
+    .modal-footer {
+        padding: 1rem 1.5rem;
+        border-top: 1px solid #334155;
+        background: #0f172a;
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.75rem;
+    }
+    .form-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.35rem;
+    }
+    .form-row {
+        display: flex;
+        gap: 1rem;
+    }
+    .form-row .col {
+        flex: 1;
+    }
+    .form-label {
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: #cbd5e1;
+    }
+    .required { color: #ef4444; }
+    .form-control {
+        background: #0f172a;
+        border: 1px solid #334155;
+        border-radius: 0.375rem;
+        color: #f8fafc;
+        padding: 0.5rem 0.75rem;
+        font-size: 0.9rem;
+    }
+    .form-control:focus {
+        outline: none;
+        border-color: #6366f1;
+    }
+    .label-with-counter {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .char-count {
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+    .code-font {
+        font-family: monospace;
+        font-size: 0.85rem;
+    }
+    .alert-error {
+        background: rgba(239, 68, 68, 0.15);
+        border: 1px solid #ef4444;
+        color: #fee2e2;
+        padding: 0.75rem;
+        border-radius: 0.375rem;
+        font-size: 0.85rem;
+    }
+    .text-danger { color: #f87171 !important; }
+    .text-success { color: #4ade80 !important; }
+</style>
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback OnClosed { get; set; }
+    [Parameter] public EventCallback OnCreated { get; set; }
+
+    private ApprovalRequestType SelectedType = ApprovalRequestType.PublishPlanVersion;
+    private string Title = "";
+    private string TargetResourceId = "";
+    private string? SupportTicketId;
+    private string Justification = "";
+    private string ImpactSummary = "";
+    private string PayloadJson = "{}";
+    private bool IsSubmitting = false;
+    private string? ErrorMessage;
+
+    private bool IsValid =>
+        !string.IsNullOrWhiteSpace(Title) &&
+        !string.IsNullOrWhiteSpace(TargetResourceId) &&
+        Justification.Trim().Length >= 10 &&
+        !string.IsNullOrWhiteSpace(ImpactSummary) &&
+        !string.IsNullOrWhiteSpace(PayloadJson);
+
+    protected override void OnParametersSet()
+    {
+        if (IsOpen)
+        {
+            ErrorMessage = null;
+            IsSubmitting = false;
+        }
+    }
+
+    private async Task Close()
+    {
+        IsOpen = false;
+        await OnClosed.InvokeAsync();
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (!IsValid) return;
+
+        IsSubmitting = true;
+        ErrorMessage = null;
+
+        var request = new CreateApprovalRequestRequest(
+            SelectedType,
+            Title,
+            Justification,
+            TargetResourceId,
+            ImpactSummary,
+            PayloadJson,
+            SupportTicketId);
+
+        var result = await ApiClient.CreateApprovalRequestAsync(request);
+        IsSubmitting = false;
+
+        if (result.IsSuccess)
+        {
+            Title = "";
+            TargetResourceId = "";
+            SupportTicketId = null;
+            Justification = "";
+            ImpactSummary = "";
+            PayloadJson = "{}";
+            await OnCreated.InvokeAsync();
+            await Close();
+        }
+        else
+        {
+            ErrorMessage = result.ErrorMessage;
+        }
+    }
+}

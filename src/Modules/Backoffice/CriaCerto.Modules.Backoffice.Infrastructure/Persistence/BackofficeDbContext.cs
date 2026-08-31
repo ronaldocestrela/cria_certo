@@ -16,6 +16,7 @@ public class BackofficeDbContext : DbContext
     public DbSet<PlanFeature> PlanFeatures => Set<PlanFeature>();
     public DbSet<PlanLimit> PlanLimits => Set<PlanLimit>();
     public DbSet<ImpersonationSession> ImpersonationSessions => Set<ImpersonationSession>();
+    public DbSet<AdminApprovalRequest> AdminApprovalRequests => Set<AdminApprovalRequest>();
 
     public BackofficeDbContext(DbContextOptions<BackofficeDbContext> options)
         : base(options)
@@ -150,6 +151,31 @@ public class BackofficeDbContext : DbContext
             builder.HasIndex(s => s.TargetTenantId);
             builder.HasIndex(s => s.Status);
             builder.HasIndex(s => s.ExpiresAtUtc);
+        });
+
+        modelBuilder.Entity<AdminApprovalRequest>(builder =>
+        {
+            builder.ToTable("AdminApprovalRequests");
+            builder.HasKey(r => r.Id);
+            builder.Property(r => r.RequestType).HasConversion<string>().IsRequired().HasMaxLength(50);
+            builder.Property(r => r.Status).HasConversion<string>().IsRequired().HasMaxLength(30);
+            builder.Property(r => r.Title).IsRequired().HasMaxLength(250);
+            builder.Property(r => r.Justification).IsRequired().HasMaxLength(1500);
+            builder.Property(r => r.SupportTicketId).HasMaxLength(50);
+            builder.Property(r => r.TargetResourceId).IsRequired().HasMaxLength(200);
+            builder.Property(r => r.ImpactSummary).IsRequired().HasMaxLength(2000);
+            builder.Property(r => r.PayloadJson).IsRequired();
+            builder.Property(r => r.DiffJson);
+            builder.Property(r => r.RequestedByAdminEmail).IsRequired().HasMaxLength(200);
+            builder.Property(r => r.ReviewedByAdminEmail).HasMaxLength(200);
+            builder.Property(r => r.ReviewNotes).HasMaxLength(1000);
+            builder.Property(r => r.RejectionReason).HasMaxLength(1000);
+            builder.Property(r => r.ExecutionResultJson);
+            builder.Property(r => r.ExecutionError).HasMaxLength(2000);
+            builder.HasIndex(r => r.Status);
+            builder.HasIndex(r => r.RequestType);
+            builder.HasIndex(r => r.RequestedByAdminUserId);
+            builder.HasIndex(r => r.ExpiresAtUtc);
         });
     }
 }

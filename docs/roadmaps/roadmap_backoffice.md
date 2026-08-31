@@ -187,14 +187,25 @@ As entregas estão organizadas em **6 Fases Sequenciais**, cobrindo fundação d
   * Testes unitários de matriz RBAC (`BackofficeRolePermissionMatrixTests` e `BackofficePermissionServiceTests`) garantindo que N1 não executa remediação, N2 possui acesso remediativo e FinanceOps/Auditor são segregados.
   * Testes funcionais em `SupportFeaturesTests` cobrindo diagnósticos, playbooks, validações de ticket/justificativa e auditoria forense com 100% de sucesso.
 
-#### Sub-fase 4.3: Gestão de Solicitações Administrativas (4-eyes principle) [PLANEJADA]
+#### Sub-fase 4.3: Gestão de Solicitações Administrativas (4-eyes principle) [CONCLUÍDA]
 * **Backend:**
-  * Fluxo de aprovação dupla para ações críticas (suspensão massiva, publicação de plano, acesso ampliado).
-  * Entidade `AdminApprovalRequest` com trilha de decisão e expiração.
+  * Entidade de domínio rica `AdminApprovalRequest` com ciclo de vida completo (`Pending`, `Approved`, `Rejected`, `Executed`, `Cancelled`, `Expired`), payload de execução serializado (`PayloadJson`) e visual diff (`DiffJson`).
+  * Salvaguarda estrita do **Princípio 4-Eyes**: bloqueio de domínio e aplicação impedindo categoricamente que o administrador solicitante autoaprove ou autorejeite sua requisição (`ApprovalErrors.CannotSelfApprove`).
+  * Mecanismo de expiração temporal automática (TTL configurável de 1h a 168h, padrão 48h).
+  * Permissões granulares de governança: `approvals.request` e `approvals.review` integradas à matriz RBAC (`BackofficePermissions` e `BackofficeRoles`).
+  * Handlers CQRS com **Result Pattern** e execução atômica no dispatch pós-aprovação (`CreateApprovalRequestCommand`, `ApproveApprovalRequestCommand`, `RejectApprovalRequestCommand`, `CancelApprovalRequestCommand` e `GetApprovalRequestsQueries`).
+  * Endpoints REST mapeados e protegidos em `Program.cs` sob o grupo `/api/v1/backoffice/approvals` com registro imutável em `AuditLog`.
+  * Migração EF Core `AddAdminApprovalRequests` com índices otimizados para status, expiração e solicitante.
 * **Frontend:**
-  * Caixa de aprovações pendentes com diff de impacto e evidências.
+  * Console completo de governança `ApprovalsManagement.razor` com 4 cards de KPIs, navegação por abas (*Pendentes de Análise*, *Minhas Solicitações*, *Histórico Concluído*), filtros e tabela interativa de solicitações.
+  * Componente modal detalhado `ApprovalDetailModal.razor` com painel de **Diff de Impacto**, evidências, banner de alerta contextual para o solicitante e painel de deliberação para o revisor (aprovação com notas ou rejeição com motivo).
+  * Modal `CreateApprovalRequestModal.razor` para submissão ad-hoc de ações de alta criticidade com validação em tempo real.
+  * Item de menu dedicado integrado em `BackofficeNavMenu.razor` com controle de exibição via `PermissionGuard`.
+  * Integração completa no cliente HTTP `BackofficeApiClient.cs`.
 * **TDD & Validação:**
-  * Testes de workflow garantindo que o solicitante não possa autoaprovar.
+  * Testes unitários de domínio `AdminApprovalRequestDomainTests` validando não-autoaprovação, ciclo de vida e expiração.
+  * Testes de features `ApprovalFeaturesTests` cobrindo submissão, aprovação com execução atômica (publicação de plano e suspensão massiva), rejeição, cancelamento e auditoria forense.
+  * Testes de matriz RBAC `BackofficeRolePermissionMatrixTests` e `BackofficePermissionServiceTests` com 100% de sucesso.
 
 ---
 

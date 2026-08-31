@@ -1,0 +1,561 @@
+@page "/backoffice/approvals"
+@using CriaCerto.Modules.Backoffice.Application.Domain.Entities
+@using CriaCerto.Modules.Backoffice.Application.Features.Approvals.Dtos
+@using CriaCerto.Modules.Backoffice.Application.Security
+@using CriaCerto.Web.Client.Components.Backoffice
+@using CriaCerto.Web.Client.Services
+@using Microsoft.AspNetCore.Components.Authorization
+@inject IBackofficeApiClient ApiClient
+@inject IBackofficePermissionService PermissionService
+@inject AuthenticationStateProvider AuthStateProvider
+
+<div class="approvals-container">
+    <!-- HEADER -->
+    <header class="page-header">
+        <div class="header-titles">
+            <div class="governance-badge">
+                <span>🛡️ Governança & Salvaguarda 4-Eyes</span>
+            </div>
+            <h1 class="page-title">Gestão de Solicitações Administrativas</h1>
+            <p class="page-subtitle">
+                Fluxo de aprovação dupla para ações de alto impacto (publicação de planos, suspensões massivas e acessos ampliados).
+            </p>
+        </div>
+
+        <PermissionGuard Permission="@BackofficePermissions.ApprovalsRequest">
+            <button class="btn btn-primary" @onclick="() => IsCreateModalOpen = true">
+                <span>➕</span> Nova Solicitação
+            </button>
+        </PermissionGuard>
+    </header>
+
+    <!-- KPI CARDS -->
+    <section class="kpis-grid">
+        <div class="kpi-card card-amber">
+            <div class="kpi-icon">⏳</div>
+            <div class="kpi-info">
+                <span class="kpi-label">Pendentes Globais</span>
+                <span class="kpi-value">@(Counts?.TotalPending ?? 0)</span>
+            </div>
+        </div>
+
+        <div class="kpi-card card-cyan">
+            <div class="kpi-icon">👁️‍🗨️</div>
+            <div class="kpi-info">
+                <span class="kpi-label">Prontas p/ Minha Análise</span>
+                <span class="kpi-value">@(Counts?.PendingReviewForMe ?? 0)</span>
+            </div>
+        </div>
+
+        <div class="kpi-card card-purple">
+            <div class="kpi-icon">📝</div>
+            <div class="kpi-info">
+                <span class="kpi-label">Minhas Aguardando</span>
+                <span class="kpi-value">@(Counts?.MyPendingRequests ?? 0)</span>
+            </div>
+        </div>
+
+        <div class="kpi-card card-green">
+            <div class="kpi-icon">⚖️</div>
+            <div class="kpi-info">
+                <span class="kpi-label">Princípio 4-Eyes</span>
+                <span class="kpi-value">100% Ativo</span>
+            </div>
+        </div>
+    </section>
+
+    <!-- TABS -->
+    <div class="tabs-nav">
+        <button class="tab-btn @(ActiveTab == "pending" ? "active" : "")" @onclick='() => ChangeTab("pending")'>
+            Pendentes de Análise (@(Counts?.TotalPending ?? 0))
+        </button>
+        <button class="tab-btn @(ActiveTab == "mine" ? "active" : "")" @onclick='() => ChangeTab("mine")'>
+            Minhas Solicitações (@(Counts?.MyPendingRequests ?? 0))
+        </button>
+        <button class="tab-btn @(ActiveTab == "history" ? "active" : "")" @onclick='() => ChangeTab("history")'>
+            Histórico / Concluídas
+        </button>
+    </div>
+
+    <!-- FILTER BAR -->
+    <div class="filters-bar">
+        <div class="filter-group">
+            <label>Tipo:</label>
+            <select class="form-select" @bind="FilterType" @bind:after="LoadDataAsync">
+                <option value="">Todos os Tipos</option>
+                <option value="@ApprovalRequestType.PublishPlanVersion">Publicação de Plano</option>
+                <option value="@ApprovalRequestType.MassTenantSuspension">Suspensão Massiva</option>
+                <option value="@ApprovalRequestType.ExtendedAccessGrant">Acesso Ampliado</option>
+                <option value="@ApprovalRequestType.CustomCriticalAction">Ações Críticas</option>
+            </select>
+        </div>
+
+        @if (ActiveTab == "history")
+        {
+            <div class="filter-group">
+                <label>Status:</label>
+                <select class="form-select" @bind="FilterStatus" @bind:after="LoadDataAsync">
+                    <option value="">Todos Concluídos</option>
+                    <option value="@ApprovalRequestStatus.Executed">Executado</option>
+                    <option value="@ApprovalRequestStatus.Approved">Aprovado</option>
+                    <option value="@ApprovalRequestStatus.Rejected">Rejeitado</option>
+                    <option value="@ApprovalRequestStatus.Cancelled">Cancelado</option>
+                    <option value="@ApprovalRequestStatus.Expired">Expirado</option>
+                </select>
+            </div>
+        }
+
+        <button class="btn btn-outline" @onclick="LoadDataAsync" disabled="@IsLoading">
+            <span>🔄</span> Atualizar
+        </button>
+    </div>
+
+    <!-- DATA TABLE -->
+    <div class="table-container">
+        @if (IsLoading)
+        {
+            <div class="loading-state">
+                <div class="spinner"></div>
+                <p>Carregando solicitações...</p>
+            </div>
+        }
+        else if (Requests.Count == 0)
+        {
+            <div class="empty-state">
+                <span class="empty-icon">📭</span>
+                <h3>Nenhuma solicitação encontrada</h3>
+                <p>Não há itens pendentes ou correspondentes aos filtros selecionados.</p>
+            </div>
+        }
+        else
+        {
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Tipo</th>
+                        <th>Título & Justificativa</th>
+                        <th>Recurso Alvo</th>
+                        <th>Solicitante</th>
+                        <th>Status</th>
+                        <th>Expiração</th>
+                        <th class="text-right">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in Requests)
+                    {
+                        var isMyRequest = item.RequestedByAdminUserId == CurrentAdminUserId;
+                        <tr>
+                            <td>
+                                <span class="badge @GetBadgeClass(item.RequestType)">
+                                    @GetTypeName(item.RequestType)
+                                </span>
+                            </td>
+                            <td>
+                                <div class="item-title">@item.Title</div>
+                                @if (!string.IsNullOrWhiteSpace(item.SupportTicketId))
+                                {
+                                    <span class="ticket-tag">@item.SupportTicketId</span>
+                                }
+                            </td>
+                            <td>
+                                <span class="code-tag">@item.TargetResourceId</span>
+                            </td>
+                            <td>
+                                <div class="requester-email">@item.RequestedByAdminEmail</div>
+                                <div class="requester-date">@item.RequestedAtUtc.ToString("dd/MM/yyyy HH:mm")</div>
+                            </td>
+                            <td>
+                                <span class="status-pill status-@item.Status.ToString().ToLower()">
+                                    @GetStatusName(item.Status)
+                                </span>
+                            </td>
+                            <td>
+                                <span class="expiration-text @(IsExpired(item) ? "text-danger" : "")">
+                                    @GetExpirationDisplay(item)
+                                </span>
+                            </td>
+                            <td class="text-right">
+                                <button class="btn-action" @onclick="() => OpenDetailAsync(item.Id)">
+                                    @(item.Status == ApprovalRequestStatus.Pending && !isMyRequest ? "Avaliar..." : "Detalhes")
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+</div>
+
+<!-- MODALS -->
+<ApprovalDetailModal
+    IsOpen="@IsDetailModalOpen"
+    RequestDetail="@SelectedDetail"
+    CurrentAdminUserId="@CurrentAdminUserId"
+    OnClosed="() => IsDetailModalOpen = false"
+    OnActionCompleted="LoadDataAsync" />
+
+<CreateApprovalRequestModal
+    IsOpen="@IsCreateModalOpen"
+    OnClosed="() => IsCreateModalOpen = false"
+    OnCreated="LoadDataAsync" />
+
+<style>
+    .approvals-container {
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+        padding: 1.5rem;
+        color: #f8fafc;
+        max-width: 1400px;
+        margin: 0 auto;
+    }
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+    .governance-badge {
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        color: #38bdf8;
+        letter-spacing: 0.05em;
+    }
+    .page-title {
+        font-size: 1.75rem;
+        font-weight: 800;
+        margin: 0.25rem 0 0.5rem 0;
+        color: #f1f5f9;
+    }
+    .page-subtitle {
+        font-size: 0.95rem;
+        color: #94a3b8;
+        margin: 0;
+        max-width: 700px;
+    }
+    .kpis-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 1rem;
+    }
+    .kpi-card {
+        background: #1e293b;
+        border-radius: 0.75rem;
+        padding: 1.25rem;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        border: 1px solid #334155;
+    }
+    .kpi-icon {
+        font-size: 2rem;
+    }
+    .kpi-info {
+        display: flex;
+        flex-direction: column;
+    }
+    .kpi-label {
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: #94a3b8;
+        text-transform: uppercase;
+    }
+    .kpi-value {
+        font-size: 1.6rem;
+        font-weight: 800;
+        color: #f8fafc;
+    }
+    .card-amber { border-left: 4px solid #f59e0b; }
+    .card-cyan { border-left: 4px solid #06b6d4; }
+    .card-purple { border-left: 4px solid #a855f7; }
+    .card-green { border-left: 4px solid #10b981; }
+
+    .tabs-nav {
+        display: flex;
+        gap: 0.5rem;
+        border-bottom: 1px solid #334155;
+        padding-bottom: 0.25rem;
+    }
+    .tab-btn {
+        background: none;
+        border: none;
+        color: #94a3b8;
+        font-size: 0.95rem;
+        font-weight: 600;
+        padding: 0.6rem 1.25rem;
+        cursor: pointer;
+        border-radius: 0.5rem 0.5rem 0 0;
+        transition: all 0.2s;
+    }
+    .tab-btn.active {
+        color: #38bdf8;
+        background: #1e293b;
+        border-bottom: 2px solid #38bdf8;
+    }
+    .filters-bar {
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+        flex-wrap: wrap;
+        background: #1e293b;
+        padding: 0.75rem 1rem;
+        border-radius: 0.5rem;
+        border: 1px solid #334155;
+    }
+    .filter-group {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.85rem;
+        color: #cbd5e1;
+    }
+    .form-select {
+        background: #0f172a;
+        color: #f8fafc;
+        border: 1px solid #334155;
+        border-radius: 0.375rem;
+        padding: 0.35rem 0.6rem;
+        font-size: 0.85rem;
+    }
+    .table-container {
+        background: #1e293b;
+        border-radius: 0.75rem;
+        border: 1px solid #334155;
+        overflow-x: auto;
+    }
+    .data-table {
+        width: 100%;
+        border-collapse: collapse;
+        text-align: left;
+    }
+    .data-table th {
+        background: #0f172a;
+        padding: 0.85rem 1rem;
+        font-size: 0.8rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        color: #94a3b8;
+        letter-spacing: 0.05em;
+        border-bottom: 1px solid #334155;
+    }
+    .data-table td {
+        padding: 1rem;
+        border-bottom: 1px solid #334155;
+        font-size: 0.9rem;
+    }
+    .item-title {
+        font-weight: 600;
+        color: #f1f5f9;
+    }
+    .ticket-tag {
+        font-size: 0.75rem;
+        background: rgba(99, 102, 241, 0.2);
+        color: #a5b4fc;
+        padding: 0.15rem 0.4rem;
+        border-radius: 0.25rem;
+        margin-top: 0.25rem;
+        display: inline-block;
+        font-family: monospace;
+    }
+    .code-tag {
+        font-family: monospace;
+        font-size: 0.85rem;
+        color: #38bdf8;
+        background: #0f172a;
+        padding: 0.2rem 0.5rem;
+        border-radius: 0.25rem;
+    }
+    .requester-email {
+        font-weight: 500;
+        color: #cbd5e1;
+    }
+    .requester-date {
+        font-size: 0.75rem;
+        color: #64748b;
+    }
+    .status-pill {
+        font-size: 0.75rem;
+        font-weight: 700;
+        padding: 0.25rem 0.6rem;
+        border-radius: 9999px;
+        text-transform: uppercase;
+    }
+    .status-pending { background: #fef3c7; color: #b45309; }
+    .status-approved { background: #dbeafe; color: #1d4ed8; }
+    .status-executed { background: #d1fae5; color: #065f46; }
+    .status-rejected { background: #fee2e2; color: #991b1b; }
+    .status-cancelled { background: #f1f5f9; color: #475569; }
+    .status-expired { background: #e2e8f0; color: #64748b; }
+
+    .btn-action {
+        background: #334155;
+        color: #f8fafc;
+        border: none;
+        padding: 0.4rem 0.8rem;
+        border-radius: 0.375rem;
+        font-size: 0.85rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .btn-action:hover {
+        background: #475569;
+        color: #38bdf8;
+    }
+    .loading-state, .empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 4rem 1rem;
+        color: #94a3b8;
+    }
+    .empty-icon { font-size: 3rem; margin-bottom: 0.5rem; }
+    .spinner {
+        width: 2rem;
+        height: 2rem;
+        border: 3px solid #334155;
+        border-top-color: #38bdf8;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        margin-bottom: 1rem;
+    }
+    @@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+
+@code {
+    private string ActiveTab = "pending";
+    private ApprovalRequestType? FilterType;
+    private ApprovalRequestStatus? FilterStatus;
+    private bool IsLoading = true;
+
+    private List<AdminApprovalRequestSummaryDto> Requests = new();
+    private PendingApprovalsCountDto? Counts;
+    private Guid CurrentAdminUserId = Guid.Empty;
+
+    private bool IsDetailModalOpen = false;
+    private AdminApprovalRequestDetailDto? SelectedDetail;
+    private bool IsCreateModalOpen = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ExtractCurrentUserAsync();
+        await LoadDataAsync();
+    }
+
+    private async Task ExtractCurrentUserAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        var subClaim = user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+            ?? user.FindFirst("sub")?.Value;
+
+        if (Guid.TryParse(subClaim, out var userId))
+        {
+            CurrentAdminUserId = userId;
+        }
+    }
+
+    private async Task ChangeTab(string tab)
+    {
+        ActiveTab = tab;
+        FilterStatus = null;
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        IsLoading = true;
+        try
+        {
+            Counts = await ApiClient.GetPendingApprovalsCountAsync();
+
+            ApprovalRequestStatus? statusToQuery = ActiveTab switch
+            {
+                "pending" => ApprovalRequestStatus.Pending,
+                "mine" => ApprovalRequestStatus.Pending,
+                "history" => FilterStatus,
+                _ => null
+            };
+
+            Guid? requesterToQuery = ActiveTab == "mine" ? CurrentAdminUserId : null;
+
+            var result = await ApiClient.GetApprovalsAsync(
+                status: statusToQuery,
+                requestType: FilterType,
+                requestedByAdminUserId: requesterToQuery,
+                page: 1,
+                pageSize: 50);
+
+            if (result is not null)
+            {
+                Requests = result.Items.ToList();
+            }
+            else
+            {
+                Requests = new();
+            }
+        }
+        catch (Exception)
+        {
+            Requests = new();
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private async Task OpenDetailAsync(Guid id)
+    {
+        var detail = await ApiClient.GetApprovalByIdAsync(id);
+        if (detail is not null)
+        {
+            SelectedDetail = detail;
+            IsDetailModalOpen = true;
+        }
+    }
+
+    private bool IsExpired(AdminApprovalRequestSummaryDto item) =>
+        item.Status == ApprovalRequestStatus.Pending && DateTime.UtcNow >= item.ExpiresAtUtc;
+
+    private string GetExpirationDisplay(AdminApprovalRequestSummaryDto item)
+    {
+        if (item.Status != ApprovalRequestStatus.Pending) return "-";
+        var remaining = item.ExpiresAtUtc - DateTime.UtcNow;
+        if (remaining.TotalSeconds <= 0) return "Expirou";
+        if (remaining.TotalHours >= 1) return $"{(int)remaining.TotalHours}h restantes";
+        return $"{remaining.Minutes}m restantes";
+    }
+
+    private string GetTypeName(ApprovalRequestType type) => type switch
+    {
+        ApprovalRequestType.PublishPlanVersion => "Plano",
+        ApprovalRequestType.MassTenantSuspension => "Suspensão",
+        ApprovalRequestType.ExtendedAccessGrant => "Acesso",
+        _ => "Ação"
+    };
+
+    private string GetBadgeClass(ApprovalRequestType type) => type switch
+    {
+        ApprovalRequestType.PublishPlanVersion => "badge-plan",
+        ApprovalRequestType.MassTenantSuspension => "badge-suspend",
+        ApprovalRequestType.ExtendedAccessGrant => "badge-access",
+        _ => "badge-custom"
+    };
+
+    private string GetStatusName(ApprovalRequestStatus status) => status switch
+    {
+        ApprovalRequestStatus.Pending => "Pendente",
+        ApprovalRequestStatus.Approved => "Aprovado",
+        ApprovalRequestStatus.Executed => "Executado",
+        ApprovalRequestStatus.Rejected => "Rejeitado",
+        ApprovalRequestStatus.Cancelled => "Cancelado",
+        ApprovalRequestStatus.Expired => "Expirado",
+        _ => status.ToString()
+    };
+}
