@@ -172,65 +172,127 @@ As entregas estão organizadas em **6 Fases Sequenciais**, cobrindo fundação d
 * **TDD & Validação:**
   * Testes de domínio `ImpersonationSessionDomainTests`, testes de features `StartImpersonationSessionCommandTests`, `StopImpersonationSessionCommandTests` e testes de segurança de claims `ImpersonationSecurityTests` aprovados com 100% de sucesso.
 
-#### Sub-fase 4.2: Workbench de Suporte N1/N2 [PLANEJADA]
+#### Sub-fase 4.2: Workbench de Suporte N1/N2 [CONCLUÍDA]
 * **Backend:**
-  * APIs de diagnóstico assistido (status de sync, filas, falhas recorrentes, módulos ativos).
-  * Catálogo de ações remediativas seguras por permissão.
+  * Permissões granulares de governança adicionadas: `support.diagnose` (N1, N2, PlatformOwner) e `support.remediate` (N2, PlatformOwner) com segregação estrita contra operações financeiras e suspensões destrutivas.
+  * API de diagnóstico assistido `GetTenantDiagnosticsQuery` consolidando saúde de sincronização PWA/campo, cotas de rebanho vs plano, matriz de módulos ativos, status de filas e jobs em background, alertas/falhas recentes e sessão de suporte ativa.
+  * Catálogo de playbooks operacionais padronizados `GetSupportPlaybooksQuery` (`PB-SYNC-01` a `PB-LOCK-05`) com roteiros de verificação passo a passo.
+  * Catálogo de ações remediativas seguras via `ExecuteTenantRemediationCommand` (`RequestClientCacheReset`, `EvictTenantCache`, `ReconcileEntitlements`, `RetryFailedQueueItems`, `ResetTransientLocks`) com dupla salvaguarda (ticket de suporte obrigatório e justificativa com mín. 10 caracteres) e registro imutável em `AuditLog` (`Support.RemediationExecuted`).
+  * Endpoints REST mapeados e protegidos: `GET /api/v1/backoffice/support/tenants/{id:guid}/diagnostics`, `GET /api/v1/backoffice/support/playbooks` e `POST /api/v1/backoffice/support/tenants/{id:guid}/remediation`.
 * **Frontend:**
-  * Console de suporte com playbooks operacionais e ações contextualizadas.
+  * Console operacional completo `SupportWorkbench.razor` com busca e seleção de tenants, cockpit com 4 cards de KPIs de diagnóstico, grid de módulos habilitados, accordion interativo com checklist de playbooks e disparo de ações sugeridas.
+  * Componente modal `ExecuteRemediationModal.razor` com salvaguardas, validação em tempo real e feedback de execução.
+  * Integração na navegação lateral `BackofficeNavMenu.razor` e atalho direto no painel 360 de `TenantsManagement.razor`.
 * **TDD & Validação:**
-  * Testes garantindo segregação entre suporte operacional e ações financeiras/sensíveis.
+  * Testes unitários de matriz RBAC (`BackofficeRolePermissionMatrixTests` e `BackofficePermissionServiceTests`) garantindo que N1 não executa remediação, N2 possui acesso remediativo e FinanceOps/Auditor são segregados.
+  * Testes funcionais em `SupportFeaturesTests` cobrindo diagnósticos, playbooks, validações de ticket/justificativa e auditoria forense com 100% de sucesso.
 
-#### Sub-fase 4.3: Gestão de Solicitações Administrativas (4-eyes principle) [PLANEJADA]
+#### Sub-fase 4.3: Gestão de Solicitações Administrativas (4-eyes principle) [CONCLUÍDA]
 * **Backend:**
-  * Fluxo de aprovação dupla para ações críticas (suspensão massiva, publicação de plano, acesso ampliado).
-  * Entidade `AdminApprovalRequest` com trilha de decisão e expiração.
+  * Entidade de domínio rica `AdminApprovalRequest` com ciclo de vida completo (`Pending`, `Approved`, `Rejected`, `Executed`, `Cancelled`, `Expired`), payload de execução serializado (`PayloadJson`) e visual diff (`DiffJson`).
+  * Salvaguarda estrita do **Princípio 4-Eyes**: bloqueio de domínio e aplicação impedindo categoricamente que o administrador solicitante autoaprove ou autorejeite sua requisição (`ApprovalErrors.CannotSelfApprove`).
+  * Mecanismo de expiração temporal automática (TTL configurável de 1h a 168h, padrão 48h).
+  * Permissões granulares de governança: `approvals.request` e `approvals.review` integradas à matriz RBAC (`BackofficePermissions` e `BackofficeRoles`).
+  * Handlers CQRS com **Result Pattern** e execução atômica no dispatch pós-aprovação (`CreateApprovalRequestCommand`, `ApproveApprovalRequestCommand`, `RejectApprovalRequestCommand`, `CancelApprovalRequestCommand` e `GetApprovalRequestsQueries`).
+  * Endpoints REST mapeados e protegidos em `Program.cs` sob o grupo `/api/v1/backoffice/approvals` com registro imutável em `AuditLog`.
+  * Migração EF Core `AddAdminApprovalRequests` com índices otimizados para status, expiração e solicitante.
 * **Frontend:**
-  * Caixa de aprovações pendentes com diff de impacto e evidências.
+  * Console completo de governança `ApprovalsManagement.razor` com 4 cards de KPIs, navegação por abas (*Pendentes de Análise*, *Minhas Solicitações*, *Histórico Concluído*), filtros e tabela interativa de solicitações.
+  * Componente modal detalhado `ApprovalDetailModal.razor` com painel de **Diff de Impacto**, evidências, banner de alerta contextual para o solicitante e painel de deliberação para o revisor (aprovação com notas ou rejeição com motivo).
+  * Modal `CreateApprovalRequestModal.razor` para submissão ad-hoc de ações de alta criticidade com validação em tempo real.
+  * Item de menu dedicado integrado em `BackofficeNavMenu.razor` com controle de exibição via `PermissionGuard`.
+  * Integração completa no cliente HTTP `BackofficeApiClient.cs`.
 * **TDD & Validação:**
-  * Testes de workflow garantindo que o solicitante não possa autoaprovar.
+  * Testes unitários de domínio `AdminApprovalRequestDomainTests` validando não-autoaprovação, ciclo de vida e expiração.
+  * Testes de features `ApprovalFeaturesTests` cobrindo submissão, aprovação com execução atômica (publicação de plano e suspensão massiva), rejeição, cancelamento e auditoria forense.
+  * Testes de matriz RBAC `BackofficeRolePermissionMatrixTests` e `BackofficePermissionServiceTests` com 100% de sucesso.
 
 ---
 
 ### Phase 5: Compliance, Auditoria, Risco e Observabilidade
 
-#### Sub-fase 5.1: Auditoria Forense e Retenção de Logs [PLANEJADA]
+#### Sub-fase 5.1: Auditoria Forense e Retenção de Logs [CONCLUÍDA]
 * **Backend:**
-  * Auditoria estruturada para toda ação administrativa (quem, quando, onde, antes/depois).
-  * Assinatura de integridade e política de retenção por criticidade.
+  * Entidade de domínio `AuditLog` com modelo forense estruturado: quem (`AdminUserId`, `AdminUserEmail`, `ActorRole`), quando (`TimestampUtc`), onde (`IpAddress`, `UserAgent`), alvo (`Resource`, `TargetTenantId`, `TargetTenantName`), categorização (`AuditCategory`), severidade (`AuditSeverity`) e mutação antes/depois (`OldValuesJson`, `NewValuesJson`).
+  * Assinatura criptográfica SHA-256 canônica (`RecordHash`) e encadeamento sequencial tamper-evident (`PreviousRecordHash`) para detecção automática de adulteração ou deleção indevida.
+  * Verificação de integridade canônica via `VerifyIntegrity()`, queries de varredura `VerifyAuditTrailIntegrityQuery` e métricas em tempo real `GetAuditStatsQuery`.
+  * Política de retenção e ciclo de vida por criticidade com `ApplyAuditRetentionPolicyCommand`: expurgo físico seguro de logs de severidade `Low` (>90d), arquivamento lógico a frio de logs `Medium` (>1 ano) e `High` (>3 anos), e proteção perpétua para eventos `Critical` (nunca expurgados automaticamente).
+  * Suporte a simulação (`DryRun`), exportação estruturada em CSV/JSON (`ExportAuditTrailQuery`) e registro imutável da própria execução de retenção.
+  * Endpoints REST mapeados no grupo `/api/v1/backoffice/audit` protegidos por claims RBAC (`audit.read` e `users_admin.manage`).
+  * Migração EF Core `AddForensicAuditAndRetentionPolicy` com índices compostos de alta performance.
 * **Frontend:**
-  * Explorer de auditoria com filtros por ator, tenant, recurso e intervalo temporal.
+  * Console interativo `AuditExplorer.razor` em `/backoffice/audit` com 4 KPI cards operacionais e indicador de integridade criptográfica.
+  * Barra de filtros multifatorial: busca textual livre, filtro por Ator, Tenant, Severidade, Categoria, Período de Datas e toggle de registros arquivados.
+  * Modal forense de detalhe `AuditLogDetailModal.razor` com painel de **Diff Antes vs Depois**, metadados de rede e selo de verificação de hash.
+  * Modal `AuditRetentionModal.razor` para configuração de SLAs por criticidade, simulação `DryRun` e execução de arquivamento/expurgo.
+  * Integração completa com `BackofficeApiClient.cs`.
 * **TDD & Validação:**
-  * Testes de imutabilidade lógica e rastreabilidade de eventos críticos.
+  * Testes unitários de domínio `AuditLogDomainTests` validando hashing SHA-256, detecção de adulteração em tempo real e retrocompatibilidade.
+  * Testes de features CQRS `AuditFeaturesTests` cobrindo filtros de busca, paginação, verificação de cadeia íntegra vs corrompida, exportação CSV e aplicação de políticas de retenção (DryRun e execução física).
+  * 100% de sucesso na suíte global de testes (470 testes aprovados, incluindo testes de arquitetura com Testcontainers).
+  * Formalização arquitetural via ADR `0009-forensic-audit-trail-and-retention-policy.md`.
 
-#### Sub-fase 5.2: Observabilidade de Backoffice e Alertas [PLANEJADA]
+#### Sub-fase 5.2: Observabilidade de Backoffice e Alertas [CONCLUÍDA]
 * **Backend & DevOps:**
-  * Métricas e traces para fluxos de admin: latência de consultas, falhas de policy, picos de impersonação.
-  * Alertas para comportamento anômalo (tentativas negadas em sequência, ações críticas fora de janela).
+  * Métricas nativas .NET 10 via `System.Diagnostics.Metrics.Meter` (`backoffice.admin_actions.total`, `backoffice.policy_failures.total`, `backoffice.impersonation_sessions.active`, `backoffice.operation_latency.duration_ms`, `backoffice.alerts.triggered.total`).
+  * Tracing distribuído via `System.Diagnostics.ActivitySource` e pipeline behavior MediatR `BackofficeObservabilityBehavior` para medição automática e transparente de latência e spans.
+  * Motor de detecção de anomalias `AnomalyDetectionEngine` com regras operacionais: violações consecutivas de política/acesso (`ALR_POLICY_BRUTE_FORCE`), operações críticas fora da janela regular (`ALR_OFF_HOURS_CRITICAL_ACTION`), surto anômalo de impersonações (`ALR_IMPERSONATION_BURST`) e detecção de adulteração de hash na trilha forense (`ALR_FORENSIC_TAMPER_DETECTED`).
+  * Entidade de domínio `BackofficeAlert` com deduplicação inteligente (`Fingerprint`), ciclo de vida (`Active`, `Acknowledged`, `Resolved`) e notas de resolução técnica obrigatórias.
+  * Endpoints REST mapeados sob `/api/v1/backoffice/observability` (`/health`, `/alerts`, `/metrics`, `/alerts/{id}/acknowledge`, `/alerts/{id}/resolve`, `/alerts/simulate`) protegidos por claims RBAC (`observability.read` e `observability.manage`).
+  * Migração EF Core `AddBackofficeObservabilityAndAlerts` com índices em `(Status, Severity)`, `Fingerprint`, `LastTriggeredAtUtc` e `RuleCode`.
 * **Frontend:**
-  * Painel de saúde operacional com indicadores de risco e eventos ativos.
+  * Painel de controle `OperationalHealthDashboard.razor` em `/backoffice/observability` com indicador global de saúde em tempo real (Saudável, Degradado, Crítico) e auto-refresh periódico de 30s.
+  * 4 KPI cards operacionais: status de integridade forense criptográfica, alertas críticos ativos, taxa de falhas de política nas 24h e sessões de suporte assistido ativas.
+  * Central de incidentes com grid interativa, filtros multifatoriais por status, severidade e busca textual.
+  * Modais especializados: `AlertDetailModal.razor` (triagem rápida, histórico, inspeção de JSON de contexto e formulário de encerramento) e `SimulateAlertModal.razor` (sandbox para simulação de incidentes sintéticos).
+  * Extensão do cliente de API `BackofficeApiClient.cs` e integração na navegação global `BackofficeNavMenu.razor` e `BackofficeDashboard.razor`.
 * **TDD & Validação:**
-  * Testes de contrato para eventos/telemetria e validação de regras de alerta.
+  * Testes unitários de domínio `BackofficeAlertDomainTests` validando criação, incrementação por fingerprint, transições de estado e validações de notas.
+  * Testes do motor de detecção `AnomalyDetectionEngineTests` validando disparo por threshold de política, horário noturno/fim de semana, pico de impersonação e quebra na cadeia de hash.
+  * Testes de features CQRS `ObservabilityFeaturesTests` e de pipeline de telemetria `BackofficeTelemetryTests`.
+  * Testes de permissões e controle de acesso no cliente `BackofficePermissionServiceTests`.
+  * 100% de aprovação na suíte global de testes (502 testes aprovados, incluindo testes de arquitetura com Testcontainers, 196 testes no Backoffice e 20 testes no cliente Web, com zero falhas e zero warnings).
+  * Formalização arquitetural via ADR `0010-backoffice-observability-and-anomaly-alerts.md`.
 
-#### Sub-fase 5.3: Compliance LGPD e Governança de Acesso [PLANEJADA]
-* **Backend:**
-  * Mascaramento de dados sensíveis no backoffice por permissão contextual.
-  * Exportação de trilha de acesso para auditorias internas/externas.
-* **Frontend:**
-  * Visualização de dados com redaction progressivo para perfis sem necessidade operacional.
+#### Sub-fase 5.3: Compliance LGPD e Governança de Acesso [CONCLUÍDA]
+* **Backend & Segurança:**
+  * Serviço de mascaramento determinístico de dados pessoais e fiscais (`IPiiDataMasker` / `PiiDataMasker`) para CPF (`***.456.789-**`), CNPJ (`12.***.***/0001-**`), e-mails (`u***a@dominio.com.br`), telefones (`(11) 9****-**21`), endereços IP e higienização de payloads JSON.
+  * Novas permissões granulares no RBAC (`compliance.read`, `compliance.export`, `compliance.unmask`) com segregação estrita de privilégios (`ReadOnlyAuditor` bloqueado para unmask, `SupportN1` sem acesso a PII em claro).
+  * Desmascaramento Just-In-Time auditado (`RevealSensitiveDataCommand`) em `POST /api/v1/backoffice/compliance/reveal-pii` com obrigatoriedade de justificativa operacional (mínimo 10 caracteres) e registro compulsório de evento forense SHA-256 encadeado em `AuditLog` (`Category = Compliance`, `Severity = High`).
+  * Emissão e exportação assinada do Dossiê Formal de Acesso LGPD (`ExportAccessTrailQuery`) em `GET /api/v1/backoffice/compliance/access-trail/export` (CSV/JSON com carimbo de tempo UTC, declaração de finalidade e auditoria com severidade crítica).
+  * Painel de visão geral de conformidade (`GetComplianceOverviewQuery`) e trilha paginada de acessos (`GetAccessTrailQuery`).
+  * Privacy by Default integrado nos mappers e handlers de tenants (`TenantAdminMapper`, `GetTenantsAdminQueryHandler`, `GetTenantAdminDetailQueryHandler`).
+* **Frontend (Blazor .NET 10):**
+  * Componente atômico reutilizável `MaskedDataField.razor` para redaction progressivo com suporte a toggle auditado e badge de conformidade.
+  * Modal de confirmação e justificativa `RevealPiiModal.razor` para captura de motivo operacional antes de qualquer revelação.
+  * Console unificado de governança `ComplianceGovernance.razor` na rota `/backoffice/compliance` com 4 KPI cards operacionais, feed interativo de trilha de acessos a PII, gerador/baixador de Dossiê Formal e matriz de privilégios dos papéis administrativos.
+  * Integração de `MaskedDataField` nas telas operacionais existentes (`TenantsManagement.razor` e `SupportWorkbench.razor`).
+  * Atualização da navegação `BackofficeNavMenu.razor` com item "Compliance & LGPD" protegido por claim.
 * **TDD & Validação:**
-  * Testes de autorização e de exposição mínima de dados.
+  * Testes unitários do mascarador `PiiDataMaskerTests` cobrindo CPFs, CNPJs, e-mails, telefones, IPs, nomes e higienização de JSON.
+  * Testes de features CQRS `ComplianceFeaturesTests` cobrindo validação de justificativa, gravação em `AuditLog` com assinatura SHA-256, cálculo de métricas de overview, filtros da trilha e exportação de dossiê em CSV.
+  * Testes de permissões e controle de acesso no cliente `BackofficePermissionServiceTests` validando regras de RBAC para os papéis operacionais.
+  * 100% de sucesso na suíte de testes (235 testes aprovados no Backoffice e 23 testes no cliente Web, zero falhas).
+  * Formalização arquitetural via ADR `0011-lgpd-compliance-contextual-masking-and-access-governance.md`.
 
 ---
 
 ### Phase 6: Hardening, Rollout Gradual e Go-Live do Backoffice
 
-#### Sub-fase 6.1: Segurança Aplicacional e Testes de Intrusão Assistidos [PLANEJADA]
+#### Sub-fase 6.1: Segurança Aplicacional e Testes de Intrusão Assistidos [CONCLUÍDA]
 * **Backend & Infra:**
-  * Hardening de autenticação, proteção contra elevação de privilégio e validação forte de policies.
-  * Testes automatizados de autorização negativa para endpoints sensíveis.
+  * Hardening do pipeline de autenticação administrativa em `AuthenticateAdminUserCommandHandler` com mitigação de *timing attacks* via verificação em tempo constante (`dummy PBKDF2 hash comparison`), prevenindo enumeração de administradores.
+  * Rate limiting defensivo nativo do ASP.NET Core 10 (`BackofficeAuthRateLimiter`) com limite de requisições por minuto e resposta padronizada `429 Too Many Requests` (`Backoffice.RateLimitExceeded`) para `/api/v1/backoffice/auth/login` e `/refresh`.
+  * Contenção e isolamento estrito de tokens de suporte assistido em `BackofficeAccessMiddleware`: bloqueio compulsório com `403 Forbidden` (`Backoffice.ImpersonationRestricted`) caso tokens de impersonação tentem acessar rotas do backoffice.
+  * Proteção avançada de cabeçalhos HTTP no `SecurityHeadersMiddleware`: injeção de `Content-Security-Policy`, `Permissions-Policy` e `Cache-Control: no-store, no-cache, must-revalidate` em 100% das rotas administrativas.
+  * Validação estrita de escopos permitidos (`ScopeGlobal`, `ScopeTenant`, `ScopeUnidade`) em `PermissionEvaluatorService` com rejeição por `BackofficeErrors.InvalidScopeData`.
 * **TDD & Validação:**
-  * Suíte de regressão de segurança executada em CI/CD com bloqueio de merge em falha.
+  * Suíte automatizada de hardening de autenticação `BackofficeAuthenticationHardeningTests` validando timing attack dummy check, MFA obrigatório/inválido, rotação de refresh token e bloqueio de replay de sessões revogadas/expiradas.
+  * Matriz exaustiva de testes de autorização negativa `BackofficeNegativeAuthorizationTests` cobrindo OWASP API1 (BOLA), API5 (BFLA) e Least Privilege para todos os papéis (`Anonymous`, `TenantUser`, `ReadOnlyAuditor`, `SupportN1`, `SupportN2`, `FinanceOps` e `PlatformOwner`), incluindo bloqueio de auto-aprovação de 4-Eyes.
+  * Testes de integração de cabeçalhos de segurança em `SecurityConfigurationTests` cobrindo CSP, Permissions-Policy, HSTS e no-store cache.
+  * Suíte de segurança categorizada com `[Trait("Category", "SecurityRegression")]` para bloqueio de merge em CI/CD.
+  * 100% de sucesso na suíte de testes (282 testes aprovados no Backoffice, 23 testes no cliente Web, 7 testes de arquitetura de segurança, zero falhas).
+  * Formalização arquitetural via ADR `0012-application-security-hardening-and-assisted-penetration-tests.md`.
 
 #### Sub-fase 6.2: Rollout por Ondas e Feature Flags [PLANEJADA]
 * **Operação:**

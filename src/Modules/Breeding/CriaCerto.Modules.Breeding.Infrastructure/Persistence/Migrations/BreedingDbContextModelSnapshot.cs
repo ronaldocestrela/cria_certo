@@ -151,6 +151,13 @@ namespace CriaCerto.Modules.Breeding.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<Guid?>("BullId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("BullName")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
                     b.PrimitiveCollection<string>("CowIds")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");

@@ -266,6 +266,8 @@ public static class BackofficeDataSeeder
         BackofficePermissions.ImpersonationStop => "Permissão de encerramento de sessão assistida (impersonação)",
         BackofficePermissions.AuditRead => "Permissão de leitura das trilhas de auditoria",
         BackofficePermissions.UsersAdminManage => "Permissão de gerenciamento completo de usuários administrativos",
+        BackofficePermissions.ObservabilityRead => "Permissão de visualização de métricas e alertas operacionais",
+        BackofficePermissions.ObservabilityManage => "Permissão para gerenciar e resolver alertas operacionais e executar simulações",
         _ => $"Permissão global para o recurso {permissionName}"
     };
 

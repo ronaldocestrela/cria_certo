@@ -83,3 +83,24 @@ public sealed record ExportBovineReportQuery(
     List<HerdCategorySummaryDto>? InventoryCategories = null,
     List<GtaAgeGroupBreakdownDto>? GtaAgeGroups = null) : IQuery<ExportReportResultDto>;
 
+public sealed record GpdMonthlyPointDto(
+    string MonthLabel,
+    decimal AverageGpdKg,
+    int WeighingsCount);
+
+public sealed record ExecutiveDashboardDto(
+    string FarmName,
+    decimal FarmAreaHectares,
+    ExecutiveScorecardDto Scorecard,
+    List<GpdMonthlyPointDto> GpdEvolution,
+    int TotalActiveCows,
+    int PregnantCows,
+    int CalvesWeaned,
+    decimal TotalPastureHectares,
+    decimal TotalAnimalUnits,
+    int ActiveSlaughterBlocks,
+    string HealthStatusDetails);
+
+public sealed record GetTenantExecutiveDashboardQuery(
+    Guid? TenantId = null) : IQuery<ExecutiveDashboardDto>;
+

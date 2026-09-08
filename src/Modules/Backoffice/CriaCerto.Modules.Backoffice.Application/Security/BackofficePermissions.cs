@@ -20,9 +20,26 @@ public static class BackofficePermissions
     public const string ImpersonationStart = "impersonation.start";
     public const string ImpersonationStop = "impersonation.stop";
 
+    // Support Workbench
+    public const string SupportDiagnose = "support.diagnose";
+    public const string SupportRemediate = "support.remediate";
+
+    // 4-Eyes Administrative Approvals
+    public const string ApprovalsRequest = "approvals.request";
+    public const string ApprovalsReview = "approvals.review";
+
     // Audit & Admin Users
     public const string AuditRead = "audit.read";
     public const string UsersAdminManage = "users_admin.manage";
+
+    // Observability & Alerts
+    public const string ObservabilityRead = "observability.read";
+    public const string ObservabilityManage = "observability.manage";
+
+    // Compliance & LGPD Data Governance
+    public const string ComplianceRead = "compliance.read";
+    public const string ComplianceExport = "compliance.export";
+    public const string ComplianceUnmask = "compliance.unmask";
 
     // Scopes
     public const string ScopeGlobal = "Global";
@@ -35,7 +52,11 @@ public static class BackofficePermissions
         PlansRead, PlansWrite, PlansPublish,
         SubscriptionsRead, SubscriptionsManage,
         ImpersonationStart, ImpersonationStop,
-        AuditRead, UsersAdminManage
+        SupportDiagnose, SupportRemediate,
+        ApprovalsRequest, ApprovalsReview,
+        AuditRead, UsersAdminManage,
+        ObservabilityRead, ObservabilityManage,
+        ComplianceRead, ComplianceExport, ComplianceUnmask
     };
 
     public static bool IsValidScope(string scope) =>

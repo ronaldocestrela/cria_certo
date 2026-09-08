@@ -1,4 +1,5 @@
 using CriaCerto.BuildingBlocks.Abstractions.Results;
+using CriaCerto.Modules.Backoffice.Application.Domain.Services;
 using CriaCerto.Modules.Backoffice.Application.Features.Tenants.Dtos;
 using CriaCerto.Modules.Tenancy.Application.Contracts;
 using CriaCerto.Modules.Tenancy.Application.Features.BackofficeTenants;
@@ -27,10 +28,12 @@ public record GetTenantsAdminQuery(
 public sealed class GetTenantsAdminQueryHandler : IRequestHandler<GetTenantsAdminQuery, Result<PagedTenantAdminResult>>
 {
     private readonly ISender _sender;
+    private readonly IPiiDataMasker? _masker;
 
-    public GetTenantsAdminQueryHandler(ISender sender)
+    public GetTenantsAdminQueryHandler(ISender sender, IPiiDataMasker? masker = null)
     {
         _sender = sender;
+        _masker = masker;
     }
 
     public async Task<Result<PagedTenantAdminResult>> Handle(GetTenantsAdminQuery request, CancellationToken cancellationToken)
@@ -57,7 +60,7 @@ public sealed class GetTenantsAdminQueryHandler : IRequestHandler<GetTenantsAdmi
             return Result.Failure<PagedTenantAdminResult>(result.Error);
         }
 
-        return Result.Success(TenantAdminMapper.ToPagedResult(result.Value));
+        return Result.Success(TenantAdminMapper.ToPagedResult(result.Value, _masker));
     }
 }
 
@@ -66,10 +69,12 @@ public record GetTenantAdminDetailQuery(Guid TenantId) : IRequest<Result<TenantA
 public sealed class GetTenantAdminDetailQueryHandler : IRequestHandler<GetTenantAdminDetailQuery, Result<TenantAdminDetailDto>>
 {
     private readonly ISender _sender;
+    private readonly IPiiDataMasker? _masker;
 
-    public GetTenantAdminDetailQueryHandler(ISender sender)
+    public GetTenantAdminDetailQueryHandler(ISender sender, IPiiDataMasker? masker = null)
     {
         _sender = sender;
+        _masker = masker;
     }
 
     public async Task<Result<TenantAdminDetailDto>> Handle(GetTenantAdminDetailQuery request, CancellationToken cancellationToken)
@@ -80,7 +85,7 @@ public sealed class GetTenantAdminDetailQueryHandler : IRequestHandler<GetTenant
             return Result.Failure<TenantAdminDetailDto>(result.Error);
         }
 
-        return Result.Success(TenantAdminMapper.ToDetailDto(result.Value));
+        return Result.Success(TenantAdminMapper.ToDetailDto(result.Value, _masker));
     }
 }
 

@@ -30,10 +30,10 @@ public sealed class BreedingOpsApiClient
         }
     }
 
-    public async Task<IatfProtocolDto?> RegisterIatfProtocolAsync(string name, DateTime startDate, DateTime inseminationDate, Guid semenBatchId, List<Guid> cowIds, Guid tenantId, CancellationToken cancellationToken = default)
+    public async Task<IatfProtocolDto?> RegisterIatfProtocolAsync(string name, DateTime startDate, DateTime inseminationDate, Guid semenBatchId, List<Guid> cowIds, Guid tenantId, Guid? bullId = null, CancellationToken cancellationToken = default)
     {
         await AttachTokenAsync();
-        var request = new { Name = name, StartDate = startDate, InseminationDate = inseminationDate, SemenBatchId = semenBatchId, CowIds = cowIds, TenantId = tenantId };
+        var request = new { Name = name, StartDate = startDate, InseminationDate = inseminationDate, SemenBatchId = semenBatchId, CowIds = cowIds, TenantId = tenantId, BullId = bullId };
         var response = await _httpClient.PostAsJsonAsync("api/breeding/iatf-protocols", request, cancellationToken);
         if (!response.IsSuccessStatusCode)
             return null;

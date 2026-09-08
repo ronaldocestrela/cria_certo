@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using CriaCerto.BuildingBlocks.Abstractions.Results;
+using CriaCerto.Modules.Backoffice.Application.Domain.Errors;
 using CriaCerto.Modules.Backoffice.Application.Security;
 
 namespace CriaCerto.Modules.Backoffice.Infrastructure.Security;
@@ -16,6 +17,11 @@ public class PermissionEvaluatorService : IPermissionEvaluator
         if (string.IsNullOrWhiteSpace(permissionName))
         {
             return Result.Success(false);
+        }
+
+        if (!string.IsNullOrWhiteSpace(requiredScope) && !BackofficePermissions.IsValidScope(requiredScope))
+        {
+            return Result.Failure<bool>(BackofficeErrors.InvalidScopeData);
         }
 
         // 1. PlatformOwner / SuperAdmin bypass

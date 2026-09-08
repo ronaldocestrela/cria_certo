@@ -64,14 +64,39 @@
 
 .desktop-nav ::deep .nav-link,
 .desktop-nav .nav-link {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
     text-decoration: none;
-    padding: 0.62rem 0.68rem;
+    padding: 0.58rem 0.68rem;
     border-radius: 0.72rem;
     border: 1px solid transparent;
     color: #1f3428;
     font-size: 0.91rem;
     font-weight: 600;
     transition: all 150ms ease;
+}
+
+.desktop-nav ::deep .nav-link .nav-icon,
+.desktop-nav .nav-link .nav-icon {
+    font-size: 1.25rem;
+    line-height: 1;
+    color: var(--cc-primary);
+    opacity: 0.85;
+    transition: transform 150ms ease, opacity 150ms ease;
+}
+
+.desktop-nav ::deep .nav-link:hover .nav-icon,
+.desktop-nav .nav-link:hover .nav-icon,
+.desktop-nav ::deep .nav-link.active .nav-icon,
+.desktop-nav .nav-link.active .nav-icon {
+    opacity: 1;
+    transform: scale(1.05);
+}
+
+.desktop-nav ::deep .nav-link .nav-text,
+.desktop-nav .nav-link .nav-text {
+    line-height: 1.2;
 }
 
 .desktop-nav ::deep .nav-link:hover,

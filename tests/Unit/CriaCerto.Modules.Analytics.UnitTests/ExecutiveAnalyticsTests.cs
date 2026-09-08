@@ -130,5 +130,53 @@ public class ExecutiveAnalyticsTests
         result.Error.Code.Should().Be("Analytics.InvalidPeriod");
         result.Error.Message.Should().Contain("A data inicial do relatório não pode ser posterior à data final");
     }
+
+    [Fact]
+    public void ExecutiveDashboardDto_ShouldInstantiateWithCorrectProperties()
+    {
+        // Arrange
+        var scorecard = new ExecutiveScorecardDto(85m, 80m, 1.8m, 0.95m, 175m, 0, "Excelente");
+        var gpdPoints = new List<GpdMonthlyPointDto>
+        {
+            new("Jan", 0.75m, 12),
+            new("Fev", 0.82m, 15)
+        };
+
+        // Act
+        var dashboard = new ExecutiveDashboardDto(
+            FarmName: "Fazenda Esperança",
+            FarmAreaHectares: 1200m,
+            Scorecard: scorecard,
+            GpdEvolution: gpdPoints,
+            TotalActiveCows: 450,
+            PregnantCows: 382,
+            CalvesWeaned: 360,
+            TotalPastureHectares: 850m,
+            TotalAnimalUnits: 1250m,
+            ActiveSlaughterBlocks: 0,
+            HealthStatusDetails: "Nenhum lote com carência vencida.");
+
+        // Assert
+        dashboard.FarmName.Should().Be("Fazenda Esperança");
+        dashboard.FarmAreaHectares.Should().Be(1200m);
+        dashboard.Scorecard.PregnancyRatePercentage.Should().Be(85m);
+        dashboard.GpdEvolution.Should().HaveCount(2);
+        dashboard.GpdEvolution[0].MonthLabel.Should().Be("Jan");
+        dashboard.TotalActiveCows.Should().Be(450);
+        dashboard.PregnantCows.Should().Be(382);
+        dashboard.CalvesWeaned.Should().Be(360);
+        dashboard.ActiveSlaughterBlocks.Should().Be(0);
+    }
+
+    [Fact]
+    public void GetTenantExecutiveDashboardQuery_ShouldHoldOptionalTenantId()
+    {
+        var tenantId = Guid.NewGuid();
+        var query = new GetTenantExecutiveDashboardQuery(tenantId);
+        query.TenantId.Should().Be(tenantId);
+
+        var emptyQuery = new GetTenantExecutiveDashboardQuery();
+        emptyQuery.TenantId.Should().BeNull();
+    }
 }
 

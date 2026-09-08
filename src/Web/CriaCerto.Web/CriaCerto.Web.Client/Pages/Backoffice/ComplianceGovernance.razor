@@ -1,0 +1,1093 @@
+@page "/backoffice/compliance"
+@layout BackofficeLayout
+@using CriaCerto.Modules.Backoffice.Application.Features.Compliance.Dtos
+@using CriaCerto.Modules.Backoffice.Application.Security
+@using CriaCerto.Web.Client.Layout
+@using CriaCerto.Web.Client.Services
+@inject IBackofficeApiClient ApiClient
+@inject IBackofficePermissionService PermissionService
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+
+<div class="compliance-page">
+    <div class="page-header">
+        <div class="header-titles">
+            <h2>Governança de Acesso e Conformidade LGPD</h2>
+            <p class="subtitle">Minimização de dados, rastreamento de acessos a PII e emissão de dossiês regulatórios (Lei 13.709/2018)</p>
+        </div>
+        <div class="header-actions">
+            <button class="btn btn-outline" @onclick="LoadDataAsync" disabled="@isLoading">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="23 4 23 10 17 10"></polyline>
+                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                </svg>
+                <span>Atualizar</span>
+            </button>
+        </div>
+    </div>
+
+    @if (!hasReadPermission)
+    {
+        <div class="access-denied-banner">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+            </svg>
+            <div>
+                <strong>Acesso Restrito ao Painel de Compliance</strong>
+                <p>Seu perfil administrativo não possui a permissão necessária (<code>compliance.read</code>) para auditar dados de conformidade LGPD.</p>
+            </div>
+        </div>
+    }
+    else
+    {
+        <!-- KPI Grid de Governança -->
+        <div class="kpi-grid">
+            <div class="kpi-card">
+                <div class="kpi-icon icon-blue">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                        <circle cx="12" cy="12" r="3"></circle>
+                    </svg>
+                </div>
+                <div class="kpi-content">
+                    <span class="kpi-label">Acessos a PII (24h)</span>
+                    <span class="kpi-value">@(overview?.PiiAccessLast24Hours ?? 0)</span>
+                    <span class="kpi-sub">Consultas e sessões assistidas</span>
+                </div>
+            </div>
+
+            <div class="kpi-card">
+                <div class="kpi-icon icon-amber">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                    </svg>
+                </div>
+                <div class="kpi-content">
+                    <span class="kpi-label">Revelações Pontuais (30d)</span>
+                    <span class="kpi-value">@(overview?.PiiUnmasksLast30Days ?? 0)</span>
+                    <span class="kpi-sub">Unmasks com justificativa formal</span>
+                </div>
+            </div>
+
+            <div class="kpi-card">
+                <div class="kpi-icon icon-purple">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="9" cy="7" r="4"></circle>
+                        <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                        <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                    </svg>
+                </div>
+                <div class="kpi-content">
+                    <span class="kpi-label">Operadores com Unmask</span>
+                    <span class="kpi-value">@(overview?.OperatorsWithUnmaskPermissionCount ?? 0)</span>
+                    <span class="kpi-sub">Privilégio estrito concedido</span>
+                </div>
+            </div>
+
+            <div class="kpi-card">
+                <div class="kpi-icon @(overview?.IsForensicTrailValid == true ? "icon-green" : "icon-red")">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                    </svg>
+                </div>
+                <div class="kpi-content">
+                    <span class="kpi-label">Integridade Forense</span>
+                    <span class="kpi-value">@(overview?.IsForensicTrailValid == true ? "Íntegra" : "Alerta")</span>
+                    <span class="kpi-sub">Cadeia SHA-256 auditada</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Abas Principais -->
+        <div class="compliance-tabs">
+            <button class="tab-btn @(activeTab == 1 ? "active" : "")" @onclick="() => SetTab(1)">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                </svg>
+                <span>Trilha de Acessos a PII</span>
+            </button>
+            <button class="tab-btn @(activeTab == 2 ? "active" : "")" @onclick="() => SetTab(2)">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                    <polyline points="10 9 9 9 8 9"></polyline>
+                </svg>
+                <span>Dossiê para Auditoria Externa / ANPD</span>
+            </button>
+            <button class="tab-btn @(activeTab == 3 ? "active" : "")" @onclick="() => SetTab(3)">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                    <line x1="3" y1="9" x2="21" y2="9"></line>
+                    <line x1="9" y1="21" x2="9" y2="9"></line>
+                </svg>
+                <span>Matriz de Governança e Privilégios</span>
+            </button>
+        </div>
+
+        @if (activeTab == 1)
+        {
+            <!-- ABA 1: Trilha de Acessos a PII -->
+            <div class="tab-content card">
+                <div class="filters-bar">
+                    <div class="search-box">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                        </svg>
+                        <input type="text"
+                               placeholder="Filtrar por e-mail do operador..."
+                               @bind="searchActorEmail"
+                               @bind:event="oninput"
+                               @onkeyup="OnSearchKeyUp" />
+                    </div>
+
+                    <div class="select-box">
+                        <select @bind="selectedEventType" @bind:after="SearchAsync">
+                            <option value="All">Todos os Eventos</option>
+                            <option value="Unmask">Revelação (Unmask)</option>
+                            <option value="Impersonation">Impersonação de Produtor</option>
+                            <option value="DataModification">Alterações Cadastrais</option>
+                        </select>
+                    </div>
+
+                    <button class="btn btn-secondary" @onclick="SearchAsync" disabled="@isLoading">
+                        Filtrar
+                    </button>
+                    <button class="btn btn-outline" @onclick="ClearFiltersAsync" disabled="@isLoading">
+                        Limpar
+                    </button>
+                </div>
+
+                @if (isLoading)
+                {
+                    <div class="loading-state">
+                        <div class="spinner"></div>
+                        <p>Carregando trilha de compliance...</p>
+                    </div>
+                }
+                else if (trailResult == null || !trailResult.Items.Any())
+                {
+                    <div class="empty-state">
+                        <p>Nenhum registro de acesso a dados pessoais encontrado para os filtros selecionados.</p>
+                    </div>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table-modern">
+                            <thead>
+                                <tr>
+                                    <th>Data / Hora UTC</th>
+                                    <th>Operador</th>
+                                    <th>Ação</th>
+                                    <th>Recurso Acessado</th>
+                                    <th>Origem (IP)</th>
+                                    <th>Justificativa / Motivo</th>
+                                    <th>Integridade</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var item in trailResult.Items)
+                                {
+                                    <tr>
+                                        <td>
+                                            <span class="timestamp code-font">@item.TimestampUtc.ToString("dd/MM/yyyy HH:mm:ss")</span>
+                                        </td>
+                                        <td>
+                                            <div class="actor-info">
+                                                <strong>@item.AdminUserEmail</strong>
+                                                <span class="role-badge">@(item.ActorRole ?? "Operador")</span>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <span class="action-tag @GetActionCssClass(item.Action)">@item.Action</span>
+                                        </td>
+                                        <td>
+                                            <div class="resource-info">
+                                                <code class="resource-code">@item.Resource</code>
+                                                @if (!string.IsNullOrEmpty(item.TargetTenantName))
+                                                {
+                                                    <span class="tenant-name">@item.TargetTenantName</span>
+                                                }
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <code class="ip-code">@item.IpAddress</code>
+                                        </td>
+                                        <td>
+                                            <span class="justification-text" title="@item.Justification">
+                                                @(string.IsNullOrEmpty(item.Justification) ? "-" : item.Justification)
+                                            </span>
+                                        </td>
+                                        <td>
+                                            @if (item.IsIntegrityValid)
+                                            {
+                                                <span class="tag-valid" title="Assinatura SHA-256 válida">
+                                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                        <polyline points="20 6 9 17 4 12"></polyline>
+                                                    </svg>
+                                                    Íntegro
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="tag-tampered" title="Alerta: Quebra na cadeia de integridade!">
+                                                    Adulterado
+                                                </span>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Paginação -->
+                    <div class="pagination-bar">
+                        <span class="page-info">
+                            Mostrando página <strong>@trailResult.PageNumber</strong> de <strong>@trailResult.TotalPages</strong> (@trailResult.TotalCount registros)
+                        </span>
+                        <div class="page-buttons">
+                            <button class="btn-page" @onclick="() => ChangePageAsync(trailResult.PageNumber - 1)" disabled="@(trailResult.PageNumber <= 1)">
+                                &laquo; Anterior
+                            </button>
+                            <button class="btn-page" @onclick="() => ChangePageAsync(trailResult.PageNumber + 1)" disabled="@(trailResult.PageNumber >= trailResult.TotalPages)">
+                                Próxima &raquo;
+                            </button>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+        else if (activeTab == 2)
+        {
+            <!-- ABA 2: Dossiê para Auditoria Externa / ANPD -->
+            <div class="tab-content card">
+                <div class="dossier-builder">
+                    <div class="dossier-intro">
+                        <h3>Emissão de Dossiê Formal de Acesso a Dados Pessoais</h3>
+                        <p>
+                            Gere e exporte a trilha completa de conformidade para atendimento a requisições de titulares (Art. 18 da LGPD),
+                            fiscalizações da ANPD ou auditorias independentes de segurança e privacidade (ISO 27701 / SOC 2).
+                        </p>
+                    </div>
+
+                    <div class="dossier-form">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Declaração de Finalidade da Extração *</label>
+                                <input type="text"
+                                       class="form-control"
+                                       placeholder="Ex: Auditoria Externa SOC 2 / ANPD Requisição Titular..."
+                                       @bind="exportPurpose" />
+                            </div>
+
+                            <div class="form-group">
+                                <label>Formato do Dossiê *</label>
+                                <select class="form-control" @bind="exportFormat">
+                                    <option value="CSV">CSV Estruturado (Auditável)</option>
+                                    <option value="JSON">JSON Canônico com Metadados</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Filtro por Operador Específico (Opcional)</label>
+                                <input type="text"
+                                       class="form-control"
+                                       placeholder="ex: operador@criacerto.com.br"
+                                       @bind="exportActorEmail" />
+                            </div>
+
+                            <div class="form-group">
+                                <label>Período de Extração</label>
+                                <div class="date-inputs">
+                                    <input type="date" class="form-control" @bind="exportDateFrom" />
+                                    <span>até</span>
+                                    <input type="date" class="form-control" @bind="exportDateTo" />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="dossier-notice">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                            </svg>
+                            <div>
+                                <strong>Rastreabilidade Compulsória da Exportação</strong>
+                                <p>A geração deste relatório é registrada na trilha forense com severidade <code>Critical</code>, contendo o hash SHA-256 do arquivo emitido.</p>
+                            </div>
+                        </div>
+
+                        <div class="dossier-actions">
+                            <button class="btn btn-primary" @onclick="ExportDossierAsync" disabled="@(isExporting || string.IsNullOrWhiteSpace(exportPurpose))">
+                                @if (isExporting)
+                                {
+                                    <span class="spinner-border spinner-border-sm"></span>
+                                    <span> Gerando Dossiê Assinado...</span>
+                                }
+                                else
+                                {
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                        <polyline points="7 10 12 15 17 10"></polyline>
+                                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                                    </svg>
+                                    <span>Emitir e Baixar Dossiê</span>
+                                }
+                            </button>
+                        </div>
+
+                        @if (!string.IsNullOrEmpty(exportSuccessMessage))
+                        {
+                            <div class="success-banner">
+                                @exportSuccessMessage
+                            </div>
+                        }
+
+                        @if (!string.IsNullOrEmpty(exportErrorMessage))
+                        {
+                            <div class="error-banner">
+                                @exportErrorMessage
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+        else if (activeTab == 3)
+        {
+            <!-- ABA 3: Matriz de Governança e Privilégios -->
+            <div class="tab-content card">
+                <div class="governance-matrix-header">
+                    <h3>Matriz de Acesso aos Dados Pessoais (Princípio do Menor Privilégio)</h3>
+                    <p>Mapeamento de segregação de funções e visibilidade padrão conforme requisitos da LGPD.</p>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table-modern">
+                        <thead>
+                            <tr>
+                                <th>Papel Administrativo</th>
+                                <th>Visualização Padrão</th>
+                                <th>Permissão Unmask</th>
+                                <th>Exportação de Dossiê</th>
+                                <th>Finalidade Operacional Primária</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong class="role-title">PlatformOwner</strong></td>
+                                <td><span class="tag-accent">Completa</span></td>
+                                <td><span class="tag-valid">Autorizado</span></td>
+                                <td><span class="tag-valid">Autorizado</span></td>
+                                <td>Administração global do SaaS e supervisão de conformidade.</td>
+                            </tr>
+                            <tr>
+                                <td><strong class="role-title">ReadOnlyAuditor</strong></td>
+                                <td><span class="tag-masked">Sob Redaction</span></td>
+                                <td><span class="tag-denied">Bloqueado</span></td>
+                                <td><span class="tag-valid">Autorizado</span></td>
+                                <td>Auditoria externa e fiscalização regulatória sem exposição desnecessária de PII.</td>
+                            </tr>
+                            <tr>
+                                <td><strong class="role-title">SupportN2</strong></td>
+                                <td><span class="tag-masked">Sob Redaction</span></td>
+                                <td><span class="tag-restricted">Condicionado a Chamado</span></td>
+                                <td><span class="tag-denied">Bloqueado</span></td>
+                                <td>Diagnóstico avançado e remediação técnica justificada.</td>
+                            </tr>
+                            <tr>
+                                <td><strong class="role-title">SupportN1</strong></td>
+                                <td><span class="tag-masked">100% Mascarado</span></td>
+                                <td><span class="tag-denied">Bloqueado</span></td>
+                                <td><span class="tag-denied">Bloqueado</span></td>
+                                <td>Atendimento inicial ao produtor sem necessidade de acesso a dados cadastrais sensíveis.</td>
+                            </tr>
+                            <tr>
+                                <td><strong class="role-title">FinanceOps</strong></td>
+                                <td><span class="tag-masked">Fiscal / Cobrança</span></td>
+                                <td><span class="tag-denied">Bloqueado</span></td>
+                                <td><span class="tag-denied">Bloqueado</span></td>
+                                <td>Faturamento e conciliação de pagamentos com PII de fazenda mascarado.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private ComplianceOverviewDto? overview;
+    private PagedAccessTrailDto? trailResult;
+
+    private int activeTab = 1;
+    private bool isLoading = true;
+    private bool hasReadPermission = false;
+    private bool isExporting = false;
+
+    // Filtros da trilha
+    private string? searchActorEmail;
+    private string selectedEventType = "All";
+    private int currentPage = 1;
+    private const int pageSize = 20;
+
+    // Campos do Dossiê
+    private string exportPurpose = "Auditoria Regulatória de Conformidade LGPD";
+    private string exportFormat = "CSV";
+    private string? exportActorEmail;
+    private DateTime? exportDateFrom;
+    private DateTime? exportDateTo;
+    private string? exportSuccessMessage;
+    private string? exportErrorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        hasReadPermission = await PermissionService.HasPermissionAsync(BackofficePermissions.ComplianceRead);
+        if (hasReadPermission)
+        {
+            await LoadDataAsync();
+        }
+        else
+        {
+            isLoading = false;
+        }
+    }
+
+    private void SetTab(int tabIndex)
+    {
+        activeTab = tabIndex;
+    }
+
+    private async Task LoadDataAsync()
+    {
+        isLoading = true;
+        try
+        {
+            var overviewTask = ApiClient.GetComplianceOverviewAsync();
+            var trailTask = ApiClient.GetAccessTrailAsync(
+                actorEmail: searchActorEmail,
+                eventType: selectedEventType,
+                pageNumber: currentPage,
+                pageSize: pageSize
+            );
+
+            await Task.WhenAll(overviewTask, trailTask);
+
+            overview = await overviewTask;
+            trailResult = await trailTask;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Erro ao carregar governança LGPD: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task SearchAsync()
+    {
+        currentPage = 1;
+        await LoadDataAsync();
+    }
+
+    private async Task ClearFiltersAsync()
+    {
+        searchActorEmail = null;
+        selectedEventType = "All";
+        currentPage = 1;
+        await LoadDataAsync();
+    }
+
+    private async Task OnSearchKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await SearchAsync();
+        }
+    }
+
+    private async Task ChangePageAsync(int page)
+    {
+        if (page < 1 || (trailResult is not null && page > trailResult.TotalPages)) return;
+        currentPage = page;
+        await LoadDataAsync();
+    }
+
+    private async Task ExportDossierAsync()
+    {
+        if (string.IsNullOrWhiteSpace(exportPurpose)) return;
+
+        isExporting = true;
+        exportSuccessMessage = null;
+        exportErrorMessage = null;
+
+        try
+        {
+            var req = new ExportAccessTrailRequest(
+                ActorEmail: exportActorEmail,
+                DateFromUtc: exportDateFrom?.ToUniversalTime(),
+                DateToUtc: exportDateTo?.ToUniversalTime().AddDays(1).AddTicks(-1),
+                Purpose: exportPurpose.Trim(),
+                Format: exportFormat
+            );
+
+            var exportResult = await ApiClient.ExportAccessTrailAsync(req);
+            if (exportResult is not null && exportResult.Content.Length > 0)
+            {
+                var base64 = Convert.ToBase64String(exportResult.Content);
+                var url = $"data:{exportResult.ContentType};base64,{base64}";
+                await JS.InvokeVoidAsync("open", url, "_blank");
+
+                exportSuccessMessage = $"Dossiê '{exportResult.FileName}' emitido com sucesso! Hash SHA-256 e auditoria registrados.";
+                await LoadDataAsync();
+            }
+            else
+            {
+                exportErrorMessage = "Não foi possível gerar o dossiê. Verifique suas permissões de exportação.";
+            }
+        }
+        catch (Exception ex)
+        {
+            exportErrorMessage = $"Erro na exportação do dossiê: {ex.Message}";
+        }
+        finally
+        {
+            isExporting = false;
+        }
+    }
+
+    private static string GetActionCssClass(string action)
+    {
+        if (action.Contains("UNMASK")) return "action-unmask";
+        if (action.Contains("IMPERSONATION")) return "action-impersonation";
+        if (action.Contains("EXPORT")) return "action-export";
+        return "action-default";
+    }
+}
+
+<style>
+    .compliance-page {
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+        padding: 1.5rem;
+        background: #0b1329;
+        min-height: 100vh;
+        color: #f8fafc;
+    }
+
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+
+    .header-titles h2 {
+        margin: 0 0 0.25rem 0;
+        font-size: 1.75rem;
+        font-weight: 700;
+        color: #f8fafc;
+    }
+
+    .subtitle {
+        margin: 0;
+        color: #94a3b8;
+        font-size: 0.9rem;
+    }
+
+    .header-actions {
+        display: flex;
+        gap: 0.75rem;
+        align-items: center;
+    }
+
+    .access-denied-banner {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        background: rgba(239, 68, 68, 0.15);
+        border: 1px solid #ef4444;
+        color: #fca5a5;
+        padding: 1.25rem;
+        border-radius: 8px;
+    }
+
+    .access-denied-banner p {
+        margin: 0.25rem 0 0 0;
+        font-size: 0.85rem;
+    }
+
+    /* KPI Grid */
+    .kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+        gap: 1rem;
+    }
+
+    .kpi-card {
+        background: #0f172a;
+        border: 1px solid #1e293b;
+        border-radius: 10px;
+        padding: 1.25rem;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+
+    .kpi-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .icon-blue { background: rgba(56, 189, 248, 0.15); color: #38bdf8; }
+    .icon-amber { background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
+    .icon-purple { background: rgba(168, 85, 247, 0.15); color: #c084fc; }
+    .icon-green { background: rgba(16, 185, 129, 0.15); color: #34d399; }
+    .icon-red { background: rgba(239, 68, 68, 0.15); color: #f87171; }
+
+    .kpi-content {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .kpi-label {
+        font-size: 0.75rem;
+        color: #94a3b8;
+        text-transform: uppercase;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+    }
+
+    .kpi-value {
+        font-size: 1.6rem;
+        font-weight: 700;
+        color: #f8fafc;
+        line-height: 1.2;
+    }
+
+    .kpi-sub {
+        font-size: 0.75rem;
+        color: #64748b;
+    }
+
+    /* Tabs */
+    .compliance-tabs {
+        display: flex;
+        gap: 0.5rem;
+        border-bottom: 1px solid #1e293b;
+        padding-bottom: 0.5rem;
+    }
+
+    .tab-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        background: transparent;
+        border: 1px solid transparent;
+        color: #94a3b8;
+        padding: 0.6rem 1.2rem;
+        border-radius: 8px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .tab-btn:hover {
+        color: #f8fafc;
+        background: rgba(30, 41, 59, 0.5);
+    }
+
+    .tab-btn.active {
+        color: #38bdf8;
+        background: #1e293b;
+        border-color: #334155;
+    }
+
+    .card {
+        background: #0f172a;
+        border: 1px solid #1e293b;
+        border-radius: 10px;
+        overflow: hidden;
+    }
+
+    /* Filters Bar */
+    .filters-bar {
+        display: flex;
+        gap: 0.75rem;
+        padding: 1rem 1.25rem;
+        background: #1e293b;
+        border-bottom: 1px solid #334155;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+
+    .search-box {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        background: #0f172a;
+        border: 1px solid #334155;
+        border-radius: 6px;
+        padding: 0.4rem 0.75rem;
+        flex: 1;
+        min-width: 250px;
+    }
+
+    .search-box input {
+        background: transparent;
+        border: none;
+        outline: none;
+        color: #f8fafc;
+        font-size: 0.85rem;
+        width: 100%;
+    }
+
+    .select-box select {
+        background: #0f172a;
+        border: 1px solid #334155;
+        color: #f8fafc;
+        padding: 0.45rem 0.75rem;
+        border-radius: 6px;
+        font-size: 0.85rem;
+        outline: none;
+    }
+
+    /* Table Styles */
+    .table-responsive {
+        overflow-x: auto;
+    }
+
+    .table-modern {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.85rem;
+        text-align: left;
+    }
+
+    .table-modern th {
+        background: #0f172a;
+        color: #94a3b8;
+        padding: 0.85rem 1rem;
+        font-weight: 600;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        border-bottom: 1px solid #1e293b;
+    }
+
+    .table-modern td {
+        padding: 0.85rem 1rem;
+        border-bottom: 1px solid #1e293b;
+        color: #cbd5e1;
+    }
+
+    .code-font {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-size: 0.8rem;
+    }
+
+    .actor-info {
+        display: flex;
+        flex-direction: column;
+        gap: 0.15rem;
+    }
+
+    .actor-info strong {
+        color: #f8fafc;
+        font-size: 0.8rem;
+    }
+
+    .role-badge {
+        font-size: 0.7rem;
+        color: #94a3b8;
+    }
+
+    .action-tag {
+        display: inline-block;
+        padding: 0.2rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.7rem;
+        font-weight: 600;
+    }
+
+    .action-unmask {
+        background: rgba(245, 158, 11, 0.15);
+        color: #fbbf24;
+        border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+
+    .action-impersonation {
+        background: rgba(168, 85, 247, 0.15);
+        color: #c084fc;
+        border: 1px solid rgba(168, 85, 247, 0.3);
+    }
+
+    .action-export {
+        background: rgba(239, 68, 68, 0.15);
+        color: #f87171;
+        border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    .action-default {
+        background: #1e293b;
+        color: #94a3b8;
+    }
+
+    .resource-info {
+        display: flex;
+        flex-direction: column;
+        gap: 0.15rem;
+    }
+
+    .resource-code {
+        color: #38bdf8;
+        font-size: 0.75rem;
+    }
+
+    .tenant-name {
+        font-size: 0.7rem;
+        color: #94a3b8;
+    }
+
+    .ip-code {
+        color: #94a3b8;
+        font-size: 0.75rem;
+    }
+
+    .justification-text {
+        max-width: 250px;
+        display: inline-block;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        font-size: 0.8rem;
+    }
+
+    .tag-valid {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        padding: 0.15rem 0.45rem;
+        border-radius: 4px;
+        background: rgba(16, 185, 129, 0.15);
+        color: #34d399;
+        font-size: 0.7rem;
+        font-weight: 600;
+    }
+
+    .tag-tampered {
+        padding: 0.15rem 0.45rem;
+        border-radius: 4px;
+        background: rgba(239, 68, 68, 0.2);
+        color: #f87171;
+        font-size: 0.7rem;
+        font-weight: 600;
+    }
+
+    .tag-accent { color: #38bdf8; font-weight: 600; }
+    .tag-masked { color: #94a3b8; font-style: italic; }
+    .tag-denied { color: #f87171; font-weight: 600; }
+    .tag-restricted { color: #fbbf24; font-weight: 600; }
+
+    /* Dossier Form */
+    .dossier-builder {
+        padding: 1.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+    }
+
+    .dossier-intro h3 {
+        margin: 0 0 0.25rem 0;
+        font-size: 1.2rem;
+        color: #f8fafc;
+    }
+
+    .dossier-intro p {
+        margin: 0;
+        color: #94a3b8;
+        font-size: 0.85rem;
+        line-height: 1.4;
+    }
+
+    .dossier-form {
+        display: flex;
+        flex-direction: column;
+        gap: 1.25rem;
+        max-width: 800px;
+    }
+
+    .form-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+    }
+
+    .form-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+    }
+
+    .form-group label {
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: #cbd5e1;
+    }
+
+    .form-control {
+        background: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 6px;
+        padding: 0.55rem 0.75rem;
+        color: #f8fafc;
+        font-size: 0.85rem;
+        outline: none;
+    }
+
+    .form-control:focus {
+        border-color: #38bdf8;
+    }
+
+    .date-inputs {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .dossier-notice {
+        display: flex;
+        gap: 0.75rem;
+        background: rgba(56, 189, 248, 0.08);
+        border: 1px solid rgba(56, 189, 248, 0.25);
+        padding: 0.85rem 1rem;
+        border-radius: 8px;
+        color: #cbd5e1;
+        font-size: 0.8rem;
+    }
+
+    .dossier-notice strong {
+        color: #38bdf8;
+        display: block;
+        margin-bottom: 0.2rem;
+    }
+
+    .dossier-notice p {
+        margin: 0;
+    }
+
+    .success-banner {
+        background: rgba(16, 185, 129, 0.15);
+        border: 1px solid #10b981;
+        color: #6ee7b7;
+        padding: 0.75rem 1rem;
+        border-radius: 6px;
+        font-size: 0.85rem;
+    }
+
+    .error-banner {
+        background: rgba(239, 68, 68, 0.15);
+        border: 1px solid #ef4444;
+        color: #fca5a5;
+        padding: 0.75rem 1rem;
+        border-radius: 6px;
+        font-size: 0.85rem;
+    }
+
+    /* Pagination */
+    .pagination-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.85rem 1.25rem;
+        background: #0f172a;
+        border-top: 1px solid #1e293b;
+    }
+
+    .page-info {
+        font-size: 0.8rem;
+        color: #94a3b8;
+    }
+
+    .page-buttons {
+        display: flex;
+        gap: 0.5rem;
+    }
+
+    .btn-page {
+        background: #1e293b;
+        border: 1px solid #334155;
+        color: #f8fafc;
+        padding: 0.35rem 0.75rem;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        cursor: pointer;
+    }
+
+    .btn-page:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    /* Common Buttons */
+    .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 1rem;
+        border-radius: 6px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        cursor: pointer;
+        border: none;
+        transition: all 0.2s ease;
+    }
+
+    .btn-primary { background: #2563eb; color: #fff; }
+    .btn-primary:hover:not(:disabled) { background: #1d4ed8; }
+    .btn-secondary { background: #334155; color: #f8fafc; }
+    .btn-secondary:hover:not(:disabled) { background: #475569; }
+    .btn-outline { background: transparent; border: 1px solid #334155; color: #f8fafc; }
+    .btn-outline:hover:not(:disabled) { background: #1e293b; border-color: #475569; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .loading-state, .empty-state {
+        padding: 3rem;
+        text-align: center;
+        color: #94a3b8;
+    }
+
+    .spinner {
+        width: 32px;
+        height: 32px;
+        border: 3px solid rgba(56, 189, 248, 0.2);
+        border-top-color: #38bdf8;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        margin: 0 auto 1rem auto;
+    }
+
+    @@keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+</style>

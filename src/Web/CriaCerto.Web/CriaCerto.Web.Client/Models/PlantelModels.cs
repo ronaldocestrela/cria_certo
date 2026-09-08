@@ -8,9 +8,10 @@ public enum ReproductiveStatus
     Pregnant = 4,
     Culled = 5,
     Sold = 6,
-    Empty = 7,
-    Bred = 8,
-    Lactating = 9
+    Active = 7,
+    Empty = 8,
+    Bred = 9,
+    Lactating = 10
 }
 
 public enum LifecycleStatus
@@ -171,7 +172,9 @@ public sealed record IatfProtocolDto(
     DateTime StartDate,
     DateTime InseminationDate,
     Guid SemenBatchId,
-    int CowCount);
+    int CowCount,
+    Guid? BullId = null,
+    string? BullName = null);
 
 public sealed record CalvingDto(
     Guid Id,

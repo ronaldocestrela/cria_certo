@@ -9,6 +9,8 @@ public class IatfProtocol
     public DateTime StartDate { get; private set; }
     public DateTime InseminationDate { get; private set; }
     public Guid SemenBatchId { get; private set; }
+    public Guid? BullId { get; private set; }
+    public string? BullName { get; private set; }
     public List<Guid> CowIds { get; private set; } = new();
     public Guid TenantId { get; private set; }
 
@@ -20,7 +22,9 @@ public class IatfProtocol
         DateTime inseminationDate,
         Guid semenBatchId,
         List<Guid> cowIds,
-        Guid tenantId)
+        Guid tenantId,
+        Guid? bullId = null,
+        string? bullName = null)
     {
         if (string.IsNullOrWhiteSpace(name))
             return Result.Failure<IatfProtocol>(Error.Validation("IatfProtocol.NameRequired", "Nome do protocolo IATF é obrigatório."));
@@ -38,6 +42,8 @@ public class IatfProtocol
             StartDate = startDate,
             InseminationDate = inseminationDate,
             SemenBatchId = semenBatchId,
+            BullId = bullId,
+            BullName = bullName?.Trim(),
             CowIds = cowIds.Distinct().ToList(),
             TenantId = tenantId
         };

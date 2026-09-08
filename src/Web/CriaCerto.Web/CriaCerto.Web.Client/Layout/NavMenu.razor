@@ -1,3 +1,5 @@
+@using CriaCerto.Web.Client.Models
+
 <div class="brand-block">
     <img src="imgs/CriaCerto.png" alt="Cria Certo Logo" style="height: 38px; width: auto; object-fit: contain; border-radius: 6px;" />
     <div>
@@ -10,44 +12,28 @@
 
 <nav class="desktop-nav" aria-label="Primary navigation">
     <p class="nav-group-label">Operações Bovinas</p>
-    <NavLink class="nav-link" href="analytics/executive-dashboard">
-        Dashboard
-    </NavLink>
-    <NavLink class="nav-link" href="breeding/registry">
-        Plantel Bovino
-    </NavLink>
-    <NavLink class="nav-link" href="breeding/iatf">
-        Protocolos IATF
-    </NavLink>
-    <NavLink class="nav-link" href="breeding/diagnostico">
-        Diagnóstico de Gestação
-    </NavLink>
-    <NavLink class="nav-link" href="calving/records">
-        Partos & Bezerreiro
-    </NavLink>
-    <NavLink class="nav-link" href="growth/pastures">
-        Pastos & Lotação UA/ha
-    </NavLink>
-    <NavLink class="nav-link" href="growth/curral-weighing">
-        Pesagem & Arrobas (@@)
-    </NavLink>
-    <NavLink class="nav-link" href="nutrition/silos">
-        Silos & Estoque Insumos
-    </NavLink>
-    <NavLink class="nav-link" href="nutrition/trough-log">
-        Trato TMR Confinamento
-    </NavLink>
-    <NavLink class="nav-link" href="nutrition/pasture-supplementation">
-        Suplementação de Pasto
-    </NavLink>
+    @foreach (var item in NavigationCatalog.GetOperationalItems())
+    {
+        <NavLink class="nav-link" href="@item.Href" Match="@(item.MatchExact ? NavLinkMatch.All : NavLinkMatch.Prefix)">
+            @if (!string.IsNullOrWhiteSpace(item.Icon))
+            {
+                <span class="material-symbols-outlined nav-icon" aria-hidden="true">@item.Icon</span>
+            }
+            <span class="nav-text">@item.Title</span>
+        </NavLink>
+    }
 
     <p class="nav-group-label nav-space">Configurações</p>
-    <NavLink class="nav-link" href="settings/organization">
-        Fazenda & Unidades
-    </NavLink>
-    <NavLink class="nav-link" href="settings/subscription">
-        Assinatura & Planos
-    </NavLink>
+    @foreach (var item in NavigationCatalog.GetSettingsItems())
+    {
+        <NavLink class="nav-link" href="@item.Href" Match="@(item.MatchExact ? NavLinkMatch.All : NavLinkMatch.Prefix)">
+            @if (!string.IsNullOrWhiteSpace(item.Icon))
+            {
+                <span class="material-symbols-outlined nav-icon" aria-hidden="true">@item.Icon</span>
+            }
+            <span class="nav-text">@item.Title</span>
+        </NavLink>
+    }
 
     <div class="promo-card">
         <p class="promo-title">Offline Sync Ready</p>

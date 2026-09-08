@@ -225,3 +225,43 @@ public sealed class ValidateSlaughterEligibilityQueryHandler : IRequestHandler<V
         return Result.Success(dto);
     }
 }
+
+public sealed record GetTreatmentsQuery : IQuery<List<TreatmentRecordDto>>;
+
+public sealed class GetTreatmentsQueryHandler : IRequestHandler<GetTreatmentsQuery, Result<List<TreatmentRecordDto>>>
+{
+    private readonly ISanitaryDbContext _context;
+
+    public GetTreatmentsQueryHandler(ISanitaryDbContext context)
+    {
+        _context = context;
+    }
+
+    public async Task<Result<List<TreatmentRecordDto>>> Handle(GetTreatmentsQuery request, CancellationToken cancellationToken)
+    {
+        var records = await _context.TreatmentRecords
+            .AsNoTracking()
+            .OrderByDescending(t => t.ApplicationDateUtc)
+            .ToListAsync(cancellationToken);
+
+        var now = DateTime.UtcNow;
+        var treatments = records
+            .Select(t => new TreatmentRecordDto(
+                t.Id,
+                t.AnimalId,
+                t.LotId,
+                t.ProductCommercialName,
+                t.Type,
+                t.BatchNumber,
+                t.Dosage,
+                t.WithdrawalDays,
+                t.ApplicationDateUtc,
+                t.WithdrawalEndDateUtc,
+                t.IsWithdrawalPeriodActive(now),
+                t.AppliedByVeterinarian,
+                t.Notes))
+            .ToList();
+
+        return Result.Success(treatments);
+    }
+}

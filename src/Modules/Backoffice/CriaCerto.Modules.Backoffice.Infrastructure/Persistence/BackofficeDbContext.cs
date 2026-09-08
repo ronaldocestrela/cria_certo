@@ -16,6 +16,8 @@ public class BackofficeDbContext : DbContext
     public DbSet<PlanFeature> PlanFeatures => Set<PlanFeature>();
     public DbSet<PlanLimit> PlanLimits => Set<PlanLimit>();
     public DbSet<ImpersonationSession> ImpersonationSessions => Set<ImpersonationSession>();
+    public DbSet<AdminApprovalRequest> AdminApprovalRequests => Set<AdminApprovalRequest>();
+    public DbSet<BackofficeAlert> Alerts => Set<BackofficeAlert>();
 
     public BackofficeDbContext(DbContextOptions<BackofficeDbContext> options)
         : base(options)
@@ -74,8 +76,28 @@ public class BackofficeDbContext : DbContext
         {
             builder.ToTable("AuditLogs");
             builder.HasKey(a => a.Id);
+            builder.Property(a => a.AdminUserEmail).IsRequired().HasMaxLength(200);
+            builder.Property(a => a.ActorRole).HasMaxLength(100);
             builder.Property(a => a.Action).IsRequired().HasMaxLength(100);
+            builder.Property(a => a.Category).HasConversion<string>().IsRequired().HasMaxLength(50);
+            builder.Property(a => a.Severity).HasConversion<string>().IsRequired().HasMaxLength(30);
             builder.Property(a => a.Resource).IsRequired().HasMaxLength(200);
+            builder.Property(a => a.TargetTenantName).HasMaxLength(200);
+            builder.Property(a => a.IpAddress).IsRequired().HasMaxLength(100);
+            builder.Property(a => a.UserAgent).HasMaxLength(500);
+            builder.Property(a => a.RecordHash).IsRequired().HasMaxLength(128);
+            builder.Property(a => a.PreviousRecordHash).HasMaxLength(128);
+            builder.Property(a => a.IsArchived).IsRequired();
+            builder.Property(a => a.TimestampUtc).IsRequired();
+
+            builder.HasIndex(a => a.TimestampUtc);
+            builder.HasIndex(a => a.AdminUserId);
+            builder.HasIndex(a => a.TargetTenantId);
+            builder.HasIndex(a => a.Action);
+            builder.HasIndex(a => a.Category);
+            builder.HasIndex(a => a.Severity);
+            builder.HasIndex(a => a.RecordHash);
+            builder.HasIndex(a => new { a.TimestampUtc, a.Severity });
         });
 
         modelBuilder.Entity<AdminSavedFilter>(builder =>
@@ -150,6 +172,56 @@ public class BackofficeDbContext : DbContext
             builder.HasIndex(s => s.TargetTenantId);
             builder.HasIndex(s => s.Status);
             builder.HasIndex(s => s.ExpiresAtUtc);
+        });
+
+        modelBuilder.Entity<AdminApprovalRequest>(builder =>
+        {
+            builder.ToTable("AdminApprovalRequests");
+            builder.HasKey(r => r.Id);
+            builder.Property(r => r.RequestType).HasConversion<string>().IsRequired().HasMaxLength(50);
+            builder.Property(r => r.Status).HasConversion<string>().IsRequired().HasMaxLength(30);
+            builder.Property(r => r.Title).IsRequired().HasMaxLength(250);
+            builder.Property(r => r.Justification).IsRequired().HasMaxLength(1500);
+            builder.Property(r => r.SupportTicketId).HasMaxLength(50);
+            builder.Property(r => r.TargetResourceId).IsRequired().HasMaxLength(200);
+            builder.Property(r => r.ImpactSummary).IsRequired().HasMaxLength(2000);
+            builder.Property(r => r.PayloadJson).IsRequired();
+            builder.Property(r => r.DiffJson);
+            builder.Property(r => r.RequestedByAdminEmail).IsRequired().HasMaxLength(200);
+            builder.Property(r => r.ReviewedByAdminEmail).HasMaxLength(200);
+            builder.Property(r => r.ReviewNotes).HasMaxLength(1000);
+            builder.Property(r => r.RejectionReason).HasMaxLength(1000);
+            builder.Property(r => r.ExecutionResultJson);
+            builder.Property(r => r.ExecutionError).HasMaxLength(2000);
+            builder.HasIndex(r => r.Status);
+            builder.HasIndex(r => r.RequestType);
+            builder.HasIndex(r => r.RequestedByAdminUserId);
+            builder.HasIndex(r => r.ExpiresAtUtc);
+        });
+
+        modelBuilder.Entity<BackofficeAlert>(builder =>
+        {
+            builder.ToTable("Alerts");
+            builder.HasKey(a => a.Id);
+            builder.Property(a => a.RuleCode).IsRequired().HasMaxLength(100);
+            builder.Property(a => a.Title).IsRequired().HasMaxLength(250);
+            builder.Property(a => a.Description).IsRequired().HasMaxLength(2000);
+            builder.Property(a => a.Severity).HasConversion<string>().IsRequired().HasMaxLength(30);
+            builder.Property(a => a.Status).HasConversion<string>().IsRequired().HasMaxLength(30);
+            builder.Property(a => a.Fingerprint).IsRequired().HasMaxLength(200);
+            builder.Property(a => a.OccurrenceCount).IsRequired();
+            builder.Property(a => a.FirstTriggeredAtUtc).IsRequired();
+            builder.Property(a => a.LastTriggeredAtUtc).IsRequired();
+            builder.Property(a => a.ContextJson).IsRequired();
+            builder.Property(a => a.TargetTenantName).HasMaxLength(200);
+            builder.Property(a => a.RelatedAdminEmail).HasMaxLength(200);
+            builder.Property(a => a.AcknowledgedByEmail).HasMaxLength(200);
+            builder.Property(a => a.ResolvedByEmail).HasMaxLength(200);
+            builder.Property(a => a.ResolutionNotes).HasMaxLength(2000);
+            builder.HasIndex(a => new { a.Status, a.Severity });
+            builder.HasIndex(a => a.Fingerprint);
+            builder.HasIndex(a => a.LastTriggeredAtUtc);
+            builder.HasIndex(a => a.RuleCode);
         });
     }
 }

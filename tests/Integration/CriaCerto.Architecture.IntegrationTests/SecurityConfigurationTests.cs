@@ -30,6 +30,25 @@ public class SecurityConfigurationTests
         context.Response.Headers["X-XSS-Protection"].ToString().Should().Be("1; mode=block");
         context.Response.Headers["Referrer-Policy"].ToString().Should().Be("strict-origin-when-cross-origin");
         context.Response.Headers["X-Permitted-Cross-Domain-Policies"].ToString().Should().Be("none");
+        context.Response.Headers["Permissions-Policy"].ToString().Should().Contain("camera=()");
+        context.Response.Headers["Content-Security-Policy"].ToString().Should().Contain("default-src 'self'");
+    }
+
+    [Fact]
+    public async Task SecurityHeadersMiddleware_ShouldInjectNoStoreCacheControl_OnBackofficeRoutes()
+    {
+        // Arrange
+        var context = new DefaultHttpContext();
+        context.Request.Path = "/api/v1/backoffice/tenants";
+        RequestDelegate next = (ctx) => Task.CompletedTask;
+        var middleware = new SecurityHeadersMiddleware(next);
+
+        // Act
+        await middleware.InvokeAsync(context);
+
+        // Assert
+        context.Response.Headers["Cache-Control"].ToString().Should().Contain("no-store");
+        context.Response.Headers["Pragma"].ToString().Should().Be("no-cache");
     }
 
     [Fact]

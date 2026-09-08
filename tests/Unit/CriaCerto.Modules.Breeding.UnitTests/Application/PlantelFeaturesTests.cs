@@ -91,4 +91,25 @@ public class PlantelFeaturesTests
         result.Value.Nickname.Should().Be("Famosa");
         result.Value.BodyConditionScore.Should().Be(4.0m);
     }
+
+    [Fact]
+    public async Task ListBullsQueryHandler_ShouldReturnOnlyActiveBullsOfTenant()
+    {
+        using var dbContext = CreateInMemoryDbContext();
+
+        var bull1 = Cow.Create("TOURO-01", "Nelore", DateTime.UtcNow.AddYears(-3), _tenantId, nickname: "Titan", category: "Reprodutor").Value;
+        var bull2 = Cow.Create("TOURO-02", "Angus", DateTime.UtcNow.AddYears(-4), _tenantId, nickname: "Brutus", category: "Touro").Value;
+        var femaleCow = Cow.Create("VACA-01", "Nelore", DateTime.UtcNow.AddYears(-3), _tenantId, nickname: "Mimosa", category: "Matriz").Value;
+        var otherTenantBull = Cow.Create("TOURO-99", "Nelore", DateTime.UtcNow.AddYears(-3), Guid.NewGuid(), category: "Reprodutor").Value;
+
+        dbContext.Cows.AddRange(bull1, bull2, femaleCow, otherTenantBull);
+        await dbContext.SaveChangesAsync();
+
+        var handler = new ListBullsQueryHandler(dbContext);
+        var result = await handler.Handle(new ListBullsQuery(_tenantId), CancellationToken.None);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Should().HaveCount(2);
+        result.Value.Select(b => b.EarTag).Should().Contain(new[] { "TOURO-01", "TOURO-02" });
+    }
 }

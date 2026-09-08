@@ -1,5 +1,7 @@
 using System.Security.Claims;
 using System.Text;
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.RateLimiting;
 using CriaCerto.Api.Middleware;
 using CriaCerto.BuildingBlocks.Application.Features.GetReferenceBreeds;
 using CriaCerto.Api.Seeders;
@@ -79,6 +81,23 @@ using CriaCerto.Modules.Backoffice.Application.Features.Plans.Dtos;
 using CriaCerto.Modules.Backoffice.Application.Features.Impersonation.Commands;
 using CriaCerto.Modules.Backoffice.Application.Features.Impersonation.Queries;
 using CriaCerto.Modules.Backoffice.Application.Features.Impersonation.Dtos;
+using CriaCerto.Modules.Backoffice.Application.Features.Support.Commands;
+using CriaCerto.Modules.Backoffice.Application.Features.Support.Queries;
+using CriaCerto.Modules.Backoffice.Application.Features.Support.Dtos;
+using CriaCerto.Modules.Backoffice.Application.Domain.Entities;
+using CriaCerto.Modules.Backoffice.Application.Domain.Enums;
+using CriaCerto.Modules.Backoffice.Application.Features.Approvals.Commands;
+using CriaCerto.Modules.Backoffice.Application.Features.Approvals.Queries;
+using CriaCerto.Modules.Backoffice.Application.Features.Approvals.Dtos;
+using CriaCerto.Modules.Backoffice.Application.Features.Audit.Commands;
+using CriaCerto.Modules.Backoffice.Application.Features.Audit.Queries;
+using CriaCerto.Modules.Backoffice.Application.Features.Audit.Dtos;
+using CriaCerto.Modules.Backoffice.Application.Features.Observability.Commands;
+using CriaCerto.Modules.Backoffice.Application.Features.Observability.Queries;
+using CriaCerto.Modules.Backoffice.Application.Features.Observability.Dtos;
+using CriaCerto.Modules.Backoffice.Application.Features.Compliance.Commands;
+using CriaCerto.Modules.Backoffice.Application.Features.Compliance.Queries;
+using CriaCerto.Modules.Backoffice.Application.Features.Compliance.Dtos;
 using CriaCerto.Modules.Backoffice.Application.Security;
 using CriaCerto.Modules.Backoffice.Infrastructure;
 using CriaCerto.Modules.Backoffice.Infrastructure.Persistence;
@@ -192,6 +211,35 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("CurralAccess", policy => policy.RequireRole(UserRole.Admin.ToString(), UserRole.Zootecnista.ToString(), UserRole.Veterinario.ToString(), UserRole.OperadorCurral.ToString()));
 });
 
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.OnRejected = async (context, token) =>
+    {
+        context.HttpContext.Response.ContentType = "application/json";
+        await context.HttpContext.Response.WriteAsJsonAsync(new
+        {
+            code = "Backoffice.RateLimitExceeded",
+            message = "Limite de requisições excedido. Por favor, aguarde alguns instantes antes de tentar novamente.",
+            type = "Failure"
+        }, cancellationToken: token);
+    };
+
+    options.AddPolicy("BackofficeAuthRateLimiter", httpContext =>
+    {
+        var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "127.0.0.1";
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: ip,
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 15,
+                Window = TimeSpan.FromMinutes(1),
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0
+            });
+    });
+});
+
 var app = builder.Build();
 
 if (app.Services.GetService<CriaCerto.BuildingBlocks.Abstractions.Tenancy.ITenantDatabaseProvisioner>() is CriaCerto.BuildingBlocks.Infrastructure.Tenancy.TenantDatabaseProvisioner provisioner)
@@ -208,6 +256,7 @@ SeedReferenceData(app);
 
 app.UseSecurityHeaders();
 app.UseCors("ProductionCorsPolicy");
+app.UseRateLimiter();
 
 if (app.Environment.IsDevelopment())
 {
@@ -649,6 +698,344 @@ backoffice.MapGet("/impersonation/history", async (Guid? tenantId, Guid? adminUs
     return ToHttpResult(result);
 }).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.AuditRead)).WithTags("Backoffice Impersonation");
 
+// --- BACKOFFICE SUPPORT WORKBENCH ENDPOINTS ---
+backoffice.MapGet("/support/tenants/{id:guid}/diagnostics", async (Guid id, ISender sender) =>
+{
+    var result = await sender.Send(new GetTenantDiagnosticsQuery(id));
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.SupportDiagnose)).WithTags("Backoffice Support");
+
+backoffice.MapGet("/support/playbooks", async (ISender sender) =>
+{
+    var result = await sender.Send(new GetSupportPlaybooksQuery());
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.SupportDiagnose)).WithTags("Backoffice Support");
+
+backoffice.MapPost("/support/tenants/{id:guid}/remediation", async (Guid id, ExecuteRemediationRequest req, HttpContext ctx, ISender sender) =>
+{
+    var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var command = new ExecuteTenantRemediationCommand(
+        id,
+        req.ActionType,
+        req.SupportTicketId,
+        req.Justification,
+        callerId,
+        callerEmail,
+        ip);
+    var result = await sender.Send(command);
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.SupportRemediate)).WithTags("Backoffice Support");
+
+// --- BACKOFFICE 4-EYES APPROVAL ENDPOINTS ---
+backoffice.MapGet("/approvals", async (
+    ApprovalRequestStatus? status,
+    ApprovalRequestType? requestType,
+    Guid? requestedByAdminUserId,
+    Guid? reviewerId,
+    int? page,
+    int? pageSize,
+    ISender sender) =>
+{
+    var query = new GetApprovalRequestsQuery(status, requestType, requestedByAdminUserId, reviewerId, page ?? 1, pageSize ?? 20);
+    var result = await sender.Send(query);
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ApprovalsRequest, BackofficePermissions.ApprovalsReview)).WithTags("Backoffice Approvals");
+
+backoffice.MapGet("/approvals/pending-count", async (HttpContext ctx, ISender sender) =>
+{
+    var (callerId, _, _) = GetBackofficeActor(ctx);
+    var result = await sender.Send(new GetPendingApprovalsCountQuery(callerId));
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ApprovalsRequest, BackofficePermissions.ApprovalsReview)).WithTags("Backoffice Approvals");
+
+backoffice.MapGet("/approvals/{id:guid}", async (Guid id, ISender sender) =>
+{
+    var result = await sender.Send(new GetApprovalRequestByIdQuery(id));
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ApprovalsRequest, BackofficePermissions.ApprovalsReview)).WithTags("Backoffice Approvals");
+
+backoffice.MapPost("/approvals", async (CreateApprovalRequestRequest req, HttpContext ctx, ISender sender) =>
+{
+    var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var command = new CreateApprovalRequestCommand(
+        req.RequestType,
+        req.Title,
+        req.Justification,
+        req.TargetResourceId,
+        req.ImpactSummary,
+        req.PayloadJson,
+        callerId,
+        callerEmail,
+        ip,
+        req.SupportTicketId,
+        req.DiffJson,
+        req.ExpirationHours);
+    var result = await sender.Send(command);
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ApprovalsRequest)).WithTags("Backoffice Approvals");
+
+backoffice.MapPost("/approvals/{id:guid}/approve", async (Guid id, ApproveApprovalRequestRequest req, HttpContext ctx, ISender sender) =>
+{
+    var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var command = new ApproveApprovalRequestCommand(
+        id,
+        callerId,
+        callerEmail,
+        ip,
+        req.ReviewNotes);
+    var result = await sender.Send(command);
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ApprovalsReview)).WithTags("Backoffice Approvals");
+
+backoffice.MapPost("/approvals/{id:guid}/reject", async (Guid id, RejectApprovalRequestRequest req, HttpContext ctx, ISender sender) =>
+{
+    var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var command = new RejectApprovalRequestCommand(
+        id,
+        req.RejectionReason,
+        callerId,
+        callerEmail,
+        ip);
+    var result = await sender.Send(command);
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ApprovalsReview)).WithTags("Backoffice Approvals");
+
+backoffice.MapPost("/approvals/{id:guid}/cancel", async (Guid id, CancelApprovalRequestRequest req, HttpContext ctx, ISender sender) =>
+{
+    var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var command = new CancelApprovalRequestCommand(
+        id,
+        callerId,
+        callerEmail,
+        ip,
+        req.CancelReason);
+    var result = await sender.Send(command);
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ApprovalsRequest)).WithTags("Backoffice Approvals");
+
+// Backoffice Forensic Audit Endpoints
+backoffice.MapGet("/audit", async (
+    int? pageNumber,
+    int? pageSize,
+    string? searchTerm,
+    string? actorEmail,
+    Guid? targetTenantId,
+    string? action,
+    AuditCategory? category,
+    AuditSeverity? severity,
+    DateTime? dateFromUtc,
+    DateTime? dateToUtc,
+    bool? includeArchived,
+    ISender sender) =>
+{
+    var query = new GetAuditLogsQuery(
+        pageNumber ?? 1,
+        pageSize ?? 25,
+        searchTerm,
+        actorEmail,
+        targetTenantId,
+        action,
+        category,
+        severity,
+        dateFromUtc,
+        dateToUtc,
+        includeArchived ?? false);
+    var result = await sender.Send(query);
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.AuditRead)).WithTags("Backoffice Audit");
+
+backoffice.MapGet("/audit/stats", async (ISender sender) =>
+{
+    var result = await sender.Send(new GetAuditStatsQuery());
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.AuditRead)).WithTags("Backoffice Audit");
+
+backoffice.MapGet("/audit/verify", async (int? maxRecords, ISender sender) =>
+{
+    var result = await sender.Send(new VerifyAuditTrailIntegrityQuery(maxRecords ?? 500));
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.AuditRead)).WithTags("Backoffice Audit");
+
+backoffice.MapGet("/audit/export", async (
+    string? searchTerm,
+    string? actorEmail,
+    Guid? targetTenantId,
+    AuditCategory? category,
+    AuditSeverity? severity,
+    DateTime? dateFromUtc,
+    DateTime? dateToUtc,
+    string? format,
+    ISender sender) =>
+{
+    var query = new ExportAuditTrailQuery(
+        searchTerm,
+        actorEmail,
+        targetTenantId,
+        category,
+        severity,
+        dateFromUtc,
+        dateToUtc,
+        format ?? "csv");
+    var result = await sender.Send(query);
+    if (result.IsFailure) return ToHttpResult(result);
+    return Results.File(result.Value.Content, result.Value.ContentType, result.Value.FileName);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.AuditRead)).WithTags("Backoffice Audit");
+
+backoffice.MapGet("/audit/{id:guid}", async (Guid id, ISender sender) =>
+{
+    var result = await sender.Send(new GetAuditLogByIdQuery(id));
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.AuditRead)).WithTags("Backoffice Audit");
+
+backoffice.MapPost("/audit/retention/apply", async (ApplyAuditRetentionRequest req, HttpContext ctx, ISender sender) =>
+{
+    var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var command = new ApplyAuditRetentionPolicyCommand(
+        callerId,
+        callerEmail,
+        ip,
+        req.DryRun,
+        req.CriticalRetentionDays,
+        req.HighRetentionDays,
+        req.MediumRetentionDays,
+        req.LowRetentionDays);
+    var result = await sender.Send(command);
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.UsersAdminManage)).WithTags("Backoffice Audit");
+
+// Backoffice Observability & Anomaly Alerts Endpoints
+backoffice.MapGet("/observability/health", async (ISender sender) =>
+{
+    var result = await sender.Send(new GetOperationalHealthQuery());
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ObservabilityRead)).WithTags("Backoffice Observability");
+
+backoffice.MapGet("/observability/alerts", async (
+    int? pageNumber,
+    int? pageSize,
+    AlertStatus? status,
+    AlertSeverity? severity,
+    string? searchTerm,
+    string? ruleCode,
+    DateTime? dateFromUtc,
+    DateTime? dateToUtc,
+    ISender sender) =>
+{
+    var query = new GetBackofficeAlertsQuery(
+        pageNumber ?? 1,
+        pageSize ?? 25,
+        status,
+        severity,
+        searchTerm,
+        ruleCode,
+        dateFromUtc,
+        dateToUtc);
+    var result = await sender.Send(query);
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ObservabilityRead)).WithTags("Backoffice Observability");
+
+backoffice.MapGet("/observability/metrics", async (ISender sender) =>
+{
+    var result = await sender.Send(new GetBackofficeMetricsSummaryQuery());
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ObservabilityRead)).WithTags("Backoffice Observability");
+
+backoffice.MapPost("/observability/alerts/{id:guid}/acknowledge", async (Guid id, HttpContext ctx, ISender sender) =>
+{
+    var (callerId, callerEmail, _) = GetBackofficeActor(ctx);
+    var command = new AcknowledgeBackofficeAlertCommand(id, callerId, callerEmail);
+    var result = await sender.Send(command);
+    return ToCommandHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ObservabilityManage)).WithTags("Backoffice Observability");
+
+backoffice.MapPost("/observability/alerts/{id:guid}/resolve", async (Guid id, ResolveAlertRequest req, HttpContext ctx, ISender sender) =>
+{
+    var (callerId, callerEmail, _) = GetBackofficeActor(ctx);
+    var command = new ResolveBackofficeAlertCommand(id, callerId, callerEmail, req.ResolutionNotes);
+    var result = await sender.Send(command);
+    return ToCommandHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ObservabilityManage)).WithTags("Backoffice Observability");
+
+backoffice.MapPost("/observability/alerts/simulate", async (SimulateAlertRequest req, ISender sender) =>
+{
+    var command = new SimulateBackofficeAlertCommand(req.RuleCode, req.Severity, req.Title, req.Description, req.ContextJson);
+    var result = await sender.Send(command);
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ObservabilityManage)).WithTags("Backoffice Observability");
+
+// Backoffice Compliance & LGPD Data Governance Endpoints
+backoffice.MapGet("/compliance/overview", async (ISender sender) =>
+{
+    var result = await sender.Send(new GetComplianceOverviewQuery());
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ComplianceRead)).WithTags("Backoffice Compliance");
+
+backoffice.MapGet("/compliance/access-trail", async (
+    Guid? targetTenantId,
+    string? actorEmail,
+    string? eventType,
+    DateTime? dateFromUtc,
+    DateTime? dateToUtc,
+    int? pageNumber,
+    int? pageSize,
+    ISender sender) =>
+{
+    var query = new GetAccessTrailQuery(
+        targetTenantId,
+        actorEmail,
+        eventType,
+        dateFromUtc,
+        dateToUtc,
+        pageNumber ?? 1,
+        pageSize ?? 25);
+    var result = await sender.Send(query);
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ComplianceRead)).WithTags("Backoffice Compliance");
+
+backoffice.MapGet("/compliance/access-trail/export", async (
+    Guid? targetTenantId,
+    string? actorEmail,
+    DateTime? dateFromUtc,
+    DateTime? dateToUtc,
+    string? purpose,
+    string? format,
+    HttpContext ctx,
+    ISender sender) =>
+{
+    var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var userAgent = ctx.Request.Headers.UserAgent.ToString();
+    var role = ctx.User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value ?? "Admin";
+
+    var request = new ExportAccessTrailRequest(
+        targetTenantId,
+        actorEmail,
+        dateFromUtc,
+        dateToUtc,
+        purpose ?? "Auditoria Externa LGPD",
+        format ?? "CSV");
+
+    var query = new ExportAccessTrailQuery(callerId, callerEmail, role, ip, userAgent, request);
+    var result = await sender.Send(query);
+
+    if (result.IsFailure)
+    {
+        return ToHttpResult(result);
+    }
+
+    return Results.File(result.Value.Content, result.Value.ContentType, result.Value.FileName);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ComplianceExport)).WithTags("Backoffice Compliance");
+
+backoffice.MapPost("/compliance/reveal-pii", async (RevealSensitiveDataRequest req, HttpContext ctx, ISender sender) =>
+{
+    var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var userAgent = ctx.Request.Headers.UserAgent.ToString();
+    var role = ctx.User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value ?? "Admin";
+
+    var command = new RevealSensitiveDataCommand(callerId, callerEmail, role, ip, userAgent, req);
+    var result = await sender.Send(command);
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ComplianceUnmask)).WithTags("Backoffice Compliance");
+
 // Backoffice Auth Endpoints (Anonymous / Credentials + MFA)
 app.MapPost("/api/v1/backoffice/auth/login", async (BackofficeLoginRequest req, HttpContext ctx, ISender sender) =>
 {
@@ -657,7 +1044,7 @@ app.MapPost("/api/v1/backoffice/auth/login", async (BackofficeLoginRequest req, 
     var command = new AuthenticateAdminUserCommand(req.Email, req.Password, req.MfaCode, ip, ua);
     var result = await sender.Send(command);
     return ToBackofficeLoginHttpResult(result);
-}).AllowAnonymous().WithTags("Backoffice Auth");
+}).RequireRateLimiting("BackofficeAuthRateLimiter").AllowAnonymous().WithTags("Backoffice Auth");
 
 app.MapPost("/api/v1/backoffice/auth/refresh", async (RefreshSessionRequest req, HttpContext ctx, ISender sender) =>
 {
@@ -666,7 +1053,7 @@ app.MapPost("/api/v1/backoffice/auth/refresh", async (RefreshSessionRequest req,
     var command = new RefreshAdminSessionCommand(req.SessionToken, req.RefreshToken, ip, ua);
     var result = await sender.Send(command);
     return ToHttpResult(result);
-}).AllowAnonymous().WithTags("Backoffice Auth");
+}).RequireRateLimiting("BackofficeAuthRateLimiter").AllowAnonymous().WithTags("Backoffice Auth");
 
 // Auth Endpoints
 app.MapPost("/api/auth/login", async (LoginCommand command, ISender sender) =>
@@ -837,6 +1224,12 @@ breeding.MapPut("/cows/{id:guid}", async (Guid id, UpdateCowCommand command, ISe
         return Results.BadRequest(new { Error = "ID da URL diverge do ID do corpo da requisição." });
 
     var result = await sender.Send(command);
+    return ToHttpResult(result);
+});
+
+breeding.MapGet("/bulls", async (Guid tenantId, ISender sender) =>
+{
+    var result = await sender.Send(new ListBullsQuery(tenantId));
     return ToHttpResult(result);
 });
 
@@ -1077,6 +1470,12 @@ sanitary.MapPost("/treatments", async (ApplyTreatmentCommand command, ISender se
     return ToHttpResult(result, StatusCodes.Status201Created);
 });
 
+sanitary.MapGet("/treatments", async (ISender sender, CancellationToken cancellationToken) =>
+{
+    var result = await sender.Send(new GetTreatmentsQuery(), cancellationToken);
+    return ToHttpResult(result);
+});
+
 sanitary.MapGet("/slaughter-validation/{animalId:guid}", async (Guid animalId, ISender sender) =>
 {
     var result = await sender.Send(new ValidateSlaughterEligibilityQuery(animalId));
@@ -1086,21 +1485,45 @@ sanitary.MapGet("/slaughter-validation/{animalId:guid}", async (Guid animalId, I
 // --- EXECUTIVE ANALYTICS ENDPOINTS ---
 var analytics = app.MapGroup("/api/analytics").RequireAuthorization();
 
+analytics.MapGet("/dashboard", async (ISender sender, Guid? tenantId) =>
+{
+    var result = await sender.Send(new GetTenantExecutiveDashboardQuery(tenantId));
+    return ToHttpResult(result);
+});
+
 analytics.MapGet("/executive-scorecard", async (
-    int totalCows,
-    int pregnantCows,
-    int calvesWeaned,
-    decimal totalPastureHectares,
-    decimal totalAnimalUnits,
-    decimal averageGpdKg,
-    decimal averageCostPerArroba,
-    int animalsUnderWithdrawal,
+    int? totalCows,
+    int? pregnantCows,
+    int? calvesWeaned,
+    decimal? totalPastureHectares,
+    decimal? totalAnimalUnits,
+    decimal? averageGpdKg,
+    decimal? averageCostPerArroba,
+    int? animalsUnderWithdrawal,
+    Guid? tenantId,
     ISender sender) =>
 {
-    var query = new GetExecutiveAnalyticsQuery(
-        totalCows, pregnantCows, calvesWeaned, totalPastureHectares, totalAnimalUnits, averageGpdKg, averageCostPerArroba, animalsUnderWithdrawal);
-    var result = await sender.Send(query);
-    return ToHttpResult(result);
+    if (totalCows.HasValue && pregnantCows.HasValue && calvesWeaned.HasValue)
+    {
+        var query = new GetExecutiveAnalyticsQuery(
+            totalCows.Value,
+            pregnantCows.Value,
+            calvesWeaned.Value,
+            totalPastureHectares ?? 0m,
+            totalAnimalUnits ?? 0m,
+            averageGpdKg ?? 0m,
+            averageCostPerArroba ?? 0m,
+            animalsUnderWithdrawal ?? 0);
+        var result = await sender.Send(query);
+        return ToHttpResult(result);
+    }
+
+    var dashboardResult = await sender.Send(new GetTenantExecutiveDashboardQuery(tenantId));
+    if (dashboardResult.IsSuccess)
+    {
+        return Results.Ok(dashboardResult.Value.Scorecard);
+    }
+    return ToHttpResult(dashboardResult);
 });
 
 analytics.MapPost("/export", async (ExportBovineReportQuery query, ISender sender) =>

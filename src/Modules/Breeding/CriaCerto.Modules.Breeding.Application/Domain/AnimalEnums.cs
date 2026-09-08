@@ -14,7 +14,8 @@ public enum ReproductiveStatus
     Inseminated = 3,   // Inseminada
     Pregnant = 4,      // Prenhe
     Culled = 5,        // Descartada
-    Sold = 6           // Vendida
+    Sold = 6,          // Vendida
+    Active = 7         // Ativo / Apto (Reprodutor / Geral)
 }
 
 public enum DiagnosisMethod

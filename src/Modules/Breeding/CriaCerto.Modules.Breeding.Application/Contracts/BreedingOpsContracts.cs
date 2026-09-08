@@ -7,7 +7,8 @@ public sealed record RegisterIatfProtocolRequest(
     DateTime StartDate,
     DateTime InseminationDate,
     Guid SemenBatchId,
-    IReadOnlyList<Guid> CowIds);
+    IReadOnlyList<Guid> CowIds,
+    Guid? BullId = null);
 
 public sealed record RegisterPregnancyDiagnosisRequest(
     Guid CowId,

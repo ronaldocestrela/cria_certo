@@ -44,13 +44,13 @@ public class StartImpersonationSessionCommandTests : IDisposable
     [Theory]
     [InlineData("")]
     [InlineData("   ")]
-    [InlineData(null!)]
-    public async Task Handle_WhenTicketIsEmpty_ShouldReturnValidationFailure(string invalidTicket)
+    [InlineData(null)]
+    public async Task Handle_WhenTicketIsEmpty_ShouldReturnValidationFailure(string? invalidTicket)
     {
         // Arrange
         var handler = new StartImpersonationSessionCommandHandler(_sender, _dbContext, _tokenService);
         var command = new StartImpersonationSessionCommand(
-            Guid.NewGuid(), null, invalidTicket, "Justificativa válida com mais de 10 caracteres.", 15,
+            Guid.NewGuid(), null, invalidTicket!, "Justificativa válida com mais de 10 caracteres.", 15,
             Guid.NewGuid(), "admin@criacerto.com.br", "127.0.0.1", "Agent");
 
         // Act

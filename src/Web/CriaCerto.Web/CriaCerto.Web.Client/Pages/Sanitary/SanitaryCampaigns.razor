@@ -1,20 +1,41 @@
 @page "/sanitary/campaigns"
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@attribute [Authorize]
+@using System.ComponentModel.DataAnnotations
 @using CriaCerto.Modules.Sanitary.Application.Domain
 @using CriaCerto.Modules.Sanitary.Application.Contracts
-@attribute [Authorize]
+@using CriaCerto.Web.Client.Services
+@using CriaCerto.Web.Client.Models
+@using Microsoft.AspNetCore.Components.Authorization
+@inject SanitaryApiClient SanitaryApi
+@inject PlantelApiClient PlantelApi
+@inject GrowthApiClient GrowthApi
+@inject IToastService ToastService
+@inject AuthenticationStateProvider AuthStateProvider
 
 <PageTitle>Campanhas Sanitárias & Carência | CriaCerto</PageTitle>
 
 <div class="container-fluid py-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    @if (!string.IsNullOrEmpty(_errorMessage))
+    {
+        <div class="alert alert-danger alert-dismissible fade show shadow-sm mb-4" role="alert">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i>@_errorMessage
+            <button type="button" class="btn-close" @onclick="() => _errorMessage = null"></button>
+        </div>
+    }
+
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4">
         <div>
             <h3 class="fw-bold text-primary mb-1">
                 <i class="bi bi-shield-check me-2"></i>Campanhas Sanitárias & Controle de Carência
             </h3>
             <p class="text-muted mb-0">Gestão de vacinações oficiais (Aftosa, Brucelose, Raiva), registro de tratamentos e bloqueio sanitário de abate.</p>
         </div>
-        <div>
-            <button class="btn btn-outline-danger me-2 shadow-sm" @onclick="OpenTreatmentModal">
+        <div class="d-flex flex-wrap gap-2">
+            <button class="btn btn-outline-secondary shadow-sm" @onclick="LoadDataAsync" disabled="@_isLoading" title="Recarregar dados">
+                <i class="bi bi-arrow-clockwise me-1 @(_isLoading ? "spin" : "")"></i> Atualizar
+            </button>
+            <button class="btn btn-outline-danger shadow-sm" @onclick="OpenTreatmentModal">
                 <i class="bi bi-capsule me-1"></i> Aplicar Tratamento / Carência
             </button>
             <button class="btn btn-primary shadow-sm" @onclick="OpenCampaignModal">
@@ -31,7 +52,16 @@
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <span class="small opacity-75 text-uppercase fw-semibold">Campanhas Ativas</span>
-                            <h3 class="fw-bold mb-0">@campaigns.Count</h3>
+                            <h3 class="fw-bold mb-0">
+                                @if (_isLoading)
+                                {
+                                    <span class="spinner-border spinner-border-sm" role="status"></span>
+                                }
+                                else
+                                {
+                                    @campaigns.Count(c => c.IsActive)
+                                }
+                            </h3>
                         </div>
                         <i class="bi bi-megaphone fs-1 opacity-50"></i>
                     </div>
@@ -44,7 +74,16 @@
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <span class="small opacity-75 text-uppercase fw-semibold">Animais em Carência para Abate</span>
-                            <h3 class="fw-bold mb-0">@treatments.Count(t => t.IsWithdrawalActive)</h3>
+                            <h3 class="fw-bold mb-0">
+                                @if (_isLoading)
+                                {
+                                    <span class="spinner-border spinner-border-sm" role="status"></span>
+                                }
+                                else
+                                {
+                                    @treatments.Count(t => t.IsWithdrawalActive)
+                                }
+                            </h3>
                         </div>
                         <i class="bi bi-slash-circle fs-1 opacity-50"></i>
                     </div>
@@ -57,7 +96,9 @@
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <span class="small opacity-75 text-uppercase fw-semibold">Status de Imunização</span>
-                            <h3 class="fw-bold mb-0">100% Conforme</h3>
+                            <h3 class="fw-bold mb-0">
+                                @(treatments.Any(t => t.IsWithdrawalActive) ? "Sob Carência" : "100% Conforme")
+                            </h3>
                         </div>
                         <i class="bi bi-check-circle fs-1 opacity-50"></i>
                     </div>
@@ -68,8 +109,9 @@
 
     <!-- TABELA DE CAMPANHAS ATIVAS -->
     <div class="card border-0 shadow-sm rounded-3 mb-4">
-        <div class="card-header bg-white py-3">
+        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
             <h6 class="m-0 fw-bold text-dark"><i class="bi bi-calendar-event me-2 text-primary"></i>Campanhas Sanitárias Declaradas</h6>
+            <span class="badge bg-light text-secondary border">@campaigns.Count campanha(s)</span>
         </div>
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
@@ -83,15 +125,45 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var c in campaigns)
+                    @if (_isLoading)
                     {
                         <tr>
-                            <td><strong class="text-primary">@c.Name</strong></td>
-                            <td><span class="badge bg-light text-dark border">@c.Type</span></td>
-                            <td>@c.StartDateUtc.ToString("dd/MM/yyyy") até @c.EndDateUtc.ToString("dd/MM/yyyy")</td>
-                            <td><span class="badge bg-success"><i class="bi bi-check me-1"></i>Ativa</span></td>
-                            <td>@(c.Description ?? "Sem observações")</td>
+                            <td colspan="5" class="text-center py-4 text-muted">
+                                <div class="spinner-border text-primary spinner-border-sm me-2" role="status"></div>
+                                Carregando campanhas sanitárias...
+                            </td>
                         </tr>
+                    }
+                    else if (campaigns.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="5" class="text-center py-4 text-muted">
+                                <i class="bi bi-inbox fs-3 d-block mb-1"></i>
+                                Nenhuma campanha sanitária cadastrada. Clique em <strong>Nova Campanha Oficial</strong> para adicionar.
+                            </td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var c in campaigns)
+                        {
+                            <tr>
+                                <td><strong class="text-primary">@c.Name</strong></td>
+                                <td><span class="badge bg-light text-dark border">@c.Type</span></td>
+                                <td>@c.StartDateUtc.ToString("dd/MM/yyyy") até @c.EndDateUtc.ToString("dd/MM/yyyy")</td>
+                                <td>
+                                    @if (c.IsActive)
+                                    {
+                                        <span class="badge bg-success"><i class="bi bi-check me-1"></i>Ativa</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-secondary">Encerrada</span>
+                                    }
+                                </td>
+                                <td>@(c.Description ?? "Sem observações")</td>
+                            </tr>
+                        }
                     }
                 </tbody>
             </table>
@@ -100,47 +172,90 @@
 
     <!-- TABELA DE TRATAMENTOS COM CARENCIA -->
     <div class="card border-0 shadow-sm rounded-3">
-        <div class="card-header bg-white py-3">
+        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
             <h6 class="m-0 fw-bold text-dark"><i class="bi bi-capsule me-2 text-danger"></i>Registro de Tratamentos Veterinários & Carência Sanitária</h6>
+            <span class="badge bg-light text-secondary border">@treatments.Count registro(s)</span>
         </div>
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
                 <thead class="table-light">
                     <tr>
                         <th>Medicamento / Produto</th>
+                        <th>Alvo (Animal / Lote)</th>
                         <th>Tipo</th>
-                        <th>Dosagem / Lote</th>
+                        <th>Dosagem / Lote Prod.</th>
                         <th>Data Aplicação</th>
-                        <th>Carência (Dias)</th>
+                        <th>Carência</th>
                         <th>Término Carência</th>
                         <th>Status de Abate</th>
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var t in treatments)
+                    @if (_isLoading)
                     {
                         <tr>
-                            <td><strong class="text-dark">@t.ProductCommercialName</strong></td>
-                            <td><span class="badge bg-info text-dark">@t.Type</span></td>
-                            <td>@t.Dosage (@(t.BatchNumber ?? "N/A"))</td>
-                            <td>@t.ApplicationDateUtc.ToString("dd/MM/yyyy")</td>
-                            <td>@t.WithdrawalDays dias</td>
-                            <td>@t.WithdrawalEndDateUtc.ToString("dd/MM/yyyy")</td>
-                            <td>
-                                @if (t.IsWithdrawalActive)
-                                {
-                                    <span class="badge bg-danger">
-                                        <i class="bi bi-exclamation-triangle-fill me-1"></i> BLOQUEADO PARA ABATE
-                                    </span>
-                                }
-                                else
-                                {
-                                    <span class="badge bg-success">
-                                        <i class="bi bi-check-circle me-1"></i> Liberado para Abate
-                                    </span>
-                                }
+                            <td colspan="8" class="text-center py-4 text-muted">
+                                <div class="spinner-border text-danger spinner-border-sm me-2" role="status"></div>
+                                Carregando histórico de tratamentos...
                             </td>
                         </tr>
+                    }
+                    else if (treatments.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="8" class="text-center py-4 text-muted">
+                                <i class="bi bi-inbox fs-3 d-block mb-1"></i>
+                                Nenhum tratamento registrado. Clique em <strong>Aplicar Tratamento / Carência</strong> para registrar.
+                            </td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var t in treatments)
+                        {
+                            <tr>
+                                <td><strong class="text-dark">@t.ProductCommercialName</strong></td>
+                                <td>
+                                    @if (t.AnimalId.HasValue)
+                                    {
+                                        var cow = availableCows.FirstOrDefault(c => c.Id == t.AnimalId.Value);
+                                        <span class="badge bg-light text-dark border">
+                                            <i class="bi bi-tag me-1"></i>Animal: @(cow != null ? cow.EarTag : t.AnimalId.Value.ToString()[..8])
+                                        </span>
+                                    }
+                                    else if (t.LotId.HasValue)
+                                    {
+                                        var lot = availableLots.FirstOrDefault(l => l.Id == t.LotId.Value);
+                                        <span class="badge bg-light text-dark border">
+                                            <i class="bi bi-collection me-1"></i>Lote: @(lot != null ? lot.Name : t.LotId.Value.ToString()[..8])
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted small">-</span>
+                                    }
+                                </td>
+                                <td><span class="badge bg-info text-dark">@t.Type</span></td>
+                                <td>@t.Dosage (@(t.BatchNumber ?? "N/A"))</td>
+                                <td>@t.ApplicationDateUtc.ToString("dd/MM/yyyy")</td>
+                                <td>@t.WithdrawalDays dias</td>
+                                <td>@t.WithdrawalEndDateUtc.ToString("dd/MM/yyyy")</td>
+                                <td>
+                                    @if (t.IsWithdrawalActive)
+                                    {
+                                        <span class="badge bg-danger">
+                                            <i class="bi bi-exclamation-triangle-fill me-1"></i> BLOQUEADO PARA ABATE
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-success">
+                                            <i class="bi bi-check-circle me-1"></i> Liberado para Abate
+                                        </span>
+                                    }
+                                </td>
+                            </tr>
+                        }
                     }
                 </tbody>
             </table>
@@ -148,19 +263,512 @@
     </div>
 </div>
 
+<!-- MODAL: NOVA CAMPANHA OFICIAL -->
+@if (_showCampaignModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title fw-bold">
+                        <i class="bi bi-plus-circle me-2"></i>Nova Campanha Oficial
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="() => _showCampaignModal = false"></button>
+                </div>
+                <EditForm Model="@_campaignForm" OnValidSubmit="HandleCreateCampaign">
+                    <DataAnnotationsValidator />
+                    <div class="modal-body">
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <label class="form-label fw-semibold">Nome da Campanha *</label>
+                                <InputText class="form-control" @bind-Value="_campaignForm.Name" placeholder="Ex: Campanha Febre Aftosa 2026" />
+                                <ValidationMessage For="@(() => _campaignForm.Name)" class="text-danger small" />
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label fw-semibold">Tipo da Campanha *</label>
+                                <InputSelect class="form-select" @bind-Value="_campaignForm.Type">
+                                    <option value="@CampaignType.Aftosa">Febre Aftosa</option>
+                                    <option value="@CampaignType.Brucelose">Brucelose</option>
+                                    <option value="@CampaignType.Raiva">Raiva dos Herbívoros</option>
+                                    <option value="@CampaignType.Clostridioses">Clostridioses</option>
+                                    <option value="@CampaignType.Reprodutiva">Reprodutiva</option>
+                                    <option value="@CampaignType.Outra">Outra</option>
+                                </InputSelect>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold">Data de Início *</label>
+                                <InputDate class="form-control" @bind-Value="_campaignForm.StartDate" />
+                                <ValidationMessage For="@(() => _campaignForm.StartDate)" class="text-danger small" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold">Data de Término *</label>
+                                <InputDate class="form-control" @bind-Value="_campaignForm.EndDate" />
+                                <ValidationMessage For="@(() => _campaignForm.EndDate)" class="text-danger small" />
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label fw-semibold">Descrição / Observações</label>
+                                <InputTextArea class="form-control" rows="3" @bind-Value="_campaignForm.Description" placeholder="Observações legais, faixa etária obrigatória, etc." />
+                                <ValidationMessage For="@(() => _campaignForm.Description)" class="text-danger small" />
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer bg-light">
+                        <button type="button" class="btn btn-outline-secondary" @onclick="() => _showCampaignModal = false">Cancelar</button>
+                        <button type="submit" class="btn btn-primary fw-semibold" disabled="@_isSavingCampaign">
+                            @if (_isSavingCampaign)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                <span>Salvando...</span>
+                            }
+                            else
+                            {
+                                <i class="bi bi-check-lg me-1"></i>
+                                <span>Salvar Campanha</span>
+                            }
+                        </button>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- MODAL: APLICAR TRATAMENTO / CARÊNCIA -->
+@if (_showTreatmentModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title fw-bold">
+                        <i class="bi bi-capsule me-2"></i>Aplicar Tratamento Veterinário & Carência
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="() => _showTreatmentModal = false"></button>
+                </div>
+                <EditForm Model="@_treatmentForm" OnValidSubmit="HandleApplyTreatment">
+                    <DataAnnotationsValidator />
+                    <div class="modal-body">
+                        <div class="row g-3">
+                            <!-- SELETOR DE ESCOPO: ANIMAL OU LOTE -->
+                            <div class="col-12">
+                                <label class="form-label fw-semibold d-block">Alvo da Aplicação *</label>
+                                <div class="btn-group w-100" role="group">
+                                    <input type="radio" class="btn-check" name="targetTypeRadio" id="targetAnimal" 
+                                           checked="@(_treatmentForm.TargetType == TreatmentTargetType.Animal)" 
+                                           @onchange="() => _treatmentForm.TargetType = TreatmentTargetType.Animal" />
+                                    <label class="btn btn-outline-primary" for="targetAnimal">
+                                        <i class="bi bi-person-badge me-1"></i> Animal Individual
+                                    </label>
+
+                                    <input type="radio" class="btn-check" name="targetTypeRadio" id="targetLot" 
+                                           checked="@(_treatmentForm.TargetType == TreatmentTargetType.Lot)" 
+                                           @onchange="() => _treatmentForm.TargetType = TreatmentTargetType.Lot" />
+                                    <label class="btn btn-outline-primary" for="targetLot">
+                                        <i class="bi bi-collection me-1"></i> Lote de Animais
+                                    </label>
+                                </div>
+                            </div>
+
+                            @if (_treatmentForm.TargetType == TreatmentTargetType.Animal)
+                            {
+                                <div class="col-12">
+                                    <label class="form-label fw-semibold">Selecione o Animal *</label>
+                                    @if (availableCows.Count > 0)
+                                    {
+                                        <InputSelect class="form-select" @bind-Value="_treatmentForm.AnimalId">
+                                            <option value="">Selecione um animal...</option>
+                                            @foreach (var cow in availableCows)
+                                            {
+                                                <option value="@cow.Id">@cow.EarTag @(string.IsNullOrEmpty(cow.Nickname) ? "" : $"({cow.Nickname})") - Raça: @cow.Breed</option>
+                                            }
+                                        </InputSelect>
+                                    }
+                                    else
+                                    {
+                                        <div class="text-muted small border rounded p-2 bg-light">
+                                            Nenhum animal carregado. Certifique-se de que há animais cadastrados no plantel.
+                                        </div>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="col-12">
+                                    <label class="form-label fw-semibold">Selecione o Lote *</label>
+                                    @if (availableLots.Count > 0)
+                                    {
+                                        <InputSelect class="form-select" @bind-Value="_treatmentForm.LotId">
+                                            <option value="">Selecione um lote...</option>
+                                            @foreach (var lot in availableLots)
+                                            {
+                                                <option value="@lot.Id">@lot.Name (@lot.Code) - @lot.HeadCount cabeças</option>
+                                            }
+                                        </InputSelect>
+                                    }
+                                    else
+                                    {
+                                        <div class="text-muted small border rounded p-2 bg-light">
+                                            Nenhum lote carregado. Certifique-se de que há lotes cadastrados na fazenda.
+                                        </div>
+                                    }
+                                </div>
+                            }
+
+                            <div class="col-md-7">
+                                <label class="form-label fw-semibold">Nome Comercial do Produto / Medicamento *</label>
+                                <InputText class="form-control" @bind-Value="_treatmentForm.ProductCommercialName" placeholder="Ex: Dectomax 1%, Oxitetraciclina LA" />
+                                <ValidationMessage For="@(() => _treatmentForm.ProductCommercialName)" class="text-danger small" />
+                            </div>
+
+                            <div class="col-md-5">
+                                <label class="form-label fw-semibold">Tipo de Tratamento *</label>
+                                <InputSelect class="form-select" @bind-Value="_treatmentForm.Type">
+                                    <option value="@TreatmentType.Medication">Medicamento Geral</option>
+                                    <option value="@TreatmentType.Vaccination">Vacinação</option>
+                                    <option value="@TreatmentType.Deworming">Vermifugação</option>
+                                    <option value="@TreatmentType.Hormonal">Hormonal</option>
+                                    <option value="@TreatmentType.Surgical">Cirúrgico</option>
+                                </InputSelect>
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label fw-semibold">Dosagem Aplicada *</label>
+                                <InputText class="form-control" @bind-Value="_treatmentForm.Dosage" placeholder="Ex: 10ml SC, 20ml IM" />
+                                <ValidationMessage For="@(() => _treatmentForm.Dosage)" class="text-danger small" />
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label fw-semibold">Número do Lote do Produto</label>
+                                <InputText class="form-control" @bind-Value="_treatmentForm.BatchNumber" placeholder="Ex: LOT-2026-A" />
+                                <ValidationMessage For="@(() => _treatmentForm.BatchNumber)" class="text-danger small" />
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label fw-semibold">Carência (Dias) *</label>
+                                <InputNumber class="form-control" @bind-Value="_treatmentForm.WithdrawalDays" min="0" max="365" />
+                                <div class="form-text small">0 = Sem restrição de carência para abate</div>
+                                <ValidationMessage For="@(() => _treatmentForm.WithdrawalDays)" class="text-danger small" />
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold">Data de Aplicação *</label>
+                                <InputDate class="form-control" @bind-Value="_treatmentForm.ApplicationDate" />
+                                <ValidationMessage For="@(() => _treatmentForm.ApplicationDate)" class="text-danger small" />
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold">Veterinário Responsável</label>
+                                <InputText class="form-control" @bind-Value="_treatmentForm.AppliedByVeterinarian" placeholder="Ex: Dr. Roberto CRMV-1234" />
+                                <ValidationMessage For="@(() => _treatmentForm.AppliedByVeterinarian)" class="text-danger small" />
+                            </div>
+
+                            <div class="col-12">
+                                <label class="form-label fw-semibold">Observações / Diagnóstico</label>
+                                <InputTextArea class="form-control" rows="2" @bind-Value="_treatmentForm.Notes" placeholder="Ex: Tratamento preventivo ou curativo, sintomas observados..." />
+                                <ValidationMessage For="@(() => _treatmentForm.Notes)" class="text-danger small" />
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer bg-light">
+                        <button type="button" class="btn btn-outline-secondary" @onclick="() => _showTreatmentModal = false">Cancelar</button>
+                        <button type="submit" class="btn btn-danger fw-semibold" disabled="@_isSavingTreatment">
+                            @if (_isSavingTreatment)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                <span>Registrando...</span>
+                            }
+                            else
+                            {
+                                <i class="bi bi-check-lg me-1"></i>
+                                <span>Registrar Tratamento</span>
+                            }
+                        </button>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
-    private List<VaccinationCampaignDto> campaigns = new()
-    {
-        new VaccinationCampaignDto(Guid.NewGuid(), "Campanha Oficial Febre Aftosa 2026", CampaignType.Aftosa, DateTime.UtcNow.AddDays(-10), DateTime.UtcNow.AddDays(20), "Vacinação obrigatória de bovinos até 24 meses.", true, DateTime.UtcNow),
-        new VaccinationCampaignDto(Guid.NewGuid(), "Campanha Brucelose Fêmeas 2026", CampaignType.Brucelose, DateTime.UtcNow.AddDays(-5), DateTime.UtcNow.AddDays(25), "Vacinação B19 em bezerras de 3 a 8 meses.", true, DateTime.UtcNow)
-    };
+    private List<VaccinationCampaignDto> campaigns = new();
+    private List<TreatmentRecordDto> treatments = new();
+    private List<CowSummaryDto> availableCows = new();
+    private List<LotDto> availableLots = new();
 
-    private List<TreatmentRecordDto> treatments = new()
-    {
-        new TreatmentRecordDto(Guid.NewGuid(), Guid.NewGuid(), null, "Dectomax Injectable 1%", TreatmentType.Deworming, "Lote DEC-99", "10ml SC", 35, DateTime.UtcNow.AddDays(-10), DateTime.UtcNow.AddDays(25), true, "Dr. Roberto Vet", "Vermifugação geral lote engorda"),
-        new TreatmentRecordDto(Guid.NewGuid(), Guid.NewGuid(), null, "Oxitetraciclina LA", TreatmentType.Medication, "Lote OXI-04", "15ml IM", 28, DateTime.UtcNow.AddDays(-40), DateTime.UtcNow.AddDays(-12), false, "Dr. Roberto Vet", "Tratamento preventivo podal")
-    };
+    private bool _isLoading = true;
+    private bool _isSavingCampaign = false;
+    private bool _isSavingTreatment = false;
+    private string? _errorMessage;
 
-    private void OpenCampaignModal() { }
-    private void OpenTreatmentModal() { }
+    private bool _showCampaignModal = false;
+    private bool _showTreatmentModal = false;
+
+    private Guid _tenantId = Guid.Empty;
+
+    private CampaignFormModel _campaignForm = new();
+    private TreatmentFormModel _treatmentForm = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ResolveTenantAsync();
+        await LoadDataAsync();
+    }
+
+    private async Task ResolveTenantAsync()
+    {
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+            var tenantClaim = user.FindFirst("TenantId")?.Value;
+            if (Guid.TryParse(tenantClaim, out var tid))
+            {
+                _tenantId = tid;
+            }
+        }
+        catch
+        {
+            // Ignorado, fallback se não autenticado
+        }
+    }
+
+    private async Task LoadDataAsync()
+    {
+        _isLoading = true;
+        _errorMessage = null;
+
+        try
+        {
+            try
+            {
+                campaigns = await SanitaryApi.GetActiveCampaignsAsync();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Sanitary] Erro ao carregar campanhas: {ex.Message}");
+            }
+
+            try
+            {
+                treatments = await SanitaryApi.GetTreatmentsAsync();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Sanitary] Erro ao carregar tratamentos: {ex.Message}");
+            }
+
+            try
+            {
+                var cowsResponse = await PlantelApi.ListCowsAsync(null, null);
+                if (cowsResponse?.Items != null)
+                {
+                    availableCows = cowsResponse.Items;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Sanitary] Erro ao carregar animais: {ex.Message}");
+            }
+
+            try
+            {
+                if (_tenantId != Guid.Empty)
+                {
+                    var lots = await GrowthApi.GetLotsAsync(_tenantId);
+                    if (lots != null)
+                    {
+                        availableLots = lots;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Sanitary] Erro ao carregar lotes: {ex.Message}");
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Erro ao carregar informações sanitárias: {ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void OpenCampaignModal()
+    {
+        _campaignForm = new CampaignFormModel
+        {
+            StartDate = DateTime.Today,
+            EndDate = DateTime.Today.AddDays(30),
+            Type = CampaignType.Aftosa
+        };
+        _showCampaignModal = true;
+    }
+
+    private void OpenTreatmentModal()
+    {
+        _treatmentForm = new TreatmentFormModel
+        {
+            ApplicationDate = DateTime.Today,
+            Type = TreatmentType.Medication,
+            WithdrawalDays = 0,
+            TargetType = TreatmentTargetType.Animal,
+            AnimalId = availableCows.FirstOrDefault()?.Id
+        };
+        _showTreatmentModal = true;
+    }
+
+    private async Task HandleCreateCampaign()
+    {
+        if (_campaignForm.EndDate <= _campaignForm.StartDate)
+        {
+            ToastService.ShowError("A data de término deve ser posterior à data de início da campanha.");
+            return;
+        }
+
+        _isSavingCampaign = true;
+        try
+        {
+            var command = new CreateVaccinationCampaignCommand(
+                _campaignForm.Name,
+                _campaignForm.Type,
+                DateTime.SpecifyKind(_campaignForm.StartDate, DateTimeKind.Utc),
+                DateTime.SpecifyKind(_campaignForm.EndDate, DateTimeKind.Utc),
+                _campaignForm.Description);
+
+            var result = await SanitaryApi.CreateCampaignAsync(command);
+            if (result != null)
+            {
+                ToastService.ShowSuccess("Campanha sanitária criada com sucesso!");
+                _showCampaignModal = false;
+                await LoadDataAsync();
+            }
+            else
+            {
+                ToastService.ShowError("Não foi possível criar a campanha. Verifique os dados e tente novamente.");
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Erro ao criar campanha: {ex.Message}");
+        }
+        finally
+        {
+            _isSavingCampaign = false;
+        }
+    }
+
+    private async Task HandleApplyTreatment()
+    {
+        if (_treatmentForm.TargetType == TreatmentTargetType.Animal && (!_treatmentForm.AnimalId.HasValue || _treatmentForm.AnimalId.Value == Guid.Empty))
+        {
+            ToastService.ShowError("Selecione um animal para aplicar o tratamento.");
+            return;
+        }
+
+        if (_treatmentForm.TargetType == TreatmentTargetType.Lot && (!_treatmentForm.LotId.HasValue || _treatmentForm.LotId.Value == Guid.Empty))
+        {
+            ToastService.ShowError("Selecione um lote para aplicar o tratamento.");
+            return;
+        }
+
+        _isSavingTreatment = true;
+        try
+        {
+            var animalId = _treatmentForm.TargetType == TreatmentTargetType.Animal ? _treatmentForm.AnimalId : null;
+            var lotId = _treatmentForm.TargetType == TreatmentTargetType.Lot ? _treatmentForm.LotId : null;
+
+            var command = new ApplyTreatmentCommand(
+                animalId,
+                lotId,
+                _treatmentForm.ProductCommercialName,
+                _treatmentForm.Type,
+                _treatmentForm.BatchNumber,
+                _treatmentForm.Dosage,
+                _treatmentForm.WithdrawalDays,
+                DateTime.SpecifyKind(_treatmentForm.ApplicationDate, DateTimeKind.Utc),
+                _treatmentForm.AppliedByVeterinarian,
+                _treatmentForm.Notes);
+
+            var result = await SanitaryApi.ApplyTreatmentAsync(command);
+            if (result != null)
+            {
+                ToastService.ShowSuccess("Tratamento registrado com sucesso!");
+                _showTreatmentModal = false;
+                await LoadDataAsync();
+            }
+            else
+            {
+                ToastService.ShowError("Não foi possível registrar o tratamento. Verifique os dados e tente novamente.");
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"Erro ao registrar tratamento: {ex.Message}");
+        }
+        finally
+        {
+            _isSavingTreatment = false;
+        }
+    }
+
+    public enum TreatmentTargetType
+    {
+        Animal,
+        Lot
+    }
+
+    public class CampaignFormModel
+    {
+        [Required(ErrorMessage = "O nome da campanha é obrigatório.")]
+        [StringLength(150, ErrorMessage = "O nome deve ter no máximo 150 caracteres.")]
+        public string Name { get; set; } = string.Empty;
+
+        public CampaignType Type { get; set; } = CampaignType.Aftosa;
+
+        [Required(ErrorMessage = "A data de início é obrigatória.")]
+        public DateTime StartDate { get; set; } = DateTime.Today;
+
+        [Required(ErrorMessage = "A data de término é obrigatória.")]
+        public DateTime EndDate { get; set; } = DateTime.Today.AddDays(30);
+
+        [StringLength(500, ErrorMessage = "A descrição deve ter no máximo 500 caracteres.")]
+        public string? Description { get; set; }
+    }
+
+    public class TreatmentFormModel
+    {
+        public TreatmentTargetType TargetType { get; set; } = TreatmentTargetType.Animal;
+
+        public Guid? AnimalId { get; set; }
+        public Guid? LotId { get; set; }
+
+        [Required(ErrorMessage = "O nome comercial do produto é obrigatório.")]
+        [StringLength(150, ErrorMessage = "O nome do produto deve ter no máximo 150 caracteres.")]
+        public string ProductCommercialName { get; set; } = string.Empty;
+
+        public TreatmentType Type { get; set; } = TreatmentType.Medication;
+
+        [StringLength(50, ErrorMessage = "O número do lote deve ter no máximo 50 caracteres.")]
+        public string? BatchNumber { get; set; }
+
+        [Required(ErrorMessage = "A dosagem é obrigatória.")]
+        [StringLength(50, ErrorMessage = "A dosagem deve ter no máximo 50 caracteres.")]
+        public string Dosage { get; set; } = string.Empty;
+
+        [Range(0, 365, ErrorMessage = "Os dias de carência devem ser entre 0 e 365.")]
+        public int WithdrawalDays { get; set; } = 0;
+
+        [Required(ErrorMessage = "A data de aplicação é obrigatória.")]
+        public DateTime ApplicationDate { get; set; } = DateTime.Today;
+
+        [StringLength(150, ErrorMessage = "O veterinário deve ter no máximo 150 caracteres.")]
+        public string? AppliedByVeterinarian { get; set; }
+
+        [StringLength(500, ErrorMessage = "As observações devem ter no máximo 500 caracteres.")]
+        public string? Notes { get; set; }
+    }
 }

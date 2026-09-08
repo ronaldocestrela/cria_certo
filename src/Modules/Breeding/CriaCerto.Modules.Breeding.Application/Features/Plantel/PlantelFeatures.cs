@@ -55,6 +55,9 @@ public sealed record GetCowQuery(Guid Id) : IQuery<CowDetailDto>;
 [RequiresModule("Breeding")]
 public sealed record ListCowsQuery(string? Search, ReproductiveStatus? Status, int Page = 1, int PageSize = 25) : IQuery<CattleListResponse<CowSummaryDto>>;
 
+[RequiresModule("Breeding")]
+public sealed record ListBullsQuery(Guid TenantId) : IQuery<List<BullSummaryDto>>;
+
 public sealed class CreateCowCommandValidator : AbstractValidator<CreateCowCommand>
 {
     public CreateCowCommandValidator()
@@ -239,6 +242,39 @@ public sealed class ListCowsQueryHandler : IRequestHandler<ListCowsQuery, Result
             .ToListAsync(cancellationToken);
 
         return Result.Success(new CattleListResponse<CowSummaryDto>(items, total, page, pageSize));
+    }
+}
+
+public sealed class ListBullsQueryHandler : IRequestHandler<ListBullsQuery, Result<List<BullSummaryDto>>>
+{
+    private readonly IBreedingDbContext _dbContext;
+
+    public ListBullsQueryHandler(IBreedingDbContext dbContext) => _dbContext = dbContext;
+
+    public async Task<Result<List<BullSummaryDto>>> Handle(ListBullsQuery request, CancellationToken cancellationToken)
+    {
+        var query = _dbContext.Cows.AsNoTracking().AsQueryable();
+
+        if (request.TenantId != Guid.Empty)
+        {
+            query = query.Where(c => c.TenantId == request.TenantId || c.TenantId == Guid.Empty);
+        }
+
+        var bulls = await query
+            .Where(c => (c.Category == "Reprodutor" || c.Category == "Touro") &&
+                        c.Status != ReproductiveStatus.Culled &&
+                        c.Status != ReproductiveStatus.Sold)
+            .OrderBy(c => c.EarTag)
+            .Select(c => new BullSummaryDto(
+                c.Id,
+                c.EarTag,
+                c.Nickname ?? c.EarTag,
+                c.Breed,
+                c.RegistryNumber,
+                true))
+            .ToListAsync(cancellationToken);
+
+        return Result.Success(bulls);
     }
 }
 

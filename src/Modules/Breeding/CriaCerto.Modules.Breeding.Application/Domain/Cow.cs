@@ -60,13 +60,17 @@ public class Cow
         if (bodyConditionScore.HasValue && (bodyConditionScore.Value < 1.0m || bodyConditionScore.Value > 5.0m))
             return Result.Failure<Cow>(Error.Validation("Cow.InvalidBcs", "O Escore de Condição Corporal (ECC) deve estar entre 1.0 e 5.0."));
 
+        var normalizedCategory = string.IsNullOrWhiteSpace(category) ? "Matriz" : category.Trim();
+        var isBull = string.Equals(normalizedCategory, "Reprodutor", StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(normalizedCategory, "Touro", StringComparison.OrdinalIgnoreCase);
+
         var cow = new Cow
         {
             Id = Guid.NewGuid(),
             EarTag = earTag.Trim(),
             Breed = breed.Trim(),
             BirthDate = birthDate,
-            Status = ReproductiveStatus.Open,
+            Status = isBull ? ReproductiveStatus.Active : ReproductiveStatus.Open,
             ParityCount = 0,
             LastCalvingDate = null,
             TenantId = tenantId,
@@ -81,7 +85,7 @@ public class Cow
             SireInfo = sireInfo?.Trim(),
             DamInfo = damInfo?.Trim(),
             BodyConditionScore = bodyConditionScore,
-            Category = string.IsNullOrWhiteSpace(category) ? "Matriz" : category.Trim()
+            Category = normalizedCategory
         };
 
         return Result.Success(cow);
@@ -133,13 +137,30 @@ public class Cow
         SireInfo = sireInfo?.Trim();
         DamInfo = damInfo?.Trim();
         BodyConditionScore = bodyConditionScore;
-        Category = string.IsNullOrWhiteSpace(category) ? "Matriz" : category.Trim();
+        var normalizedCategory = string.IsNullOrWhiteSpace(category) ? "Matriz" : category.Trim();
+        var isBull = string.Equals(normalizedCategory, "Reprodutor", StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(normalizedCategory, "Touro", StringComparison.OrdinalIgnoreCase);
+
+        if (isBull && Status == ReproductiveStatus.Open)
+        {
+            Status = ReproductiveStatus.Active;
+        }
+        else if (!isBull && Status == ReproductiveStatus.Active)
+        {
+            Status = ReproductiveStatus.Open;
+        }
+
+        Category = normalizedCategory;
 
         return Result.Success();
     }
 
     public Result StartIatfProtocol(Guid protocolId)
     {
+        if (string.Equals(Category, "Reprodutor", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(Category, "Touro", StringComparison.OrdinalIgnoreCase))
+            return Result.Failure(Error.Conflict("Cow.IsBull", "Animal é um reprodutor/touro e não entra em protocolo reprodutivo de matrizes."));
+
         if (Status == ReproductiveStatus.Pregnant)
             return Result.Failure(Error.Conflict("Cow.AlreadyPregnant", "Matriz já está confirmada prenhe. Não é possível iniciar IATF."));
 

@@ -18,6 +18,30 @@ public class IatfProtocolTests
         result.IsSuccess.Should().BeTrue();
         result.Value.Name.Should().Be("Protocolo IATF Primavera");
         result.Value.CowIds.Should().Contain(cowId);
+        result.Value.BullId.Should().BeNull();
+        result.Value.BullName.Should().BeNull();
+    }
+
+    [Fact]
+    public void Create_WithBull_ShouldSetBullIdAndBullName()
+    {
+        var cowId = Guid.NewGuid();
+        var bullId = Guid.NewGuid();
+        var bullName = "BR-01 - Touro Brutus (Nelore)";
+
+        var result = IatfProtocol.Create(
+            "Protocolo IATF Com Touro",
+            DateTime.UtcNow,
+            DateTime.UtcNow.AddDays(10),
+            Guid.NewGuid(),
+            new List<Guid> { cowId },
+            _tenantId,
+            bullId,
+            bullName);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.BullId.Should().Be(bullId);
+        result.Value.BullName.Should().Be(bullName);
     }
 }
 

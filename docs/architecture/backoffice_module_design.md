@@ -39,6 +39,20 @@ O módulo `Modules.Backoffice` é o núcleo administrativo isolado da plataforma
 * Conciliação financeira automática e assistida: quitação de fatura ou anistia com justificativa restaura o status do tenant de `PastDue` / `Suspended` para `Active`.
 * Ações auditadas: `Billing.PaymentRecorded`, `Billing.InvoiceRegularized`.
 
+## 4.4 Solicitações Administrativas e Princípio 4-Eyes (Sub-fase 4.3)
+* Entidade de domínio `AdminApprovalRequest` com ciclo de vida rigoroso (`Pending`, `Approved`, `Rejected`, `Executed`, `Cancelled`, `Expired`).
+* Salvaguarda estrita contra autoaprovação (`ApprovalErrors.CannotSelfApprove`) e expiração temporal automática (padrão 48h).
+* Execução atômica despachada pós-deliberação com visual diff de impacto (`DiffJson`).
+* Auditoria: `Approval.Requested`, `Approval.ApprovedAndExecuted`, `Approval.Rejected`, `Approval.Cancelled`.
+
+## 4.5 Auditoria Forense, Integridade Criptográfica e Retenção (Sub-fase 5.1)
+* Modelo estruturado `AuditLog`: ator (`AdminUserId`, `AdminUserEmail`, `ActorRole`), rede (`IpAddress`, `UserAgent`), alvo (`Resource`, `TargetTenantId`), categorização (`AuditCategory`), severidade (`AuditSeverity`) e mutação (`OldValuesJson`, `NewValuesJson`).
+* Integridade tamper-evident com hash canônico SHA-256 (`RecordHash`) e encadeamento sequencial (`PreviousRecordHash`).
+* Detecção em tempo real de adulteração em banco de dados (`VerifyIntegrity()`).
+* Política de retenção estratificada por criticidade com comando `ApplyAuditRetentionPolicyCommand` (suporte a `DryRun` e auditoria de execução):
+  * `Critical`: permanente/1825d (nunca expurgado); `High`: 1095d (arquivamento); `Medium`: 365d (arquivamento); `Low`: 90d (expurgo físico).
+* Console interativo `AuditExplorer.razor` com KPIs, filtros avançados, diff visual e exportação CSV.
+
 ## 5. Política de Segurança Default Deny
 Todas as requisições destinadas ao prefixo `/api/v1/backoffice/*` passam pelo middleware de segurança `BackofficeAccessMiddleware`.
 * Se o usuário não possuir credenciais autenticadas ou a claim/permissão administrativa correspondente, a requisição é bloqueada imediatamente com status `401 Unauthorized` ou `403 Forbidden`.

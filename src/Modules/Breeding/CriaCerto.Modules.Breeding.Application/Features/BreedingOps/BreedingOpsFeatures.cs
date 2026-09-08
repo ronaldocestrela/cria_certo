@@ -17,7 +17,8 @@ public sealed record RegisterIatfProtocolCommand(
     DateTime InseminationDate,
     Guid SemenBatchId,
     IReadOnlyList<Guid> CowIds,
-    Guid TenantId) : ICommand<IatfProtocolDto>;
+    Guid TenantId,
+    Guid? BullId = null) : ICommand<IatfProtocolDto>;
 
 [RequiresModule("Breeding")]
 public sealed record RegisterPregnancyDiagnosisCommand(
@@ -55,7 +56,32 @@ public sealed class RegisterIatfProtocolCommandHandler : IRequestHandler<Registe
 
     public async Task<Result<IatfProtocolDto>> Handle(RegisterIatfProtocolCommand request, CancellationToken cancellationToken)
     {
-        var protocolResult = IatfProtocol.Create(request.Name, request.StartDate, request.InseminationDate, request.SemenBatchId, request.CowIds.ToList(), request.TenantId);
+        string? bullName = null;
+        if (request.BullId.HasValue && request.BullId.Value != Guid.Empty)
+        {
+            var bull = await _dbContext.Cows
+                .AsNoTracking()
+                .FirstOrDefaultAsync(c => c.Id == request.BullId.Value &&
+                                          (request.TenantId == Guid.Empty || c.TenantId == request.TenantId || c.TenantId == Guid.Empty), cancellationToken);
+
+            if (bull is not null)
+            {
+                bullName = !string.IsNullOrWhiteSpace(bull.Nickname)
+                    ? $"{bull.EarTag} - {bull.Nickname} ({bull.Breed})"
+                    : $"{bull.EarTag} ({bull.Breed})";
+            }
+        }
+
+        var protocolResult = IatfProtocol.Create(
+            request.Name,
+            request.StartDate,
+            request.InseminationDate,
+            request.SemenBatchId,
+            request.CowIds.ToList(),
+            request.TenantId,
+            request.BullId,
+            bullName);
+
         if (protocolResult.IsFailure)
             return Result.Failure<IatfProtocolDto>(protocolResult.Error);
 
@@ -76,7 +102,9 @@ public sealed class RegisterIatfProtocolCommandHandler : IRequestHandler<Registe
             protocolResult.Value.StartDate,
             protocolResult.Value.InseminationDate,
             protocolResult.Value.SemenBatchId,
-            protocolResult.Value.CowIds.Count));
+            protocolResult.Value.CowIds.Count,
+            protocolResult.Value.BullId,
+            protocolResult.Value.BullName));
     }
 }
 
@@ -138,7 +166,9 @@ public sealed class GetIatfProtocolsQueryHandler : IRequestHandler<GetIatfProtoc
             p.StartDate,
             p.InseminationDate,
             p.SemenBatchId,
-            p.CowIds.Count)).ToList();
+            p.CowIds.Count,
+            p.BullId,
+            p.BullName)).ToList();
 
         return Result.Success(dtos);
     }

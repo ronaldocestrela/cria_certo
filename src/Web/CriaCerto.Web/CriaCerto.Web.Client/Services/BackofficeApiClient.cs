@@ -9,6 +9,13 @@ using CriaCerto.Modules.Backoffice.Application.Features.Plans.Commands;
 using CriaCerto.Modules.Backoffice.Application.Features.Plans.Queries;
 using CriaCerto.Modules.Backoffice.Application.Features.Impersonation.Dtos;
 using CriaCerto.Modules.Backoffice.Application.Features.Impersonation.Queries;
+using CriaCerto.Modules.Backoffice.Application.Features.Support.Dtos;
+using CriaCerto.Modules.Backoffice.Application.Domain.Entities;
+using CriaCerto.Modules.Backoffice.Application.Domain.Enums;
+using CriaCerto.Modules.Backoffice.Application.Features.Approvals.Dtos;
+using CriaCerto.Modules.Backoffice.Application.Features.Audit.Dtos;
+using CriaCerto.Modules.Backoffice.Application.Features.Observability.Dtos;
+using CriaCerto.Modules.Backoffice.Application.Features.Compliance.Dtos;
 using CriaCerto.Web.Client.Models;
 using Microsoft.JSInterop;
 
@@ -18,6 +25,21 @@ public interface IBackofficeApiClient
 {
     Task<BackofficeLoginResponse> LoginAsync(string email, string password, string? mfaCode = null, CancellationToken cancellationToken = default);
     Task<BackofficeDashboardKpisModel?> GetDashboardKpisAsync(CancellationToken cancellationToken = default);
+    Task<OperationalHealthDto?> GetOperationalHealthAsync(CancellationToken cancellationToken = default);
+    Task<PagedAlertsDto?> GetBackofficeAlertsAsync(
+        int pageNumber = 1,
+        int pageSize = 25,
+        AlertStatus? status = null,
+        AlertSeverity? severity = null,
+        string? searchTerm = null,
+        string? ruleCode = null,
+        DateTime? dateFromUtc = null,
+        DateTime? dateToUtc = null,
+        CancellationToken cancellationToken = default);
+    Task<BackofficeMetricsSummaryDto?> GetBackofficeMetricsSummaryAsync(CancellationToken cancellationToken = default);
+    Task<bool> AcknowledgeAlertAsync(Guid id, CancellationToken cancellationToken = default);
+    Task<bool> ResolveAlertAsync(Guid id, string resolutionNotes, CancellationToken cancellationToken = default);
+    Task<BackofficeAlertDto?> SimulateAlertAsync(SimulateAlertRequest request, CancellationToken cancellationToken = default);
     Task<PagedResult<AdminUserSummaryDto>?> GetAdminUsersAsync(string? searchTerm = null, bool? isActive = null, string? roleName = null, int page = 1, int pageSize = 20, CancellationToken cancellationToken = default);
     Task<AdminUserDetailDto?> GetAdminUserByIdAsync(Guid id, CancellationToken cancellationToken = default);
     Task<bool> CreateAdminUserAsync(string name, string email, string password, List<Guid> roleIds, CancellationToken cancellationToken = default);
@@ -78,6 +100,76 @@ public interface IBackofficeApiClient
     Task<bool> StopImpersonationAsync(Guid sessionId, string? reason = null, CancellationToken cancellationToken = default);
     Task<ImpersonationSessionDto?> GetActiveImpersonationAsync(CancellationToken cancellationToken = default);
     Task<PagedImpersonationAuditResult?> GetImpersonationHistoryAsync(Guid? tenantId = null, Guid? adminUserId = null, int page = 1, int pageSize = 20, CancellationToken cancellationToken = default);
+
+    // Support Workbench Methods
+    Task<TenantDiagnosticReportDto?> GetTenantDiagnosticsAsync(Guid tenantId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyCollection<SupportPlaybookDto>?> GetSupportPlaybooksAsync(CancellationToken cancellationToken = default);
+    Task<RemediationExecutionResult> ExecuteRemediationAsync(Guid tenantId, ExecuteRemediationRequest request, CancellationToken cancellationToken = default);
+
+    // 4-Eyes Administrative Approvals Methods
+    Task<PagedApprovalResult?> GetApprovalsAsync(
+        ApprovalRequestStatus? status = null,
+        ApprovalRequestType? requestType = null,
+        Guid? requestedByAdminUserId = null,
+        Guid? reviewerId = null,
+        int page = 1,
+        int pageSize = 20,
+        CancellationToken cancellationToken = default);
+
+    Task<AdminApprovalRequestDetailDto?> GetApprovalByIdAsync(Guid id, CancellationToken cancellationToken = default);
+    Task<PendingApprovalsCountDto?> GetPendingApprovalsCountAsync(CancellationToken cancellationToken = default);
+    Task<ApprovalActionResult> CreateApprovalRequestAsync(CreateApprovalRequestRequest request, CancellationToken cancellationToken = default);
+    Task<ApprovalActionResult> ApproveRequestAsync(Guid id, string? reviewNotes = null, CancellationToken cancellationToken = default);
+    Task<ApprovalActionResult> RejectRequestAsync(Guid id, string rejectionReason, CancellationToken cancellationToken = default);
+    Task<ApprovalActionResult> CancelRequestAsync(Guid id, string? cancelReason = null, CancellationToken cancellationToken = default);
+
+    // Forensic Audit & Retention Methods
+    Task<PagedAuditLogsDto?> GetAuditLogsAsync(
+        int pageNumber = 1,
+        int pageSize = 25,
+        string? searchTerm = null,
+        string? actorEmail = null,
+        Guid? targetTenantId = null,
+        string? action = null,
+        AuditCategory? category = null,
+        AuditSeverity? severity = null,
+        DateTime? dateFromUtc = null,
+        DateTime? dateToUtc = null,
+        bool includeArchived = false,
+        CancellationToken cancellationToken = default);
+
+    Task<AuditStatsDto?> GetAuditStatsAsync(CancellationToken cancellationToken = default);
+    Task<AuditTrailVerificationResultDto?> VerifyAuditTrailIntegrityAsync(int maxRecords = 500, CancellationToken cancellationToken = default);
+    Task<AuditLogDetailDto?> GetAuditLogByIdAsync(Guid id, CancellationToken cancellationToken = default);
+    Task<AuditRetentionExecutionResultDto?> ApplyAuditRetentionPolicyAsync(ApplyAuditRetentionRequest request, CancellationToken cancellationToken = default);
+
+    // Compliance & LGPD Data Governance Methods
+    Task<ComplianceOverviewDto?> GetComplianceOverviewAsync(CancellationToken cancellationToken = default);
+    Task<PagedAccessTrailDto?> GetAccessTrailAsync(
+        Guid? targetTenantId = null,
+        string? actorEmail = null,
+        string? eventType = null,
+        DateTime? dateFromUtc = null,
+        DateTime? dateToUtc = null,
+        int pageNumber = 1,
+        int pageSize = 25,
+        CancellationToken cancellationToken = default);
+    Task<RevealedDataResultDto?> RevealSensitiveDataAsync(RevealSensitiveDataRequest request, CancellationToken cancellationToken = default);
+    Task<ComplianceDossierExportDto?> ExportAccessTrailAsync(ExportAccessTrailRequest request, CancellationToken cancellationToken = default);
+}
+
+public sealed class ApprovalActionResult
+{
+    public AdminApprovalRequestDetailDto? Request { get; init; }
+    public string? ErrorMessage { get; init; }
+    public bool IsSuccess => Request is not null && string.IsNullOrWhiteSpace(ErrorMessage);
+}
+
+public sealed class RemediationExecutionResult
+{
+    public RemediationExecutionResultDto? Result { get; init; }
+    public string? ErrorMessage { get; init; }
+    public bool IsSuccess => Result is not null && string.IsNullOrWhiteSpace(ErrorMessage);
 }
 
 public sealed class ImpersonationResult
@@ -562,4 +654,339 @@ public class BackofficeApiClient : IBackofficeApiClient
 
         return await _httpClient.GetFromJsonAsync<PagedImpersonationAuditResult>(url, cancellationToken);
     }
+
+    public async Task<TenantDiagnosticReportDto?> GetTenantDiagnosticsAsync(Guid tenantId, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        return await _httpClient.GetFromJsonAsync<TenantDiagnosticReportDto>($"api/v1/backoffice/support/tenants/{tenantId}/diagnostics", cancellationToken);
+    }
+
+    public async Task<IReadOnlyCollection<SupportPlaybookDto>?> GetSupportPlaybooksAsync(CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        return await _httpClient.GetFromJsonAsync<IReadOnlyCollection<SupportPlaybookDto>>("api/v1/backoffice/support/playbooks", cancellationToken);
+    }
+
+    public async Task<RemediationExecutionResult> ExecuteRemediationAsync(Guid tenantId, ExecuteRemediationRequest request, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.PostAsJsonAsync($"api/v1/backoffice/support/tenants/{tenantId}/remediation", request, cancellationToken);
+        if (response.IsSuccessStatusCode)
+        {
+            var dto = await response.Content.ReadFromJsonAsync<RemediationExecutionResultDto>(cancellationToken: cancellationToken);
+            return new RemediationExecutionResult { Result = dto };
+        }
+
+        Error? error = null;
+        try
+        {
+            error = await response.Content.ReadFromJsonAsync<Error>(cancellationToken: cancellationToken);
+        }
+        catch
+        {
+            // Ignore parse failures
+        }
+
+        return new RemediationExecutionResult
+        {
+            ErrorMessage = error?.Message ?? "Não foi possível executar a ação remediativa de suporte."
+        };
+    }
+
+    public async Task<PagedApprovalResult?> GetApprovalsAsync(
+        ApprovalRequestStatus? status = null,
+        ApprovalRequestType? requestType = null,
+        Guid? requestedByAdminUserId = null,
+        Guid? reviewerId = null,
+        int page = 1,
+        int pageSize = 20,
+        CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var url = $"api/v1/backoffice/approvals?page={page}&pageSize={pageSize}";
+        if (status.HasValue) url += $"&status={status.Value}";
+        if (requestType.HasValue) url += $"&requestType={requestType.Value}";
+        if (requestedByAdminUserId.HasValue) url += $"&requestedByAdminUserId={requestedByAdminUserId.Value}";
+        if (reviewerId.HasValue) url += $"&reviewerId={reviewerId.Value}";
+
+        return await _httpClient.GetFromJsonAsync<PagedApprovalResult>(url, cancellationToken);
+    }
+
+    public async Task<AdminApprovalRequestDetailDto?> GetApprovalByIdAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        return await _httpClient.GetFromJsonAsync<AdminApprovalRequestDetailDto>($"api/v1/backoffice/approvals/{id}", cancellationToken);
+    }
+
+    public async Task<PendingApprovalsCountDto?> GetPendingApprovalsCountAsync(CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        return await _httpClient.GetFromJsonAsync<PendingApprovalsCountDto>("api/v1/backoffice/approvals/pending-count", cancellationToken);
+    }
+
+    public async Task<ApprovalActionResult> CreateApprovalRequestAsync(CreateApprovalRequestRequest request, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.PostAsJsonAsync("api/v1/backoffice/approvals", request, cancellationToken);
+        return await HandleApprovalResponseAsync(response, cancellationToken);
+    }
+
+    public async Task<ApprovalActionResult> ApproveRequestAsync(Guid id, string? reviewNotes = null, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.PostAsJsonAsync($"api/v1/backoffice/approvals/{id}/approve", new ApproveApprovalRequestRequest(reviewNotes), cancellationToken);
+        return await HandleApprovalResponseAsync(response, cancellationToken);
+    }
+
+    public async Task<ApprovalActionResult> RejectRequestAsync(Guid id, string rejectionReason, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.PostAsJsonAsync($"api/v1/backoffice/approvals/{id}/reject", new RejectApprovalRequestRequest(rejectionReason), cancellationToken);
+        return await HandleApprovalResponseAsync(response, cancellationToken);
+    }
+
+    public async Task<ApprovalActionResult> CancelRequestAsync(Guid id, string? cancelReason = null, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.PostAsJsonAsync($"api/v1/backoffice/approvals/{id}/cancel", new CancelApprovalRequestRequest(cancelReason), cancellationToken);
+        return await HandleApprovalResponseAsync(response, cancellationToken);
+    }
+
+    private static async Task<ApprovalActionResult> HandleApprovalResponseAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    {
+        if (response.IsSuccessStatusCode)
+        {
+            var dto = await response.Content.ReadFromJsonAsync<AdminApprovalRequestDetailDto>(cancellationToken: cancellationToken);
+            return new ApprovalActionResult { Request = dto };
+        }
+
+        Error? error = null;
+        try
+        {
+            error = await response.Content.ReadFromJsonAsync<Error>(cancellationToken: cancellationToken);
+        }
+        catch { }
+
+        return new ApprovalActionResult
+        {
+            ErrorMessage = error?.Message ?? "Falha na operação de aprovação administrativa."
+        };
+    }
+
+    public async Task<PagedAuditLogsDto?> GetAuditLogsAsync(
+        int pageNumber = 1,
+        int pageSize = 25,
+        string? searchTerm = null,
+        string? actorEmail = null,
+        Guid? targetTenantId = null,
+        string? action = null,
+        AuditCategory? category = null,
+        AuditSeverity? severity = null,
+        DateTime? dateFromUtc = null,
+        DateTime? dateToUtc = null,
+        bool includeArchived = false,
+        CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var queryParams = new List<string>
+        {
+            $"pageNumber={pageNumber}",
+            $"pageSize={pageSize}",
+            $"includeArchived={includeArchived}"
+        };
+
+        if (!string.IsNullOrWhiteSpace(searchTerm)) queryParams.Add($"searchTerm={Uri.EscapeDataString(searchTerm)}");
+        if (!string.IsNullOrWhiteSpace(actorEmail)) queryParams.Add($"actorEmail={Uri.EscapeDataString(actorEmail)}");
+        if (targetTenantId.HasValue) queryParams.Add($"targetTenantId={targetTenantId.Value}");
+        if (!string.IsNullOrWhiteSpace(action)) queryParams.Add($"action={Uri.EscapeDataString(action)}");
+        if (category.HasValue) queryParams.Add($"category={category.Value}");
+        if (severity.HasValue) queryParams.Add($"severity={severity.Value}");
+        if (dateFromUtc.HasValue) queryParams.Add($"dateFromUtc={Uri.EscapeDataString(dateFromUtc.Value.ToString("O"))}");
+        if (dateToUtc.HasValue) queryParams.Add($"dateToUtc={Uri.EscapeDataString(dateToUtc.Value.ToString("O"))}");
+
+        var url = $"api/v1/backoffice/audit?{string.Join("&", queryParams)}";
+        var response = await _httpClient.GetAsync(url, cancellationToken);
+        if (!response.IsSuccessStatusCode) return null;
+
+        return await response.Content.ReadFromJsonAsync<PagedAuditLogsDto>(cancellationToken: cancellationToken);
+    }
+
+    public async Task<AuditStatsDto?> GetAuditStatsAsync(CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.GetAsync("api/v1/backoffice/audit/stats", cancellationToken);
+        if (!response.IsSuccessStatusCode) return null;
+
+        return await response.Content.ReadFromJsonAsync<AuditStatsDto>(cancellationToken: cancellationToken);
+    }
+
+    public async Task<AuditTrailVerificationResultDto?> VerifyAuditTrailIntegrityAsync(int maxRecords = 500, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.GetAsync($"api/v1/backoffice/audit/verify?maxRecords={maxRecords}", cancellationToken);
+        if (!response.IsSuccessStatusCode) return null;
+
+        return await response.Content.ReadFromJsonAsync<AuditTrailVerificationResultDto>(cancellationToken: cancellationToken);
+    }
+
+    public async Task<AuditLogDetailDto?> GetAuditLogByIdAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.GetAsync($"api/v1/backoffice/audit/{id}", cancellationToken);
+        if (!response.IsSuccessStatusCode) return null;
+
+        return await response.Content.ReadFromJsonAsync<AuditLogDetailDto>(cancellationToken: cancellationToken);
+    }
+
+    public async Task<AuditRetentionExecutionResultDto?> ApplyAuditRetentionPolicyAsync(ApplyAuditRetentionRequest request, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.PostAsJsonAsync("api/v1/backoffice/audit/retention/apply", request, cancellationToken);
+        if (!response.IsSuccessStatusCode) return null;
+
+        return await response.Content.ReadFromJsonAsync<AuditRetentionExecutionResultDto>(cancellationToken: cancellationToken);
+    }
+
+    public async Task<OperationalHealthDto?> GetOperationalHealthAsync(CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.GetAsync("api/v1/backoffice/observability/health", cancellationToken);
+        if (!response.IsSuccessStatusCode) return null;
+
+        return await response.Content.ReadFromJsonAsync<OperationalHealthDto>(cancellationToken: cancellationToken);
+    }
+
+    public async Task<PagedAlertsDto?> GetBackofficeAlertsAsync(
+        int pageNumber = 1,
+        int pageSize = 25,
+        AlertStatus? status = null,
+        AlertSeverity? severity = null,
+        string? searchTerm = null,
+        string? ruleCode = null,
+        DateTime? dateFromUtc = null,
+        DateTime? dateToUtc = null,
+        CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var queryParams = new List<string>
+        {
+            $"pageNumber={pageNumber}",
+            $"pageSize={pageSize}"
+        };
+
+        if (status.HasValue) queryParams.Add($"status={status.Value}");
+        if (severity.HasValue) queryParams.Add($"severity={severity.Value}");
+        if (!string.IsNullOrWhiteSpace(searchTerm)) queryParams.Add($"searchTerm={Uri.EscapeDataString(searchTerm)}");
+        if (!string.IsNullOrWhiteSpace(ruleCode)) queryParams.Add($"ruleCode={Uri.EscapeDataString(ruleCode)}");
+        if (dateFromUtc.HasValue) queryParams.Add($"dateFromUtc={Uri.EscapeDataString(dateFromUtc.Value.ToString("O"))}");
+        if (dateToUtc.HasValue) queryParams.Add($"dateToUtc={Uri.EscapeDataString(dateToUtc.Value.ToString("O"))}");
+
+        var url = $"api/v1/backoffice/observability/alerts?{string.Join("&", queryParams)}";
+        var response = await _httpClient.GetAsync(url, cancellationToken);
+        if (!response.IsSuccessStatusCode) return null;
+
+        return await response.Content.ReadFromJsonAsync<PagedAlertsDto>(cancellationToken: cancellationToken);
+    }
+
+    public async Task<BackofficeMetricsSummaryDto?> GetBackofficeMetricsSummaryAsync(CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.GetAsync("api/v1/backoffice/observability/metrics", cancellationToken);
+        if (!response.IsSuccessStatusCode) return null;
+
+        return await response.Content.ReadFromJsonAsync<BackofficeMetricsSummaryDto>(cancellationToken: cancellationToken);
+    }
+
+    public async Task<bool> AcknowledgeAlertAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.PostAsync($"api/v1/backoffice/observability/alerts/{id}/acknowledge", null, cancellationToken);
+        return response.IsSuccessStatusCode;
+    }
+
+    public async Task<bool> ResolveAlertAsync(Guid id, string resolutionNotes, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var request = new ResolveAlertRequest(Guid.Empty, string.Empty, resolutionNotes);
+        var response = await _httpClient.PostAsJsonAsync($"api/v1/backoffice/observability/alerts/{id}/resolve", request, cancellationToken);
+        return response.IsSuccessStatusCode;
+    }
+
+    public async Task<BackofficeAlertDto?> SimulateAlertAsync(SimulateAlertRequest request, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.PostAsJsonAsync("api/v1/backoffice/observability/alerts/simulate", request, cancellationToken);
+        if (!response.IsSuccessStatusCode) return null;
+
+        return await response.Content.ReadFromJsonAsync<BackofficeAlertDto>(cancellationToken: cancellationToken);
+    }
+
+    public async Task<ComplianceOverviewDto?> GetComplianceOverviewAsync(CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.GetAsync("api/v1/backoffice/compliance/overview", cancellationToken);
+        if (!response.IsSuccessStatusCode) return null;
+        return await response.Content.ReadFromJsonAsync<ComplianceOverviewDto>(cancellationToken: cancellationToken);
+    }
+
+    public async Task<PagedAccessTrailDto?> GetAccessTrailAsync(
+        Guid? targetTenantId = null,
+        string? actorEmail = null,
+        string? eventType = null,
+        DateTime? dateFromUtc = null,
+        DateTime? dateToUtc = null,
+        int pageNumber = 1,
+        int pageSize = 25,
+        CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var qb = new List<string>
+        {
+            $"pageNumber={pageNumber}",
+            $"pageSize={pageSize}"
+        };
+
+        if (targetTenantId.HasValue) qb.Add($"targetTenantId={targetTenantId.Value}");
+        if (!string.IsNullOrWhiteSpace(actorEmail)) qb.Add($"actorEmail={Uri.EscapeDataString(actorEmail)}");
+        if (!string.IsNullOrWhiteSpace(eventType)) qb.Add($"eventType={Uri.EscapeDataString(eventType)}");
+        if (dateFromUtc.HasValue) qb.Add($"dateFromUtc={dateFromUtc.Value:O}");
+        if (dateToUtc.HasValue) qb.Add($"dateToUtc={dateToUtc.Value:O}");
+
+        var query = string.Join("&", qb);
+        var response = await _httpClient.GetAsync($"api/v1/backoffice/compliance/access-trail?{query}", cancellationToken);
+        if (!response.IsSuccessStatusCode) return null;
+        return await response.Content.ReadFromJsonAsync<PagedAccessTrailDto>(cancellationToken: cancellationToken);
+    }
+
+    public async Task<RevealedDataResultDto?> RevealSensitiveDataAsync(RevealSensitiveDataRequest request, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.PostAsJsonAsync("api/v1/backoffice/compliance/reveal-pii", request, cancellationToken);
+        if (!response.IsSuccessStatusCode) return null;
+        return await response.Content.ReadFromJsonAsync<RevealedDataResultDto>(cancellationToken: cancellationToken);
+    }
+
+    public async Task<ComplianceDossierExportDto?> ExportAccessTrailAsync(ExportAccessTrailRequest request, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var qb = new List<string>();
+        if (request.TargetTenantId.HasValue) qb.Add($"targetTenantId={request.TargetTenantId.Value}");
+        if (!string.IsNullOrWhiteSpace(request.ActorEmail)) qb.Add($"actorEmail={Uri.EscapeDataString(request.ActorEmail)}");
+        if (request.DateFromUtc.HasValue) qb.Add($"dateFromUtc={request.DateFromUtc.Value:O}");
+        if (request.DateToUtc.HasValue) qb.Add($"dateToUtc={request.DateToUtc.Value:O}");
+        if (!string.IsNullOrWhiteSpace(request.Purpose)) qb.Add($"purpose={Uri.EscapeDataString(request.Purpose)}");
+        if (!string.IsNullOrWhiteSpace(request.Format)) qb.Add($"format={Uri.EscapeDataString(request.Format)}");
+
+        var query = string.Join("&", qb);
+        var response = await _httpClient.GetAsync($"api/v1/backoffice/compliance/access-trail/export?{query}", cancellationToken);
+        if (!response.IsSuccessStatusCode) return null;
+
+        var content = await response.Content.ReadAsByteArrayAsync(cancellationToken);
+        var fileName = response.Content.Headers.ContentDisposition?.FileNameStar ?? response.Content.Headers.ContentDisposition?.FileName ?? "dossie-acesso-lgpd.csv";
+        fileName = fileName.Trim('\"');
+        var contentType = response.Content.Headers.ContentType?.ToString() ?? "text/csv";
+
+        return new ComplianceDossierExportDto(fileName, contentType, content, string.Empty, DateTime.UtcNow);
+    }
 }
+

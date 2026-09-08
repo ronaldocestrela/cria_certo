@@ -72,4 +72,6 @@ public sealed record IatfProtocolDto(
     DateTime StartDate,
     DateTime InseminationDate,
     Guid SemenBatchId,
-    int CowCount);
+    int CowCount,
+    Guid? BullId = null,
+    string? BullName = null);

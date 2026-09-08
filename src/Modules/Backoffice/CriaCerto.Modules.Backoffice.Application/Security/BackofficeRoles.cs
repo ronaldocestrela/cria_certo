@@ -23,7 +23,9 @@ public static class BackofficeRoles
             {
                 BackofficePermissions.TenantsRead,
                 BackofficePermissions.SubscriptionsRead,
-                BackofficePermissions.AuditRead
+                BackofficePermissions.AuditRead,
+                BackofficePermissions.SupportDiagnose,
+                BackofficePermissions.ObservabilityRead
             },
 
             SupportN2 => new[]
@@ -34,7 +36,13 @@ public static class BackofficeRoles
                 BackofficePermissions.SubscriptionsManage,
                 BackofficePermissions.AuditRead,
                 BackofficePermissions.ImpersonationStart,
-                BackofficePermissions.ImpersonationStop
+                BackofficePermissions.ImpersonationStop,
+                BackofficePermissions.SupportDiagnose,
+                BackofficePermissions.SupportRemediate,
+                BackofficePermissions.ApprovalsRequest,
+                BackofficePermissions.ObservabilityRead,
+                BackofficePermissions.ObservabilityManage,
+                BackofficePermissions.ComplianceRead
             },
 
             FinanceOps => new[]
@@ -44,7 +52,9 @@ public static class BackofficeRoles
                 BackofficePermissions.PlansWrite,
                 BackofficePermissions.PlansPublish,
                 BackofficePermissions.SubscriptionsRead,
-                BackofficePermissions.SubscriptionsManage
+                BackofficePermissions.SubscriptionsManage,
+                BackofficePermissions.ApprovalsRequest,
+                BackofficePermissions.ObservabilityRead
             },
 
             ReadOnlyAuditor => new[]
@@ -52,7 +62,10 @@ public static class BackofficeRoles
                 BackofficePermissions.TenantsRead,
                 BackofficePermissions.PlansRead,
                 BackofficePermissions.SubscriptionsRead,
-                BackofficePermissions.AuditRead
+                BackofficePermissions.AuditRead,
+                BackofficePermissions.ObservabilityRead,
+                BackofficePermissions.ComplianceRead,
+                BackofficePermissions.ComplianceExport
             },
 
             _ => Array.Empty<string>()
