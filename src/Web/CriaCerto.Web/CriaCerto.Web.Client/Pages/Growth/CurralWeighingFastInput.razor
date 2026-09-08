@@ -1,5 +1,9 @@
 @page "/growth/curral-weighing"
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
 @using CriaCerto.Web.Client.Components.Growth
+@using CriaCerto.Web.Client.Services
+@using CriaCerto.Web.Client.Models
+@inject PlantelApiClient PlantelApi
 @attribute [Authorize]
 
 <PageTitle>Manejo de Curral - Pesagem Rápida | CriaCerto</PageTitle>
@@ -36,11 +40,76 @@
                 </div>
                 <div class="card-body">
                     <div class="mb-3">
-                        <label class="form-label font-monospace fw-bold">Brinco / RFID / SISBOV *</label>
-                        <div class="input-group">
-                            <span class="input-group-text"><i class="bi bi-qr-code-scan"></i></span>
-                            <input type="text" class="form-control font-monospace text-uppercase" placeholder="Ex: BR-9802" @bind="currentTag" @bind:event="oninput" />
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <label class="form-label font-monospace fw-bold mb-0">Animal Cadastrado (Brinco / RFID) *</label>
+                            <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none text-success" @onclick="ToggleInputMode">
+                                @if (manualTagInput)
+                                {
+                                    <span class="small"><i class="bi bi-list-ul me-1"></i>Selecionar da lista</span>
+                                }
+                                else
+                                {
+                                    <span class="small"><i class="bi bi-pencil me-1"></i>Digitar manual</span>
+                                }
+                            </button>
                         </div>
+
+                        @if (manualTagInput)
+                        {
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-qr-code-scan"></i></span>
+                                <input type="text" class="form-control font-monospace text-uppercase" placeholder="Ex: BR-9802" @bind="currentTag" @bind:event="oninput" />
+                            </div>
+                            <small class="text-muted">Modo de digitação livre para animal não listado.</small>
+                        }
+                        else
+                        {
+                            @if (isLoadingAnimals)
+                            {
+                                <div class="d-flex align-items-center text-muted p-2 border rounded bg-light">
+                                    <span class="spinner-border spinner-border-sm text-success me-2" role="status"></span>
+                                    <span class="small">Carregando animais do plantel...</span>
+                                </div>
+                            }
+                            else if (availableAnimals.Count > 0)
+                            {
+                                <div class="input-group">
+                                    <span class="input-group-text"><i class="bi bi-tag-fill text-success"></i></span>
+                                    <select class="form-select font-monospace" @bind="currentTag">
+                                        <option value="">-- Selecione o Animal Cadastrado --</option>
+                                        @foreach (var animal in availableAnimals)
+                                        {
+                                            <option value="@animal.EarTag">
+                                                @animal.EarTag - @animal.Breed @(string.IsNullOrWhiteSpace(animal.Nickname) ? "" : $"({animal.Nickname})") [@animal.Category]
+                                            </option>
+                                        }
+                                    </select>
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center mt-1">
+                                    <small class="text-muted">@availableAnimals.Count animal(is) no plantel</small>
+                                    @if (!string.IsNullOrEmpty(currentTag))
+                                    {
+                                        var selected = availableAnimals.FirstOrDefault(a => a.EarTag == currentTag);
+                                        if (selected != null)
+                                        {
+                                            <span class="badge bg-success-subtle text-success border border-success">
+                                                @selected.Category | @selected.Breed
+                                            </span>
+                                        }
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="alert alert-warning py-2 px-3 small mb-0">
+                                    <i class="bi bi-exclamation-triangle me-1"></i>
+                                    @(loadAnimalsError ?? "Nenhum animal cadastrado encontrado no plantel.")
+                                    <button type="button" class="btn btn-sm btn-link p-0 ms-2 text-decoration-none fw-bold" @onclick="ToggleInputMode">
+                                        Digitar brinco manual
+                                    </button>
+                                </div>
+                            }
+                        }
                     </div>
 
                     <div class="row g-2 mb-3">
@@ -233,6 +302,43 @@
     private decimal currentWeight = 0.0m;
     private decimal currentYield = 50.0m;
     private string currentNotes = string.Empty;
+
+    private List<CowSummaryDto> availableAnimals = new();
+    private bool isLoadingAnimals = false;
+    private string? loadAnimalsError;
+    private bool manualTagInput = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadRegisteredAnimalsAsync();
+    }
+
+    private async Task LoadRegisteredAnimalsAsync()
+    {
+        isLoadingAnimals = true;
+        loadAnimalsError = null;
+        try
+        {
+            var response = await PlantelApi.ListCowsAsync(pageSize: 100);
+            if (response?.Items != null)
+            {
+                availableAnimals = response.Items;
+            }
+        }
+        catch (Exception)
+        {
+            loadAnimalsError = "Não foi possível carregar os animais do plantel.";
+        }
+        finally
+        {
+            isLoadingAnimals = false;
+        }
+    }
+
+    private void ToggleInputMode()
+    {
+        manualTagInput = !manualTagInput;
+    }
 
     private List<SessionWeighingItem> sessionWeighings = new();
     private List<GpdTrendChart.WeighingPointModel> chartPoints = new();

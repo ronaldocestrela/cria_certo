@@ -16,7 +16,12 @@ public sealed class PlantelApiClient
         _jsRuntime = jsRuntime;
     }
 
-    public async Task<CattleListResponse<CowSummaryDto>?> ListCowsAsync(string? search, ReproductiveStatus? status, CancellationToken cancellationToken = default)
+    public async Task<CattleListResponse<CowSummaryDto>?> ListCowsAsync(
+        string? search = null,
+        ReproductiveStatus? status = null,
+        int page = 1,
+        int pageSize = 25,
+        CancellationToken cancellationToken = default)
     {
         await AttachTokenAsync();
         var query = new List<string>();
@@ -28,6 +33,16 @@ public sealed class PlantelApiClient
         if (status.HasValue)
         {
             query.Add($"status={status.Value}");
+        }
+
+        if (page > 1)
+        {
+            query.Add($"page={page}");
+        }
+
+        if (pageSize != 25)
+        {
+            query.Add($"pageSize={pageSize}");
         }
 
         var url = "api/breeding/cows" + (query.Count > 0 ? "?" + string.Join('&', query) : string.Empty);

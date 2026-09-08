@@ -63,6 +63,8 @@ Supported Electronic Scale Export File Formats:
 
 ---
 
-## 4. Field Offline Capability
-* Pasture lot movements and curral weighings performed in remote paddocks are cached in client `IndexedDB` when network connection is unavailable and synchronized automatically when connectivity is re-established.
+## 4. Field Offline Capability & Curral Weighing UI
+* **Curral Weighing Fast Input (`/growth/curral-weighing`):** Permite entrada ágil de pesagem individual na balança. O operador seleciona o animal diretamente de um dropdown populado a partir do plantel de bovinos cadastrados (`Breeding / Plantel`), visualizando brinco, raça, categoria e apelido.
+* **Offline & Contingência:** Caso a conexão esteja indisponível ou ocorra entrada de animal não cadastrado previamente, a interface oferece alternância instantânea para modo de digitação livre de brinco/RFID.
+* **Cache & Sincronização:** Movimentações de lotes em pastagem e pesagens de curral realizadas em locais remotos são armazenadas em cache local no `IndexedDB` do cliente PWA quando não há conectividade com a rede, sendo sincronizadas em segundo plano assim que a conexão é restabelecida.
 
