@@ -73,10 +73,6 @@
     min-width: 0;
 }
 
-.mobile-tabs {
-    display: none;
-}
-
 @media (max-width: 880px) {
     .shell-page {
         grid-template-columns: 1fr;
@@ -87,43 +83,11 @@
     }
 
     .shell-main {
-        padding: 1rem 1rem 5.6rem;
+        padding: 1rem 1rem calc(5rem + env(safe-area-inset-bottom, 0px));
     }
 
     .shell-status {
         display: none;
-    }
-
-    .mobile-tabs {
-        position: fixed;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        z-index: 40;
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 0.35rem;
-        padding: 0.7rem;
-        border-top: 1px solid var(--cc-border);
-        backdrop-filter: blur(10px);
-        background: rgba(249, 251, 247, 0.9);
-    }
-
-    .mobile-tabs ::deep a {
-        text-align: center;
-        text-decoration: none;
-        border-radius: 0.9rem;
-        border: 1px solid transparent;
-        color: var(--cc-ink-muted);
-        font-weight: 600;
-        font-size: 0.86rem;
-        padding: 0.56rem 0.45rem;
-    }
-
-    .mobile-tabs ::deep a.active {
-        background: var(--cc-primary-soft);
-        border-color: var(--cc-primary-soft-border);
-        color: var(--cc-primary);
     }
 }
 

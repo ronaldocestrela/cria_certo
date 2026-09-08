@@ -1,0 +1,15 @@
+@using CriaCerto.Web.Client.Models
+
+<nav class="mobile-nav-bar" aria-label="Navegação Móvel Operacional">
+    <div class="mobile-nav-scroll">
+        @foreach (var item in NavigationCatalog.GetAllItems())
+        {
+            <NavLink class="mobile-nav-link" href="@item.Href" Match="@(item.MatchExact ? NavLinkMatch.All : NavLinkMatch.Prefix)" title="@item.Title" aria-label="@item.Title">
+                @if (!string.IsNullOrWhiteSpace(item.Icon))
+                {
+                    <span class="material-symbols-outlined mobile-nav-icon" aria-hidden="true">@item.Icon</span>
+                }
+            </NavLink>
+        }
+    </div>
+</nav>
