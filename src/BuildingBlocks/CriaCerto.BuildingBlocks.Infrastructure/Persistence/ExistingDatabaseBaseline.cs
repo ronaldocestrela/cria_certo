@@ -1,7 +1,10 @@
 using System.Data;
 using System.Data.Common;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Migrations.Operations;
 using Microsoft.Extensions.Logging;
 
 namespace CriaCerto.BuildingBlocks.Infrastructure.Persistence;
@@ -241,13 +244,98 @@ internal static class ExistingDatabaseBaseline
         CancellationToken cancellationToken)
     {
         var validated = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var expectedColumns = GetExpectedBaselineColumns(dbContext, module);
+
+        foreach (var (table, column, expectedStoreType, isNullable) in expectedColumns)
+        {
+            var schema = module.Schema;
+            if (!validated.Add($"{schema}.{table}.{column}"))
+            {
+                continue;
+            }
+
+            var actual = await GetColumnDefinitionAsync(
+                connection,
+                schema,
+                table,
+                column,
+                cancellationToken);
+
+            if (actual is null)
+            {
+                throw new InvalidOperationException(
+                    $"Cannot baseline {dbContext.GetType().Name}: missing column [{schema}].[{table}].[{column}].");
+            }
+
+            if ((expectedStoreType is not null && !StoreTypesMatch(expectedStoreType, actual.Value.StoreType))
+                || isNullable != actual.Value.IsNullable)
+            {
+                throw new InvalidOperationException(
+                    $"Cannot baseline {dbContext.GetType().Name}: column [{schema}].[{table}].[{column}] " +
+                    $"does not match the baseline migration model. Expected {expectedStoreType ?? "unknown"} " +
+                    $"{(isNullable ? "NULL" : "NOT NULL")}, found " +
+                    $"{actual.Value.StoreType} {(actual.Value.IsNullable ? "NULL" : "NOT NULL")}.");
+            }
+        }
+    }
+
+    internal static IReadOnlyList<(string Table, string Column, string? ExpectedStoreType, bool IsNullable)> GetExpectedBaselineColumns(
+        DbContext dbContext,
+        MigrationBaselineModule module)
+    {
+        var migrationsAssembly = dbContext.GetService<IMigrationsAssembly>();
+        if (migrationsAssembly.Migrations.TryGetValue(module.MigrationId, out var migrationType))
+        {
+            var activeProvider = dbContext.Database.ProviderName ?? "Microsoft.EntityFrameworkCore.SqlServer";
+            var migration = migrationsAssembly.CreateMigration(migrationType, activeProvider);
+            if (migration is not null)
+            {
+                var columns = new List<(string Table, string Column, string? ExpectedStoreType, bool IsNullable)>();
+                foreach (var operation in migration.UpOperations)
+                {
+                    if (operation is CreateTableOperation createTable)
+                    {
+                        var schema = createTable.Schema ?? dbContext.Model.GetDefaultSchema();
+                        if (!string.Equals(schema, module.Schema, StringComparison.OrdinalIgnoreCase))
+                        {
+                            continue;
+                        }
+
+                        foreach (var col in createTable.Columns)
+                        {
+                            columns.Add((createTable.Name, col.Name, col.ColumnType, col.IsNullable));
+                        }
+                    }
+                    else if (operation is AddColumnOperation addColumn)
+                    {
+                        var schema = addColumn.Schema ?? dbContext.Model.GetDefaultSchema();
+                        if (!string.Equals(schema, module.Schema, StringComparison.OrdinalIgnoreCase))
+                        {
+                            continue;
+                        }
+
+                        columns.Add((addColumn.Table, addColumn.Name, addColumn.ColumnType, addColumn.IsNullable));
+                    }
+                }
+
+                if (columns.Count > 0)
+                {
+                    return columns;
+                }
+            }
+        }
+
+        // Fallback: If migration operations cannot be loaded, inspect the model restricting to RequiredTables
+        var requiredTables = module.RequiredTables.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var fallbackColumns = new List<(string Table, string Column, string? ExpectedStoreType, bool IsNullable)>();
 
         foreach (var entityType in dbContext.Model.GetEntityTypes())
         {
             var table = entityType.GetTableName();
             var schema = entityType.GetSchema() ?? dbContext.Model.GetDefaultSchema();
             if (table is null
-                || !string.Equals(schema, module.Schema, StringComparison.OrdinalIgnoreCase))
+                || !string.Equals(schema, module.Schema, StringComparison.OrdinalIgnoreCase)
+                || !requiredTables.Contains(table))
             {
                 continue;
             }
@@ -256,37 +344,19 @@ internal static class ExistingDatabaseBaseline
             foreach (var property in entityType.GetProperties())
             {
                 var column = property.GetColumnName(storeObject);
-                if (column is null || !validated.Add($"{schema}.{table}.{column}"))
+                if (column is null)
                 {
                     continue;
                 }
 
                 var expectedStoreType = property.GetColumnType()
                     ?? property.GetRelationalTypeMapping().StoreType;
-                var actual = await GetColumnDefinitionAsync(
-                    connection,
-                    schema!,
-                    table,
-                    column,
-                    cancellationToken);
-
-                if (actual is null)
-                {
-                    throw new InvalidOperationException(
-                        $"Cannot baseline {dbContext.GetType().Name}: missing column [{schema}].[{table}].[{column}].");
-                }
-
-                if (!StoreTypesMatch(expectedStoreType, actual.Value.StoreType)
-                    || property.IsColumnNullable(storeObject) != actual.Value.IsNullable)
-                {
-                    throw new InvalidOperationException(
-                        $"Cannot baseline {dbContext.GetType().Name}: column [{schema}].[{table}].[{column}] " +
-                        $"does not match the EF model. Expected {expectedStoreType} " +
-                        $"{(property.IsColumnNullable(storeObject) ? "NULL" : "NOT NULL")}, found " +
-                        $"{actual.Value.StoreType} {(actual.Value.IsNullable ? "NULL" : "NOT NULL")}.");
-                }
+                var isNullable = property.IsColumnNullable(storeObject);
+                fallbackColumns.Add((table, column, expectedStoreType, isNullable));
             }
         }
+
+        return fallbackColumns;
     }
 
     private static async Task<(string StoreType, bool IsNullable)?> GetColumnDefinitionAsync(
