@@ -62,6 +62,7 @@ builder.Services.AddScoped<BreedingOpsApiClient>();
 builder.Services.AddScoped<GrowthApiClient>();
 builder.Services.AddScoped<NutritionApiClient>();
 builder.Services.AddScoped<CalvingApiClient>();
+builder.Services.AddScoped<SanitaryApiClient>();
 builder.Services.AddScoped<TenancyApiClient>();
 builder.Services.AddScoped<IBackofficeApiClient, BackofficeApiClient>();
 builder.Services.AddScoped<IBackofficePermissionService, BackofficePermissionService>();

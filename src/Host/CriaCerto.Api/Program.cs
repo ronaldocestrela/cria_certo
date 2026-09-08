@@ -1470,6 +1470,12 @@ sanitary.MapPost("/treatments", async (ApplyTreatmentCommand command, ISender se
     return ToHttpResult(result, StatusCodes.Status201Created);
 });
 
+sanitary.MapGet("/treatments", async (ISender sender, CancellationToken cancellationToken) =>
+{
+    var result = await sender.Send(new GetTreatmentsQuery(), cancellationToken);
+    return ToHttpResult(result);
+});
+
 sanitary.MapGet("/slaughter-validation/{animalId:guid}", async (Guid animalId, ISender sender) =>
 {
     var result = await sender.Send(new ValidateSlaughterEligibilityQuery(animalId));
