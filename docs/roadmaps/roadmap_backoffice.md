@@ -294,12 +294,28 @@ As entregas estão organizadas em **6 Fases Sequenciais**, cobrindo fundação d
   * 100% de sucesso na suíte de testes (282 testes aprovados no Backoffice, 23 testes no cliente Web, 7 testes de arquitetura de segurança, zero falhas).
   * Formalização arquitetural via ADR `0012-application-security-hardening-and-assisted-penetration-tests.md`.
 
-#### Sub-fase 6.2: Rollout por Ondas e Feature Flags [PLANEJADA]
-* **Operação:**
-  * Liberação progressiva do backoffice por grupos de usuários administrativos.
-  * Feature flags para módulos críticos (impersonação, publicação de planos, suspensões).
-* **Validação:**
-  * Critérios de rollback definidos por SLO de erro, latência e incidentes de autorização.
+#### Sub-fase 6.2: Rollout por Ondas e Feature Flags [CONCLUÍDA]
+* **Backend & Governança (.NET 10):**
+  * Entidade de domínio `FeatureFlag` com suporte a chave canônica, categorias, liberação progressiva por anéis (`Ring0_Canary`, `Ring1_EarlyAdopters`, `Ring2_GeneralAvailability`), percentuais (0% a 100%), whitelists de teste e regime de emergência (*Kill-Switch* / *Circuit Breaker*).
+  * Avaliador determinístico `FeatureFlagEvaluator` via hash criptográfico SHA-256 (`Key:AdminEmail % 100`), garantindo consistência percentual sem variações durante a navegação dos operadores.
+  * MediatR Pipeline Behavior declarativo `FeatureFlagEvaluationBehavior` com interceptação via atributo `[RequireFeatureFlag]`, abortando requisições não elegíveis com retorno estrito de `Result.Failure(FeatureFlagErrors)`.
+  * Proteção das 5 rotas/operações críticas da plataforma: impersonação (`backoffice.feature.impersonation`), publicação de planos (`backoffice.feature.plan_publishing`), suspensão de inquilinos (`backoffice.feature.tenant_suspension`), remediação operacional (`backoffice.feature.remediation_execution`) e desmascaramento LGPD (`backoffice.feature.compliance_unmasking`).
+  * Encadeamento compulsório de auditoria forense criptográfica SHA-256 em `AuditLog` para toggles, transições de anéis e acionamentos de Kill-Switch com severidade crítica.
+  * Seeder automático de produção e migração EF Core `AddFeatureFlagsAndRolloutGovernance` para sincronização com SQL Server.
+  * Endpoints RESTful em `/api/v1/backoffice/feature-flags/*` para consulta, toggle, configuração de onda, health de SLO e acionamento/restauração de Kill-Switch.
+* **Frontend (Blazor .NET 10):**
+  * Componente atômico reutilizável `FeatureFlagGuard.razor` com escuta reativa a eventos `OnFlagsChanged`.
+  * Badge visual `RolloutWaveBadge.razor` com categorização por cor e ícone para cada anel e estado de Kill-Switch.
+  * Modal administrativo `FeatureFlagRolloutModal.razor` para configuração de anéis, ajuste de percentual via slider, gestão de whitelist e acionamento/restauração de Kill-Switch com justificativa obrigatória.
+  * Console unificado de governança `RolloutManagement.razor` na rota `/backoffice/rollout` com KPI cards, painel de SLOs (taxa de erro e latência p95) e catálogo de flags com busca e ações imediatas.
+  * Integração de proteção com `FeatureFlagGuard` nas telas operacionais existentes (`SupportWorkbench.razor`, `TenantsManagement.razor` e `PlanCatalogManagement.razor`).
+  * Atualização da navegação `BackofficeNavMenu.razor` com o item "Rollout & Flags" protegido pela claim `rollout.read`.
+* **TDD & Validação:**
+  * Bateria de testes de domínio `FeatureFlagTests` cobrindo regras de validação, cálculo determinístico de hash, isolamento por anéis, whitelisting e invariantes de Kill-Switch.
+  * Testes de features e pipeline `FeatureFlagFeaturesTests` validando commands, queries, exigência de justificativa operacional, auditoria SHA-256 e intercepção no MediatR.
+  * Testes unitários do cliente Web `FeatureFlagClientServiceTests` cobrindo consumo de API, cache em memória e avaliação de elegibilidade por papéis operacionais.
+  * 100% de sucesso na suíte completa de testes da solução (640 testes aprovados, zero falhas, 310 no Backoffice, 39 no cliente Web e 5 em integração SQL Server).
+  * Formalização arquitetural via ADR `0013-wave-rollout-and-feature-flag-governance.md`.
 
 #### Sub-fase 6.3: Playbooks, Treinamento e Hand-off Operacional [PLANEJADA]
 * **Documentação & Operação:**

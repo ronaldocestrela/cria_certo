@@ -42,7 +42,8 @@ public static class BackofficeRoles
                 BackofficePermissions.ApprovalsRequest,
                 BackofficePermissions.ObservabilityRead,
                 BackofficePermissions.ObservabilityManage,
-                BackofficePermissions.ComplianceRead
+                BackofficePermissions.ComplianceRead,
+                BackofficePermissions.RolloutRead
             },
 
             FinanceOps => new[]
@@ -54,7 +55,8 @@ public static class BackofficeRoles
                 BackofficePermissions.SubscriptionsRead,
                 BackofficePermissions.SubscriptionsManage,
                 BackofficePermissions.ApprovalsRequest,
-                BackofficePermissions.ObservabilityRead
+                BackofficePermissions.ObservabilityRead,
+                BackofficePermissions.RolloutRead
             },
 
             ReadOnlyAuditor => new[]
@@ -65,7 +67,8 @@ public static class BackofficeRoles
                 BackofficePermissions.AuditRead,
                 BackofficePermissions.ObservabilityRead,
                 BackofficePermissions.ComplianceRead,
-                BackofficePermissions.ComplianceExport
+                BackofficePermissions.ComplianceExport,
+                BackofficePermissions.RolloutRead
             },
 
             _ => Array.Empty<string>()

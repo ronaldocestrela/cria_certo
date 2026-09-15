@@ -108,9 +108,18 @@
                     <div class="identity-actions">
                         <PermissionGuard Permission="@BackofficePermissions.ImpersonationStart">
                             <Authorized>
-                                <button class="btn btn-impersonate" @onclick="OpenImpersonationModal" title="Acessar com dupla salvaguarda">
-                                    🔑 Impersonar Tenant
-                                </button>
+                                <FeatureFlagGuard FlagKey="backoffice.feature.impersonation">
+                                    <ChildContent>
+                                        <button class="btn btn-impersonate" @onclick="OpenImpersonationModal" title="Acessar com dupla salvaguarda">
+                                            🔑 Impersonar Tenant
+                                        </button>
+                                    </ChildContent>
+                                    <Disabled>
+                                        <button class="btn btn-secondary opacity-50" disabled title="Funcionalidade suspensa pela governança de rollout/kill-switch">
+                                            🔒 Impersonação Indisponível
+                                        </button>
+                                    </Disabled>
+                                </FeatureFlagGuard>
                             </Authorized>
                         </PermissionGuard>
                         <button class="btn btn-refresh" @onclick="() => LoadDiagnostics(SelectedTenantId.Value)" title="Atualizar dados">

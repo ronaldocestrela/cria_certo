@@ -41,6 +41,11 @@ public static class BackofficePermissions
     public const string ComplianceExport = "compliance.export";
     public const string ComplianceUnmask = "compliance.unmask";
 
+    // Wave Rollout & Feature Flags
+    public const string RolloutRead = "rollout.read";
+    public const string RolloutManage = "rollout.manage";
+    public const string RolloutKillSwitch = "rollout.killswitch";
+
     // Scopes
     public const string ScopeGlobal = "Global";
     public const string ScopeTenant = "Tenant";
@@ -56,7 +61,8 @@ public static class BackofficePermissions
         ApprovalsRequest, ApprovalsReview,
         AuditRead, UsersAdminManage,
         ObservabilityRead, ObservabilityManage,
-        ComplianceRead, ComplianceExport, ComplianceUnmask
+        ComplianceRead, ComplianceExport, ComplianceUnmask,
+        RolloutRead, RolloutManage, RolloutKillSwitch
     };
 
     public static bool IsValidScope(string scope) =>

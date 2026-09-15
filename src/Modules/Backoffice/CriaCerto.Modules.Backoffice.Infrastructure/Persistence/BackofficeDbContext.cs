@@ -18,6 +18,7 @@ public class BackofficeDbContext : DbContext
     public DbSet<ImpersonationSession> ImpersonationSessions => Set<ImpersonationSession>();
     public DbSet<AdminApprovalRequest> AdminApprovalRequests => Set<AdminApprovalRequest>();
     public DbSet<BackofficeAlert> Alerts => Set<BackofficeAlert>();
+    public DbSet<FeatureFlag> FeatureFlags => Set<FeatureFlag>();
 
     public BackofficeDbContext(DbContextOptions<BackofficeDbContext> options)
         : base(options)
@@ -222,6 +223,32 @@ public class BackofficeDbContext : DbContext
             builder.HasIndex(a => a.Fingerprint);
             builder.HasIndex(a => a.LastTriggeredAtUtc);
             builder.HasIndex(a => a.RuleCode);
+        });
+
+        modelBuilder.Entity<FeatureFlag>(builder =>
+        {
+            builder.ToTable("FeatureFlags");
+            builder.HasKey(f => f.Id);
+            builder.Property(f => f.Key).IsRequired().HasMaxLength(150);
+            builder.Property(f => f.Name).IsRequired().HasMaxLength(200);
+            builder.Property(f => f.Description).HasMaxLength(1000);
+            builder.Property(f => f.Category).HasConversion<string>().IsRequired().HasMaxLength(50);
+            builder.Property(f => f.MaxAllowedRing).HasConversion<string>().IsRequired().HasMaxLength(50);
+            builder.Property(f => f.IsEnabled).IsRequired();
+            builder.Property(f => f.RolloutPercentage).IsRequired();
+            builder.Property(f => f.AllowedRolesJson).IsRequired();
+            builder.Property(f => f.WhitelistedAdminEmailsJson).IsRequired();
+            builder.Property(f => f.BlacklistedAdminEmailsJson).IsRequired();
+            builder.Property(f => f.KillSwitchActive).IsRequired();
+            builder.Property(f => f.KillSwitchReason).HasMaxLength(1000);
+            builder.Property(f => f.KillSwitchActivatedBy).HasMaxLength(200);
+            builder.Property(f => f.CreatedBy).IsRequired().HasMaxLength(200);
+            builder.Property(f => f.UpdatedBy).HasMaxLength(200);
+            builder.Property(f => f.LastToggledReason).HasMaxLength(1000);
+            builder.HasIndex(f => f.Key).IsUnique();
+            builder.HasIndex(f => f.Category);
+            builder.HasIndex(f => f.IsEnabled);
+            builder.HasIndex(f => f.KillSwitchActive);
         });
     }
 }

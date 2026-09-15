@@ -7,11 +7,13 @@ using CriaCerto.Modules.Backoffice.Application.Domain.Services;
 using CriaCerto.Modules.Backoffice.Application.Features.Compliance.Dtos;
 using CriaCerto.Modules.Tenancy.Application.Contracts;
 using CriaCerto.Modules.Tenancy.Application.Features.BackofficeTenants;
+using CriaCerto.Modules.Backoffice.Application.Security;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
 namespace CriaCerto.Modules.Backoffice.Application.Features.Compliance.Commands;
 
+[RequireFeatureFlag("backoffice.feature.compliance_unmasking")]
 public record RevealSensitiveDataCommand(
     Guid ActorId,
     string ActorEmail,
@@ -19,7 +21,7 @@ public record RevealSensitiveDataCommand(
     string IpAddress,
     string? UserAgent,
     RevealSensitiveDataRequest Request
-) : IRequest<Result<RevealedDataResultDto>>;
+) : IRequest<Result<RevealedDataResultDto>>, IBackofficeActorRequest;
 
 public class RevealSensitiveDataCommandHandler : IRequestHandler<RevealSensitiveDataCommand, Result<RevealedDataResultDto>>
 {

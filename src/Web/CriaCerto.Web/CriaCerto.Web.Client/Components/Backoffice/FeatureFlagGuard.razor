@@ -1,0 +1,70 @@
+@using CriaCerto.Web.Client.Services
+@inject IFeatureFlagClientService FeatureFlagService
+@implements IDisposable
+
+@if (_isEnabled)
+{
+    if (Enabled is not null)
+    {
+        @Enabled
+    }
+    else if (ChildContent is not null)
+    {
+        @ChildContent
+    }
+}
+else if (Disabled is not null)
+{
+    @Disabled
+}
+
+@code {
+    [Parameter]
+    public string FlagKey { get; set; } = string.Empty;
+
+    [Parameter]
+    public RenderFragment? Enabled { get; set; }
+
+    [Parameter]
+    public RenderFragment? Disabled { get; set; }
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    private bool _isEnabled = true;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await EvaluateFlagAsync();
+    }
+
+    protected override void OnInitialized()
+    {
+        FeatureFlagService.OnFlagsChanged += HandleFlagsChanged;
+    }
+
+    private async void HandleFlagsChanged()
+    {
+        await InvokeAsync(async () =>
+        {
+            await EvaluateFlagAsync();
+            StateHasChanged();
+        });
+    }
+
+    private async Task EvaluateFlagAsync()
+    {
+        if (string.IsNullOrWhiteSpace(FlagKey))
+        {
+            _isEnabled = true;
+            return;
+        }
+
+        _isEnabled = await FeatureFlagService.IsFeatureEnabledAsync(FlagKey);
+    }
+
+    public void Dispose()
+    {
+        FeatureFlagService.OnFlagsChanged -= HandleFlagsChanged;
+    }
+}

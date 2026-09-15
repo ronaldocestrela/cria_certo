@@ -2,18 +2,25 @@ using CriaCerto.BuildingBlocks.Abstractions.Results;
 using CriaCerto.Modules.Backoffice.Application.Domain.Entities;
 using CriaCerto.Modules.Backoffice.Application.Domain.Errors;
 using CriaCerto.Modules.Backoffice.Application.Features.Plans.Dtos;
+using CriaCerto.Modules.Backoffice.Application.Security;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
 namespace CriaCerto.Modules.Backoffice.Application.Features.Plans.Commands;
 
+[RequireFeatureFlag("backoffice.feature.plan_publishing")]
 public record PublishPlanVersionCommand(
     Guid VersionId,
     string? ApprovalNotes,
     Guid PerformedByAdminUserId,
     string PerformedByAdminEmail,
     string IpAddress
-) : IRequest<Result<PlanVersionDto>>;
+) : IRequest<Result<PlanVersionDto>>, IBackofficeActorRequest
+{
+    public Guid ActorId => PerformedByAdminUserId;
+    public string ActorEmail => PerformedByAdminEmail;
+    public string? ActorRole => null;
+}
 
 public sealed class PublishPlanVersionCommandHandler : IRequestHandler<PublishPlanVersionCommand, Result<PlanVersionDto>>
 {

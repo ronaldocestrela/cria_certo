@@ -1,0 +1,49 @@
+<span class="badge @BadgeClass d-inline-flex align-items-center gap-1">
+    <i class="@IconClass"></i>
+    <span>@RingLabel</span>
+    @if (Percentage < 100 && !KillSwitchActive)
+    {
+        <span class="opacity-75">(@Percentage%)</span>
+    }
+</span>
+
+@code {
+    [Parameter]
+    public string MaxAllowedRing { get; set; } = string.Empty;
+
+    [Parameter]
+    public int Percentage { get; set; } = 100;
+
+    [Parameter]
+    public bool KillSwitchActive { get; set; } = false;
+
+    private string BadgeClass => KillSwitchActive
+        ? "bg-danger text-white"
+        : MaxAllowedRing switch
+        {
+            var r when r.Contains("Ring0", StringComparison.OrdinalIgnoreCase) => "bg-warning text-dark border border-warning",
+            var r when r.Contains("Ring1", StringComparison.OrdinalIgnoreCase) => "bg-info text-dark border border-info",
+            var r when r.Contains("Ring2", StringComparison.OrdinalIgnoreCase) => "bg-success text-white",
+            _ => "bg-secondary text-white"
+        };
+
+    private string IconClass => KillSwitchActive
+        ? "bi bi-exclamation-octagon-fill"
+        : MaxAllowedRing switch
+        {
+            var r when r.Contains("Ring0", StringComparison.OrdinalIgnoreCase) => "bi bi-radioactive",
+            var r when r.Contains("Ring1", StringComparison.OrdinalIgnoreCase) => "bi bi-shield-shaded",
+            var r when r.Contains("Ring2", StringComparison.OrdinalIgnoreCase) => "bi bi-check-circle-fill",
+            _ => "bi bi-flag"
+        };
+
+    private string RingLabel => KillSwitchActive
+        ? "KILL-SWITCH ATIVO"
+        : MaxAllowedRing switch
+        {
+            var r when r.Contains("Ring0", StringComparison.OrdinalIgnoreCase) => "Ring 0 (Canary/Core)",
+            var r when r.Contains("Ring1", StringComparison.OrdinalIgnoreCase) => "Ring 1 (Early Adopters)",
+            var r when r.Contains("Ring2", StringComparison.OrdinalIgnoreCase) => "Ring 2 (Disponibilidade Geral)",
+            _ => MaxAllowedRing
+        };
+}

@@ -4,12 +4,14 @@ using CriaCerto.BuildingBlocks.Abstractions.Results;
 using CriaCerto.Modules.Backoffice.Application.Domain.Entities;
 using CriaCerto.Modules.Backoffice.Application.Domain.Errors;
 using CriaCerto.Modules.Backoffice.Application.Features.Support.Dtos;
+using CriaCerto.Modules.Backoffice.Application.Security;
 using CriaCerto.Modules.Tenancy.Application.Features.BackofficeTenants;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
 namespace CriaCerto.Modules.Backoffice.Application.Features.Support.Commands;
 
+[RequireFeatureFlag("backoffice.feature.remediation_execution")]
 public record ExecuteTenantRemediationCommand(
     Guid TenantId,
     string ActionType,
@@ -18,7 +20,12 @@ public record ExecuteTenantRemediationCommand(
     Guid AdminUserId,
     string AdminUserEmail,
     string IpAddress
-) : IRequest<Result<RemediationExecutionResultDto>>;
+) : IRequest<Result<RemediationExecutionResultDto>>, IBackofficeActorRequest
+{
+    public Guid ActorId => AdminUserId;
+    public string ActorEmail => AdminUserEmail;
+    public string? ActorRole => null;
+}
 
 public sealed class ExecuteTenantRemediationCommandHandler
     : IRequestHandler<ExecuteTenantRemediationCommand, Result<RemediationExecutionResultDto>>

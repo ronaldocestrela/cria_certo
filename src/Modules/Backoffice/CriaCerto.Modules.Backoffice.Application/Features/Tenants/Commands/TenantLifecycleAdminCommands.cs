@@ -2,19 +2,26 @@ using CriaCerto.BuildingBlocks.Abstractions.Results;
 using CriaCerto.Modules.Backoffice.Application.Domain.Entities;
 using CriaCerto.Modules.Backoffice.Application.Features.Tenants;
 using CriaCerto.Modules.Backoffice.Application.Features.Tenants.Dtos;
+using CriaCerto.Modules.Backoffice.Application.Security;
 using CriaCerto.Modules.Tenancy.Application.Features.BackofficeTenants;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
 namespace CriaCerto.Modules.Backoffice.Application.Features.Tenants.Commands;
 
+[RequireFeatureFlag("backoffice.feature.tenant_suspension")]
 public record SuspendTenantAdminCommand(
     Guid TenantId,
     string Reason,
     Guid PerformedByAdminUserId,
     string PerformedByAdminEmail,
     string IpAddress
-) : IRequest<Result<TenantAdminDetailDto>>;
+) : IRequest<Result<TenantAdminDetailDto>>, IBackofficeActorRequest
+{
+    public Guid ActorId => PerformedByAdminUserId;
+    public string ActorEmail => PerformedByAdminEmail;
+    public string? ActorRole => null;
+}
 
 public record ReactivateTenantAdminCommand(
     Guid TenantId,

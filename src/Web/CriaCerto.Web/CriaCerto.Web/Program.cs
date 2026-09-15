@@ -69,6 +69,7 @@ builder.Services.AddScoped<IBackofficePermissionService, BackofficePermissionSer
 builder.Services.AddScoped<IImpersonationStateService, ImpersonationStateService>();
 builder.Services.AddScoped<IOfflineSyncService, OfflineSyncService>();
 builder.Services.AddScoped<IToastService, ToastService>();
+builder.Services.AddScoped<IFeatureFlagClientService, FeatureFlagClientService>();
 
 var app = builder.Build();
 

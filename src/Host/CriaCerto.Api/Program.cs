@@ -98,6 +98,9 @@ using CriaCerto.Modules.Backoffice.Application.Features.Observability.Dtos;
 using CriaCerto.Modules.Backoffice.Application.Features.Compliance.Commands;
 using CriaCerto.Modules.Backoffice.Application.Features.Compliance.Queries;
 using CriaCerto.Modules.Backoffice.Application.Features.Compliance.Dtos;
+using CriaCerto.Modules.Backoffice.Application.Features.Rollout.Commands;
+using CriaCerto.Modules.Backoffice.Application.Features.Rollout.Queries;
+using CriaCerto.Modules.Backoffice.Application.Features.Rollout.Dtos;
 using CriaCerto.Modules.Backoffice.Application.Security;
 using CriaCerto.Modules.Backoffice.Infrastructure;
 using CriaCerto.Modules.Backoffice.Infrastructure.Persistence;
@@ -1035,6 +1038,109 @@ backoffice.MapPost("/compliance/reveal-pii", async (RevealSensitiveDataRequest r
     var result = await sender.Send(command);
     return ToHttpResult(result);
 }).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ComplianceUnmask)).WithTags("Backoffice Compliance");
+
+// Backoffice Wave Rollout & Feature Flags Endpoints
+backoffice.MapGet("/feature-flags", async (ISender sender) =>
+{
+    var result = await sender.Send(new GetFeatureFlagsQuery());
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.RolloutRead)).WithTags("Backoffice Rollout");
+
+backoffice.MapGet("/feature-flags/{key}", async (string key, ISender sender) =>
+{
+    var result = await sender.Send(new GetFeatureFlagByKeyQuery(key));
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.RolloutRead)).WithTags("Backoffice Rollout");
+
+backoffice.MapGet("/feature-flags/slo-health", async (ISender sender) =>
+{
+    var result = await sender.Send(new GetRolloutSloHealthQuery());
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.RolloutRead)).WithTags("Backoffice Rollout");
+
+backoffice.MapPost("/feature-flags/{key}/toggle", async (string key, ToggleFeatureFlagRequest req, HttpContext ctx, ISender sender) =>
+{
+    var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var userAgent = ctx.Request.Headers.UserAgent.ToString();
+    var role = ctx.User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value ?? "Admin";
+
+    var command = new ToggleFeatureFlagCommand(
+        key,
+        req.IsEnabled,
+        req.Reason ?? "Alteração de estado operacional",
+        callerId,
+        callerEmail,
+        role,
+        ip,
+        userAgent
+    );
+
+    var result = await sender.Send(command);
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.RolloutManage)).WithTags("Backoffice Rollout");
+
+backoffice.MapPut("/feature-flags/{key}/rollout", async (string key, UpdateRolloutWaveRequest req, HttpContext ctx, ISender sender) =>
+{
+    var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var userAgent = ctx.Request.Headers.UserAgent.ToString();
+    var role = ctx.User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value ?? "Admin";
+
+    var command = new UpdateRolloutWaveCommand(
+        key,
+        req.Percentage,
+        req.MaxAllowedRing,
+        req.WhitelistedEmails,
+        req.Reason ?? "Atualização da onda de liberação",
+        callerId,
+        callerEmail,
+        role,
+        ip,
+        userAgent
+    );
+
+    var result = await sender.Send(command);
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.RolloutManage)).WithTags("Backoffice Rollout");
+
+backoffice.MapPost("/feature-flags/{key}/kill-switch", async (string key, TriggerKillSwitchRequest req, HttpContext ctx, ISender sender) =>
+{
+    var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var userAgent = ctx.Request.Headers.UserAgent.ToString();
+    var role = ctx.User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value ?? "Admin";
+
+    var command = new TriggerKillSwitchCommand(
+        key,
+        req.Reason,
+        callerId,
+        callerEmail,
+        role,
+        ip,
+        userAgent
+    );
+
+    var result = await sender.Send(command);
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.RolloutKillSwitch)).WithTags("Backoffice Rollout");
+
+backoffice.MapPost("/feature-flags/{key}/restore", async (string key, RestoreKillSwitchRequest req, HttpContext ctx, ISender sender) =>
+{
+    var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var userAgent = ctx.Request.Headers.UserAgent.ToString();
+    var role = ctx.User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value ?? "Admin";
+
+    var command = new DeactivateKillSwitchCommand(
+        key,
+        req.Reason,
+        callerId,
+        callerEmail,
+        role,
+        ip,
+        userAgent
+    );
+
+    var result = await sender.Send(command);
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.RolloutManage)).WithTags("Backoffice Rollout");
 
 // Backoffice Auth Endpoints (Anonymous / Credentials + MFA)
 app.MapPost("/api/v1/backoffice/auth/login", async (BackofficeLoginRequest req, HttpContext ctx, ISender sender) =>

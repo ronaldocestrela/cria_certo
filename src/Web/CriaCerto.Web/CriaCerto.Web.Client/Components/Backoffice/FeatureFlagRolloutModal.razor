@@ -1,0 +1,263 @@
+@using CriaCerto.Web.Client.Models
+@using CriaCerto.Web.Client.Services
+@inject IFeatureFlagClientService FeatureFlagService
+@inject IToastService ToastService
+
+@if (IsOpen && Flag is not null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.65); backdrop-filter: blur(3px); z-index: 1055;">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content shadow-lg border-0">
+                <div class="modal-header @(Flag.KillSwitchActive ? "bg-danger text-white" : "bg-dark text-white")">
+                    <h5 class="modal-title d-flex align-items-center gap-2">
+                        <i class="bi @(Flag.KillSwitchActive ? "bi-exclamation-triangle-fill" : "bi-sliders2")"></i>
+                        <span>Governança de Rollout: <strong>@Flag.Name</strong></span>
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CloseModal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="alert alert-secondary d-flex justify-content-between align-items-center mb-4">
+                        <div>
+                            <span class="text-muted small d-block">Chave Canônica:</span>
+                            <code class="fs-6 fw-bold">@Flag.Key</code>
+                        </div>
+                        <div>
+                            <span class="text-muted small d-block">Categoria:</span>
+                            <span class="badge bg-secondary">@Flag.Category</span>
+                        </div>
+                    </div>
+
+                    @if (Flag.KillSwitchActive)
+                    {
+                        <div class="alert alert-danger mb-4">
+                            <h6 class="fw-bold d-flex align-items-center gap-2">
+                                <i class="bi bi-shield-x"></i> REGIME DE EMERGÊNCIA ATIVO (KILL-SWITCH)
+                            </h6>
+                            <p class="mb-1 small">Esta funcionalidade está completamente interrompida para todos os usuários.</p>
+                            <p class="mb-1 small"><strong>Motivo do Corte:</strong> @Flag.KillSwitchReason</p>
+                            <p class="mb-0 small text-muted">Acionado por: @Flag.KillSwitchActivatedBy em @Flag.KillSwitchActivatedAtUtc?.ToString("dd/MM/yyyy HH:mm:ss") UTC</p>
+                        </div>
+                    }
+
+                    <div class="card mb-4 border">
+                        <div class="card-header bg-light fw-bold text-dark">
+                            <i class="bi bi-bezier2 me-1"></i> Configuração da Onda de Liberação (Wave Rollout)
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">Anel Máximo Permitido (Target Ring):</label>
+                                <select class="form-select" @bind="_selectedRing" disabled="@Flag.KillSwitchActive">
+                                    <option value="0">Ring 0 - Canary / Core Ops (Apenas PlatformOwner)</option>
+                                    <option value="1">Ring 1 - Early Adopters (SupportN2 e FinanceOps)</option>
+                                    <option value="2">Ring 2 - General Availability (Todos os Operadores Autorizados)</option>
+                                </select>
+                                <div class="form-text">Define o grupo de papéis administrativos elegível para esta funcionalidade.</div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label fw-bold d-flex justify-content-between">
+                                    <span>Percentual de Usuários (Deterministic Rollout):</span>
+                                    <span class="badge bg-primary fs-6">@_percentage%</span>
+                                </label>
+                                <input type="range" class="form-range" min="0" max="100" step="5" @bind="_percentage" @bind:event="oninput" disabled="@Flag.KillSwitchActive" />
+                                <div class="form-text">Distribuição por hashing determinístico dos operadores dentro do anel selecionado.</div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">Whitelist de Operadores para Teste (Emails separados por vírgula):</label>
+                                <input type="text" class="form-control" @bind="_whitelistedEmailsText" placeholder="ex: dev@criacerto.com.br, qa@criacerto.com.br" disabled="@Flag.KillSwitchActive" />
+                                <div class="form-text">Usuários na lista têm acesso liberado independentemente do percentual ou anel.</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold text-dark">
+                            <i class="bi bi-shield-check text-success me-1"></i> Justificativa Operacional (Obrigatório para Auditoria Forense):
+                        </label>
+                        <textarea class="form-control" rows="2" @bind="_justification" placeholder="Descreva o motivo operacional ou autorização de governança (mínimo 10 caracteres)..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light d-flex justify-content-between">
+                    <div>
+                        @if (Flag.KillSwitchActive)
+                        {
+                            <button type="button" class="btn btn-outline-success" @onclick="RestoreKillSwitchAsync" disabled="@_isSubmitting">
+                                <i class="bi bi-arrow-counterclockwise me-1"></i> Restaurar Operação Normal
+                            </button>
+                        }
+                        else
+                        {
+                            <button type="button" class="btn btn-outline-danger" @onclick="TriggerKillSwitchAsync" disabled="@_isSubmitting">
+                                <i class="bi bi-exclamation-octagon-fill me-1"></i> Disparar Kill-Switch (Corte Emergencial)
+                            </button>
+                        }
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-secondary" @onclick="CloseModal" disabled="@_isSubmitting">Cancelar</button>
+                        <button type="button" class="btn btn-primary" @onclick="SaveRolloutWaveAsync" disabled="@(_isSubmitting || Flag.KillSwitchActive)">
+                            @if (_isSubmitting)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1"></span>
+                                <span>Salvando...</span>
+                            }
+                            else
+                            {
+                                <i class="bi bi-check-circle-fill me-1"></i>
+                                <span>Aplicar Configuração</span>
+                            }
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public bool IsOpen { get; set; }
+
+    [Parameter]
+    public FeatureFlagClientDto? Flag { get; set; }
+
+    [Parameter]
+    public EventCallback OnSaved { get; set; }
+
+    [Parameter]
+    public EventCallback OnClosed { get; set; }
+
+    private int _selectedRing = 1;
+    private int _percentage = 100;
+    private string _whitelistedEmailsText = string.Empty;
+    private string _justification = string.Empty;
+    private bool _isSubmitting = false;
+
+    protected override void OnParametersSet()
+    {
+        if (Flag is not null)
+        {
+            _percentage = Flag.RolloutPercentage;
+            _selectedRing = Flag.MaxAllowedRing switch
+            {
+                var r when r.Contains("Ring0", StringComparison.OrdinalIgnoreCase) => 0,
+                var r when r.Contains("Ring1", StringComparison.OrdinalIgnoreCase) => 1,
+                var r when r.Contains("Ring2", StringComparison.OrdinalIgnoreCase) => 2,
+                _ => 1
+            };
+            _whitelistedEmailsText = string.Join(", ", Flag.WhitelistedEmails ?? new List<string>());
+            _justification = string.Empty;
+        }
+    }
+
+    private async Task SaveRolloutWaveAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_justification) || _justification.Trim().Length < 10)
+        {
+            ToastService.ShowWarning("A justificativa operacional é obrigatória (mínimo 10 caracteres) para conformidade e auditoria.");
+            return;
+        }
+
+        if (Flag is null) return;
+
+        _isSubmitting = true;
+        try
+        {
+            var emails = _whitelistedEmailsText
+                .Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(e => e.Trim())
+                .Where(e => !string.IsNullOrWhiteSpace(e))
+                .ToList();
+
+            var result = await FeatureFlagService.UpdateRolloutAsync(
+                Flag.Key,
+                _percentage,
+                _selectedRing,
+                emails,
+                _justification.Trim()
+            );
+
+            if (result is not null)
+            {
+                ToastService.ShowSuccess($"Onda de liberação da flag '{Flag.Name}' atualizada com sucesso!");
+                await OnSaved.InvokeAsync();
+                await CloseModal();
+            }
+            else
+            {
+                ToastService.ShowError("Falha ao salvar as configurações de rollout.");
+            }
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+
+    private async Task TriggerKillSwitchAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_justification) || _justification.Trim().Length < 10)
+        {
+            ToastService.ShowWarning("O acionamento do Kill-Switch exige justificativa operacional de emergência (mínimo 10 caracteres).");
+            return;
+        }
+
+        if (Flag is null) return;
+
+        _isSubmitting = true;
+        try
+        {
+            var result = await FeatureFlagService.TriggerKillSwitchAsync(Flag.Key, _justification.Trim());
+            if (result is not null)
+            {
+                ToastService.ShowError($"KILL-SWITCH ACIONADO: A funcionalidade '{Flag.Name}' foi interrompida imediatamente!");
+                await OnSaved.InvokeAsync();
+                await CloseModal();
+            }
+            else
+            {
+                ToastService.ShowError("Falha ao acionar o kill-switch.");
+            }
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+
+    private async Task RestoreKillSwitchAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_justification) || _justification.Trim().Length < 10)
+        {
+            ToastService.ShowWarning("A restauração de regime exige justificativa operacional (mínimo 10 caracteres).");
+            return;
+        }
+
+        if (Flag is null) return;
+
+        _isSubmitting = true;
+        try
+        {
+            var result = await FeatureFlagService.RestoreKillSwitchAsync(Flag.Key, _justification.Trim());
+            if (result is not null)
+            {
+                ToastService.ShowSuccess($"Regime normal restaurado com sucesso para a funcionalidade '{Flag.Name}'.");
+                await OnSaved.InvokeAsync();
+                await CloseModal();
+            }
+            else
+            {
+                ToastService.ShowError("Falha ao restaurar regime normal.");
+            }
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+
+    private async Task CloseModal()
+    {
+        await OnClosed.InvokeAsync();
+    }
+}

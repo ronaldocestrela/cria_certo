@@ -33,20 +33,22 @@ public static class BackofficeDataSeeder
         await dbContext.SaveChangesAsync(cancellationToken);
 
         var plansCreated = await SeedPlansAsync(dbContext, logger, cancellationToken);
+        var flagsCreated = await SeedFeatureFlagsAsync(dbContext, logger, cancellationToken);
 
-        if (plansCreated > 0)
+        if (plansCreated > 0 || flagsCreated > 0)
         {
             await dbContext.SaveChangesAsync(cancellationToken);
         }
 
         logger?.LogInformation(
-            "Backoffice seed completed. PermissionsCreated={PermissionsCreated}, RolesCreated={RolesCreated}, AdminCreated={AdminCreated}, AdminRoleRepaired={AdminRoleRepaired}, AdminPasswordReset={AdminPasswordReset}, PlansCreated={PlansCreated}.",
+            "Backoffice seed completed. PermissionsCreated={PermissionsCreated}, RolesCreated={RolesCreated}, AdminCreated={AdminCreated}, AdminRoleRepaired={AdminRoleRepaired}, AdminPasswordReset={AdminPasswordReset}, PlansCreated={PlansCreated}, FlagsCreated={FlagsCreated}.",
             iamResult.PermissionsCreated,
             iamResult.RolesCreated,
             iamResult.AdminCreated,
             iamResult.AdminRoleRepaired,
             iamResult.AdminPasswordReset,
-            plansCreated);
+            plansCreated,
+            flagsCreated);
     }
 
     public static async Task<IamSeedResult> SeedIamAsync(
@@ -435,5 +437,53 @@ public static class BackofficeDataSeeder
 
         dbContext.PlanCatalogs.Add(plan);
         return 1;
+    }
+
+    private static async Task<int> SeedFeatureFlagsAsync(
+        BackofficeDbContext dbContext,
+        ILogger? logger,
+        CancellationToken cancellationToken)
+    {
+        var existingKeys = await dbContext.FeatureFlags
+            .Select(f => f.Key)
+            .ToListAsync(cancellationToken);
+
+        var existingSet = new HashSet<string>(existingKeys, StringComparer.OrdinalIgnoreCase);
+        var created = 0;
+
+        var defaultFlags = new (string Key, string Name, string Description, CriaCerto.Modules.Backoffice.Application.Domain.Enums.FeatureFlagCategory Category, CriaCerto.Modules.Backoffice.Application.Domain.Enums.RolloutRing Ring, int Percentage)[]
+        {
+            ("backoffice.feature.impersonation", "Suporte Assistido com Impersonação", "Acesso temporário ao ambiente de produtores para suporte técnico assistido.", CriaCerto.Modules.Backoffice.Application.Domain.Enums.FeatureFlagCategory.SupportTools, CriaCerto.Modules.Backoffice.Application.Domain.Enums.RolloutRing.Ring1_EarlyAdopters, 100),
+            ("backoffice.feature.plan_publishing", "Publicação de Planos e Preços", "Publicação e versionamento de catálogos comerciais e tabelas de planos.", CriaCerto.Modules.Backoffice.Application.Domain.Enums.FeatureFlagCategory.CommercialAndPlans, CriaCerto.Modules.Backoffice.Application.Domain.Enums.RolloutRing.Ring1_EarlyAdopters, 100),
+            ("backoffice.feature.tenant_suspension", "Suspensão e Bloqueio de Inquilinos", "Suspensão, cancelamento e arquivamento de inquilinos com impacto de acesso.", CriaCerto.Modules.Backoffice.Application.Domain.Enums.FeatureFlagCategory.CriticalOperation, CriaCerto.Modules.Backoffice.Application.Domain.Enums.RolloutRing.Ring1_EarlyAdopters, 100),
+            ("backoffice.feature.remediation_execution", "Execução de Remediações de Suporte", "Execução de rotinas e scripts de remediação operacional assistida.", CriaCerto.Modules.Backoffice.Application.Domain.Enums.FeatureFlagCategory.SupportTools, CriaCerto.Modules.Backoffice.Application.Domain.Enums.RolloutRing.Ring1_EarlyAdopters, 100),
+            ("backoffice.feature.compliance_unmasking", "Desmascaramento Just-In-Time LGPD", "Revelação contextual de dados pessoais sensíveis (PII) com auditoria criptográfica.", CriaCerto.Modules.Backoffice.Application.Domain.Enums.FeatureFlagCategory.ComplianceAndPrivacy, CriaCerto.Modules.Backoffice.Application.Domain.Enums.RolloutRing.Ring0_Canary, 100)
+        };
+
+        foreach (var (key, name, description, category, ring, percentage) in defaultFlags)
+        {
+            if (existingSet.Contains(key))
+            {
+                continue;
+            }
+
+            var flagResult = FeatureFlag.Create(
+                key: key,
+                name: name,
+                description: description,
+                category: category,
+                initialRing: ring,
+                initialPercentage: percentage,
+                createdBy: "system_seeder"
+            );
+
+            if (flagResult.IsSuccess)
+            {
+                dbContext.FeatureFlags.Add(flagResult.Value);
+                created++;
+            }
+        }
+
+        return created;
     }
 }

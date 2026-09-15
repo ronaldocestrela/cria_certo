@@ -97,7 +97,16 @@
                                         <button class="btn btn-sm btn-outline" @onclick="() => OpenEditDraftModal(plan, plan.DraftVersion)">Editar Rascunho</button>
                                     </PermissionGuard>
                                     <PermissionGuard Permission="@BackofficePermissions.PlansPublish">
-                                        <button class="btn btn-sm btn-success" @onclick="() => OpenPublishModal(plan, plan.DraftVersion)">Publicar Versão</button>
+                                        <FeatureFlagGuard FlagKey="backoffice.feature.plan_publishing">
+                                            <ChildContent>
+                                                <button class="btn btn-sm btn-success" @onclick="() => OpenPublishModal(plan, plan.DraftVersion)">Publicar Versão</button>
+                                            </ChildContent>
+                                            <Disabled>
+                                                <button class="btn btn-sm btn-secondary opacity-50" disabled title="Publicação de planos suspensa por governança de rollout/kill-switch">
+                                                    🔒 Publicação Bloqueada
+                                                </button>
+                                            </Disabled>
+                                        </FeatureFlagGuard>
                                     </PermissionGuard>
                                 </div>
                             </div>

@@ -22,6 +22,7 @@ builder.Services.AddScoped<IBackofficePermissionService, BackofficePermissionSer
 builder.Services.AddScoped<IImpersonationStateService, ImpersonationStateService>();
 builder.Services.AddScoped<IOfflineSyncService, OfflineSyncService>();
 builder.Services.AddScoped<IToastService, ToastService>();
+builder.Services.AddScoped<IFeatureFlagClientService, FeatureFlagClientService>();
 
 builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) });
 

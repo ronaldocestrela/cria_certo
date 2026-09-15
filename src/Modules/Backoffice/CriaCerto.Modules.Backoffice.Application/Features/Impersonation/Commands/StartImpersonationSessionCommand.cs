@@ -10,6 +10,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace CriaCerto.Modules.Backoffice.Application.Features.Impersonation.Commands;
 
+[RequireFeatureFlag("backoffice.feature.impersonation")]
 public record StartImpersonationSessionCommand(
     Guid TargetTenantId,
     Guid? TargetUserId,
@@ -19,7 +20,12 @@ public record StartImpersonationSessionCommand(
     Guid AdminUserId,
     string AdminUserEmail,
     string IpAddress,
-    string UserAgent) : IRequest<Result<ImpersonationSessionDto>>;
+    string UserAgent) : IRequest<Result<ImpersonationSessionDto>>, IBackofficeActorRequest
+{
+    public Guid ActorId => AdminUserId;
+    public string ActorEmail => AdminUserEmail;
+    public string? ActorRole => null;
+}
 
 public class StartImpersonationSessionCommandHandler : IRequestHandler<StartImpersonationSessionCommand, Result<ImpersonationSessionDto>>
 {

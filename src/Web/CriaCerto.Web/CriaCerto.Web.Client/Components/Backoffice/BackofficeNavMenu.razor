@@ -68,6 +68,12 @@
                 <span class="nav-icon">⚖️</span> Compliance & LGPD
             </NavLink>
         </PermissionGuard>
+
+        <PermissionGuard Permission="@BackofficePermissions.RolloutRead">
+            <NavLink class="nav-link" href="backoffice/rollout">
+                <span class="nav-icon">🔀</span> Rollout & Flags
+            </NavLink>
+        </PermissionGuard>
     </div>
 </nav>
 

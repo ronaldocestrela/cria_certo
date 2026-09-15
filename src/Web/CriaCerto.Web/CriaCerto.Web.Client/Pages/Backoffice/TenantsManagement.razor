@@ -228,27 +228,36 @@
                                 </PermissionGuard>
                                 <PermissionGuard Permission="@BackofficePermissions.TenantsSuspend">
                                     <Authorized>
-                                        @if (CanSuspend(SelectedTenant))
-                                        {
-                                            <button class="btn btn-warning" @onclick="() => OpenLifecycleModal(TenantLifecycleModal.LifecycleAction.Suspend)">Suspender</button>
-                                        }
-                                        @if (CanReactivate(SelectedTenant))
-                                        {
-                                            <button class="btn btn-primary" @onclick="() => OpenLifecycleModal(TenantLifecycleModal.LifecycleAction.Reactivate)">Reativar</button>
-                                        }
-                                        @if (CanCancel(SelectedTenant))
-                                        {
-                                            <button class="btn btn-danger" @onclick="() => OpenLifecycleModal(TenantLifecycleModal.LifecycleAction.Cancel)">Cancelar</button>
-                                        }
-                                        @if (CanArchive(SelectedTenant))
-                                        {
-                                            <button class="btn btn-danger" @onclick="() => OpenLifecycleModal(TenantLifecycleModal.LifecycleAction.Archive)">Arquivar</button>
-                                        }
-                                        @if (!SelectedTenant.IsProtected)
-                                        {
-                                            <button class="btn btn-secondary" @onclick="() => OpenLifecycleModal(TenantLifecycleModal.LifecycleAction.Protect)">Proteger</button>
-                                        }
-                                        else
+                                        <FeatureFlagGuard FlagKey="backoffice.feature.tenant_suspension">
+                                            <ChildContent>
+                                                @if (CanSuspend(SelectedTenant))
+                                                {
+                                                    <button class="btn btn-warning" @onclick="() => OpenLifecycleModal(TenantLifecycleModal.LifecycleAction.Suspend)">Suspender</button>
+                                                }
+                                                @if (CanReactivate(SelectedTenant))
+                                                {
+                                                    <button class="btn btn-primary" @onclick="() => OpenLifecycleModal(TenantLifecycleModal.LifecycleAction.Reactivate)">Reativar</button>
+                                                }
+                                                @if (CanCancel(SelectedTenant))
+                                                {
+                                                    <button class="btn btn-danger" @onclick="() => OpenLifecycleModal(TenantLifecycleModal.LifecycleAction.Cancel)">Cancelar</button>
+                                                }
+                                                @if (CanArchive(SelectedTenant))
+                                                {
+                                                    <button class="btn btn-danger" @onclick="() => OpenLifecycleModal(TenantLifecycleModal.LifecycleAction.Archive)">Arquivar</button>
+                                                }
+                                                @if (!SelectedTenant.IsProtected)
+                                                {
+                                                    <button class="btn btn-secondary" @onclick="() => OpenLifecycleModal(TenantLifecycleModal.LifecycleAction.Protect)">Proteger</button>
+                                                }
+                                            </ChildContent>
+                                            <Disabled>
+                                                <button class="btn btn-secondary opacity-50" disabled title="Ações de suspensão suspensas por governança de rollout/kill-switch">
+                                                    🔒 Suspensões Bloqueadas
+                                                </button>
+                                            </Disabled>
+                                        </FeatureFlagGuard>
+                                        @if (SelectedTenant.IsProtected)
                                         {
                                             <button class="btn btn-secondary" @onclick="() => OpenLifecycleModal(TenantLifecycleModal.LifecycleAction.Unprotect)">Desproteger</button>
                                         }

@@ -42,9 +42,13 @@ public static class BackofficeModuleExtensions
         // Register Compliance & PII Masking Services
         services.AddSingleton<CriaCerto.Modules.Backoffice.Application.Domain.Services.IPiiDataMasker, CriaCerto.Modules.Backoffice.Application.Domain.Services.PiiDataMasker>();
 
+        // Register Wave Rollout & Feature Flag Services
+        services.AddSingleton<CriaCerto.Modules.Backoffice.Application.Domain.Services.IFeatureFlagEvaluator, CriaCerto.Modules.Backoffice.Application.Domain.Services.FeatureFlagEvaluator>();
+
         // Register Observability & Anomaly Services
         services.AddScoped<CriaCerto.Modules.Backoffice.Application.Features.Observability.Services.IAnomalyDetectionEngine, CriaCerto.Modules.Backoffice.Application.Features.Observability.Services.AnomalyDetectionEngine>();
         services.AddTransient(typeof(MediatR.IPipelineBehavior<,>), typeof(CriaCerto.Modules.Backoffice.Application.Telemetry.BackofficeObservabilityBehavior<,>));
+        services.AddTransient(typeof(MediatR.IPipelineBehavior<,>), typeof(CriaCerto.Modules.Backoffice.Application.Security.FeatureFlagEvaluationBehavior<,>));
 
         return services;
     }

@@ -1,0 +1,364 @@
+@page "/backoffice/rollout"
+@using CriaCerto.Web.Client.Models
+@using CriaCerto.Web.Client.Services
+@using CriaCerto.Web.Client.Components.Backoffice
+@inject IFeatureFlagClientService FeatureFlagService
+@inject IBackofficePermissionService PermissionService
+@inject IToastService ToastService
+@inject NavigationManager Navigation
+
+<PageTitle>Rollout por Ondas & Feature Flags - CriaCerto Backoffice</PageTitle>
+
+<PermissionGuard Permission="rollout.read">
+    <Authorized>
+        <div class="container-fluid p-4">
+            <!-- Header -->
+            <div class="d-flex justify-content-between align-items-center mb-4 pb-2 border-bottom">
+                <div>
+                    <h2 class="h3 fw-bold mb-1 d-flex align-items-center gap-2">
+                        <i class="bi bi-bezier2 text-primary"></i>
+                        <span>Rollout por Ondas & Feature Flags</span>
+                    </h2>
+                    <p class="text-muted mb-0 small">
+                        Governança dinâmica de funcionalidades críticas, liberação progressiva por anéis (Rings 0, 1 e 2) e circuit breaker com corte emergencial (Kill-Switch).
+                    </p>
+                </div>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-outline-secondary btn-sm" @onclick="RefreshDataAsync" disabled="@_isLoading">
+                        <i class="bi bi-arrow-clockwise @(_isLoading ? "spin" : "") me-1"></i> Atualizar
+                    </button>
+                </div>
+            </div>
+
+            <!-- KPI Cards -->
+            <div class="row g-3 mb-4">
+                <div class="col-md-3">
+                    <div class="card shadow-sm border-0 bg-light p-3">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <span class="text-muted small fw-bold text-uppercase">Total de Flags</span>
+                                <h3 class="fw-bold mb-0 text-dark">@_flags.Count</h3>
+                            </div>
+                            <div class="bg-primary bg-opacity-10 p-3 rounded-circle text-primary">
+                                <i class="bi bi-flag-fill fs-4"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <div class="card shadow-sm border-0 bg-light p-3">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <span class="text-muted small fw-bold text-uppercase">Onda Canary / Early</span>
+                                <h3 class="fw-bold mb-0 text-info">
+                                    @_flags.Count(f => f.MaxAllowedRing.Contains("Ring0") || f.MaxAllowedRing.Contains("Ring1"))
+                                </h3>
+                            </div>
+                            <div class="bg-info bg-opacity-10 p-3 rounded-circle text-info">
+                                <i class="bi bi-shield-shaded fs-4"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <div class="card shadow-sm border-0 bg-light p-3">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <span class="text-muted small fw-bold text-uppercase">Disponibilidade Geral (GA)</span>
+                                <h3 class="fw-bold mb-0 text-success">
+                                    @_flags.Count(f => f.MaxAllowedRing.Contains("Ring2") && !f.KillSwitchActive && f.IsEnabled)
+                                </h3>
+                            </div>
+                            <div class="bg-success bg-opacity-10 p-3 rounded-circle text-success">
+                                <i class="bi bi-check-circle-fill fs-4"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <div class="card shadow-sm border-0 @(_flags.Any(f => f.KillSwitchActive) ? "bg-danger text-white" : "bg-light") p-3">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <span class="small fw-bold text-uppercase @(_flags.Any(f => f.KillSwitchActive) ? "text-white opacity-75" : "text-muted")">Kill-Switch Ativo</span>
+                                <h3 class="fw-bold mb-0 @(_flags.Any(f => f.KillSwitchActive) ? "text-white" : "text-danger")">
+                                    @_flags.Count(f => f.KillSwitchActive)
+                                </h3>
+                            </div>
+                            <div class="@(_flags.Any(f => f.KillSwitchActive) ? "bg-white text-danger" : "bg-danger bg-opacity-10 text-danger") p-3 rounded-circle">
+                                <i class="bi bi-exclamation-octagon-fill fs-4"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SLO & Observability Strip -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+                    <h5 class="card-title fw-bold mb-0 d-flex align-items-center gap-2">
+                        <i class="bi bi-activity text-success"></i>
+                        <span>Monitoramento de SLO & Guardrails em Tempo Real</span>
+                    </h5>
+                    <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1">
+                        Janela Ativa de 24h
+                    </span>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light text-muted small text-uppercase">
+                                <tr>
+                                    <th>Funcionalidade</th>
+                                    <th>Taxa de Erro Atual</th>
+                                    <th>Latência p95</th>
+                                    <th>Alertas de Política</th>
+                                    <th>Status de Estabilidade</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (_sloHealthList.Count == 0)
+                                {
+                                    <tr>
+                                        <td colspan="5" class="text-center py-3 text-muted small">Carregando métricas de SLO...</td>
+                                    </tr>
+                                }
+                                else
+                                {
+                                    @foreach (var slo in _sloHealthList)
+                                    {
+                                        <tr>
+                                            <td class="fw-bold">
+                                                <span>@slo.FlagName</span>
+                                                <span class="d-block text-muted small"><code>@slo.FlagKey</code></span>
+                                            </td>
+                                            <td>
+                                                <span class="fw-bold @(slo.CurrentErrorRatePercent > slo.MaxErrorRateThresholdPercent ? "text-danger" : "text-success")">
+                                                    @slo.CurrentErrorRatePercent.ToString("F2")%
+                                                </span>
+                                                <span class="text-muted small"> (SLO &le; @slo.MaxErrorRateThresholdPercent.ToString("F1")%)</span>
+                                            </td>
+                                            <td>
+                                                <span class="fw-bold @(slo.CurrentLatencyP95Ms > slo.MaxLatencyP95ThresholdMs ? "text-warning" : "text-dark")">
+                                                    @slo.CurrentLatencyP95Ms.ToString("F0") ms
+                                                </span>
+                                                <span class="text-muted small"> (SLO &le; @slo.MaxLatencyP95ThresholdMs.ToString("F0") ms)</span>
+                                            </td>
+                                            <td>
+                                                @if (slo.PolicyFailuresCount > 0)
+                                                {
+                                                    <span class="badge bg-warning text-dark">@slo.PolicyFailuresCount alerta(s)</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-light text-success border border-success">0 violações</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (slo.IsHealthy)
+                                                {
+                                                    <span class="badge bg-success-subtle text-success border border-success-subtle d-inline-flex align-items-center gap-1">
+                                                        <i class="bi bi-shield-check"></i> Conforme
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-danger text-white d-inline-flex align-items-center gap-1">
+                                                        <i class="bi bi-shield-exclamation"></i> Risco / Corte
+                                                    </span>
+                                                }
+                                                <span class="d-block small text-muted">@slo.StatusSummary</span>
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Feature Flags Table -->
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <h5 class="card-title fw-bold mb-0 d-flex align-items-center gap-2">
+                        <i class="bi bi-toggles text-primary"></i>
+                        <span>Catálogo de Feature Flags & Anéis de Implantação</span>
+                    </h5>
+                    <div class="d-flex gap-2">
+                        <input type="text" class="form-control form-control-sm" placeholder="Buscar por chave ou nome..." @bind="_searchTerm" @bind:event="oninput" style="max-width: 260px;" />
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light text-muted small text-uppercase">
+                                <tr>
+                                    <th>Status</th>
+                                    <th>Funcionalidade / Chave</th>
+                                    <th>Categoria</th>
+                                    <th>Onda Atual (Ring & %)</th>
+                                    <th>Última Atualização</th>
+                                    <th class="text-end pe-3">Ações de Governança</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (_isLoading)
+                                {
+                                    <tr>
+                                        <td colspan="6" class="text-center py-4">
+                                            <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                                            <span class="ms-2 text-muted small">Carregando governança de flags...</span>
+                                        </td>
+                                    </tr>
+                                }
+                                else if (FilteredFlags.Count == 0)
+                                {
+                                    <tr>
+                                        <td colspan="6" class="text-center py-4 text-muted">
+                                            Nenhuma feature flag localizada com os filtros informados.
+                                        </td>
+                                    </tr>
+                                }
+                                else
+                                {
+                                    @foreach (var flag in FilteredFlags)
+                                    {
+                                        <tr class="@(flag.KillSwitchActive ? "table-danger" : !flag.IsEnabled ? "table-light opacity-75" : "")">
+                                            <td>
+                                                @if (flag.KillSwitchActive)
+                                                {
+                                                    <span class="badge bg-danger text-white">KILL-SWITCH</span>
+                                                }
+                                                else if (flag.IsEnabled)
+                                                {
+                                                    <span class="badge bg-success">ATIVA</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-secondary">INATIVA</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                <span class="fw-bold d-block text-dark">@flag.Name</span>
+                                                <code class="small text-muted">@flag.Key</code>
+                                                <span class="d-block small text-muted mt-1">@flag.Description</span>
+                                            </td>
+                                            <td>
+                                                <span class="badge bg-secondary bg-opacity-75">@flag.Category</span>
+                                            </td>
+                                            <td>
+                                                <RolloutWaveBadge MaxAllowedRing="@flag.MaxAllowedRing" Percentage="@flag.RolloutPercentage" KillSwitchActive="@flag.KillSwitchActive" />
+                                                @if (flag.WhitelistedEmails != null && flag.WhitelistedEmails.Count > 0)
+                                                {
+                                                    <span class="d-block small text-info mt-1">
+                                                        <i class="bi bi-people-fill me-1"></i>@flag.WhitelistedEmails.Count em whitelist
+                                                    </span>
+                                                }
+                                            </td>
+                                            <td>
+                                                <span class="small d-block text-dark">@(flag.UpdatedAtUtc?.ToString("dd/MM/yyyy HH:mm") ?? flag.CreatedAtUtc.ToString("dd/MM/yyyy HH:mm")) UTC</span>
+                                                <span class="small text-muted">por @(flag.UpdatedBy ?? flag.CreatedBy)</span>
+                                            </td>
+                                            <td class="text-end pe-3">
+                                                <div class="btn-group btn-group-sm">
+                                                    <button class="btn btn-outline-primary" title="Configurar Onda e Parâmetros" @onclick="() => OpenRolloutModal(flag)">
+                                                        <i class="bi bi-sliders me-1"></i> Configurar
+                                                    </button>
+                                                    <button class="btn @(flag.IsEnabled ? "btn-outline-warning" : "btn-outline-success")" title="Alternar Estado Operacional" @onclick="() => ToggleFlagDirectlyAsync(flag)">
+                                                        <i class="bi @(flag.IsEnabled ? "bi-pause-circle" : "bi-play-circle")"></i>
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <FeatureFlagRolloutModal IsOpen="@_isModalOpen" Flag="@_selectedFlag" OnSaved="HandleFlagSaved" OnClosed="() => _isModalOpen = false" />
+    </Authorized>
+    <NotAuthorized>
+        <div class="container p-5 text-center">
+            <div class="alert alert-danger d-inline-block p-4">
+                <i class="bi bi-shield-lock-fill fs-1 d-block mb-3"></i>
+                <h4 class="fw-bold">Acesso Restrito</h4>
+                <p class="mb-0">Seu usuário não possui a permissão administrativa <code>rollout.read</code> necessária para visualizar a governança de rollout.</p>
+            </div>
+        </div>
+    </NotAuthorized>
+</PermissionGuard>
+
+@code {
+    private List<FeatureFlagClientDto> _flags = new();
+    private List<RolloutSloHealthClientDto> _sloHealthList = new();
+    private bool _isLoading = true;
+    private string _searchTerm = string.Empty;
+
+    private bool _isModalOpen = false;
+    private FeatureFlagClientDto? _selectedFlag;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshDataAsync();
+    }
+
+    private async Task RefreshDataAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            _flags = await FeatureFlagService.GetFlagsAsync(forceRefresh: true);
+            _sloHealthList = await FeatureFlagService.GetSloHealthAsync();
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private List<FeatureFlagClientDto> FilteredFlags =>
+        string.IsNullOrWhiteSpace(_searchTerm)
+            ? _flags
+            : _flags.Where(f =>
+                f.Name.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase) ||
+                f.Key.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase) ||
+                f.Category.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase)
+              ).ToList();
+
+    private void OpenRolloutModal(FeatureFlagClientDto flag)
+    {
+        _selectedFlag = flag;
+        _isModalOpen = true;
+    }
+
+    private async Task HandleFlagSaved()
+    {
+        await RefreshDataAsync();
+    }
+
+    private async Task ToggleFlagDirectlyAsync(FeatureFlagClientDto flag)
+    {
+        var targetState = !flag.IsEnabled;
+        var reason = targetState
+            ? "Reativação operacional solicitada via painel"
+            : "Desativação temporária preventiva solicitada via painel";
+
+        var result = await FeatureFlagService.ToggleFlagAsync(flag.Key, targetState, reason);
+        if (result is not null)
+        {
+            ToastService.ShowSuccess($"Feature flag '{flag.Name}' {(targetState ? "ativada" : "desativada")} com sucesso!");
+            await RefreshDataAsync();
+        }
+        else
+        {
+            ToastService.ShowError("Falha ao alternar estado da flag.");
+        }
+    }
+}
