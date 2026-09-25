@@ -225,51 +225,77 @@
 
                     <div class="card-plan-price">
                         <span class="currency">R$</span>
-                        <span class="price-val">@((_isAnnual ? plan.AnnualPriceMonthly : plan.MonthlyPrice).ToString("N0"))</span>
+                        <span class="price-val">@FormatPrice(_isAnnual ? plan.AnnualPriceMonthly : plan.MonthlyPrice)</span>
                         <span class="period">/mês</span>
                     </div>
 
                     <div class="capacity-pill font-mono">
                         <span class="material-symbols-outlined icon-sm">groups</span>
-                        <span>@(plan.HeadCapacityLimit == int.MaxValue ? "Cabeças Ilimitadas" : $"Até {plan.HeadCapacityLimit:N0} cabeças")</span>
+                        <span>@(plan.HeadCapacityLimit >= 999999 || plan.HeadCapacityLimit == int.MaxValue ? "Cabeças Ilimitadas" : $"Até {plan.HeadCapacityLimit:N0} cabeças")</span>
                     </div>
 
                     <ul class="plan-features-list">
-                        <li>
-                            <span class="material-symbols-outlined check-icon">check_circle</span>
-                            <span>Acesso PWA Curral 100% Off-line</span>
-                        </li>
-                        <li>
-                            <span class="material-symbols-outlined check-icon">check_circle</span>
-                            <span>Módulo Reprodução & IATF</span>
-                        </li>
-                        @if (plan.IncludedModules.Contains("Growth"))
+                        @if (plan.Features != null && plan.Features.Any(f => f.IsEnabled))
                         {
-                            <li>
-                                <span class="material-symbols-outlined check-icon">check_circle</span>
-                                <span>Balança Eletrônica & Curva de GPD</span>
-                            </li>
+                            @foreach (var feature in plan.Features.Where(f => f.IsEnabled))
+                            {
+                                <li>
+                                    <span class="material-symbols-outlined check-icon">check_circle</span>
+                                    <span>@feature.Name</span>
+                                </li>
+                            }
                         }
-                        @if (plan.IncludedModules.Contains("Nutrition"))
+                        else
                         {
-                            <li>
-                                <span class="material-symbols-outlined check-icon">check_circle</span>
-                                <span>Nutrição, TMR & Silos</span>
-                            </li>
-                        }
-                        @if (plan.IncludedModules.Contains("Sanitary"))
-                        {
-                            <li>
-                                <span class="material-symbols-outlined check-icon">check_circle</span>
-                                <span>Trava de Carência Medicamentosa</span>
-                            </li>
-                        }
-                        @if (plan.IncludedModules.Contains("Analytics"))
-                        {
-                            <li>
-                                <span class="material-symbols-outlined check-icon">check_circle</span>
-                                <span>Analytics Executivo & Custo por @@</span>
-                            </li>
+                            @if (plan.IncludedModules.Contains("CurralOffline") || plan.IncludedModules.Contains("PwaOfflineMode"))
+                            {
+                                <li>
+                                    <span class="material-symbols-outlined check-icon">check_circle</span>
+                                    <span>Acesso PWA Curral 100% Off-line</span>
+                                </li>
+                            }
+                            @if (plan.IncludedModules.Contains("Breeding"))
+                            {
+                                <li>
+                                    <span class="material-symbols-outlined check-icon">check_circle</span>
+                                    <span>Módulo Reprodução & IATF</span>
+                                </li>
+                            }
+                            @if (plan.IncludedModules.Contains("Calving"))
+                            {
+                                <li>
+                                    <span class="material-symbols-outlined check-icon">check_circle</span>
+                                    <span>Módulo de Partos & Bezerreiro</span>
+                                </li>
+                            }
+                            @if (plan.IncludedModules.Contains("Growth"))
+                            {
+                                <li>
+                                    <span class="material-symbols-outlined check-icon">check_circle</span>
+                                    <span>Balança Eletrônica & Curva de GPD</span>
+                                </li>
+                            }
+                            @if (plan.IncludedModules.Contains("Nutrition"))
+                            {
+                                <li>
+                                    <span class="material-symbols-outlined check-icon">check_circle</span>
+                                    <span>Nutrição, TMR & Silos</span>
+                                </li>
+                            }
+                            @if (plan.IncludedModules.Contains("Sanitary"))
+                            {
+                                <li>
+                                    <span class="material-symbols-outlined check-icon">check_circle</span>
+                                    <span>Trava de Carência Medicamentosa</span>
+                                </li>
+                            }
+                            @if (plan.IncludedModules.Contains("Analytics"))
+                            {
+                                <li>
+                                    <span class="material-symbols-outlined check-icon">check_circle</span>
+                                    <span>Analytics Executivo & Custo por @@</span>
+                                </li>
+                            }
                         }
                     </ul>
 
@@ -321,4 +347,7 @@
     {
         _plans = await TenancyApiClient.GetSubscriptionPlansAsync();
     }
+
+    private static string FormatPrice(decimal price) =>
+        price % 1 == 0 ? price.ToString("N0") : price.ToString("N2");
 }

@@ -4,6 +4,12 @@ using Microsoft.JSInterop;
 
 namespace CriaCerto.Web.Client.Services;
 
+public sealed record SubscriptionPlanFeatureModel(
+    string Key,
+    string Name,
+    bool IsEnabled = true
+);
+
 public sealed record SubscriptionPlanModel(
     string PlanId,
     string Name,
@@ -12,7 +18,8 @@ public sealed record SubscriptionPlanModel(
     decimal AnnualPriceMonthly,
     int HeadCapacityLimit,
     IReadOnlyList<string> IncludedModules,
-    bool IsPopular
+    bool IsPopular,
+    IReadOnlyList<SubscriptionPlanFeatureModel>? Features = null
 );
 
 public sealed record TenantProfileModel(
@@ -350,9 +357,15 @@ public sealed class TenancyApiClient
                 Description: "Ideal para pequenas propriedades iniciando o controle de plantel e reprodução.",
                 MonthlyPrice: 149.00m,
                 AnnualPriceMonthly: 119.00m,
-                HeadCapacityLimit: 1000,
+                HeadCapacityLimit: 500,
                 IncludedModules: new[] { "Breeding", "Calving" },
-                IsPopular: false
+                IsPopular: false,
+                Features: new List<SubscriptionPlanFeatureModel>
+                {
+                    new("Modules.Breeding", "Módulo de Reprodução & IATF", true),
+                    new("Modules.Calving", "Módulo de Partos & Bezerreiro", true),
+                    new("PwaOfflineMode", "Modo Offline PWA em Curral", true)
+                }
             ),
             new(
                 PlanId: "Pro",
@@ -360,9 +373,18 @@ public sealed class TenancyApiClient
                 Description: "Gestão completa de pasto, balança de curral, manejo reprodutivo e sanidade.",
                 MonthlyPrice: 349.00m,
                 AnnualPriceMonthly: 279.00m,
-                HeadCapacityLimit: 5000,
+                HeadCapacityLimit: 2500,
                 IncludedModules: new[] { "Breeding", "Calving", "Growth", "Nutrition", "Sanitary" },
-                IsPopular: true
+                IsPopular: true,
+                Features: new List<SubscriptionPlanFeatureModel>
+                {
+                    new("Modules.Breeding", "Módulo de Reprodução & IATF", true),
+                    new("Modules.Calving", "Módulo de Partos & Bezerreiro", true),
+                    new("Modules.Growth", "Módulo de Manejo & Pesagem", true),
+                    new("Modules.Sanitary", "Módulo Sanitário & Vacinação", true),
+                    new("Modules.Nutrition", "Módulo Nutricional & Suplementação", true),
+                    new("PwaOfflineMode", "Modo Offline PWA em Curral", true)
+                }
             ),
             new(
                 PlanId: "Enterprise",
@@ -372,7 +394,17 @@ public sealed class TenancyApiClient
                 AnnualPriceMonthly: 649.00m,
                 HeadCapacityLimit: int.MaxValue,
                 IncludedModules: new[] { "Breeding", "Calving", "Growth", "Nutrition", "Sanitary", "Analytics" },
-                IsPopular: false
+                IsPopular: false,
+                Features: new List<SubscriptionPlanFeatureModel>
+                {
+                    new("Modules.Breeding", "Módulo de Reprodução & IATF", true),
+                    new("Modules.Calving", "Módulo de Partos & Bezerreiro", true),
+                    new("Modules.Growth", "Módulo de Manejo & Pesagem", true),
+                    new("Modules.Sanitary", "Módulo Sanitário & Vacinação", true),
+                    new("Modules.Nutrition", "Módulo Nutricional & Suplementação", true),
+                    new("Modules.Analytics", "Zootecnia Avançada & Analytics", true),
+                    new("PwaOfflineMode", "Modo Offline PWA em Curral", true)
+                }
             )
         };
     }

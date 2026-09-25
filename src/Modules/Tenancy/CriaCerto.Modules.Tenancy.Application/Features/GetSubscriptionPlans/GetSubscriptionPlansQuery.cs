@@ -7,9 +7,25 @@ public record GetSubscriptionPlansQuery : IRequest<Result<List<SubscriptionPlanD
 
 public sealed class GetSubscriptionPlansQueryHandler : IRequestHandler<GetSubscriptionPlansQuery, Result<List<SubscriptionPlanDto>>>
 {
-    public Task<Result<List<SubscriptionPlanDto>>> Handle(GetSubscriptionPlansQuery request, CancellationToken cancellationToken)
+    private readonly ISubscriptionPlansProvider? _plansProvider;
+
+    public GetSubscriptionPlansQueryHandler(ISubscriptionPlansProvider? plansProvider = null)
     {
-        var plans = new List<SubscriptionPlanDto>
+        _plansProvider = plansProvider;
+    }
+
+    public async Task<Result<List<SubscriptionPlanDto>>> Handle(GetSubscriptionPlansQuery request, CancellationToken cancellationToken)
+    {
+        if (_plansProvider != null)
+        {
+            var plansFromProvider = await _plansProvider.GetActivePlansAsync(cancellationToken);
+            if (plansFromProvider is { Count: > 0 })
+            {
+                return Result.Success(plansFromProvider);
+            }
+        }
+
+        var fallbackPlans = new List<SubscriptionPlanDto>
         {
             new(
                 PlanId: "Starter",
@@ -19,7 +35,13 @@ public sealed class GetSubscriptionPlansQueryHandler : IRequestHandler<GetSubscr
                 AnnualPriceMonthly: 119.00m,
                 HeadCapacityLimit: 500,
                 IncludedModules: new[] { "Breeding", "Calving" },
-                IsPopular: false
+                IsPopular: false,
+                Features: new List<SubscriptionPlanFeatureDto>
+                {
+                    new("Modules.Breeding", "Módulo de Reprodução & IATF", true),
+                    new("Modules.Calving", "Módulo de Partos & Bezerreiro", true),
+                    new("PwaOfflineMode", "Modo Offline PWA em Curral", true)
+                }
             ),
             new(
                 PlanId: "Pro",
@@ -29,7 +51,16 @@ public sealed class GetSubscriptionPlansQueryHandler : IRequestHandler<GetSubscr
                 AnnualPriceMonthly: 279.00m,
                 HeadCapacityLimit: 2500,
                 IncludedModules: new[] { "Breeding", "Calving", "Growth", "Nutrition", "Sanitary" },
-                IsPopular: true
+                IsPopular: true,
+                Features: new List<SubscriptionPlanFeatureDto>
+                {
+                    new("Modules.Breeding", "Módulo de Reprodução & IATF", true),
+                    new("Modules.Calving", "Módulo de Partos & Bezerreiro", true),
+                    new("Modules.Growth", "Módulo de Manejo & Pesagem", true),
+                    new("Modules.Sanitary", "Módulo Sanitário & Vacinação", true),
+                    new("Modules.Nutrition", "Módulo Nutricional & Suplementação", true),
+                    new("PwaOfflineMode", "Modo Offline PWA em Curral", true)
+                }
             ),
             new(
                 PlanId: "Enterprise",
@@ -39,10 +70,20 @@ public sealed class GetSubscriptionPlansQueryHandler : IRequestHandler<GetSubscr
                 AnnualPriceMonthly: 649.00m,
                 HeadCapacityLimit: int.MaxValue,
                 IncludedModules: new[] { "Breeding", "Calving", "Growth", "Nutrition", "Sanitary", "Analytics" },
-                IsPopular: false
+                IsPopular: false,
+                Features: new List<SubscriptionPlanFeatureDto>
+                {
+                    new("Modules.Breeding", "Módulo de Reprodução & IATF", true),
+                    new("Modules.Calving", "Módulo de Partos & Bezerreiro", true),
+                    new("Modules.Growth", "Módulo de Manejo & Pesagem", true),
+                    new("Modules.Sanitary", "Módulo Sanitário & Vacinação", true),
+                    new("Modules.Nutrition", "Módulo Nutricional & Suplementação", true),
+                    new("Modules.Analytics", "Zootecnia Avançada & Analytics", true),
+                    new("PwaOfflineMode", "Modo Offline PWA em Curral", true)
+                }
             )
         };
 
-        return Task.FromResult(Result.Success(plans));
+        return Result.Success(fallbackPlans);
     }
 }

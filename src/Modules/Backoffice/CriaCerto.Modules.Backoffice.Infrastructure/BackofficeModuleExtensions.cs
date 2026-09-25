@@ -28,6 +28,7 @@ public static class BackofficeModuleExtensions
         });
 
         services.AddScoped<DbContext>(sp => sp.GetRequiredService<BackofficeDbContext>());
+        services.AddScoped<CriaCerto.Modules.Tenancy.Application.Features.GetSubscriptionPlans.ISubscriptionPlansProvider, Services.BackofficeSubscriptionPlansProvider>();
 
         // Register Granular RBAC & Policy Authorization Services
         services.AddScoped<IPermissionEvaluator, PermissionEvaluatorService>();
