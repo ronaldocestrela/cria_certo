@@ -15,5 +15,7 @@ public sealed record SubscriptionPlanDto(
     int HeadCapacityLimit,
     IReadOnlyList<string> IncludedModules,
     bool IsPopular,
-    IReadOnlyList<SubscriptionPlanFeatureDto>? Features = null
+    IReadOnlyList<SubscriptionPlanFeatureDto>? Features = null,
+    string? StripePriceIdMonthly = null,
+    string? StripePriceIdAnnual = null
 );

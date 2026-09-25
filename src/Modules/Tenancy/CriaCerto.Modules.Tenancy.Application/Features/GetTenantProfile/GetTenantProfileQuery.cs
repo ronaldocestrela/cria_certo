@@ -39,7 +39,11 @@ public class GetTenantProfileQueryHandler : IRequestHandler<GetTenantProfileQuer
             tenant.City,
             tenant.StateRegistration,
             tenant.AreaInHectares,
-            tenant.Type
+            tenant.Type,
+            tenant.StripeCustomerId,
+            tenant.StripeSubscriptionId,
+            tenant.CurrentPeriodEndUtc,
+            tenant.CancelAtPeriodEnd
         );
 
         return Result.Success(dto);

@@ -11,7 +11,11 @@ public sealed record TenantProfileDto(
     string City,
     string StateRegistration,
     decimal AreaInHectares,
-    string Type
+    string Type,
+    string? StripeCustomerId = null,
+    string? StripeSubscriptionId = null,
+    DateTime? CurrentPeriodEndUtc = null,
+    bool CancelAtPeriodEnd = false
 );
 
 public sealed record ProductionUnitDto(

@@ -31,6 +31,30 @@ public static class DependencyInjection
         services.AddScoped<IJwtService, JwtService>();
         services.AddScoped<ITenantAccessGuard, TenantAccessGuard>();
 
+        services.Configure<StripeOptions>(options =>
+        {
+            configuration.GetSection(StripeOptions.SectionName).Bind(options);
+
+            var apiKey = configuration["STRIPE_API_KEY"] ?? Environment.GetEnvironmentVariable("STRIPE_API_KEY");
+            if (!string.IsNullOrWhiteSpace(apiKey)) options.ApiKey = apiKey;
+
+            var pubKey = configuration["STRIPE_PUBLISHABLE_KEY"] ?? Environment.GetEnvironmentVariable("STRIPE_PUBLISHABLE_KEY");
+            if (!string.IsNullOrWhiteSpace(pubKey)) options.PublishableKey = pubKey;
+
+            var webhookSecret = configuration["STRIPE_WEBHOOK_SECRET"] ?? Environment.GetEnvironmentVariable("STRIPE_WEBHOOK_SECRET");
+            if (!string.IsNullOrWhiteSpace(webhookSecret)) options.WebhookSecret = webhookSecret;
+
+            var successUrl = configuration["STRIPE_SUCCESS_URL"] ?? Environment.GetEnvironmentVariable("STRIPE_SUCCESS_URL");
+            if (!string.IsNullOrWhiteSpace(successUrl)) options.SuccessUrl = successUrl;
+
+            var cancelUrl = configuration["STRIPE_CANCEL_URL"] ?? Environment.GetEnvironmentVariable("STRIPE_CANCEL_URL");
+            if (!string.IsNullOrWhiteSpace(cancelUrl)) options.CancelUrl = cancelUrl;
+
+            var returnUrl = configuration["STRIPE_RETURN_URL"] ?? Environment.GetEnvironmentVariable("STRIPE_RETURN_URL");
+            if (!string.IsNullOrWhiteSpace(returnUrl)) options.ReturnUrl = returnUrl;
+        });
+        services.AddScoped<IStripePaymentService, StripePaymentService>();
+
         return services;
     }
 }

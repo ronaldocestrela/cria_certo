@@ -33,6 +33,40 @@
         </div>
     }
 
+    @if (_profile != null && (!string.IsNullOrEmpty(_profile.StripeCustomerId) || _profile.CurrentPeriodEndUtc.HasValue))
+    {
+        <div style="background: white; border: 1px solid var(--cc-border); border-radius: 12px; padding: 1.25rem 1.5rem; margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; box-shadow: var(--cc-shadow);">
+            <div style="display: flex; align-items: center; gap: 1rem;">
+                <div style="width: 44px; height: 44px; border-radius: 10px; background: #635bff15; color: #635bff; display: flex; align-items: center; justify-content: center;">
+                    <span class="material-symbols-outlined" style="font-size: 26px;">credit_card</span>
+                </div>
+                <div>
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <span style="font-weight: 700; color: var(--cc-ink); font-size: 15px;">Faturamento Seguro Stripe</span>
+                        <span class="font-mono" style="font-size: 11px; padding: 0.15rem 0.5rem; border-radius: 99px; background: #dcfce7; color: #166534; font-weight: 700;">CONECTADO</span>
+                    </div>
+                    <p style="margin: 0.2rem 0 0 0; font-size: 13px; color: var(--cc-ink-muted);">
+                        @if (_profile.CurrentPeriodEndUtc.HasValue)
+                        {
+                            <span>Próxima renovação em <strong>@_profile.CurrentPeriodEndUtc.Value.ToString("dd/MM/yyyy")</strong>.</span>
+                        }
+                        else
+                        {
+                            <span>Cobrança recorrente ativa via gateway seguro Stripe.</span>
+                        }
+                    </p>
+                </div>
+            </div>
+            <div>
+                <button class="cc-btn cc-btn-outline font-mono text-xs" @onclick="OpenBillingPortal" disabled="@_isSubmitting"
+                        style="border: 1px solid #635bff; color: #635bff; background: white; padding: 0.6rem 1.2rem; border-radius: 8px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 0.5rem;">
+                    <span class="material-symbols-outlined" style="font-size: 16px;">open_in_new</span>
+                    <span>Gerenciar Cobrança & Cartões</span>
+                </button>
+            </div>
+        </div>
+    }
+
     <!-- Usage Limit Indicators (Stitch Mobile component styling) -->
     <section style="background-color: white; border: 1px solid var(--cc-border); border-radius: 12px; padding: 1.5rem; margin-bottom: 2.5rem; box-shadow: var(--cc-shadow);">
         <h3 class="font-mono text-[12px] font-bold text-secondary" style="margin: 0 0 1rem 0; text-transform: uppercase; tracking-wider: 0.05em;">Uso Atual das Cotas do Plano</h3>
@@ -273,6 +307,7 @@
 
 @code {
     private Guid _tenantId = Guid.Empty;
+    private TenantProfileModel? _profile;
     private string _activePlan = "Starter";
     private bool _isAnnual = false;
     private bool _showAccordion = true;
@@ -306,10 +341,10 @@
             if (Guid.TryParse(tenantIdClaim, out var tenantId))
             {
                 _tenantId = tenantId;
-                var profile = await TenancyApiClient.GetTenantProfileAsync(tenantId);
-                if (profile != null && !string.IsNullOrEmpty(profile.SubscribedPlan))
+                _profile = await TenancyApiClient.GetTenantProfileAsync(tenantId);
+                if (_profile != null && !string.IsNullOrEmpty(_profile.SubscribedPlan))
                 {
-                    _activePlan = profile.SubscribedPlan;
+                    _activePlan = _profile.SubscribedPlan;
                 }
             }
 
@@ -371,9 +406,25 @@
 
         try
         {
+            // Tenta criar checkout com o Stripe
+            var checkoutSession = await TenancyApiClient.CreateSubscriptionCheckoutAsync(
+                _tenantId,
+                planName,
+                _isAnnual ? "annual" : "monthly",
+                Navigation.ToAbsoluteUri("/settings/subscription?success=true").ToString(),
+                Navigation.ToAbsoluteUri("/settings/subscription?canceled=true").ToString());
+
+            if (checkoutSession != null && !string.IsNullOrWhiteSpace(checkoutSession.Url))
+            {
+                Navigation.NavigateTo(checkoutSession.Url);
+                return;
+            }
+
+            // Fallback direto caso o Stripe ainda não tenha chaves ativas no ambiente
             var response = await TenancyApiClient.ChangeSubscriptionPlanAsync(new ChangeSubscriptionPlanRequest(_tenantId, planName));
             if (response != null && response.Profile != null)
             {
+                _profile = response.Profile;
                 _activePlan = response.Profile.SubscribedPlan;
                 _message = $"Plano alterado para '{_activePlan}' com sucesso!";
                 _isSuccessMessage = true;
@@ -389,9 +440,41 @@
                 _isSuccessMessage = false;
             }
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            _message = "Erro inesperado ao alterar o plano de assinatura.";
+            _message = $"Erro ao processar alteração de plano: {ex.Message}";
+            _isSuccessMessage = false;
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+
+    private async Task OpenBillingPortal()
+    {
+        if (_tenantId == Guid.Empty) return;
+
+        _isSubmitting = true;
+        try
+        {
+            var portalSession = await TenancyApiClient.CreateSubscriptionPortalAsync(
+                _tenantId,
+                Navigation.ToAbsoluteUri("/settings/subscription").ToString());
+
+            if (portalSession != null && !string.IsNullOrWhiteSpace(portalSession.Url))
+            {
+                Navigation.NavigateTo(portalSession.Url);
+            }
+            else
+            {
+                _message = "Não foi possível abrir o portal Stripe. Verifique as credenciais no servidor.";
+                _isSuccessMessage = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            _message = $"Erro ao abrir portal de cobrança: {ex.Message}";
             _isSuccessMessage = false;
         }
         finally

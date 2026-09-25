@@ -33,8 +33,15 @@ public sealed record TenantProfileModel(
     string City,
     string StateRegistration,
     decimal AreaInHectares,
-    string Type
+    string Type,
+    string? StripeCustomerId = null,
+    string? StripeSubscriptionId = null,
+    DateTime? CurrentPeriodEndUtc = null,
+    bool CancelAtPeriodEnd = false
 );
+
+public sealed record StripeCheckoutSessionResponse(string SessionId, string Url);
+public sealed record StripePortalSessionResponse(string Url);
 
 public sealed record ProductionUnitModel(
     Guid Id,
@@ -176,6 +183,64 @@ public sealed class TenancyApiClient
             if (response.IsSuccessStatusCode)
             {
                 return await response.Content.ReadFromJsonAsync<ChangeSubscriptionPlanResponse>(cancellationToken: cancellationToken);
+            }
+        }
+        catch
+        {
+        }
+
+        return null;
+    }
+
+    public async Task<StripeCheckoutSessionResponse?> CreateSubscriptionCheckoutAsync(
+        Guid tenantId,
+        string planId,
+        string billingCycle = "monthly",
+        string? successUrl = null,
+        string? cancelUrl = null,
+        CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        try
+        {
+            var payload = new
+            {
+                tenantId,
+                planId,
+                billingCycle,
+                successUrl,
+                cancelUrl
+            };
+            var response = await _httpClient.PostAsJsonAsync("/api/v1/tenancy/subscription/checkout", payload, cancellationToken);
+            if (response.IsSuccessStatusCode)
+            {
+                return await response.Content.ReadFromJsonAsync<StripeCheckoutSessionResponse>(cancellationToken: cancellationToken);
+            }
+        }
+        catch
+        {
+        }
+
+        return null;
+    }
+
+    public async Task<StripePortalSessionResponse?> CreateSubscriptionPortalAsync(
+        Guid tenantId,
+        string? returnUrl = null,
+        CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        try
+        {
+            var payload = new
+            {
+                tenantId,
+                returnUrl
+            };
+            var response = await _httpClient.PostAsJsonAsync("/api/v1/tenancy/subscription/portal", payload, cancellationToken);
+            if (response.IsSuccessStatusCode)
+            {
+                return await response.Content.ReadFromJsonAsync<StripePortalSessionResponse>(cancellationToken: cancellationToken);
             }
         }
         catch

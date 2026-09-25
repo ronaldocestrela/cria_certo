@@ -42,6 +42,9 @@ using CriaCerto.Modules.Tenancy.Application.Features.GetSubscriptionPlans;
 using CriaCerto.Modules.Tenancy.Application.Features.GetTenantProfile;
 using CriaCerto.Modules.Tenancy.Application.Features.UpdateTenantProfile;
 using CriaCerto.Modules.Tenancy.Application.Features.ChangeSubscriptionPlan;
+using CriaCerto.Modules.Tenancy.Application.Features.SubscriptionCheckout;
+using CriaCerto.Modules.Tenancy.Application.Features.SubscriptionPortal;
+using CriaCerto.Modules.Tenancy.Application.Features.ProcessStripeWebhook;
 using CriaCerto.Modules.Tenancy.Application.Features.GetProductionUnits;
 using CriaCerto.Modules.Tenancy.Application.Features.CreateProductionUnit;
 using CriaCerto.Modules.Tenancy.Application.Features.UpdateProductionUnit;
@@ -1254,6 +1257,61 @@ app.MapPut("/api/v1/tenancy/subscription", async (ChangeSubscriptionPlanRequest 
     var result = await sender.Send(command);
     return ToHttpResult(result);
 }).RequireAuthorization().WithTags("Tenancy");
+
+app.MapPost("/api/v1/tenancy/subscription/checkout", async (CreateCheckoutSessionRequest request, System.Security.Claims.ClaimsPrincipal userClaims, ISender sender) =>
+{
+    var sub = userClaims.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value 
+           ?? userClaims.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value 
+           ?? userClaims.FindFirst("sub")?.Value
+           ?? userClaims.FindFirst("UserId")?.Value;
+
+    if (!Guid.TryParse(sub, out var userId))
+    {
+        return Results.Unauthorized();
+    }
+
+    var command = new CreateCheckoutSessionCommand(
+        request.TenantId,
+        userId,
+        request.PlanId,
+        request.BillingCycle,
+        request.SuccessUrl,
+        request.CancelUrl);
+
+    var result = await sender.Send(command);
+    return ToHttpResult(result);
+}).RequireAuthorization().WithTags("Tenancy Subscription");
+
+app.MapPost("/api/v1/tenancy/subscription/portal", async (CreatePortalSessionRequest request, System.Security.Claims.ClaimsPrincipal userClaims, ISender sender) =>
+{
+    var sub = userClaims.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value 
+           ?? userClaims.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value 
+           ?? userClaims.FindFirst("sub")?.Value
+           ?? userClaims.FindFirst("UserId")?.Value;
+
+    if (!Guid.TryParse(sub, out var userId))
+    {
+        return Results.Unauthorized();
+    }
+
+    var command = new CreatePortalSessionCommand(request.TenantId, userId, request.ReturnUrl);
+    var result = await sender.Send(command);
+    return ToHttpResult(result);
+}).RequireAuthorization().WithTags("Tenancy Subscription");
+
+app.MapPost("/api/v1/payments/stripe-webhook", async (HttpRequest request, ISender sender) =>
+{
+    using var reader = new StreamReader(request.Body);
+    var jsonPayload = await reader.ReadToEndAsync();
+    var stripeSignature = request.Headers["Stripe-Signature"].ToString();
+
+    var command = new ProcessStripeWebhookCommand(jsonPayload, stripeSignature);
+    var result = await sender.Send(command);
+
+    return result.IsSuccess 
+        ? Results.Ok(new { received = true, eventType = result.Value.EventType }) 
+        : Results.BadRequest(new { error = result.Error.Message });
+}).AllowAnonymous().WithTags("Payments Webhook");
 
 app.MapGet("/api/v1/tenancy/production-units", async (Guid tenantId, ISender sender) =>
 {

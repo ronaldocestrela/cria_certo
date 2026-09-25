@@ -27,6 +27,11 @@ public sealed class Tenant
     public string? TechnicalOwnerEmail { get; set; }
     public string? CommercialOwnerName { get; set; }
     public string? CommercialOwnerEmail { get; set; }
+    public string? StripeCustomerId { get; set; }
+    public string? StripeSubscriptionId { get; set; }
+    public string? StripePriceId { get; set; }
+    public DateTime? CurrentPeriodEndUtc { get; set; }
+    public bool CancelAtPeriodEnd { get; set; }
     public bool IsProtected { get; set; }
     public string? StatusReason { get; set; }
     public DateTime? StatusChangedAtUtc { get; set; }
