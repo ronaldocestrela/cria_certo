@@ -11,6 +11,8 @@ using CriaCerto.Modules.Sanitary.Infrastructure.Persistence;
 using FluentAssertions;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace CriaCerto.Architecture.IntegrationTests;
@@ -186,4 +188,69 @@ public class SystemDataSeederIntegrationTests : IDisposable
         result.Value.Should().NotBeEmpty();
         result.Value.Any(v => v.DiseaseName == "Febre Aftosa").Should().BeTrue();
     }
+
+    [Fact]
+    public async Task SeedDataAsync_WithCustomMasterAdminOptions_ShouldSeedConfiguredAdmin()
+    {
+        var customOptions = new MasterAdminOptions(
+            "custom.env.admin@criacerto.com.br",
+            "SuperEnvPassword123!",
+            "Admin via Env");
+
+        await SystemDataSeeder.SeedDataAsync(
+            _foundationDb,
+            _sanitaryDb,
+            _backofficeDb,
+            _passwordHasher,
+            null,
+            resetBootstrapAdminPassword: false,
+            masterAdminOptions: customOptions,
+            cancellationToken: CancellationToken.None);
+
+        var adminUsers = await _backofficeDb.AdminUsers.ToListAsync();
+        adminUsers.Should().HaveCount(1);
+
+        var admin = adminUsers.First();
+        admin.Email.Should().Be("custom.env.admin@criacerto.com.br");
+        admin.Name.Should().Be("Admin via Env");
+        _passwordHasher.VerifyPassword("SuperEnvPassword123!", admin.PasswordHash).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task SeedAsync_WithConfigurationValues_ShouldSeedAdminFromConfiguration()
+    {
+        var inMemoryConfig = new Dictionary<string, string?>
+        {
+            ["Backoffice:MasterAdmin:Email"] = "dirops@criacerto.com.br",
+            ["Backoffice:MasterAdmin:Password"] = "OpsEnvSecret987!",
+            ["Backoffice:MasterAdmin:Name"] = "Diretor Operacional",
+            ["Backoffice:ResetBootstrapAdminPassword"] = "false"
+        };
+
+        var configuration = new Microsoft.Extensions.Configuration.ConfigurationBuilder()
+            .AddInMemoryCollection(inMemoryConfig)
+            .Build();
+
+        var backofficeOptions = new DbContextOptionsBuilder<BackofficeDbContext>()
+            .UseSqlite(_backofficeConnection)
+            .Options;
+
+        var services = new ServiceCollection();
+        services.AddScoped(_ => _foundationDb);
+        services.AddScoped(_ => _sanitaryDb);
+        services.AddScoped(_ => new BackofficeDbContext(backofficeOptions));
+        services.AddScoped<IPasswordHasherService>(_ => _passwordHasher);
+        services.AddSingleton<IConfiguration>(configuration);
+
+        var serviceProvider = services.BuildServiceProvider();
+
+        await SystemDataSeeder.SeedAsync(serviceProvider, CancellationToken.None);
+
+        await using var assertDb = new BackofficeDbContext(backofficeOptions);
+        var admin = await assertDb.AdminUsers.SingleAsync();
+        admin.Email.Should().Be("dirops@criacerto.com.br");
+        admin.Name.Should().Be("Diretor Operacional");
+        _passwordHasher.VerifyPassword("OpsEnvSecret987!", admin.PasswordHash).Should().BeTrue();
+    }
 }
+

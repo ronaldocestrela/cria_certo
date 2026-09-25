@@ -55,6 +55,12 @@ services:
       Cors__AllowedOrigins__1: "http://localhost:8080"
       Cors__AllowedOrigins__2: "http://localhost:5000"
       Cors__AllowedOrigins__3: "http://localhost:5001"
+      Backoffice__MasterAdmin__Email: "${BACKOFFICE_MASTER_ADMIN_EMAIL:-admin@criacerto.com.br}"
+      Backoffice__MasterAdmin__Password: "${BACKOFFICE_MASTER_ADMIN_PASSWORD:-AdminPassword123!}"
+      Backoffice__MasterAdmin__Name: "${BACKOFFICE_MASTER_ADMIN_NAME:-Administrador Mestre}"
+      BACKOFFICE_MASTER_ADMIN_EMAIL: "${BACKOFFICE_MASTER_ADMIN_EMAIL:-admin@criacerto.com.br}"
+      BACKOFFICE_MASTER_ADMIN_PASSWORD: "${BACKOFFICE_MASTER_ADMIN_PASSWORD:-AdminPassword123!}"
+      BACKOFFICE_MASTER_ADMIN_NAME: "${BACKOFFICE_MASTER_ADMIN_NAME:-Administrador Mestre}"
     depends_on:
       database:
         condition: service_healthy

@@ -153,7 +153,7 @@ public class Result<TValue> : Result
   * Producer access enforcement for blocked tenant statuses (`Suspended`, `Cancelled`, `Archived`).
 
 ### 5.7 Backoffice Module (`Modules.Backoffice`)
-* **Bootstrap admin (seed):** `admin@criacerto.com.br` / `AdminPassword123!` — created by `BackofficeDataSeeder` on API startup.
+* **Bootstrap admin (seed):** Parametrizado via `.env` / variáveis de ambiente (`BACKOFFICE_MASTER_ADMIN_EMAIL`, `BACKOFFICE_MASTER_ADMIN_PASSWORD`, `BACKOFFICE_MASTER_ADMIN_NAME`) ou seção `Backoffice:MasterAdmin` do `appsettings.json`, com fallbacks padrão para `admin@criacerto.com.br` / `AdminPassword123!` — criado por `BackofficeDataSeeder` na inicialização da API.
 * **Dev reset:** set `Backoffice:ResetBootstrapAdminPassword=true` in `appsettings.Development.json` to re-sync the bootstrap password on existing databases (never enable in production without explicit ops approval).
 * **Login endpoint:** `POST /api/v1/backoffice/auth/login` returns `401` for invalid credentials (`Backoffice.InvalidCredentials`), not RBAC `403`.
 * **Administrative Approvals (4-Eyes Principle):** Critical platform actions (`PublishPlanVersion`, `MassTenantSuspension`, `ExtendedAccessGrant`) must follow the dual-control principle (`AdminApprovalRequest`). The requester cannot self-approve (`ApprovalErrors.CannotSelfApprove`). Requests carry automatic TTL expiration (default 48h), mandatory justification (min 10 chars), execution payloads and visual diffs with full audit logging in `AuditLog`.

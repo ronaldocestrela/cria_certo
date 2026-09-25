@@ -8,17 +8,35 @@ using Microsoft.Extensions.Logging;
 
 namespace CriaCerto.Modules.Backoffice.Infrastructure.Persistence.Seeders;
 
+public sealed record MasterAdminOptions(
+    string? Email = null,
+    string? Password = null,
+    string? Name = null);
+
 public static class BackofficeDataSeeder
 {
-    public const string MasterAdminEmail = "admin@criacerto.com.br";
-    public const string MasterAdminName = "Administrador Mestre";
-    public const string MasterAdminPassword = "AdminPassword123!";
+    public const string DefaultMasterAdminEmail = "admin@criacerto.com.br";
+    public const string DefaultMasterAdminName = "Administrador Mestre";
+    public const string DefaultMasterAdminPassword = "AdminPassword123!";
+
+    public const string MasterAdminEmail = DefaultMasterAdminEmail;
+    public const string MasterAdminName = DefaultMasterAdminName;
+    public const string MasterAdminPassword = DefaultMasterAdminPassword;
+
+    public static Task SeedAsync(
+        BackofficeDbContext dbContext,
+        IPasswordHasherService passwordHasher,
+        ILogger? logger,
+        bool resetBootstrapAdminPassword,
+        CancellationToken cancellationToken) =>
+        SeedAsync(dbContext, passwordHasher, logger, resetBootstrapAdminPassword, null, cancellationToken);
 
     public static async Task SeedAsync(
         BackofficeDbContext dbContext,
         IPasswordHasherService passwordHasher,
         ILogger? logger = null,
         bool resetBootstrapAdminPassword = false,
+        MasterAdminOptions? masterAdminOptions = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(dbContext);
@@ -28,6 +46,7 @@ public static class BackofficeDataSeeder
             dbContext,
             passwordHasher,
             resetBootstrapAdminPassword,
+            masterAdminOptions,
             cancellationToken);
 
         await dbContext.SaveChangesAsync(cancellationToken);
@@ -51,10 +70,18 @@ public static class BackofficeDataSeeder
             flagsCreated);
     }
 
+    public static Task<IamSeedResult> SeedIamAsync(
+        BackofficeDbContext dbContext,
+        IPasswordHasherService passwordHasher,
+        bool resetBootstrapAdminPassword,
+        CancellationToken cancellationToken) =>
+        SeedIamAsync(dbContext, passwordHasher, resetBootstrapAdminPassword, null, cancellationToken);
+
     public static async Task<IamSeedResult> SeedIamAsync(
         BackofficeDbContext dbContext,
         IPasswordHasherService passwordHasher,
         bool resetBootstrapAdminPassword = false,
+        MasterAdminOptions? masterAdminOptions = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(dbContext);
@@ -67,6 +94,7 @@ public static class BackofficeDataSeeder
             passwordHasher,
             rolesMap,
             resetBootstrapAdminPassword,
+            masterAdminOptions,
             cancellationToken);
 
         return new IamSeedResult(
@@ -175,6 +203,7 @@ public static class BackofficeDataSeeder
         IPasswordHasherService passwordHasher,
         IReadOnlyDictionary<string, AdminRole> rolesMap,
         bool resetBootstrapAdminPassword,
+        MasterAdminOptions? masterAdminOptions,
         CancellationToken cancellationToken)
     {
         if (!rolesMap.TryGetValue(BackofficeRoles.PlatformOwner, out var platformOwnerRole))
@@ -183,7 +212,19 @@ public static class BackofficeDataSeeder
                 $"Required role '{BackofficeRoles.PlatformOwner}' was not seeded.");
         }
 
-        var normalizedEmail = MasterAdminEmail.Trim().ToLowerInvariant();
+        var effectiveEmail = !string.IsNullOrWhiteSpace(masterAdminOptions?.Email)
+            ? masterAdminOptions.Email.Trim()
+            : DefaultMasterAdminEmail;
+
+        var effectivePassword = !string.IsNullOrWhiteSpace(masterAdminOptions?.Password)
+            ? masterAdminOptions.Password
+            : DefaultMasterAdminPassword;
+
+        var effectiveName = !string.IsNullOrWhiteSpace(masterAdminOptions?.Name)
+            ? masterAdminOptions.Name.Trim()
+            : DefaultMasterAdminName;
+
+        var normalizedEmail = effectiveEmail.ToLowerInvariant();
         var existingAdmin = await dbContext.AdminUsers
             .Include(u => u.Roles)
             .FirstOrDefaultAsync(u => u.Email == normalizedEmail, cancellationToken);
@@ -215,7 +256,7 @@ public static class BackofficeDataSeeder
 
             if (resetBootstrapAdminPassword)
             {
-                var passwordHash = passwordHasher.HashPassword(MasterAdminPassword);
+                var passwordHash = passwordHasher.HashPassword(effectivePassword);
                 var updateResult = existingAdmin.UpdatePasswordHash(passwordHash);
                 if (updateResult.IsFailure)
                 {
@@ -229,10 +270,10 @@ public static class BackofficeDataSeeder
             return (false, adminRoleRepaired, adminPasswordReset);
         }
 
-        var newPasswordHash = passwordHasher.HashPassword(MasterAdminPassword);
+        var newPasswordHash = passwordHasher.HashPassword(effectivePassword);
         var userResult = AdminUser.Create(
-            name: MasterAdminName,
-            email: MasterAdminEmail,
+            name: effectiveName,
+            email: effectiveEmail,
             passwordHash: newPasswordHash,
             mustChangePasswordOnNextLogin: false);
 

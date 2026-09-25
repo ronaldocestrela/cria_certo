@@ -104,6 +104,9 @@ using CriaCerto.Modules.Backoffice.Application.Features.Rollout.Dtos;
 using CriaCerto.Modules.Backoffice.Application.Security;
 using CriaCerto.Modules.Backoffice.Infrastructure;
 using CriaCerto.Modules.Backoffice.Infrastructure.Persistence;
+using CriaCerto.Api.Configuration;
+
+DotEnvLoader.Load();
 
 var builder = WebApplication.CreateBuilder(args);
 

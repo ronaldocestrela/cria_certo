@@ -26,6 +26,29 @@ public static class SystemDataSeeder
             var configuration = scope.ServiceProvider.GetRequiredService<IConfiguration>();
             var resetBootstrapAdminPassword = configuration.GetValue<bool>("Backoffice:ResetBootstrapAdminPassword");
 
+            var adminEmail = configuration["Backoffice:MasterAdmin:Email"]
+                ?? configuration["Backoffice:MasterAdminEmail"]
+                ?? configuration["BACKOFFICE_MASTER_ADMIN_EMAIL"]
+                ?? configuration["MASTER_ADMIN_EMAIL"]
+                ?? Environment.GetEnvironmentVariable("BACKOFFICE_MASTER_ADMIN_EMAIL")
+                ?? Environment.GetEnvironmentVariable("MASTER_ADMIN_EMAIL");
+
+            var adminPassword = configuration["Backoffice:MasterAdmin:Password"]
+                ?? configuration["Backoffice:MasterAdminPassword"]
+                ?? configuration["BACKOFFICE_MASTER_ADMIN_PASSWORD"]
+                ?? configuration["MASTER_ADMIN_PASSWORD"]
+                ?? Environment.GetEnvironmentVariable("BACKOFFICE_MASTER_ADMIN_PASSWORD")
+                ?? Environment.GetEnvironmentVariable("MASTER_ADMIN_PASSWORD");
+
+            var adminName = configuration["Backoffice:MasterAdmin:Name"]
+                ?? configuration["Backoffice:MasterAdminName"]
+                ?? configuration["BACKOFFICE_MASTER_ADMIN_NAME"]
+                ?? configuration["MASTER_ADMIN_NAME"]
+                ?? Environment.GetEnvironmentVariable("BACKOFFICE_MASTER_ADMIN_NAME")
+                ?? Environment.GetEnvironmentVariable("MASTER_ADMIN_NAME");
+
+            var masterAdminOptions = new MasterAdminOptions(adminEmail, adminPassword, adminName);
+
             await SeedDataAsync(
                 foundationDb,
                 sanitaryDb,
@@ -33,6 +56,7 @@ public static class SystemDataSeeder
                 passwordHasher,
                 logger,
                 resetBootstrapAdminPassword,
+                masterAdminOptions,
                 cancellationToken);
             logger?.LogInformation("[SystemDataSeeder] Reference and backoffice data seeded successfully.");
         }
@@ -43,6 +67,24 @@ public static class SystemDataSeeder
         }
     }
 
+    public static Task SeedDataAsync(
+        FoundationDbContext foundationDb,
+        SanitaryDbContext sanitaryDb,
+        BackofficeDbContext backofficeDb,
+        IPasswordHasherService passwordHasher,
+        ILogger? logger,
+        bool resetBootstrapAdminPassword,
+        CancellationToken cancellationToken) =>
+        SeedDataAsync(
+            foundationDb,
+            sanitaryDb,
+            backofficeDb,
+            passwordHasher,
+            logger,
+            resetBootstrapAdminPassword,
+            null,
+            cancellationToken);
+
     public static async Task SeedDataAsync(
         FoundationDbContext foundationDb,
         SanitaryDbContext sanitaryDb,
@@ -50,6 +92,7 @@ public static class SystemDataSeeder
         IPasswordHasherService passwordHasher,
         ILogger? logger = null,
         bool resetBootstrapAdminPassword = false,
+        MasterAdminOptions? masterAdminOptions = null,
         CancellationToken cancellationToken = default)
     {
         logger?.LogInformation("[SystemDataSeeder] Seeding bovine breeds...");
@@ -66,6 +109,7 @@ public static class SystemDataSeeder
             passwordHasher,
             logger,
             resetBootstrapAdminPassword,
+            masterAdminOptions,
             cancellationToken);
         logger?.LogInformation("[SystemDataSeeder] Backoffice IAM data seeded.");
     }
