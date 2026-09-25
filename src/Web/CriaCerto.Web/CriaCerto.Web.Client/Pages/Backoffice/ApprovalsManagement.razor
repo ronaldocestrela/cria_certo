@@ -1,4 +1,5 @@
 @page "/backoffice/approvals"
+@layout Layout.BackofficeLayout
 @using CriaCerto.Modules.Backoffice.Application.Domain.Entities
 @using CriaCerto.Modules.Backoffice.Application.Features.Approvals.Dtos
 @using CriaCerto.Modules.Backoffice.Application.Security
@@ -8,6 +9,8 @@
 @inject IBackofficeApiClient ApiClient
 @inject IBackofficePermissionService PermissionService
 @inject AuthenticationStateProvider AuthStateProvider
+
+<PageTitle>Aprovações Administrativas (4-Eyes) | CriaCerto Backoffice</PageTitle>
 
 <div class="approvals-container">
     <!-- HEADER -->

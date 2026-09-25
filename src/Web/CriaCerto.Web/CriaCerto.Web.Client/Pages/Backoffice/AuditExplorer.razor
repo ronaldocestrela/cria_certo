@@ -1,4 +1,5 @@
 @page "/backoffice/audit"
+@layout Layout.BackofficeLayout
 @using CriaCerto.Modules.Backoffice.Application.Domain.Enums
 @using CriaCerto.Modules.Backoffice.Application.Features.Audit.Dtos
 @using CriaCerto.Modules.Backoffice.Application.Security
@@ -6,6 +7,8 @@
 @using CriaCerto.Web.Client.Services
 @inject IBackofficeApiClient ApiClient
 @inject IJSRuntime JS
+
+<PageTitle>Trilha Forense de Auditoria | CriaCerto Backoffice</PageTitle>
 
 <div class="audit-page">
     <div class="page-header">
