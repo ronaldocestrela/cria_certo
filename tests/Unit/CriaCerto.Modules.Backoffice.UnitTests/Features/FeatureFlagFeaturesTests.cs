@@ -367,6 +367,104 @@ public class FeatureFlagFeaturesTests : IDisposable
         nextCalled.Should().BeTrue();
         response.IsSuccess.Should().BeTrue();
     }
+
+    [Fact]
+    public async Task FeatureFlagEvaluationBehavior_WhenPublishPlanVersionWithPlatformOwnerRole_ShouldAllow()
+    {
+        // Arrange: Flag backoffice.feature.plan_publishing em Ring 1 (Early Adopters)
+        await SeedFlagAsync(
+            key: "backoffice.feature.plan_publishing",
+            name: "Publicação de Planos",
+            ring: RolloutRing.Ring1_EarlyAdopters,
+            percentage: 100);
+
+        var behavior = new FeatureFlagEvaluationBehavior<CriaCerto.Modules.Backoffice.Application.Features.Plans.Commands.PublishPlanVersionCommand, Result<CriaCerto.Modules.Backoffice.Application.Features.Plans.Dtos.PlanVersionDto>>(
+            _dbContext,
+            _evaluator
+        );
+
+        var command = new CriaCerto.Modules.Backoffice.Application.Features.Plans.Commands.PublishPlanVersionCommand(
+            VersionId: Guid.NewGuid(),
+            ApprovalNotes: "Lançamento oficial",
+            PerformedByAdminUserId: Guid.NewGuid(),
+            PerformedByAdminEmail: "owner@criacerto.com.br",
+            IpAddress: "127.0.0.1",
+            ActorRole: "PlatformOwner"
+        );
+
+        var nextCalled = false;
+        Task<Result<CriaCerto.Modules.Backoffice.Application.Features.Plans.Dtos.PlanVersionDto>> Next()
+        {
+            nextCalled = true;
+            return Task.FromResult(Result.Success(new CriaCerto.Modules.Backoffice.Application.Features.Plans.Dtos.PlanVersionDto(
+                command.VersionId,
+                Guid.NewGuid(),
+                1,
+                "v1.0",
+                "Published",
+                100m,
+                80m,
+                100,
+                null,
+                null,
+                null,
+                null,
+                DateTimeOffset.UtcNow,
+                Guid.NewGuid(),
+                "Aprovado",
+                DateTimeOffset.UtcNow,
+                Array.Empty<CriaCerto.Modules.Backoffice.Application.Features.Plans.Dtos.PlanFeatureDto>(),
+                Array.Empty<CriaCerto.Modules.Backoffice.Application.Features.Plans.Dtos.PlanLimitDto>()
+            )));
+        }
+
+        // Act
+        var response = await behavior.Handle(command, Next, CancellationToken.None);
+
+        // Assert
+        nextCalled.Should().BeTrue();
+        response.IsSuccess.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task FeatureFlagEvaluationBehavior_WhenPublishPlanVersionWithSupportN1Role_ShouldFailWaveNotReached()
+    {
+        // Arrange: Flag backoffice.feature.plan_publishing em Ring 1 (Early Adopters)
+        await SeedFlagAsync(
+            key: "backoffice.feature.plan_publishing",
+            name: "Publicação de Planos",
+            ring: RolloutRing.Ring1_EarlyAdopters,
+            percentage: 100);
+
+        var behavior = new FeatureFlagEvaluationBehavior<CriaCerto.Modules.Backoffice.Application.Features.Plans.Commands.PublishPlanVersionCommand, Result<CriaCerto.Modules.Backoffice.Application.Features.Plans.Dtos.PlanVersionDto>>(
+            _dbContext,
+            _evaluator
+        );
+
+        var command = new CriaCerto.Modules.Backoffice.Application.Features.Plans.Commands.PublishPlanVersionCommand(
+            VersionId: Guid.NewGuid(),
+            ApprovalNotes: "Tentativa não autorizada",
+            PerformedByAdminUserId: Guid.NewGuid(),
+            PerformedByAdminEmail: "n1@criacerto.com.br",
+            IpAddress: "127.0.0.1",
+            ActorRole: "SupportN1"
+        );
+
+        var nextCalled = false;
+        Task<Result<CriaCerto.Modules.Backoffice.Application.Features.Plans.Dtos.PlanVersionDto>> Next()
+        {
+            nextCalled = true;
+            return Task.FromResult(Result.Success<CriaCerto.Modules.Backoffice.Application.Features.Plans.Dtos.PlanVersionDto>(null!));
+        }
+
+        // Act
+        var response = await behavior.Handle(command, Next, CancellationToken.None);
+
+        // Assert
+        nextCalled.Should().BeFalse();
+        response.IsFailure.Should().BeTrue();
+        response.Error.Code.Should().Be("FeatureFlag.WaveNotReached");
+    }
 }
 
 [RequireFeatureFlag("feature.critical.test")]

@@ -498,7 +498,8 @@ backoffice.MapPut("/tenants/{id:guid}", async (Guid id, UpdateTenantAdminRequest
 backoffice.MapPost("/tenants/{id:guid}/suspend", async (Guid id, TenantLifecycleActionRequest req, HttpContext ctx, ISender sender) =>
 {
     var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
-    var command = new SuspendTenantAdminCommand(id, req.Reason, callerId, callerEmail, ip);
+    var role = GetBackofficeActorRole(ctx);
+    var command = new SuspendTenantAdminCommand(id, req.Reason, callerId, callerEmail, ip, role);
     var result = await sender.Send(command);
     return ToHttpResult(result);
 }).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.TenantsSuspend)).WithTags("Backoffice Tenants");
@@ -658,7 +659,8 @@ backoffice.MapPut("/plans/versions/{versionId:guid}", async (Guid versionId, Upd
 backoffice.MapPost("/plans/versions/{versionId:guid}/publish", async (Guid versionId, PublishPlanVersionRequest req, HttpContext ctx, ISender sender) =>
 {
     var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
-    var command = new PublishPlanVersionCommand(versionId, req.ApprovalNotes, callerId, callerEmail, ip);
+    var role = GetBackofficeActorRole(ctx);
+    var command = new PublishPlanVersionCommand(versionId, req.ApprovalNotes, callerId, callerEmail, ip, role);
     var result = await sender.Send(command);
     return ToHttpResult(result);
 }).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.PlansPublish)).WithTags("Backoffice Plans");
@@ -667,6 +669,7 @@ backoffice.MapPost("/plans/versions/{versionId:guid}/publish", async (Guid versi
 backoffice.MapPost("/impersonation/start", async (StartImpersonationRequest req, HttpContext ctx, ISender sender) =>
 {
     var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var role = GetBackofficeActorRole(ctx);
     var ua = ctx.Request.Headers.UserAgent.ToString() ?? "Unknown";
     var command = new StartImpersonationSessionCommand(
         req.TargetTenantId,
@@ -677,7 +680,8 @@ backoffice.MapPost("/impersonation/start", async (StartImpersonationRequest req,
         callerId,
         callerEmail,
         ip,
-        ua);
+        ua,
+        role);
     var result = await sender.Send(command);
     return ToHttpResult(result, StatusCodes.Status201Created);
 }).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ImpersonationStart)).WithTags("Backoffice Impersonation");
@@ -720,6 +724,7 @@ backoffice.MapGet("/support/playbooks", async (ISender sender) =>
 backoffice.MapPost("/support/tenants/{id:guid}/remediation", async (Guid id, ExecuteRemediationRequest req, HttpContext ctx, ISender sender) =>
 {
     var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var role = GetBackofficeActorRole(ctx);
     var command = new ExecuteTenantRemediationCommand(
         id,
         req.ActionType,
@@ -727,7 +732,8 @@ backoffice.MapPost("/support/tenants/{id:guid}/remediation", async (Guid id, Exe
         req.Justification,
         callerId,
         callerEmail,
-        ip);
+        ip,
+        role);
     var result = await sender.Send(command);
     return ToHttpResult(result);
 }).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.SupportRemediate)).WithTags("Backoffice Support");
@@ -1035,7 +1041,7 @@ backoffice.MapPost("/compliance/reveal-pii", async (RevealSensitiveDataRequest r
 {
     var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
     var userAgent = ctx.Request.Headers.UserAgent.ToString();
-    var role = ctx.User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value ?? "Admin";
+    var role = GetBackofficeActorRole(ctx);
 
     var command = new RevealSensitiveDataCommand(callerId, callerEmail, role, ip, userAgent, req);
     var result = await sender.Send(command);
@@ -1771,6 +1777,44 @@ static (Guid AdminUserId, string AdminEmail, string IpAddress) GetBackofficeActo
         ?? "admin@criacerto.com.br";
     var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "127.0.0.1";
     return (adminUserId, adminEmail, ip);
+}
+
+static string GetBackofficeActorRole(HttpContext ctx)
+{
+    var roles = ctx.User.FindAll(ClaimTypes.Role).Select(c => c.Value)
+        .Concat(ctx.User.FindAll("role").Select(c => c.Value))
+        .Where(r => !string.IsNullOrWhiteSpace(r))
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .ToList();
+
+    if (roles.Contains(BackofficeRoles.PlatformOwner, StringComparer.OrdinalIgnoreCase) ||
+        ctx.User.HasClaim("is_platform_owner", "true"))
+    {
+        return BackofficeRoles.PlatformOwner;
+    }
+
+    if (roles.Contains(BackofficeRoles.FinanceOps, StringComparer.OrdinalIgnoreCase))
+    {
+        return BackofficeRoles.FinanceOps;
+    }
+
+    if (roles.Contains("Admin", StringComparer.OrdinalIgnoreCase) ||
+        roles.Contains("PlatformAdmin", StringComparer.OrdinalIgnoreCase))
+    {
+        return "Admin";
+    }
+
+    if (roles.Contains(BackofficeRoles.SupportN2, StringComparer.OrdinalIgnoreCase))
+    {
+        return BackofficeRoles.SupportN2;
+    }
+
+    if (roles.Contains(BackofficeRoles.SupportN1, StringComparer.OrdinalIgnoreCase))
+    {
+        return BackofficeRoles.SupportN1;
+    }
+
+    return roles.FirstOrDefault() ?? BackofficeRoles.PlatformOwner;
 }
 
 public record CreateAdminUserRequest(string Name, string Email, string RawPassword, List<Guid> RoleIds);

@@ -73,7 +73,13 @@ public sealed class FeatureFlagEvaluationBehavior<TRequest, TResponse> : IPipeli
     {
         if (request is IBackofficeActorRequest actorReq)
         {
-            return (actorReq.ActorEmail, actorReq.ActorRole ?? "SupportN1");
+            var role = !string.IsNullOrWhiteSpace(actorReq.ActorRole)
+                ? actorReq.ActorRole
+                : (actorReq.ActorEmail.Equals("admin@criacerto.com.br", StringComparison.OrdinalIgnoreCase)
+                    ? "PlatformOwner"
+                    : "SupportN1");
+
+            return (actorReq.ActorEmail, role);
         }
 
         // Fallback via reflexão caso o comando tenha propriedades ActorEmail e ActorRole
@@ -82,7 +88,13 @@ public sealed class FeatureFlagEvaluationBehavior<TRequest, TResponse> : IPipeli
 
         if (!string.IsNullOrWhiteSpace(emailProp))
         {
-            return (emailProp, roleProp ?? "SupportN1");
+            var role = !string.IsNullOrWhiteSpace(roleProp)
+                ? roleProp
+                : (emailProp.Equals("admin@criacerto.com.br", StringComparison.OrdinalIgnoreCase)
+                    ? "PlatformOwner"
+                    : "SupportN1");
+
+            return (emailProp, role);
         }
 
         return ("system@criacerto.com.br", "PlatformOwner");

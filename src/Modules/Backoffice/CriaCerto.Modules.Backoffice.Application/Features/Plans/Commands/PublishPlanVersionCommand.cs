@@ -14,12 +14,12 @@ public record PublishPlanVersionCommand(
     string? ApprovalNotes,
     Guid PerformedByAdminUserId,
     string PerformedByAdminEmail,
-    string IpAddress
+    string IpAddress,
+    string? ActorRole = null
 ) : IRequest<Result<PlanVersionDto>>, IBackofficeActorRequest
 {
     public Guid ActorId => PerformedByAdminUserId;
     public string ActorEmail => PerformedByAdminEmail;
-    public string? ActorRole => null;
 }
 
 public sealed class PublishPlanVersionCommandHandler : IRequestHandler<PublishPlanVersionCommand, Result<PlanVersionDto>>

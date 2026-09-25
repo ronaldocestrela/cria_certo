@@ -20,11 +20,11 @@ public record StartImpersonationSessionCommand(
     Guid AdminUserId,
     string AdminUserEmail,
     string IpAddress,
-    string UserAgent) : IRequest<Result<ImpersonationSessionDto>>, IBackofficeActorRequest
+    string UserAgent,
+    string? ActorRole = null) : IRequest<Result<ImpersonationSessionDto>>, IBackofficeActorRequest
 {
     public Guid ActorId => AdminUserId;
     public string ActorEmail => AdminUserEmail;
-    public string? ActorRole => null;
 }
 
 public class StartImpersonationSessionCommandHandler : IRequestHandler<StartImpersonationSessionCommand, Result<ImpersonationSessionDto>>

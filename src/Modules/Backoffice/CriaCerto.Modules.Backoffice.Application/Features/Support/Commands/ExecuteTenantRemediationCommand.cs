@@ -19,12 +19,12 @@ public record ExecuteTenantRemediationCommand(
     string Justification,
     Guid AdminUserId,
     string AdminUserEmail,
-    string IpAddress
+    string IpAddress,
+    string? ActorRole = null
 ) : IRequest<Result<RemediationExecutionResultDto>>, IBackofficeActorRequest
 {
     public Guid ActorId => AdminUserId;
     public string ActorEmail => AdminUserEmail;
-    public string? ActorRole => null;
 }
 
 public sealed class ExecuteTenantRemediationCommandHandler

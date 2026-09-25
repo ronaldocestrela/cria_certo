@@ -15,12 +15,12 @@ public record SuspendTenantAdminCommand(
     string Reason,
     Guid PerformedByAdminUserId,
     string PerformedByAdminEmail,
-    string IpAddress
+    string IpAddress,
+    string? ActorRole = null
 ) : IRequest<Result<TenantAdminDetailDto>>, IBackofficeActorRequest
 {
     public Guid ActorId => PerformedByAdminUserId;
     public string ActorEmail => PerformedByAdminEmail;
-    public string? ActorRole => null;
 }
 
 public record ReactivateTenantAdminCommand(
