@@ -317,13 +317,17 @@ As entregas estão organizadas em **6 Fases Sequenciais**, cobrindo fundação d
   * 100% de sucesso na suíte completa de testes da solução (640 testes aprovados, zero falhas, 310 no Backoffice, 39 no cliente Web e 5 em integração SQL Server).
   * Formalização arquitetural via ADR `0013-wave-rollout-and-feature-flag-governance.md`.
 
-#### Sub-fase 6.3: Playbooks, Treinamento e Hand-off Operacional [PLANEJADA]
+#### Sub-fase 6.3: Playbooks, Treinamento e Hand-off Operacional [CONCLUÍDA]
 * **Documentação & Operação:**
-  * Playbooks de suporte, segurança e resposta a incidentes administrativos.
-  * Treinamento dos perfis `SupportN1/N2`, `FinanceOps` e `PlatformOwner`.
-  * Runbooks de emergência para revogação de acesso e contenção.
-* **Validação:**
-  * Simulação de incidente (tabletop) com evidência de resposta ponta a ponta.
+  * Playbook operacional de Suporte N1 e N2 em `docs/operations/playbook_support.md` cobrindo diagnóstico 360 do produtor, sincronização off-line do curral (IndexedDB/PWA), sessões de impersonação com dupla salvaguarda (`impersonation.start`), remediação de dados e desmascaramento pontual LGPD.
+  * Playbook operacional Financeiro e Catálogo de Planos em `docs/operations/playbook_finance.md` cobrindo imutabilidade de versões, parametrização de capacidade zootécnica (Starter, Pro, Enterprise), workflow de aprovação dupla (4-Eyes) e régua de cobrança/suspensão justificada.
+  * Runbooks de emergência e resposta a incidentes em `docs/operations/runbook_incident_response.md` (RUNBOOK-01 a RUNBOOK-05): acionamento de Kill-Switch com contenção em < 1s, resposta a alerta de adulteração de hash forense (`ALR_FORENSIC_TAMPER_DETECTED`), ataques de força bruta, contenção de token de suporte em rotas administrativas (`Backoffice.ImpersonationRestricted`) e revogação emergencial de credenciais.
+  * Matriz RACI, trilhas de capacitação por perfil (`SupportN1`, `SupportN2`, `FinanceOps`, `PlatformOwner`) e checklist de hand-off em `docs/operations/training_matrix_and_handoff.md`.
+  * Formalização arquitetural via ADR `0014-operational-playbooks-incident-response-and-handoff.md`.
+* **Validação & Testes Executáveis:**
+  * Relatório formal de simulação de incidentes de mesa (*Tabletop Drill*) em `docs/operations/tabletop_simulation_report.md` atestando MTTD de 2 minutos, MTTC de 2 minutos e 100% de conformidade com Result Pattern e integridade forense SHA-256.
+  * Suíte automatizada de testes executáveis `IncidentResponseSimulationTests.cs` validando os fluxos dos runbooks em código (Kill-Switch, restauração, detecção de adulteração de cadeia SHA-256, 4-Eyes contra autoaprovação e justificativa para PII).
+  * 100% de sucesso na suíte de testes (315 testes aprovados no Backoffice, zero falhas).
 
 ---
 
@@ -344,11 +348,11 @@ As entregas estão organizadas em **6 Fases Sequenciais**, cobrindo fundação d
 Para marcar qualquer sub-fase como **CONCLUÍDA**, a checklist abaixo deve ser preenchida:
 
 ```markdown
-- [ ] Endpoints e serviços backoffice implementados em .NET 10 com Result Pattern (Result<T>).
-- [ ] Interface Blazor administrativa implementada com guardas por permissão granular.
-- [ ] Testes unitários, integração e autorização aprovados (TDD Red/Green/Refactor).
-- [ ] Auditoria de ações administrativas e trilha de impersonação validadas.
-- [ ] Documentação viva (/docs) atualizada com regras, fluxos e decisões arquiteturais.
+- [x] Endpoints e serviços backoffice implementados em .NET 10 com Result Pattern (Result<T>).
+- [x] Interface Blazor administrativa implementada com guardas por permissão granular.
+- [x] Testes unitários, integração e autorização aprovados (TDD Red/Green/Refactor).
+- [x] Auditoria de ações administrativas e trilha de impersonação validadas.
+- [x] Documentação viva (/docs) atualizada com regras, fluxos e decisões arquiteturais.
 ```
 
 ---
