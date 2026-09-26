@@ -479,7 +479,8 @@ backoffice.MapPost("/tenants", async (CreateTenantAdminRequest req, HttpContext 
         req.SubscribedPlan, req.Capacity, req.Type,
         req.TechnicalOwnerName, req.TechnicalOwnerEmail,
         req.CommercialOwnerName, req.CommercialOwnerEmail, req.OwnerUserEmail,
-        callerId, callerEmail, ip);
+        callerId, callerEmail, ip,
+        req.CurrentPeriodEndUtc);
     var result = await sender.Send(command);
     return ToHttpResult(result, StatusCodes.Status201Created);
 }).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.TenantsWrite)).WithTags("Backoffice Tenants");
@@ -493,7 +494,9 @@ backoffice.MapPut("/tenants/{id:guid}", async (Guid id, UpdateTenantAdminRequest
         req.Capacity, req.Type,
         req.TechnicalOwnerName, req.TechnicalOwnerEmail,
         req.CommercialOwnerName, req.CommercialOwnerEmail,
-        callerId, callerEmail, ip);
+        callerId, callerEmail, ip,
+        req.CurrentPeriodEndUtc,
+        req.UpdateCurrentPeriodEnd);
     var result = await sender.Send(command);
     return ToHttpResult(result);
 }).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.TenantsWrite)).WithTags("Backoffice Tenants");

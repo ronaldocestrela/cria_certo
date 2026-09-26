@@ -19,7 +19,9 @@ public sealed record TenantBackofficeSummaryDto(
     string? TechnicalOwnerName,
     string? CommercialOwnerName,
     bool IsProtected,
-    DateTime CreatedAtUtc
+    DateTime CreatedAtUtc,
+    DateTime? CurrentPeriodEndUtc = null,
+    bool CancelAtPeriodEnd = false
 );
 
 public sealed record TenantBackofficeDetailDto(
@@ -53,7 +55,9 @@ public sealed record TenantBackofficeDetailDto(
     int TeamMemberCount,
     int ProductionUnitCount,
     DateTime CreatedAtUtc,
-    DateTime UpdatedAtUtc
+    DateTime UpdatedAtUtc,
+    DateTime? CurrentPeriodEndUtc = null,
+    bool CancelAtPeriodEnd = false
 );
 
 public sealed record PagedTenantBackofficeResult<T>(

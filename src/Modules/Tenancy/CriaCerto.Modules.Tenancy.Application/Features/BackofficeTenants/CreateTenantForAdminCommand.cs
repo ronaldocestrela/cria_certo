@@ -27,7 +27,8 @@ public record CreateTenantForAdminCommand(
     string? CommercialOwnerName,
     string? CommercialOwnerEmail,
     string? OwnerUserEmail,
-    string? InitialStatus = null
+    string? InitialStatus = null,
+    DateTime? CurrentPeriodEndUtc = null
 ) : IRequest<Result<TenantBackofficeDetailDto>>;
 
 public sealed class CreateTenantForAdminCommandValidator : AbstractValidator<CreateTenantForAdminCommand>
@@ -152,6 +153,7 @@ public sealed class CreateTenantForAdminCommandHandler : IRequestHandler<CreateT
             TechnicalOwnerEmail = TrimOrNull(request.TechnicalOwnerEmail),
             CommercialOwnerName = TrimOrNull(request.CommercialOwnerName),
             CommercialOwnerEmail = TrimOrNull(request.CommercialOwnerEmail),
+            CurrentPeriodEndUtc = request.CurrentPeriodEndUtc,
             CreatedAtUtc = now,
             UpdatedAtUtc = now
         };

@@ -37,7 +37,9 @@ public sealed record TenantAdminSummaryDto(
     string? TechnicalOwnerName,
     string? CommercialOwnerName,
     bool IsProtected,
-    DateTime CreatedAtUtc
+    DateTime CreatedAtUtc,
+    DateTime? CurrentPeriodEndUtc = null,
+    bool CancelAtPeriodEnd = false
 );
 
 public sealed record TenantAdminDetailDto(
@@ -71,7 +73,9 @@ public sealed record TenantAdminDetailDto(
     int TeamMemberCount,
     int ProductionUnitCount,
     DateTime CreatedAtUtc,
-    DateTime UpdatedAtUtc
+    DateTime UpdatedAtUtc,
+    DateTime? CurrentPeriodEndUtc = null,
+    bool CancelAtPeriodEnd = false
 );
 
 public sealed record PagedTenantAdminResult(
@@ -121,7 +125,8 @@ public sealed record CreateTenantAdminRequest(
     string? CommercialOwnerName,
     string? CommercialOwnerEmail,
     string? OwnerUserEmail,
-    string? InitialStatus = null
+    string? InitialStatus = null,
+    DateTime? CurrentPeriodEndUtc = null
 );
 
 public sealed record UpdateTenantAdminRequest(
@@ -138,7 +143,9 @@ public sealed record UpdateTenantAdminRequest(
     string? TechnicalOwnerName,
     string? TechnicalOwnerEmail,
     string? CommercialOwnerName,
-    string? CommercialOwnerEmail
+    string? CommercialOwnerEmail,
+    DateTime? CurrentPeriodEndUtc = null,
+    bool UpdateCurrentPeriodEnd = false
 );
 
 public sealed record UpdateTenantSegmentationAdminRequest(

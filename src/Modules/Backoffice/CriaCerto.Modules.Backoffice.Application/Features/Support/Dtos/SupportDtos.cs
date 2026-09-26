@@ -21,7 +21,9 @@ public sealed record TenantOverviewDto(
     string? CommercialRegion,
     string? ProductiveProfile,
     string? ChurnRisk,
-    DateTime CreatedAtUtc
+    DateTime CreatedAtUtc,
+    DateTime? CurrentPeriodEndUtc = null,
+    bool CancelAtPeriodEnd = false
 );
 
 public sealed record SyncHealthDto(

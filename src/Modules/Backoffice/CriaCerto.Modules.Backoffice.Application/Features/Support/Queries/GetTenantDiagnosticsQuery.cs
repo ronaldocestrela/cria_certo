@@ -44,7 +44,9 @@ public sealed class GetTenantDiagnosticsQueryHandler : IRequestHandler<GetTenant
             tenant.CommercialRegion,
             tenant.ProductiveProfile,
             tenant.ChurnRisk,
-            tenant.CreatedAtUtc);
+            tenant.CreatedAtUtc,
+            tenant.CurrentPeriodEndUtc,
+            tenant.CancelAtPeriodEnd);
 
         // 2. Active Impersonation Session
         var activeSession = await _dbContext.Set<ImpersonationSession>()

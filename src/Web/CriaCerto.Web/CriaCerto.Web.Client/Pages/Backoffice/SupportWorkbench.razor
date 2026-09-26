@@ -94,6 +94,13 @@
                             <span>Razão: @DiagnosticReport.Overview.LegalName</span>
                             <span>CNPJ/CPF: <MaskedDataField Value="@DiagnosticReport.Overview.DocumentNumber" EntityType="Tenant" EntityId="@DiagnosticReport.Overview.Id" FieldName="CNPJ" Label="CNPJ/CPF" /></span>
                             <span>Plano: <strong>@DiagnosticReport.Overview.SubscribedPlan</strong></span>
+                            @if (DiagnosticReport.Overview.CurrentPeriodEndUtc.HasValue)
+                            {
+                                <span>
+                                    @(DiagnosticReport.Overview.CancelAtPeriodEnd ? "Cancela em: " : "Renova em: ")
+                                    <strong>@DiagnosticReport.Overview.CurrentPeriodEndUtc.Value.ToLocalTime().ToString("dd/MM/yyyy")</strong>
+                                </span>
+                            }
                             @if (!string.IsNullOrEmpty(DiagnosticReport.Overview.SizeSegment))
                             {
                                 <span>Porte: @DiagnosticReport.Overview.SizeSegment</span>
@@ -199,6 +206,12 @@
                                     <div class="progress-bar-fill @(pct >= 90 ? "fill-danger" : "fill-primary")" style="width: @pct%"></div>
                                 </div>
                                 <span class="progress-label">@pct% da capacidade utilizada</span>
+                                @if (DiagnosticReport.Overview.CurrentPeriodEndUtc.HasValue)
+                                {
+                                    <span class="small text-muted d-block mt-2">
+                                        📅 @(DiagnosticReport.Overview.CancelAtPeriodEnd ? "Vencimento/Cancelamento" : "Próxima renovação"): <strong>@DiagnosticReport.Overview.CurrentPeriodEndUtc.Value.ToLocalTime().ToString("dd/MM/yyyy")</strong>
+                                    </span>
+                                }
                             </div>
                         </div>
                         <div class="card-footer">

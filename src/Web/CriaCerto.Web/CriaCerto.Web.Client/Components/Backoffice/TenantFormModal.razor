@@ -58,6 +58,10 @@
                         <label>Tipo Produtivo</label>
                         <input type="text" class="form-control" @bind="Type" />
                     </div>
+                    <div class="form-group">
+                        <label>Renovação do Plano</label>
+                        <input type="date" class="form-control" value="@(CurrentPeriodEnd?.ToString("yyyy-MM-dd"))" @onchange="HandleRenewalDateChange" />
+                    </div>
                 </div>
                 @if (!IsEdit)
                 {
@@ -144,10 +148,23 @@
     [Parameter] public string? TechnicalOwnerEmail { get; set; }
     [Parameter] public string? CommercialOwnerName { get; set; }
     [Parameter] public string? CommercialOwnerEmail { get; set; }
+    [Parameter] public DateTime? CurrentPeriodEnd { get; set; }
     [Parameter] public EventCallback OnClose { get; set; }
     [Parameter] public EventCallback<TenantFormSaveModel> OnSave { get; set; }
 
     private string? OwnerUserEmail { get; set; }
+
+    private void HandleRenewalDateChange(ChangeEventArgs e)
+    {
+        if (DateTime.TryParse(e.Value?.ToString(), out var dt))
+        {
+            CurrentPeriodEnd = DateTime.SpecifyKind(dt, DateTimeKind.Utc);
+        }
+        else
+        {
+            CurrentPeriodEnd = null;
+        }
+    }
 
     private async Task Close() => await OnClose.InvokeAsync();
 
@@ -157,7 +174,7 @@
             TenantId, Name, LegalName, CNPJ, ExternalIdentifier, State, City,
             StateRegistration, AreaInHectares, Capacity, Type, SubscribedPlan,
             TechnicalOwnerName, TechnicalOwnerEmail, CommercialOwnerName, CommercialOwnerEmail,
-            OwnerUserEmail));
+            OwnerUserEmail, CurrentPeriodEnd));
     }
 
     public sealed record TenantFormSaveModel(
@@ -177,6 +194,7 @@
         string? TechnicalOwnerEmail,
         string? CommercialOwnerName,
         string? CommercialOwnerEmail,
-        string? OwnerUserEmail
+        string? OwnerUserEmail,
+        DateTime? CurrentPeriodEnd = null
     );
 }

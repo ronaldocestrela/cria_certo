@@ -29,7 +29,9 @@ internal static class TenantBackofficeMapper
             tenant.TechnicalOwnerName,
             tenant.CommercialOwnerName,
             tenant.IsProtected,
-            tenant.CreatedAtUtc);
+            tenant.CreatedAtUtc,
+            tenant.CurrentPeriodEndUtc,
+            tenant.CancelAtPeriodEnd);
 
     public static TenantBackofficeDetailDto ToDetailDto(
         Tenant tenant,
@@ -69,7 +71,9 @@ internal static class TenantBackofficeMapper
             teamMemberCount,
             productionUnitCount,
             tenant.CreatedAtUtc,
-            tenant.UpdatedAtUtc);
+            tenant.UpdatedAtUtc,
+            tenant.CurrentPeriodEndUtc,
+            tenant.CancelAtPeriodEnd);
     }
 
     public static async Task<IReadOnlyDictionary<Guid, List<TenantOperationalTagDto>>> LoadTagsByTenantIdsAsync(

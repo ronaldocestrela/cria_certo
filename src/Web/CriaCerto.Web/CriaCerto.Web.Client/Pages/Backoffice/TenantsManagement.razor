@@ -170,7 +170,15 @@
                                                 </div>
                                             </td>
                                             <td><span class="status-badge status-@tenant.Status.ToLower()">@tenant.Status</span></td>
-                                            <td>@tenant.SubscribedPlan</td>
+                                            <td>
+                                                <div class="fw-semibold">@tenant.SubscribedPlan</div>
+                                                @if (tenant.CurrentPeriodEndUtc.HasValue)
+                                                {
+                                                    <div class="renewal-info @(tenant.CancelAtPeriodEnd ? "text-warning" : "text-muted")" style="font-size: 0.75rem;" title="@(tenant.CancelAtPeriodEnd ? "Cancelamento agendado para o fim do período" : "Data prevista para renovação automática")">
+                                                        @(tenant.CancelAtPeriodEnd ? "Cancela: " : "Renova: ")@tenant.CurrentPeriodEndUtc.Value.ToLocalTime().ToString("dd/MM/yyyy")
+                                                    </div>
+                                                }
+                                            </td>
                                             <td>@tenant.State</td>
                                             <td>@tenant.SizeSegment</td>
                                             <td>@tenant.CommercialRegion</td>
@@ -290,6 +298,25 @@
                                     <dt>Status alterado em</dt><dd>@SelectedTenant.StatusChangedAtUtc.Value.ToLocalTime().ToString("g")</dd>
                                 }
                                 <dt>Plano</dt><dd>@SelectedTenant.SubscribedPlan</dd>
+                                <dt>Renovação do Plano</dt>
+                                <dd>
+                                    @if (SelectedTenant.CurrentPeriodEndUtc.HasValue)
+                                    {
+                                        <strong>@SelectedTenant.CurrentPeriodEndUtc.Value.ToLocalTime().ToString("dd/MM/yyyy")</strong>
+                                        @if (SelectedTenant.CancelAtPeriodEnd)
+                                        {
+                                            <span class="badge bg-warning text-dark ms-2" title="Assinatura não será renovada ao término do ciclo atual">Cancela no fim do período</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-success-subtle text-success ms-2" title="Renovação automática ativa">Renovação automática</span>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">Não definida (Vitalício / Manual)</span>
+                                    }
+                                </dd>
                                 <dt>Capacidade</dt><dd>@SelectedTenant.Capacity.ToString("N0") cabeças</dd>
                                 <dt>Limite do Plano</dt><dd>@(SelectedTenant.PlanHeadCapacityLimit == int.MaxValue ? "Ilimitado" : SelectedTenant.PlanHeadCapacityLimit.ToString("N0"))</dd>
                                 <dt>Acima do Plano</dt><dd class="@(SelectedTenant.IsOverPlanLimit ? "text-warning" : "")">@(SelectedTenant.IsOverPlanLimit ? "Sim" : "Não")</dd>
@@ -429,6 +456,7 @@
             TechnicalOwnerEmail="@FormTechOwnerEmail"
             CommercialOwnerName="@FormCommOwnerName"
             CommercialOwnerEmail="@FormCommOwnerEmail"
+            CurrentPeriodEnd="@FormCurrentPeriodEnd"
             OnClose="CloseModal"
             OnSave="HandleSave" />
 
@@ -450,6 +478,8 @@
             IsOpen="IsPlanModalOpen"
             TenantId="@(SelectedTenant?.Id ?? Guid.Empty)"
             TenantName="@(SelectedTenant?.Name ?? string.Empty)"
+            CurrentPeriodEndUtc="@(SelectedTenant?.CurrentPeriodEndUtc)"
+            CancelAtPeriodEnd="@(SelectedTenant?.CancelAtPeriodEnd ?? false)"
             OnClosed="() => IsPlanModalOpen = false"
             OnPlanChanged="HandlePlanChanged" />
 
@@ -599,6 +629,7 @@
     private string? FormTechOwnerEmail;
     private string? FormCommOwnerName;
     private string? FormCommOwnerEmail;
+    private DateTime? FormCurrentPeriodEnd;
 
     private bool IsLifecycleModalOpen;
     private TenantLifecycleModal.LifecycleAction LifecycleAction;
@@ -826,6 +857,7 @@
         FormTechOwnerEmail = null;
         FormCommOwnerName = null;
         FormCommOwnerEmail = null;
+        FormCurrentPeriodEnd = null;
         IsModalOpen = true;
     }
 
@@ -849,6 +881,7 @@
         FormTechOwnerEmail = SelectedTenant.TechnicalOwnerEmail;
         FormCommOwnerName = SelectedTenant.CommercialOwnerName;
         FormCommOwnerEmail = SelectedTenant.CommercialOwnerEmail;
+        FormCurrentPeriodEnd = SelectedTenant.CurrentPeriodEndUtc;
         IsModalOpen = true;
     }
 
@@ -863,7 +896,9 @@
                 model.State, model.City, model.StateRegistration, model.AreaInHectares,
                 model.Capacity, model.Type,
                 model.TechnicalOwnerName, model.TechnicalOwnerEmail,
-                model.CommercialOwnerName, model.CommercialOwnerEmail);
+                model.CommercialOwnerName, model.CommercialOwnerEmail,
+                CurrentPeriodEndUtc: model.CurrentPeriodEnd,
+                UpdateCurrentPeriodEnd: true);
             await ApiClient.UpdateTenantAsync(model.TenantId, request);
             await SelectTenant(model.TenantId);
         }
@@ -874,7 +909,8 @@
                 model.State, model.City, model.StateRegistration, model.AreaInHectares,
                 model.SubscribedPlan, model.Capacity, model.Type,
                 model.TechnicalOwnerName, model.TechnicalOwnerEmail,
-                model.CommercialOwnerName, model.CommercialOwnerEmail, model.OwnerUserEmail);
+                model.CommercialOwnerName, model.CommercialOwnerEmail, model.OwnerUserEmail,
+                CurrentPeriodEndUtc: model.CurrentPeriodEnd);
             var created = await ApiClient.CreateTenantAsync(request);
             if (created != null)
             {

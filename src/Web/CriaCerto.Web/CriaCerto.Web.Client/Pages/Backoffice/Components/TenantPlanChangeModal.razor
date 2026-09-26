@@ -91,6 +91,14 @@
                                             </div>
                                         </div>
                                     }
+                                    @if (CurrentPeriodEndUtc.HasValue)
+                                    {
+                                        <div class="mt-2 pt-2 border-top text-muted small">
+                                            <i class="bi bi-calendar-event me-1"></i>
+                                            @(CancelAtPeriodEnd ? "Assinatura cancela em: " : "Ciclo atual renova em: ")
+                                            <strong>@CurrentPeriodEndUtc.Value.ToLocalTime().ToString("dd/MM/yyyy")</strong>
+                                        </div>
+                                    }
                                 </div>
                             </div>
                         }
@@ -124,6 +132,8 @@
     [Parameter] public bool IsOpen { get; set; }
     [Parameter] public Guid TenantId { get; set; }
     [Parameter] public string TenantName { get; set; } = string.Empty;
+    [Parameter] public DateTime? CurrentPeriodEndUtc { get; set; }
+    [Parameter] public bool CancelAtPeriodEnd { get; set; }
     [Parameter] public EventCallback OnClosed { get; set; }
     [Parameter] public EventCallback<ChangeTenantPlanResponseDto> OnPlanChanged { get; set; }
 

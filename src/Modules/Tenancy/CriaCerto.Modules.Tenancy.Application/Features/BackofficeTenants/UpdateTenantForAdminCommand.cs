@@ -24,7 +24,9 @@ public record UpdateTenantForAdminCommand(
     string? TechnicalOwnerName,
     string? TechnicalOwnerEmail,
     string? CommercialOwnerName,
-    string? CommercialOwnerEmail
+    string? CommercialOwnerEmail,
+    DateTime? CurrentPeriodEndUtc = null,
+    bool UpdateCurrentPeriodEnd = false
 ) : IRequest<Result<TenantBackofficeDetailDto>>;
 
 public sealed class UpdateTenantForAdminCommandValidator : AbstractValidator<UpdateTenantForAdminCommand>
@@ -136,6 +138,10 @@ public sealed class UpdateTenantForAdminCommandHandler : IRequestHandler<UpdateT
         tenant.TechnicalOwnerEmail = TrimOrNull(request.TechnicalOwnerEmail);
         tenant.CommercialOwnerName = TrimOrNull(request.CommercialOwnerName);
         tenant.CommercialOwnerEmail = TrimOrNull(request.CommercialOwnerEmail);
+        if (request.UpdateCurrentPeriodEnd)
+        {
+            tenant.CurrentPeriodEndUtc = request.CurrentPeriodEndUtc;
+        }
         tenant.UpdatedAtUtc = DateTime.UtcNow;
         tenant.CommercialRegion = TenantSegmentationCatalog.ResolveCommercialRegionFromState(tenant.State);
         if (tenant.SizeSegment == TenantSegmentationCatalog.SizeSegments.Small && tenant.Capacity != request.Capacity)

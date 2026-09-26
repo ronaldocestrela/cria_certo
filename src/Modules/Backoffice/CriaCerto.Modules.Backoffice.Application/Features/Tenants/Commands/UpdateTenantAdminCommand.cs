@@ -25,7 +25,9 @@ public record UpdateTenantAdminCommand(
     string? CommercialOwnerEmail,
     Guid PerformedByAdminUserId,
     string PerformedByAdminEmail,
-    string IpAddress
+    string IpAddress,
+    DateTime? CurrentPeriodEndUtc = null,
+    bool UpdateCurrentPeriodEnd = false
 ) : IRequest<Result<TenantAdminDetailDto>>;
 
 public sealed class UpdateTenantAdminCommandHandler : IRequestHandler<UpdateTenantAdminCommand, Result<TenantAdminDetailDto>>
@@ -62,7 +64,9 @@ public sealed class UpdateTenantAdminCommandHandler : IRequestHandler<UpdateTena
             request.TechnicalOwnerName,
             request.TechnicalOwnerEmail,
             request.CommercialOwnerName,
-            request.CommercialOwnerEmail);
+            request.CommercialOwnerEmail,
+            request.CurrentPeriodEndUtc,
+            request.UpdateCurrentPeriodEnd);
 
         var result = await _sender.Send(tenancyCommand, cancellationToken);
         if (result.IsFailure)

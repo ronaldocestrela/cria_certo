@@ -32,7 +32,9 @@ internal static class TenantAdminMapper
             masker != null ? masker.MaskPersonName(dto.TechnicalOwnerName) : dto.TechnicalOwnerName,
             masker != null ? masker.MaskPersonName(dto.CommercialOwnerName) : dto.CommercialOwnerName,
             dto.IsProtected,
-            dto.CreatedAtUtc);
+            dto.CreatedAtUtc,
+            dto.CurrentPeriodEndUtc,
+            dto.CancelAtPeriodEnd);
 
     public static TenantAdminDetailDto ToDetailDto(TenantBackofficeDetailDto dto, IPiiDataMasker? masker = null) =>
         new(
@@ -66,7 +68,9 @@ internal static class TenantAdminMapper
             dto.TeamMemberCount,
             dto.ProductionUnitCount,
             dto.CreatedAtUtc,
-            dto.UpdatedAtUtc);
+            dto.UpdatedAtUtc,
+            dto.CurrentPeriodEndUtc,
+            dto.CancelAtPeriodEnd);
 
     public static PagedTenantAdminResult ToPagedResult(PagedTenantBackofficeResult<TenantBackofficeSummaryDto> result, IPiiDataMasker? masker = null) =>
         new(

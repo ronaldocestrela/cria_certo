@@ -26,7 +26,8 @@ public record CreateTenantAdminCommand(
     string? OwnerUserEmail,
     Guid PerformedByAdminUserId,
     string PerformedByAdminEmail,
-    string IpAddress
+    string IpAddress,
+    DateTime? CurrentPeriodEndUtc = null
 ) : IRequest<Result<TenantAdminDetailDto>>;
 
 public sealed class CreateTenantAdminCommandHandler : IRequestHandler<CreateTenantAdminCommand, Result<TenantAdminDetailDto>>
@@ -58,7 +59,8 @@ public sealed class CreateTenantAdminCommandHandler : IRequestHandler<CreateTena
             request.TechnicalOwnerEmail,
             request.CommercialOwnerName,
             request.CommercialOwnerEmail,
-            request.OwnerUserEmail);
+            request.OwnerUserEmail,
+            CurrentPeriodEndUtc: request.CurrentPeriodEndUtc);
 
         var result = await _sender.Send(tenancyCommand, cancellationToken);
         if (result.IsFailure)
