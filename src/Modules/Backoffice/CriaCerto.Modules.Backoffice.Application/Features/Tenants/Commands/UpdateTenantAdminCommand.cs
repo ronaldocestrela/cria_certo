@@ -92,7 +92,8 @@ public sealed class UpdateTenantAdminCommandHandler : IRequestHandler<UpdateTena
                     before.ExternalIdentifier,
                     before.Capacity,
                     before.TechnicalOwnerName,
-                    before.CommercialOwnerName
+                    before.CommercialOwnerName,
+                    before.CurrentPeriodEndUtc
                 },
                 After = new
                 {
@@ -101,7 +102,8 @@ public sealed class UpdateTenantAdminCommandHandler : IRequestHandler<UpdateTena
                     after.ExternalIdentifier,
                     after.Capacity,
                     after.TechnicalOwnerName,
-                    after.CommercialOwnerName
+                    after.CommercialOwnerName,
+                    after.CurrentPeriodEndUtc
                 }
             }));
 

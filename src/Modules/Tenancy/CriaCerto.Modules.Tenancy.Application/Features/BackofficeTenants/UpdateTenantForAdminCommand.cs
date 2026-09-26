@@ -43,7 +43,8 @@ public sealed class UpdateTenantForAdminCommandValidator : AbstractValidator<Upd
 
         RuleFor(x => x.CNPJ)
             .NotEmpty().WithMessage("O CNPJ/CPF é obrigatório.")
-            .Must(CnpjNormalizer.IsValidCnpjOrCpf).WithMessage("O CNPJ ou CPF informado é inválido.");
+            .Must(cnpj => cnpj.Contains('*') || CnpjNormalizer.IsValidCnpjOrCpf(cnpj))
+            .WithMessage("O CNPJ ou CPF informado é inválido.");
 
         RuleFor(x => x.State)
             .NotEmpty().WithMessage("O estado (UF) é obrigatório.")
@@ -92,17 +93,24 @@ public sealed class UpdateTenantForAdminCommandHandler : IRequestHandler<UpdateT
             return Result.Failure<TenantBackofficeDetailDto>(TenancyErrors.TenantNotFound);
         }
 
-        var cnpjNormalized = CnpjNormalizer.Normalize(request.CNPJ);
-        if (!CnpjNormalizer.IsValidCnpjOrCpf(request.CNPJ))
+        var isCnpjMasked = request.CNPJ.Contains('*');
+        if (!isCnpjMasked)
         {
-            return Result.Failure<TenantBackofficeDetailDto>(TenancyErrors.InvalidCnpj);
-        }
+            var cnpjNormalized = CnpjNormalizer.Normalize(request.CNPJ);
+            if (!CnpjNormalizer.IsValidCnpjOrCpf(request.CNPJ))
+            {
+                return Result.Failure<TenantBackofficeDetailDto>(TenancyErrors.InvalidCnpj);
+            }
 
-        var cnpjConflict = await _dbContext.Tenants
-            .AnyAsync(t => t.CnpjNormalized == cnpjNormalized && t.Id != request.TenantId, cancellationToken);
-        if (cnpjConflict)
-        {
-            return Result.Failure<TenantBackofficeDetailDto>(TenancyErrors.CnpjAlreadyExists);
+            var cnpjConflict = await _dbContext.Tenants
+                .AnyAsync(t => t.CnpjNormalized == cnpjNormalized && t.Id != request.TenantId, cancellationToken);
+            if (cnpjConflict)
+            {
+                return Result.Failure<TenantBackofficeDetailDto>(TenancyErrors.CnpjAlreadyExists);
+            }
+
+            tenant.CNPJ = request.CNPJ.Trim();
+            tenant.CnpjNormalized = cnpjNormalized;
         }
 
         var externalId = string.IsNullOrWhiteSpace(request.ExternalIdentifier) ? null : request.ExternalIdentifier.Trim();
@@ -125,8 +133,6 @@ public sealed class UpdateTenantForAdminCommandHandler : IRequestHandler<UpdateT
 
         tenant.Name = request.Name.Trim();
         tenant.LegalName = string.IsNullOrWhiteSpace(request.LegalName) ? null : request.LegalName.Trim();
-        tenant.CNPJ = request.CNPJ.Trim();
-        tenant.CnpjNormalized = cnpjNormalized;
         tenant.ExternalIdentifier = externalId;
         tenant.State = request.State.Trim().ToUpperInvariant();
         tenant.City = request.City.Trim();
@@ -134,13 +140,27 @@ public sealed class UpdateTenantForAdminCommandHandler : IRequestHandler<UpdateT
         tenant.AreaInHectares = request.AreaInHectares;
         tenant.Capacity = request.Capacity;
         tenant.Type = request.Type.Trim();
-        tenant.TechnicalOwnerName = TrimOrNull(request.TechnicalOwnerName);
-        tenant.TechnicalOwnerEmail = TrimOrNull(request.TechnicalOwnerEmail);
-        tenant.CommercialOwnerName = TrimOrNull(request.CommercialOwnerName);
-        tenant.CommercialOwnerEmail = TrimOrNull(request.CommercialOwnerEmail);
+        if (request.TechnicalOwnerName == null || !request.TechnicalOwnerName.Contains('*'))
+        {
+            tenant.TechnicalOwnerName = TrimOrNull(request.TechnicalOwnerName);
+        }
+        if (request.TechnicalOwnerEmail == null || !request.TechnicalOwnerEmail.Contains('*'))
+        {
+            tenant.TechnicalOwnerEmail = TrimOrNull(request.TechnicalOwnerEmail);
+        }
+        if (request.CommercialOwnerName == null || !request.CommercialOwnerName.Contains('*'))
+        {
+            tenant.CommercialOwnerName = TrimOrNull(request.CommercialOwnerName);
+        }
+        if (request.CommercialOwnerEmail == null || !request.CommercialOwnerEmail.Contains('*'))
+        {
+            tenant.CommercialOwnerEmail = TrimOrNull(request.CommercialOwnerEmail);
+        }
         if (request.UpdateCurrentPeriodEnd)
         {
-            tenant.CurrentPeriodEndUtc = request.CurrentPeriodEndUtc;
+            tenant.CurrentPeriodEndUtc = request.CurrentPeriodEndUtc.HasValue
+                ? DateTime.SpecifyKind(request.CurrentPeriodEndUtc.Value, DateTimeKind.Utc)
+                : null;
         }
         tenant.UpdatedAtUtc = DateTime.UtcNow;
         tenant.CommercialRegion = TenantSegmentationCatalog.ResolveCommercialRegionFromState(tenant.State);

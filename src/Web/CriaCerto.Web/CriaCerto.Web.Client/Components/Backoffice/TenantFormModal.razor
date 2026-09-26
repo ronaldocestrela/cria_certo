@@ -11,56 +11,69 @@
                 <button class="close-btn" @onclick="Close">✕</button>
             </div>
             <div class="modal-body">
+                @if (!string.IsNullOrWhiteSpace(ErrorMessage))
+                {
+                    <div style="background: rgba(239, 68, 68, 0.15); border: 1px solid #ef4444; color: #fca5a5; padding: 0.75rem 1rem; border-radius: 0.5rem; font-size: 0.85rem; margin-bottom: 0.5rem;">
+                        ⚠️ @ErrorMessage
+                    </div>
+                }
                 <div class="form-row">
                     <div class="form-group">
                         <label>Nome da Fazenda *</label>
-                        <input type="text" class="form-control" @bind="Name" />
+                        <input type="text" class="form-control" @bind="_name" />
                     </div>
                     <div class="form-group">
                         <label>Razão Social</label>
-                        <input type="text" class="form-control" @bind="LegalName" />
+                        <input type="text" class="form-control" @bind="_legalName" />
                     </div>
                 </div>
                 <div class="form-row">
                     <div class="form-group">
                         <label>CNPJ/CPF *</label>
-                        <input type="text" class="form-control" @bind="CNPJ" />
+                        @if (IsEdit)
+                        {
+                            <input type="text" class="form-control" value="@_cnpj" readonly title="Documento fiscal imutável na edição cadastral básica." style="opacity: 0.75; cursor: not-allowed;" />
+                        }
+                        else
+                        {
+                            <input type="text" class="form-control" @bind="_cnpj" />
+                        }
                     </div>
                     <div class="form-group">
                         <label>Identificador Externo</label>
-                        <input type="text" class="form-control" @bind="ExternalIdentifier" />
+                        <input type="text" class="form-control" @bind="_externalIdentifier" />
                     </div>
                 </div>
                 <div class="form-row">
                     <div class="form-group">
                         <label>UF *</label>
-                        <input type="text" class="form-control" maxlength="2" @bind="State" />
+                        <input type="text" class="form-control" maxlength="2" @bind="_state" />
                     </div>
                     <div class="form-group">
                         <label>Município *</label>
-                        <input type="text" class="form-control" @bind="City" />
+                        <input type="text" class="form-control" @bind="_city" />
                     </div>
                     <div class="form-group">
                         <label>Inscrição Estadual</label>
-                        <input type="text" class="form-control" @bind="StateRegistration" />
+                        <input type="text" class="form-control" @bind="_stateRegistration" />
                     </div>
                 </div>
                 <div class="form-row">
                     <div class="form-group">
                         <label>Área (ha)</label>
-                        <input type="number" class="form-control" @bind="AreaInHectares" />
+                        <input type="number" class="form-control" @bind="_areaInHectares" />
                     </div>
                     <div class="form-group">
                         <label>Capacidade (cabeças) *</label>
-                        <input type="number" class="form-control" @bind="Capacity" />
+                        <input type="number" class="form-control" @bind="_capacity" />
                     </div>
                     <div class="form-group">
                         <label>Tipo Produtivo</label>
-                        <input type="text" class="form-control" @bind="Type" />
+                        <input type="text" class="form-control" @bind="_type" />
                     </div>
                     <div class="form-group">
                         <label>Renovação do Plano</label>
-                        <input type="date" class="form-control" value="@(CurrentPeriodEnd?.ToString("yyyy-MM-dd"))" @onchange="HandleRenewalDateChange" />
+                        <input type="date" class="form-control" value="@_renewalDateString" @onchange="HandleRenewalDateChange" />
                     </div>
                 </div>
                 @if (!IsEdit)
@@ -68,7 +81,7 @@
                     <div class="form-row">
                         <div class="form-group">
                             <label>Plano *</label>
-                            <select class="form-control" @bind="SubscribedPlan">
+                            <select class="form-control" @bind="_subscribedPlan">
                                 <option value="Starter">Starter</option>
                                 <option value="Pro">Pro</option>
                                 <option value="Enterprise">Enterprise</option>
@@ -76,7 +89,7 @@
                         </div>
                         <div class="form-group">
                             <label>E-mail Owner Produtor (opcional)</label>
-                            <input type="email" class="form-control" @bind="OwnerUserEmail" placeholder="produtor@fazenda.com.br" />
+                            <input type="email" class="form-control" @bind="_ownerUserEmail" placeholder="produtor@fazenda.com.br" />
                         </div>
                     </div>
                 }
@@ -84,21 +97,21 @@
                 <div class="form-row">
                     <div class="form-group">
                         <label>Owner Técnico</label>
-                        <input type="text" class="form-control" @bind="TechnicalOwnerName" />
+                        <input type="text" class="form-control" @bind="_technicalOwnerName" />
                     </div>
                     <div class="form-group">
                         <label>E-mail Técnico</label>
-                        <input type="email" class="form-control" @bind="TechnicalOwnerEmail" />
+                        <input type="email" class="form-control" @bind="_technicalOwnerEmail" />
                     </div>
                 </div>
                 <div class="form-row">
                     <div class="form-group">
                         <label>Owner Comercial</label>
-                        <input type="text" class="form-control" @bind="CommercialOwnerName" />
+                        <input type="text" class="form-control" @bind="_commercialOwnerName" />
                     </div>
                     <div class="form-group">
                         <label>E-mail Comercial</label>
-                        <input type="email" class="form-control" @bind="CommercialOwnerEmail" />
+                        <input type="email" class="form-control" @bind="_commercialOwnerEmail" />
                     </div>
                 </div>
             </div>
@@ -149,20 +162,64 @@
     [Parameter] public string? CommercialOwnerName { get; set; }
     [Parameter] public string? CommercialOwnerEmail { get; set; }
     [Parameter] public DateTime? CurrentPeriodEnd { get; set; }
+    [Parameter] public string? ErrorMessage { get; set; }
     [Parameter] public EventCallback OnClose { get; set; }
     [Parameter] public EventCallback<TenantFormSaveModel> OnSave { get; set; }
 
-    private string? OwnerUserEmail { get; set; }
+    private string _name = string.Empty;
+    private string? _legalName;
+    private string _cnpj = string.Empty;
+    private string? _externalIdentifier;
+    private string _state = string.Empty;
+    private string _city = string.Empty;
+    private string _stateRegistration = string.Empty;
+    private decimal _areaInHectares;
+    private int _capacity = 500;
+    private string _type = "Pecuária de Corte e Cria";
+    private string _subscribedPlan = "Starter";
+    private string? _technicalOwnerName;
+    private string? _technicalOwnerEmail;
+    private string? _commercialOwnerName;
+    private string? _commercialOwnerEmail;
+    private string? _ownerUserEmail;
+    private DateTime? _currentPeriodEnd;
+    private string? _renewalDateString;
+
+    protected override void OnParametersSet()
+    {
+        _name = Name;
+        _legalName = LegalName;
+        _cnpj = CNPJ;
+        _externalIdentifier = ExternalIdentifier;
+        _state = State;
+        _city = City;
+        _stateRegistration = StateRegistration;
+        _areaInHectares = AreaInHectares;
+        _capacity = Capacity;
+        _type = Type;
+        _subscribedPlan = SubscribedPlan;
+        _technicalOwnerName = TechnicalOwnerName;
+        _technicalOwnerEmail = TechnicalOwnerEmail;
+        _commercialOwnerName = CommercialOwnerName;
+        _commercialOwnerEmail = CommercialOwnerEmail;
+        _currentPeriodEnd = CurrentPeriodEnd;
+        _renewalDateString = CurrentPeriodEnd.HasValue
+            ? CurrentPeriodEnd.Value.ToLocalTime().ToString("yyyy-MM-dd")
+            : null;
+    }
 
     private void HandleRenewalDateChange(ChangeEventArgs e)
     {
-        if (DateTime.TryParse(e.Value?.ToString(), out var dt))
+        var str = e.Value?.ToString();
+        _renewalDateString = str;
+        if (!string.IsNullOrWhiteSpace(str) && DateTime.TryParse(str, out var dt))
         {
-            CurrentPeriodEnd = DateTime.SpecifyKind(dt, DateTimeKind.Utc);
+            var localDateTime = DateTime.SpecifyKind(dt.Date, DateTimeKind.Local);
+            _currentPeriodEnd = localDateTime.ToUniversalTime();
         }
         else
         {
-            CurrentPeriodEnd = null;
+            _currentPeriodEnd = null;
         }
     }
 
@@ -171,10 +228,10 @@
     private async Task Save()
     {
         await OnSave.InvokeAsync(new TenantFormSaveModel(
-            TenantId, Name, LegalName, CNPJ, ExternalIdentifier, State, City,
-            StateRegistration, AreaInHectares, Capacity, Type, SubscribedPlan,
-            TechnicalOwnerName, TechnicalOwnerEmail, CommercialOwnerName, CommercialOwnerEmail,
-            OwnerUserEmail, CurrentPeriodEnd));
+            TenantId, _name, _legalName, _cnpj, _externalIdentifier, _state, _city,
+            _stateRegistration, _areaInHectares, _capacity, _type, _subscribedPlan,
+            _technicalOwnerName, _technicalOwnerEmail, _commercialOwnerName, _commercialOwnerEmail,
+            _ownerUserEmail, _currentPeriodEnd));
     }
 
     public sealed record TenantFormSaveModel(

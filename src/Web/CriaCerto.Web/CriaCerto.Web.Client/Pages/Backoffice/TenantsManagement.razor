@@ -457,6 +457,7 @@
             CommercialOwnerName="@FormCommOwnerName"
             CommercialOwnerEmail="@FormCommOwnerEmail"
             CurrentPeriodEnd="@FormCurrentPeriodEnd"
+            ErrorMessage="@FormErrorMessage"
             OnClose="CloseModal"
             OnSave="HandleSave" />
 
@@ -630,6 +631,7 @@
     private string? FormCommOwnerName;
     private string? FormCommOwnerEmail;
     private DateTime? FormCurrentPeriodEnd;
+    private string? FormErrorMessage;
 
     private bool IsLifecycleModalOpen;
     private TenantLifecycleModal.LifecycleAction LifecycleAction;
@@ -858,6 +860,7 @@
         FormCommOwnerName = null;
         FormCommOwnerEmail = null;
         FormCurrentPeriodEnd = null;
+        FormErrorMessage = null;
         IsModalOpen = true;
     }
 
@@ -882,13 +885,19 @@
         FormCommOwnerName = SelectedTenant.CommercialOwnerName;
         FormCommOwnerEmail = SelectedTenant.CommercialOwnerEmail;
         FormCurrentPeriodEnd = SelectedTenant.CurrentPeriodEndUtc;
+        FormErrorMessage = null;
         IsModalOpen = true;
     }
 
-    private void CloseModal() => IsModalOpen = false;
+    private void CloseModal()
+    {
+        IsModalOpen = false;
+        FormErrorMessage = null;
+    }
 
     private async Task HandleSave(TenantFormModal.TenantFormSaveModel model)
     {
+        FormErrorMessage = null;
         if (IsModalEdit)
         {
             var request = new UpdateTenantAdminRequest(
@@ -899,7 +908,13 @@
                 model.CommercialOwnerName, model.CommercialOwnerEmail,
                 CurrentPeriodEndUtc: model.CurrentPeriodEnd,
                 UpdateCurrentPeriodEnd: true);
-            await ApiClient.UpdateTenantAsync(model.TenantId, request);
+            var result = await ApiClient.UpdateTenantAsync(model.TenantId, request);
+            if (!result.IsSuccess)
+            {
+                FormErrorMessage = result.ErrorMessage ?? "Erro ao atualizar dados do tenant.";
+                return;
+            }
+
             await SelectTenant(model.TenantId);
         }
         else
@@ -911,10 +926,16 @@
                 model.TechnicalOwnerName, model.TechnicalOwnerEmail,
                 model.CommercialOwnerName, model.CommercialOwnerEmail, model.OwnerUserEmail,
                 CurrentPeriodEndUtc: model.CurrentPeriodEnd);
-            var created = await ApiClient.CreateTenantAsync(request);
-            if (created != null)
+            var result = await ApiClient.CreateTenantAsync(request);
+            if (!result.IsSuccess)
             {
-                await SelectTenant(created.Id);
+                FormErrorMessage = result.ErrorMessage ?? "Erro ao cadastrar tenant.";
+                return;
+            }
+
+            if (result.Tenant != null)
+            {
+                await SelectTenant(result.Tenant.Id);
             }
         }
 

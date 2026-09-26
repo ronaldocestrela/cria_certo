@@ -74,8 +74,8 @@ public interface IBackofficeApiClient
     Task<bool> DeleteSavedFilterAsync(Guid filterId, CancellationToken cancellationToken = default);
     Task<ExportTenantsResult?> ExportTenantsCsvAsync(TenantAdminFilterDto filter, CancellationToken cancellationToken = default);
     Task<TenantAdminDetailDto?> GetTenantByIdAsync(Guid id, CancellationToken cancellationToken = default);
-    Task<TenantAdminDetailDto?> CreateTenantAsync(CreateTenantAdminRequest request, CancellationToken cancellationToken = default);
-    Task<TenantAdminDetailDto?> UpdateTenantAsync(Guid id, UpdateTenantAdminRequest request, CancellationToken cancellationToken = default);
+    Task<TenantMutationResult> CreateTenantAsync(CreateTenantAdminRequest request, CancellationToken cancellationToken = default);
+    Task<TenantMutationResult> UpdateTenantAsync(Guid id, UpdateTenantAdminRequest request, CancellationToken cancellationToken = default);
     Task<LifecycleActionResult> SuspendTenantAsync(Guid id, string reason, CancellationToken cancellationToken = default);
     Task<LifecycleActionResult> ReactivateTenantAsync(Guid id, string reason, CancellationToken cancellationToken = default);
     Task<LifecycleActionResult> CancelTenantAsync(Guid id, string reason, CancellationToken cancellationToken = default);
@@ -180,6 +180,13 @@ public sealed class ImpersonationResult
 }
 
 public sealed class LifecycleActionResult
+{
+    public TenantAdminDetailDto? Tenant { get; init; }
+    public string? ErrorMessage { get; init; }
+    public bool IsSuccess => Tenant is not null && string.IsNullOrWhiteSpace(ErrorMessage);
+}
+
+public sealed class TenantMutationResult
 {
     public TenantAdminDetailDto? Tenant { get; init; }
     public string? ErrorMessage { get; init; }
@@ -484,20 +491,52 @@ public class BackofficeApiClient : IBackofficeApiClient
         return await _httpClient.GetFromJsonAsync<TenantAdminDetailDto>($"api/v1/backoffice/tenants/{id}", cancellationToken);
     }
 
-    public async Task<TenantAdminDetailDto?> CreateTenantAsync(CreateTenantAdminRequest request, CancellationToken cancellationToken = default)
+    public async Task<TenantMutationResult> CreateTenantAsync(CreateTenantAdminRequest request, CancellationToken cancellationToken = default)
     {
         await AttachTokenAsync();
         var response = await _httpClient.PostAsJsonAsync("api/v1/backoffice/tenants", request, cancellationToken);
-        if (!response.IsSuccessStatusCode) return null;
-        return await response.Content.ReadFromJsonAsync<TenantAdminDetailDto>(cancellationToken: cancellationToken);
+        if (response.IsSuccessStatusCode)
+        {
+            var tenant = await response.Content.ReadFromJsonAsync<TenantAdminDetailDto>(cancellationToken: cancellationToken);
+            return new TenantMutationResult { Tenant = tenant };
+        }
+
+        string? errorMessage = null;
+        try
+        {
+            var error = await response.Content.ReadFromJsonAsync<Error>(cancellationToken: cancellationToken);
+            errorMessage = error?.Message;
+        }
+        catch { }
+
+        return new TenantMutationResult
+        {
+            ErrorMessage = !string.IsNullOrWhiteSpace(errorMessage) ? errorMessage : "Erro ao cadastrar tenant."
+        };
     }
 
-    public async Task<TenantAdminDetailDto?> UpdateTenantAsync(Guid id, UpdateTenantAdminRequest request, CancellationToken cancellationToken = default)
+    public async Task<TenantMutationResult> UpdateTenantAsync(Guid id, UpdateTenantAdminRequest request, CancellationToken cancellationToken = default)
     {
         await AttachTokenAsync();
         var response = await _httpClient.PutAsJsonAsync($"api/v1/backoffice/tenants/{id}", request, cancellationToken);
-        if (!response.IsSuccessStatusCode) return null;
-        return await response.Content.ReadFromJsonAsync<TenantAdminDetailDto>(cancellationToken: cancellationToken);
+        if (response.IsSuccessStatusCode)
+        {
+            var tenant = await response.Content.ReadFromJsonAsync<TenantAdminDetailDto>(cancellationToken: cancellationToken);
+            return new TenantMutationResult { Tenant = tenant };
+        }
+
+        string? errorMessage = null;
+        try
+        {
+            var error = await response.Content.ReadFromJsonAsync<Error>(cancellationToken: cancellationToken);
+            errorMessage = error?.Message;
+        }
+        catch { }
+
+        return new TenantMutationResult
+        {
+            ErrorMessage = !string.IsNullOrWhiteSpace(errorMessage) ? errorMessage : "Erro ao atualizar dados do tenant."
+        };
     }
 
     public Task<LifecycleActionResult> SuspendTenantAsync(Guid id, string reason, CancellationToken cancellationToken = default) =>
