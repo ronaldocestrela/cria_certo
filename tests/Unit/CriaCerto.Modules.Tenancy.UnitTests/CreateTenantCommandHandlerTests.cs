@@ -126,6 +126,8 @@ public class CreateTenantCommandHandlerTests : IDisposable
         tenantInDb!.State.Should().Be("MT");
         tenantInDb.SubscribedPlan.Should().Be("Pro");
         tenantInDb.Capacity.Should().Be(5000);
+        tenantInDb.Status.Should().Be("Trial");
+        tenantInDb.CurrentPeriodEndUtc.Should().NotBeNull();
 
         var userTenantInDb = await _dbContext.UserTenants
             .FirstOrDefaultAsync(ut => ut.UserId == user.Id && ut.TenantId == tenantInDb.Id);

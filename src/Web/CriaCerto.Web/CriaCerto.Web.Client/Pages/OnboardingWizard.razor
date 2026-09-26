@@ -8,7 +8,7 @@
 <PageTitle>Cria Certo - Configuração Inicial da Fazenda</PageTitle>
 
 <div class="min-h-screen flex flex-col items-center justify-center p-4 md:p-6" style="background-color: var(--cc-canvas);">
-    <main class="w-full max-w-[720px]">
+    <main class="w-full max-w-[780px]">
 
         <!-- Header logo -->
         <div class="flex flex-col items-center mb-6 text-center" style="display: flex; flex-direction: column; align-items: center; text-align: center; margin-bottom: 1.5rem;">
@@ -172,60 +172,156 @@
             }
             else if (CurrentStep == 3)
             {
-                <!-- STEP 3: PLANO & CAPACIDADE -->
+                <!-- STEP 3: PLANO & CAPACIDADE COM PERÍODO DE TESTE -->
                 <div class="space-y-4">
-                    <h3 class="font-headline text-lg font-bold" style="color: var(--cc-ink); margin-bottom: 0.5rem;">Passo 3: Escolha do Plano & Capacidade do Rebanho</h3>
-                    <p class="text-sm text-secondary" style="color: var(--cc-ink-muted); margin-bottom: 1.5rem;">
-                        Selecione o plano ideal para o tamanho da sua operação pecuária.
-                    </p>
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <div>
+                            <h3 class="font-headline text-lg font-bold" style="color: var(--cc-ink); margin: 0;">Passo 3: Escolha do Plano & Início do Teste</h3>
+                            <p class="text-sm text-secondary" style="color: var(--cc-ink-muted); margin: 0.25rem 0 0 0;">
+                                Selecione o plano ideal para sua fazenda. Você terá <strong>14 dias de teste grátis</strong> com acesso irrestrito.
+                            </p>
+                        </div>
+                        <span class="font-mono text-xs font-bold" style="background-color: #dcfce7; color: #166534; padding: 0.35rem 0.8rem; border-radius: 99px; border: 1px solid #86efac; display: inline-flex; align-items: center; gap: 0.35rem;">
+                            <span class="material-symbols-outlined" style="font-size: 16px;">verified</span>
+                            14 DIAS GRÁTIS
+                        </span>
+                    </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+                    <!-- Box de Transparência Financeira / Condições do Teste -->
+                    <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1.1rem 1.25rem; margin-bottom: 1.25rem;">
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 0.75rem;">
+                            <div style="display: flex; flex-direction: column;">
+                                <span class="font-mono text-[11px] uppercase font-bold" style="color: var(--cc-ink-muted);">Cobrança Hoje</span>
+                                <span class="font-headline text-base font-bold" style="color: #16a34a;">R$ 0,00 (Totalmente Grátis)</span>
+                            </div>
+                            <div style="display: flex; flex-direction: column;">
+                                <span class="font-mono text-[11px] uppercase font-bold" style="color: var(--cc-ink-muted);">Cartão de Crédito</span>
+                                <span class="font-headline text-base font-bold" style="color: var(--cc-ink);">Não exigido para começar</span>
+                            </div>
+                            <div style="display: flex; flex-direction: column;">
+                                <span class="font-mono text-[11px] uppercase font-bold" style="color: var(--cc-ink-muted);">Término do Teste</span>
+                                <span class="font-headline text-base font-bold" style="color: var(--cc-ink);">@TrialEndDateFormatted</span>
+                            </div>
+                        </div>
+                        <div style="border-top: 1px dashed #cbd5e1; padding-top: 0.65rem; font-size: 12px; color: var(--cc-ink-muted); display: flex; align-items: flex-start; gap: 0.5rem; line-height: 1.4;">
+                            <span class="material-symbols-outlined text-green-600" style="font-size: 16px; margin-top: 1px;">info</span>
+                            <span>
+                                <strong>Quando você realmente paga?</strong> Apenas em <strong>@TrialEndDateFormatted</strong>, e somente se você decidir continuar usando o sistema. Caso contrário, nada será cobrado.
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Cards de Planos com Preços Transparentes -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.25rem;">
                         
                         <!-- Starter Card -->
                         <div @onclick='() => SelectPlan("Starter", 1000)'
                              class="p-4 rounded-xl cursor-pointer border transition-all"
-                             style="padding: 1rem; border-radius: 12px; cursor: pointer; border: 2px solid @(SubscribedPlan == "Starter" ? "var(--cc-primary)" : "var(--cc-border)"); background-color: @(SubscribedPlan == "Starter" ? "#f0fdf4" : "white");">
-                            <div class="flex justify-between items-center mb-2" style="display: flex; justify-content: space-between; align-items: center;">
+                             style="padding: 1.15rem 1rem; border-radius: 12px; cursor: pointer; border: 2px solid @(SubscribedPlan == "Starter" ? "var(--cc-primary)" : "var(--cc-border)"); background-color: @(SubscribedPlan == "Starter" ? "#f0fdf4" : "white"); position: relative;">
+                            @if (SubscribedPlan == "Starter")
+                            {
+                                <div style="position: absolute; top: -10px; right: 12px; background-color: var(--cc-primary); color: white; padding: 0.15rem 0.55rem; border-radius: 99px; font-size: 10px; font-weight: bold;" class="font-mono">
+                                    SELECIONADO
+                                </div>
+                            }
+                            <div class="flex justify-between items-center mb-1">
                                 <h4 class="font-bold text-base" style="margin: 0; color: var(--cc-ink);">Starter</h4>
-                                @if (SubscribedPlan == "Starter")
-                                {
-                                    <span class="material-symbols-outlined text-green-600 text-sm" style="color: #16a34a;">check_circle</span>
-                                }
+                                <span class="font-mono text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded" style="border: 1px solid #bbf7d0;">R$ 149/mês</span>
                             </div>
-                            <p class="text-xs text-gray-500 mb-3" style="font-size: 12px; color: #6b7280;">Até 1.000 cabeças. Registro de plantel, pesagens e sanidade.</p>
-                            <span class="font-mono text-xs font-bold uppercase" style="color: var(--cc-primary);">Plano Recomendado</span>
+                            <p class="text-xs text-gray-500 mb-2" style="font-size: 12px; color: #6b7280; line-height: 1.4;">Até 1.000 cabeças. Plantel, pesagens de balança e controle sanitário.</p>
+                            <div class="font-mono text-[11px] font-semibold" style="color: var(--cc-primary);">
+                                14 dias R$ 0 &bull; após @TrialEndDateFormatted
+                            </div>
                         </div>
 
                         <!-- Pro Card -->
                         <div @onclick='() => SelectPlan("Pro", 5000)'
                              class="p-4 rounded-xl cursor-pointer border transition-all"
-                             style="padding: 1rem; border-radius: 12px; cursor: pointer; border: 2px solid @(SubscribedPlan == "Pro" ? "var(--cc-primary)" : "var(--cc-border)"); background-color: @(SubscribedPlan == "Pro" ? "#f0fdf4" : "white");">
-                            <div class="flex justify-between items-center mb-2" style="display: flex; justify-content: space-between; align-items: center;">
-                                <h4 class="font-bold text-base" style="margin: 0; color: var(--cc-ink);">Pro</h4>
-                                @if (SubscribedPlan == "Pro")
-                                {
-                                    <span class="material-symbols-outlined text-green-600 text-sm" style="color: #16a34a;">check_circle</span>
-                                }
+                             style="padding: 1.15rem 1rem; border-radius: 12px; cursor: pointer; border: 2px solid @(SubscribedPlan == "Pro" ? "var(--cc-primary)" : "var(--cc-border)"); background-color: @(SubscribedPlan == "Pro" ? "#f0fdf4" : "white"); position: relative;">
+                            <div style="position: absolute; top: -10px; left: 12px; background-color: #f59e0b; color: white; padding: 0.15rem 0.55rem; border-radius: 99px; font-size: 9px; font-weight: bold;" class="font-mono">
+                                MAIS POPULAR
                             </div>
-                            <p class="text-xs text-gray-500 mb-3" style="font-size: 12px; color: #6b7280;">Até 5.000 cabeças. Módulo completo IATF, GPD e Suplementação.</p>
-                            <span class="font-mono text-xs font-bold uppercase" style="color: var(--cc-primary);">Alta Performance</span>
+                            @if (SubscribedPlan == "Pro")
+                            {
+                                <div style="position: absolute; top: -10px; right: 12px; background-color: var(--cc-primary); color: white; padding: 0.15rem 0.55rem; border-radius: 99px; font-size: 10px; font-weight: bold;" class="font-mono">
+                                    SELECIONADO
+                                </div>
+                            }
+                            <div class="flex justify-between items-center mb-1" style="margin-top: 0.15rem;">
+                                <h4 class="font-bold text-base" style="margin: 0; color: var(--cc-ink);">Pro</h4>
+                                <span class="font-mono text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded" style="border: 1px solid #bbf7d0;">R$ 349/mês</span>
+                            </div>
+                            <p class="text-xs text-gray-500 mb-2" style="font-size: 12px; color: #6b7280; line-height: 1.4;">Até 5.000 cabeças. Módulos IATF, GPD, Curral PWA e Suplementação.</p>
+                            <div class="font-mono text-[11px] font-semibold" style="color: var(--cc-primary);">
+                                14 dias R$ 0 &bull; após @TrialEndDateFormatted
+                            </div>
                         </div>
 
                         <!-- Enterprise Card -->
                         <div @onclick='() => SelectPlan("Enterprise", 25000)'
                              class="p-4 rounded-xl cursor-pointer border transition-all"
-                             style="padding: 1rem; border-radius: 12px; cursor: pointer; border: 2px solid @(SubscribedPlan == "Enterprise" ? "var(--cc-primary)" : "var(--cc-border)"); background-color: @(SubscribedPlan == "Enterprise" ? "#f0fdf4" : "white");">
-                            <div class="flex justify-between items-center mb-2" style="display: flex; justify-content: space-between; align-items: center;">
+                             style="padding: 1.15rem 1rem; border-radius: 12px; cursor: pointer; border: 2px solid @(SubscribedPlan == "Enterprise" ? "var(--cc-primary)" : "var(--cc-border)"); background-color: @(SubscribedPlan == "Enterprise" ? "#f0fdf4" : "white"); position: relative;">
+                            @if (SubscribedPlan == "Enterprise")
+                            {
+                                <div style="position: absolute; top: -10px; right: 12px; background-color: var(--cc-primary); color: white; padding: 0.15rem 0.55rem; border-radius: 99px; font-size: 10px; font-weight: bold;" class="font-mono">
+                                    SELECIONADO
+                                </div>
+                            }
+                            <div class="flex justify-between items-center mb-1">
                                 <h4 class="font-bold text-base" style="margin: 0; color: var(--cc-ink);">Enterprise</h4>
-                                @if (SubscribedPlan == "Enterprise")
-                                {
-                                    <span class="material-symbols-outlined text-green-600 text-sm" style="color: #16a34a;">check_circle</span>
-                                }
+                                <span class="font-mono text-xs font-bold text-gray-700 bg-gray-100 px-2 py-0.5 rounded" style="border: 1px solid #e5e7eb;">Sob Consulta</span>
                             </div>
-                            <p class="text-xs text-gray-500 mb-3" style="font-size: 12px; color: #6b7280;">Rebanhos acima de 5.000 cabeças. Confinamento, TMR & Indicadores Avançados.</p>
-                            <span class="font-mono text-xs font-bold uppercase" style="color: var(--cc-primary);">Multi-fazenda</span>
+                            <p class="text-xs text-gray-500 mb-2" style="font-size: 12px; color: #6b7280; line-height: 1.4;">Grandes plantéis. Confinamento, TMR, Multi-fazenda e Zootecnia.</p>
+                            <div class="font-mono text-[11px] font-semibold" style="color: var(--cc-primary);">
+                                14 dias grátis assistido
+                            </div>
                         </div>
 
+                    </div>
+
+                    <!-- Timeline Visual: Como funciona o período de teste e pagamento -->
+                    <div style="background: white; border: 1px solid var(--cc-border); border-radius: 12px; padding: 1.25rem; margin-bottom: 1.25rem;">
+                        <h4 class="font-mono text-[11px] font-bold text-secondary uppercase tracking-wider" style="color: var(--cc-ink-muted); margin: 0 0 0.85rem 0;">
+                            Linha do Tempo de Cobrança:
+                        </h4>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem;">
+                            <!-- Etapa 1: Hoje -->
+                            <div style="display: flex; gap: 0.65rem;">
+                                <div style="width: 26px; height: 26px; border-radius: 50%; background-color: var(--cc-primary); color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 11px; flex-shrink: 0;">
+                                    1
+                                </div>
+                                <div>
+                                    <span class="font-bold text-xs" style="color: var(--cc-ink); display: block;">Hoje (Início)</span>
+                                    <span style="font-size: 11px; color: var(--cc-ink-muted); line-height: 1.35; display: block;">
+                                        Acesso imediato ao plano <strong>@SubscribedPlan</strong>. R$ 0,00 cobrados hoje e sem informar cartão.
+                                    </span>
+                                </div>
+                            </div>
+                            <!-- Etapa 2: Dia 10 -->
+                            <div style="display: flex; gap: 0.65rem;">
+                                <div style="width: 26px; height: 26px; border-radius: 50%; background-color: #f3f4f6; color: #374151; border: 1px solid #d1d5db; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 11px; flex-shrink: 0;">
+                                    2
+                                </div>
+                                <div>
+                                    <span class="font-bold text-xs" style="color: var(--cc-ink); display: block;">Dia 10 (Aviso Prévio)</span>
+                                    <span style="font-size: 11px; color: var(--cc-ink-muted); line-height: 1.35; display: block;">
+                                        Enviaremos um lembrete informando que restam 4 dias para o fim da avaliação.
+                                    </span>
+                                </div>
+                            </div>
+                            <!-- Etapa 3: Dia 14 -->
+                            <div style="display: flex; gap: 0.65rem;">
+                                <div style="width: 26px; height: 26px; border-radius: 50%; background-color: #f3f4f6; color: #374151; border: 1px solid #d1d5db; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 11px; flex-shrink: 0;">
+                                    3
+                                </div>
+                                <div>
+                                    <span class="font-bold text-xs" style="color: var(--cc-ink); display: block;">Dia 14 (@TrialEndDateFormatted)</span>
+                                    <span style="font-size: 11px; color: var(--cc-ink-muted); line-height: 1.35; display: block;">
+                                        Você decide se deseja continuar cadastrando Cartão, Pix ou Boleto no Stripe.
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <div style="margin-bottom: 1.5rem;">
@@ -233,20 +329,26 @@
                         <input type="number" @bind="Capacity" class="w-full h-[46px] px-4 rounded-lg border font-headline" style="width: 100%; height: 46px; padding: 0 1rem; border-radius: 8px; border: 1px solid var(--cc-border); background-color: var(--cc-canvas);" />
                     </div>
 
-                    <div class="flex justify-between pt-4" style="display: flex; justify-content: space-between; margin-top: 1rem;">
+                    <div class="flex justify-between pt-4" style="display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; flex-wrap: wrap; gap: 1rem;">
                         <button type="button" @onclick="PrevStep" class="h-[46px] px-6 text-gray-700 font-mono text-sm rounded-lg border uppercase font-bold" style="height: 46px; padding: 0 1.5rem; border: 1px solid var(--cc-border); background-color: white; border-radius: 8px; cursor: pointer;">
                             &larr; Voltar
                         </button>
                         <button type="button" @onclick="CompleteOnboarding" disabled="@IsLoading" class="h-[48px] px-8 text-white font-mono text-sm rounded-lg uppercase font-bold tracking-wider" style="height: 48px; padding: 0 2rem; background-color: var(--cc-primary); border: none; border-radius: 8px; cursor: pointer;">
                             @if (IsLoading)
                             {
-                                <span>Criando Fazenda...</span>
+                                <span>Criando Fazenda & Liberando Acesso...</span>
                             }
                             else
                             {
-                                <span>Concluir Cadastro & Acessar Fazenda</span>
+                                <span>Iniciar Teste Grátis de 14 Dias & Acessar Fazenda &rarr;</span>
                             }
                         </button>
+                    </div>
+
+                    <div class="text-center mt-2" style="text-align: center; margin-top: 0.5rem;">
+                        <span class="text-xs" style="font-size: 12px; color: var(--cc-ink-muted);">
+                            🔒 Início 100% gratuito sem cartão no cadastro &bull; Cancele a qualquer momento sem custos
+                        </span>
                     </div>
                 </div>
             }
@@ -281,6 +383,8 @@
     private decimal AreaInHectares = 500;
     private string SubscribedPlan = "Starter";
     private int Capacity = 1000;
+    private DateTime TrialEndDate => DateTime.Today.AddDays(14);
+    private string TrialEndDateFormatted => TrialEndDate.ToString("dd/MM/yyyy");
 
     protected override void OnInitialized()
     {
@@ -362,7 +466,7 @@
                 if (authResult != null && !string.IsNullOrEmpty(authResult.Token))
                 {
                     await AuthStateProvider.MarkUserAsAuthenticated(authResult.Token);
-                    Navigation.NavigateTo("");
+                    Navigation.NavigateTo("/analytics/executive-dashboard");
                 }
                 else
                 {

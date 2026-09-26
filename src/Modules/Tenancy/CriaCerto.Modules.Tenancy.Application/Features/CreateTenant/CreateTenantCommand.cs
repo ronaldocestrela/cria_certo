@@ -89,7 +89,8 @@ public sealed class CreateTenantCommandHandler : IRequestHandler<CreateTenantCom
             AreaInHectares = request.AreaInHectares,
             SubscribedPlan = plan,
             Capacity = capacity,
-            Status = "Active",
+            Status = TenantLifecycle.ToStatusString(TenantStatus.Trial),
+            CurrentPeriodEndUtc = now.AddDays(14),
             Type = "Pecuária de Corte e Cria",
             CreatedAtUtc = now,
             UpdatedAtUtc = now
