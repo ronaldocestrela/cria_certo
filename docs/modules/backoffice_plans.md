@@ -84,3 +84,17 @@ Todas as operações de criação, atualização de rascunho e publicação gera
 - `PlanVersion.Published`
 
 Cada log armazena o id do administrador (`PerformedByAdminUserId`), e-mail, IP e payload JSON das alterações efetuadas.
+
+---
+
+## 6. Consumo Público e Single Source of Truth
+
+O catálogo comercial configurado no Backoffice é a fonte única da verdade para a exibição de planos na plataforma:
+1. **Provedor de Planos (`BackofficeSubscriptionPlansProvider`):**
+   - Implementa `ISubscriptionPlansProvider` do módulo Tenancy.
+   - Disponibiliza os planos ativos na rota pública `GET /api/v1/tenancy/plans`.
+2. **Assistente de Onboarding (`OnboardingWizard.razor`):**
+   - Carrega dinamicamente a lista de planos via `TenancyApiClient.GetSubscriptionPlansAsync()`.
+   - Permite seleção de planos com base no catálogo atualizado, preenchendo automaticamente capacidades e valores do período de teste de 14 dias.
+3. **Gestão de Assinatura (`/settings/subscription` - `SubscriptionManagement.razor`):**
+   - Apresenta os cards de planos, limites de cabeças e matriz comparativa de funcionalidades dinamicamente conforme os preços e módulos cadastrados no Backoffice.

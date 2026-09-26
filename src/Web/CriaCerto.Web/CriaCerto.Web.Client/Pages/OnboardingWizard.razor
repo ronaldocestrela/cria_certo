@@ -4,6 +4,7 @@
 @inject HttpClient Http
 @inject NavigationManager Navigation
 @inject Auth.CustomAuthStateProvider AuthStateProvider
+@inject CriaCerto.Web.Client.Services.TenancyApiClient TenancyApiClient
 
 <PageTitle>Cria Certo - Configuração Inicial da Fazenda</PageTitle>
 
@@ -211,73 +212,59 @@
                         </div>
                     </div>
 
-                    <!-- Cards de Planos com Preços Transparentes -->
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.25rem;">
-                        
-                        <!-- Starter Card -->
-                        <div @onclick='() => SelectPlan("Starter", 1000)'
-                             class="p-4 rounded-xl cursor-pointer border transition-all"
-                             style="padding: 1.15rem 1rem; border-radius: 12px; cursor: pointer; border: 2px solid @(SubscribedPlan == "Starter" ? "var(--cc-primary)" : "var(--cc-border)"); background-color: @(SubscribedPlan == "Starter" ? "#f0fdf4" : "white"); position: relative;">
-                            @if (SubscribedPlan == "Starter")
+                    <!-- Cards de Planos Dinâmicos obtidos do Backoffice -->
+                    @if (_isLoadingPlans)
+                    {
+                        <div class="flex items-center justify-center p-8 text-center" style="display: flex; justify-content: center; align-items: center; padding: 2.5rem; background-color: #f8fafc; border-radius: 12px; border: 1px dashed #cbd5e1; margin-bottom: 1.25rem;">
+                            <div class="animate-spin rounded-full h-8 w-8 border-b-2" style="width: 28px; height: 28px; border: 3px solid #e5e7eb; border-top-color: var(--cc-primary); border-radius: 50%;"></div>
+                            <span class="ml-3 font-mono text-xs font-semibold" style="margin-left: 0.75rem; color: var(--cc-ink-muted);">Carregando planos e capacidades atualizados do sistema...</span>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.25rem;">
+                            @foreach (var plan in _availablePlans)
                             {
-                                <div style="position: absolute; top: -10px; right: 12px; background-color: var(--cc-primary); color: white; padding: 0.15rem 0.55rem; border-radius: 99px; font-size: 10px; font-weight: bold;" class="font-mono">
-                                    SELECIONADO
+                                var isSelected = string.Equals(SubscribedPlan, plan.PlanId, StringComparison.OrdinalIgnoreCase);
+                                <div @onclick="() => SelectPlan(plan)"
+                                     class="p-4 rounded-xl cursor-pointer border transition-all"
+                                     style="padding: 1.15rem 1rem; border-radius: 12px; cursor: pointer; border: 2px solid @(isSelected ? "var(--cc-primary)" : "var(--cc-border)"); background-color: @(isSelected ? "#f0fdf4" : "white"); position: relative;">
+                                    @if (plan.IsPopular && !isSelected)
+                                    {
+                                        <div style="position: absolute; top: -10px; left: 12px; background-color: #f59e0b; color: white; padding: 0.15rem 0.55rem; border-radius: 99px; font-size: 9px; font-weight: bold;" class="font-mono">
+                                            MAIS POPULAR
+                                        </div>
+                                    }
+                                    @if (isSelected)
+                                    {
+                                        <div style="position: absolute; top: -10px; right: 12px; background-color: var(--cc-primary); color: white; padding: 0.15rem 0.55rem; border-radius: 99px; font-size: 10px; font-weight: bold;" class="font-mono">
+                                            SELECIONADO
+                                        </div>
+                                    }
+                                    <div class="flex justify-between items-center mb-1" style="margin-top: @(plan.IsPopular ? "0.15rem" : "0");">
+                                        <h4 class="font-bold text-base" style="margin: 0; color: var(--cc-ink);">@plan.Name</h4>
+                                        <span class="font-mono text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded" style="border: 1px solid #bbf7d0;">
+                                            @(plan.MonthlyPrice > 0 ? $"R$ {plan.MonthlyPrice:N2}/mês" : "Sob Consulta")
+                                        </span>
+                                    </div>
+                                    <p class="text-xs text-gray-500 mb-2" style="font-size: 12px; color: #6b7280; line-height: 1.4;">
+                                        @if (plan.HeadCapacityLimit > 0 && plan.HeadCapacityLimit < 999999)
+                                        {
+                                            <span>Até @plan.HeadCapacityLimit.ToString("N0") cabeças. </span>
+                                        }
+                                        else
+                                        {
+                                            <span>Cabeças ilimitadas. </span>
+                                        }
+                                        @plan.Description
+                                    </p>
+                                    <div class="font-mono text-[11px] font-semibold" style="color: var(--cc-primary);">
+                                        14 dias R$ 0 &bull; após @TrialEndDateFormatted
+                                    </div>
                                 </div>
                             }
-                            <div class="flex justify-between items-center mb-1">
-                                <h4 class="font-bold text-base" style="margin: 0; color: var(--cc-ink);">Starter</h4>
-                                <span class="font-mono text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded" style="border: 1px solid #bbf7d0;">R$ 149/mês</span>
-                            </div>
-                            <p class="text-xs text-gray-500 mb-2" style="font-size: 12px; color: #6b7280; line-height: 1.4;">Até 1.000 cabeças. Plantel, pesagens de balança e controle sanitário.</p>
-                            <div class="font-mono text-[11px] font-semibold" style="color: var(--cc-primary);">
-                                14 dias R$ 0 &bull; após @TrialEndDateFormatted
-                            </div>
                         </div>
-
-                        <!-- Pro Card -->
-                        <div @onclick='() => SelectPlan("Pro", 5000)'
-                             class="p-4 rounded-xl cursor-pointer border transition-all"
-                             style="padding: 1.15rem 1rem; border-radius: 12px; cursor: pointer; border: 2px solid @(SubscribedPlan == "Pro" ? "var(--cc-primary)" : "var(--cc-border)"); background-color: @(SubscribedPlan == "Pro" ? "#f0fdf4" : "white"); position: relative;">
-                            <div style="position: absolute; top: -10px; left: 12px; background-color: #f59e0b; color: white; padding: 0.15rem 0.55rem; border-radius: 99px; font-size: 9px; font-weight: bold;" class="font-mono">
-                                MAIS POPULAR
-                            </div>
-                            @if (SubscribedPlan == "Pro")
-                            {
-                                <div style="position: absolute; top: -10px; right: 12px; background-color: var(--cc-primary); color: white; padding: 0.15rem 0.55rem; border-radius: 99px; font-size: 10px; font-weight: bold;" class="font-mono">
-                                    SELECIONADO
-                                </div>
-                            }
-                            <div class="flex justify-between items-center mb-1" style="margin-top: 0.15rem;">
-                                <h4 class="font-bold text-base" style="margin: 0; color: var(--cc-ink);">Pro</h4>
-                                <span class="font-mono text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded" style="border: 1px solid #bbf7d0;">R$ 349/mês</span>
-                            </div>
-                            <p class="text-xs text-gray-500 mb-2" style="font-size: 12px; color: #6b7280; line-height: 1.4;">Até 5.000 cabeças. Módulos IATF, GPD, Curral PWA e Suplementação.</p>
-                            <div class="font-mono text-[11px] font-semibold" style="color: var(--cc-primary);">
-                                14 dias R$ 0 &bull; após @TrialEndDateFormatted
-                            </div>
-                        </div>
-
-                        <!-- Enterprise Card -->
-                        <div @onclick='() => SelectPlan("Enterprise", 25000)'
-                             class="p-4 rounded-xl cursor-pointer border transition-all"
-                             style="padding: 1.15rem 1rem; border-radius: 12px; cursor: pointer; border: 2px solid @(SubscribedPlan == "Enterprise" ? "var(--cc-primary)" : "var(--cc-border)"); background-color: @(SubscribedPlan == "Enterprise" ? "#f0fdf4" : "white"); position: relative;">
-                            @if (SubscribedPlan == "Enterprise")
-                            {
-                                <div style="position: absolute; top: -10px; right: 12px; background-color: var(--cc-primary); color: white; padding: 0.15rem 0.55rem; border-radius: 99px; font-size: 10px; font-weight: bold;" class="font-mono">
-                                    SELECIONADO
-                                </div>
-                            }
-                            <div class="flex justify-between items-center mb-1">
-                                <h4 class="font-bold text-base" style="margin: 0; color: var(--cc-ink);">Enterprise</h4>
-                                <span class="font-mono text-xs font-bold text-gray-700 bg-gray-100 px-2 py-0.5 rounded" style="border: 1px solid #e5e7eb;">Sob Consulta</span>
-                            </div>
-                            <p class="text-xs text-gray-500 mb-2" style="font-size: 12px; color: #6b7280; line-height: 1.4;">Grandes plantéis. Confinamento, TMR, Multi-fazenda e Zootecnia.</p>
-                            <div class="font-mono text-[11px] font-semibold" style="color: var(--cc-primary);">
-                                14 dias grátis assistido
-                            </div>
-                        </div>
-
-                    </div>
+                    }
 
                     <!-- Timeline Visual: Como funciona o período de teste e pagamento -->
                     <div style="background: white; border: 1px solid var(--cc-border); border-radius: 12px; padding: 1.25rem; margin-bottom: 1.25rem;">
@@ -293,7 +280,7 @@
                                 <div>
                                     <span class="font-bold text-xs" style="color: var(--cc-ink); display: block;">Hoje (Início)</span>
                                     <span style="font-size: 11px; color: var(--cc-ink-muted); line-height: 1.35; display: block;">
-                                        Acesso imediato ao plano <strong>@SubscribedPlan</strong>. R$ 0,00 cobrados hoje e sem informar cartão.
+                                        Acesso imediato ao plano <strong>@SelectedPlanName</strong>. R$ 0,00 cobrados hoje e sem informar cartão.
                                     </span>
                                 </div>
                             </div>
@@ -386,11 +373,36 @@
     private DateTime TrialEndDate => DateTime.Today.AddDays(14);
     private string TrialEndDateFormatted => TrialEndDate.ToString("dd/MM/yyyy");
 
-    protected override void OnInitialized()
+    private List<SubscriptionPlanModel> _availablePlans = new();
+    private bool _isLoadingPlans = true;
+    private string SelectedPlanName => _availablePlans.FirstOrDefault(p => string.Equals(p.PlanId, SubscribedPlan, StringComparison.OrdinalIgnoreCase))?.Name ?? SubscribedPlan;
+
+    protected override async Task OnInitializedAsync()
     {
         if (!string.IsNullOrWhiteSpace(Name))
         {
             ProducerName = Uri.UnescapeDataString(Name);
+        }
+
+        try
+        {
+            _isLoadingPlans = true;
+            _availablePlans = await TenancyApiClient.GetSubscriptionPlansAsync();
+            if (_availablePlans is { Count: > 0 })
+            {
+                var defaultPlan = _availablePlans.FirstOrDefault(p => string.Equals(p.PlanId, "Starter", StringComparison.OrdinalIgnoreCase))
+                    ?? _availablePlans.FirstOrDefault(p => p.IsPopular)
+                    ?? _availablePlans[0];
+                SelectPlan(defaultPlan);
+            }
+        }
+        catch
+        {
+            _availablePlans = TenancyApiClient.GetFallbackPlans();
+        }
+        finally
+        {
+            _isLoadingPlans = false;
         }
     }
 
@@ -416,6 +428,14 @@
         ErrorMessage = null;
         if (CurrentStep > 1)
             CurrentStep--;
+    }
+
+    private void SelectPlan(SubscriptionPlanModel plan)
+    {
+        SubscribedPlan = plan.PlanId;
+        Capacity = plan.HeadCapacityLimit > 0 && plan.HeadCapacityLimit < 999999
+            ? plan.HeadCapacityLimit
+            : 1000;
     }
 
     private void SelectPlan(string plan, int defaultCapacity)

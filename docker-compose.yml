@@ -61,6 +61,20 @@ services:
       BACKOFFICE_MASTER_ADMIN_EMAIL: "${BACKOFFICE_MASTER_ADMIN_EMAIL:-admin@criacerto.com.br}"
       BACKOFFICE_MASTER_ADMIN_PASSWORD: "${BACKOFFICE_MASTER_ADMIN_PASSWORD:-AdminPassword123!}"
       BACKOFFICE_MASTER_ADMIN_NAME: "${BACKOFFICE_MASTER_ADMIN_NAME:-Administrador Mestre}"
+      STRIPE_API_KEY: "${STRIPE_API_KEY:-}"
+      STRIPE_PUBLISHABLE_KEY: "${STRIPE_PUBLISHABLE_KEY:-}"
+      STRIPE_WEBHOOK_SECRET: "${STRIPE_WEBHOOK_SECRET:-}"
+      STRIPE_SUCCESS_URL: "${STRIPE_SUCCESS_URL:-http://localhost:8081/settings/subscription?success=true}"
+      STRIPE_CANCEL_URL: "${STRIPE_CANCEL_URL:-http://localhost:8081/settings/subscription?canceled=true}"
+      STRIPE_RETURN_URL: "${STRIPE_RETURN_URL:-http://localhost:8081/settings/subscription}"
+      Stripe__ApiKey: "${STRIPE_API_KEY:-}"
+      Stripe__PublishableKey: "${STRIPE_PUBLISHABLE_KEY:-}"
+      Stripe__WebhookSecret: "${STRIPE_WEBHOOK_SECRET:-}"
+      Stripe__SuccessUrl: "${STRIPE_SUCCESS_URL:-http://localhost:8081/settings/subscription?success=true}"
+      Stripe__CancelUrl: "${STRIPE_CANCEL_URL:-http://localhost:8081/settings/subscription?canceled=true}"
+      Stripe__ReturnUrl: "${STRIPE_RETURN_URL:-http://localhost:8081/settings/subscription}"
+    env_file:
+      - .env
     depends_on:
       database:
         condition: service_healthy

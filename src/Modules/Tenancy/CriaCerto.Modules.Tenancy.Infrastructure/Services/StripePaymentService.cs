@@ -28,6 +28,23 @@ public sealed class StripePaymentService : IStripePaymentService
         {
             StripeConfiguration.ApiKey = _options.ApiKey;
         }
+        else
+        {
+            _logger.LogWarning("Chave do Stripe (STRIPE_API_KEY) não configurada. Operações de pagamento falharão.");
+        }
+    }
+
+    private void EnsureApiKeyConfigured()
+    {
+        if (string.IsNullOrWhiteSpace(_options.ApiKey) && string.IsNullOrWhiteSpace(StripeConfiguration.ApiKey))
+        {
+            throw new InvalidOperationException("A chave de API da Stripe (STRIPE_API_KEY / Stripe:ApiKey) não está configurada.");
+        }
+
+        if (string.IsNullOrWhiteSpace(StripeConfiguration.ApiKey))
+        {
+            StripeConfiguration.ApiKey = _options.ApiKey;
+        }
     }
 
     public async Task<string> GetOrCreateCustomerAsync(
@@ -35,6 +52,8 @@ public sealed class StripePaymentService : IStripePaymentService
         User user,
         CancellationToken cancellationToken = default)
     {
+        EnsureApiKeyConfigured();
+
         if (!string.IsNullOrWhiteSpace(tenant.StripeCustomerId))
         {
             return tenant.StripeCustomerId;
@@ -161,6 +180,8 @@ public sealed class StripePaymentService : IStripePaymentService
         string returnUrl,
         CancellationToken cancellationToken = default)
     {
+        EnsureApiKeyConfigured();
+
         if (string.IsNullOrWhiteSpace(tenant.StripeCustomerId))
         {
             throw new InvalidOperationException("Tenant não possui identificador de cliente registrado no Stripe.");

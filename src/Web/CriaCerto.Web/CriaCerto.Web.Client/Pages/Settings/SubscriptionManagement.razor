@@ -126,122 +126,122 @@
         </span>
     </section>
 
-    <!-- Bento Pricing Cards Matrix (Stitch Desktop Style) -->
-    <section style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 2rem; margin-bottom: 3.5rem; align-items: stretch;">
-        
-        <!-- Starter Card -->
-        <div style="background-color: white; border: @(IsActivePlan("Starter") ? "2px solid var(--cc-primary)" : "1px solid var(--cc-border)"); border-radius: 12px; padding: 2rem 1.5rem; display: flex; flex-direction: column; position: relative; box-shadow: var(--cc-shadow);">
-            @if (IsActivePlan("Starter"))
+    @if (_isLoadingPlans)
+    {
+        <div class="flex items-center justify-center p-12 text-center" style="display: flex; justify-content: center; align-items: center; padding: 3rem; background-color: white; border-radius: 12px; border: 1px solid var(--cc-border); margin-bottom: 3.5rem;">
+            <div class="animate-spin rounded-full h-8 w-8 border-b-2" style="width: 32px; height: 32px; border: 3px solid #e5e7eb; border-top-color: var(--cc-primary); border-radius: 50%;"></div>
+            <span class="ml-3 font-mono text-sm font-semibold" style="margin-left: 0.75rem; color: var(--cc-ink-muted);">Carregando catálogo de planos atualizados do Backoffice...</span>
+        </div>
+    }
+    else
+    {
+        <!-- Bento Pricing Cards Matrix (Stitch Desktop Style) -->
+        <section style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 2rem; margin-bottom: 3.5rem; align-items: stretch;">
+            @foreach (var plan in _availablePlans)
             {
-                <div style="position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background-color: var(--cc-primary); color: white; padding: 0.25rem 1rem; border-radius: 99px; font-size: 10px; font-weight: bold; text-transform: uppercase;" class="font-mono">
-                    Plano Ativo
+                var isActive = IsActivePlan(plan.PlanId);
+                var isProOrPopular = plan.IsPopular;
+                var currentPrice = GetPrice(plan);
+                var activePlanObj = _availablePlans.FirstOrDefault(p => IsActivePlan(p.PlanId));
+                var isUpgrade = activePlanObj != null && plan.MonthlyPrice > activePlanObj.MonthlyPrice;
+
+                <div style="background-color: white; border: @(isActive ? "2px solid var(--cc-primary)" : (isProOrPopular ? "2px solid var(--cc-primary-container)" : "1px solid var(--cc-border)")); border-radius: 12px; padding: 2rem 1.5rem; display: flex; flex-direction: column; position: relative; box-shadow: var(--cc-shadow); transform: @(isProOrPopular && !isActive ? "scale(1.02)" : "none"); z-index: @(isProOrPopular ? "10" : "1");">
+                    @if (isActive)
+                    {
+                        <div style="position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background-color: var(--cc-primary); color: white; padding: 0.25rem 1rem; border-radius: 99px; font-size: 10px; font-weight: bold; text-transform: uppercase;" class="font-mono">
+                            Plano Ativo
+                        </div>
+                    }
+                    else if (isProOrPopular)
+                    {
+                        <div style="position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background-color: var(--cc-primary-container); color: white; padding: 0.25rem 1rem; border-radius: 99px; font-size: 10px; font-weight: bold; text-transform: uppercase;" class="font-mono">
+                            Mais Popular
+                        </div>
+                    }
+
+                    <div style="margin-bottom: 1.5rem;">
+                        <h3 style="margin: 0 0 0.5rem 0; font-size: 22px; font-weight: bold; color: var(--cc-ink);">@plan.Name</h3>
+                        <p style="margin: 0; font-size: 13px; color: var(--cc-ink-muted); line-height: 1.4;">@plan.Description</p>
+                    </div>
+
+                    <div style="margin-bottom: 2rem;">
+                        @if (currentPrice > 0)
+                        {
+                            <span style="font-size: 32px; font-weight: bold; color: var(--cc-ink);">R$ @currentPrice.ToString("N2")</span>
+                            <span style="font-size: 14px; color: var(--cc-ink-muted);">/mês</span>
+                        }
+                        else
+                        {
+                            <span style="font-size: 32px; font-weight: bold; color: var(--cc-ink);">Consultar</span>
+                        }
+                    </div>
+
+                    <ul style="list-style: none; padding: 0; margin: 0 0 2rem 0; flex: 1; display: flex; flex-direction: column; gap: 0.85rem; font-size: 14px; color: var(--cc-ink);">
+                        <li style="display: flex; align-items: center; gap: 0.5rem; font-weight: 600;">
+                            <span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1; font-size: 18px;">check_circle</span>
+                            @if (plan.HeadCapacityLimit > 0 && plan.HeadCapacityLimit < 999999)
+                            {
+                                <span>Até @plan.HeadCapacityLimit.ToString("N0") Matrizes / Cabeças</span>
+                            }
+                            else
+                            {
+                                <span>Matrizes Ilimitadas</span>
+                            }
+                        </li>
+                        @if (plan.Features != null && plan.Features.Any())
+                        {
+                            @foreach (var feature in plan.Features.Where(f => f.IsEnabled).Take(4))
+                            {
+                                <li style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1; font-size: 18px;">check_circle</span>
+                                    @feature.Name
+                                </li>
+                            }
+                        }
+                        else
+                        {
+                            @foreach (var module in plan.IncludedModules.Take(4))
+                            {
+                                <li style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1; font-size: 18px;">check_circle</span>
+                                    Módulo @module
+                                </li>
+                            }
+                        }
+                    </ul>
+
+                    @if (isActive)
+                    {
+                        <button class="cc-btn cc-btn-outline w-full pressed-effect" disabled
+                                style="width: 100%; border: 1px solid var(--cc-primary); border-radius: 8px; padding: 0.75rem; font-weight: bold; background: white; color: var(--cc-primary); cursor: default;">
+                            Plano Atual
+                        </button>
+                    }
+                    else if (currentPrice == 0)
+                    {
+                        <button class="cc-btn cc-btn-outline w-full pressed-effect" @onclick='() => ChangePlan(plan.PlanId)'
+                                style="width: 100%; border: 1px solid var(--cc-border); border-radius: 8px; padding: 0.75rem; font-weight: bold; background: white; color: var(--cc-ink-muted); cursor: pointer;">
+                            Falar com Consultor
+                        </button>
+                    }
+                    else if (isUpgrade)
+                    {
+                        <button class="cc-btn cc-btn-primary w-full pressed-effect" @onclick='() => ChangePlan(plan.PlanId)'
+                                style="width: 100%; border: none; background-color: var(--cc-primary-container); color: white; border-radius: 8px; padding: 0.75rem; font-weight: bold; cursor: pointer;">
+                            Fazer Upgrade para @plan.Name
+                        </button>
+                    }
+                    else
+                    {
+                        <button class="cc-btn cc-btn-outline w-full pressed-effect" @onclick='() => ChangePlan(plan.PlanId)'
+                                style="width: 100%; border: 1px solid var(--cc-primary); border-radius: 8px; padding: 0.75rem; font-weight: bold; background: white; color: var(--cc-primary); cursor: pointer;">
+                            Downgrade para @plan.Name
+                        </button>
+                    }
                 </div>
             }
-            <div style="margin-bottom: 1.5rem;">
-                <h3 style="margin: 0 0 0.5rem 0; font-size: 22px; font-weight: bold; color: var(--cc-ink);">Starter</h3>
-                <p style="margin: 0; font-size: 13px; color: var(--cc-ink-muted); line-height: 1.4;">Ideal para pequenos produtores iniciando a digitalização do plantel.</p>
-            </div>
-            <div style="margin-bottom: 2rem;">
-                <span style="font-size: 32px; font-weight: bold; color: var(--cc-ink);">R$ @(GetPrice("Starter"))</span>
-                <span style="font-size: 14px; color: var(--cc-ink-muted);">/mês</span>
-            </div>
-            <ul style="list-style: none; padding: 0; margin: 0 0 2rem 0; flex: 1; display: flex; flex-direction: column; gap: 0.85rem; font-size: 14px; color: var(--cc-ink);">
-                <li style="display: flex; align-items: center; gap: 0.5rem;">
-                    <span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1; font-size: 18px;">check_circle</span>
-                    Até 150 Matrizes
-                </li>
-                <li style="display: flex; align-items: center; gap: 0.5rem;">
-                    <span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1; font-size: 18px;">check_circle</span>
-                    Controle de Lotes & Ciclos
-                </li>
-                <li style="display: flex; align-items: center; gap: 0.5rem;">
-                    <span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1; font-size: 18px;">check_circle</span>
-                    Registro Sanitário Básico
-                </li>
-            </ul>
-            <button class="cc-btn cc-btn-outline w-full pressed-effect" disabled="@IsActivePlan("Starter")" @onclick='() => ChangePlan("Starter")'
-                    style="width: 100%; border: 1px solid var(--cc-primary); border-radius: 8px; padding: 0.75rem; font-weight: bold; background: white; color: var(--cc-primary); cursor: pointer;">
-                @(IsActivePlan("Starter") ? "Plano Atual" : "Downgrade para Starter")
-            </button>
-        </div>
-
-        <!-- Pro Card (Most Popular - Highlighted) -->
-        <div style="background-color: white; border: 2px solid var(--cc-primary-container); border-radius: 12px; padding: 2rem 1.5rem; display: flex; flex-direction: column; position: relative; box-shadow: var(--cc-shadow); transform: scale(1.03); z-index: 10;">
-            <div style="position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background-color: var(--cc-primary-container); color: white; padding: 0.25rem 1rem; border-radius: 99px; font-size: 10px; font-weight: bold; text-transform: uppercase;" class="font-mono">
-                @(IsActivePlan("Pro") ? "Plano Ativo" : "Mais Popular")
-            </div>
-            <div style="margin-bottom: 1.5rem;">
-                <h3 style="margin: 0 0 0.5rem 0; font-size: 22px; font-weight: bold; color: var(--cc-ink);">Pro</h3>
-                <p style="margin: 0; font-size: 13px; color: var(--cc-ink-muted); line-height: 1.4;">Aumente a produtividade com formulação de rações e nutrição avançada.</p>
-            </div>
-            <div style="margin-bottom: 2rem;">
-                <span style="font-size: 32px; font-weight: bold; color: var(--cc-ink);">R$ @(GetPrice("Pro"))</span>
-                <span style="font-size: 14px; color: var(--cc-ink-muted);">/mês</span>
-            </div>
-            <ul style="list-style: none; padding: 0; margin: 0 0 2rem 0; flex: 1; display: flex; flex-direction: column; gap: 0.85rem; font-size: 14px; color: var(--cc-ink);">
-                <li style="display: flex; align-items: center; gap: 0.5rem; font-weight: 600;">
-                    <span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1; font-size: 18px;">check_circle</span>
-                    Até 1.000 Matrizes
-                </li>
-                <li style="display: flex; align-items: center; gap: 0.5rem;">
-                    <span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1; font-size: 18px;">check_circle</span>
-                    Módulo de Nutrição e Ração
-                </li>
-                <li style="display: flex; align-items: center; gap: 0.5rem;">
-                    <span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1; font-size: 18px;">check_circle</span>
-                    Previsão de CA e ADG com IA
-                </li>
-                <li style="display: flex; align-items: center; gap: 0.5rem;">
-                    <span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1; font-size: 18px;">check_circle</span>
-                    Multi-usuários (Até 5)
-                </li>
-            </ul>
-            <button class="cc-btn cc-btn-primary w-full pressed-effect" disabled="@IsActivePlan("Pro")" @onclick='() => ChangePlan("Pro")'
-                    style="width: 100%; border: none; background-color: var(--cc-primary-container); color: white; border-radius: 8px; padding: 0.75rem; font-weight: bold; cursor: pointer;">
-                @(IsActivePlan("Pro") ? "Plano Atual" : (IsActivePlan("Enterprise") ? "Downgrade para Pro" : "Fazer Upgrade para Pro"))
-            </button>
-        </div>
-
-        <!-- Enterprise Card -->
-        <div style="background-color: white; border: @(IsActivePlan("Enterprise") ? "2px solid var(--cc-primary)" : "1px solid var(--cc-border)"); border-radius: 12px; padding: 2rem 1.5rem; display: flex; flex-direction: column; position: relative; box-shadow: var(--cc-shadow);">
-            @if (IsActivePlan("Enterprise"))
-            {
-                <div style="position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background-color: var(--cc-primary); color: white; padding: 0.25rem 1rem; border-radius: 99px; font-size: 10px; font-weight: bold; text-transform: uppercase;" class="font-mono">
-                    Plano Ativo
-                </div>
-            }
-            <div style="margin-bottom: 1.5rem;">
-                <h3 style="margin: 0 0 0.5rem 0; font-size: 22px; font-weight: bold; color: var(--cc-ink);">Enterprise</h3>
-                <p style="margin: 0; font-size: 13px; color: var(--cc-ink-muted); line-height: 1.4;">Para cooperativas e grandes operações integradas multi-granjas.</p>
-            </div>
-            <div style="margin-bottom: 2rem;">
-                <span style="font-size: 32px; font-weight: bold; color: var(--cc-ink);">Consultar</span>
-            </div>
-            <ul style="list-style: none; padding: 0; margin: 0 0 2rem 0; flex: 1; display: flex; flex-direction: column; gap: 0.85rem; font-size: 14px; color: var(--cc-ink);">
-                <li style="display: flex; align-items: center; gap: 0.5rem;">
-                    <span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1; font-size: 18px;">check_circle</span>
-                    Matrizes Ilimitadas
-                </li>
-                <li style="display: flex; align-items: center; gap: 0.5rem;">
-                    <span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1; font-size: 18px;">check_circle</span>
-                    Business Intelligence Avançado
-                </li>
-                <li style="display: flex; align-items: center; gap: 0.5rem;">
-                    <span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1; font-size: 18px;">check_circle</span>
-                    API de Integração Aberta
-                </li>
-                <li style="display: flex; align-items: center; gap: 0.5rem;">
-                    <span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1; font-size: 18px;">check_circle</span>
-                    Suporte 24/7 com SLA
-                </li>
-            </ul>
-            <button class="cc-btn cc-btn-outline w-full pressed-effect" disabled="@IsActivePlan("Enterprise")" @onclick='() => ChangePlan("Enterprise")'
-                    style="width: 100%; border: 1px solid var(--cc-border); border-radius: 8px; padding: 0.75rem; font-weight: bold; background: white; color: var(--cc-ink-muted); cursor: pointer;">
-                @(IsActivePlan("Enterprise") ? "Plano Atual" : "Falar com Consultor")
-            </button>
-        </div>
-
-    </section>
+        </section>
+    }
 
     <!-- Accordion Matrix for Comparison (Responsive desktop view table) -->
     <section style="background-color: white; border: 1px solid var(--cc-border); border-radius: 12px; overflow: hidden; box-shadow: var(--cc-shadow); margin-bottom: 3rem;">
@@ -261,41 +261,129 @@
                     <thead>
                         <tr style="background-color: var(--cc-canvas); color: var(--cc-ink-muted);" class="font-mono">
                             <th style="padding: 1rem 1.5rem; font-size: 11px; font-weight: bold; text-transform: uppercase;">Recurso</th>
-                            <th style="padding: 1rem 1.5rem; font-size: 11px; font-weight: bold; text-transform: uppercase; text-align: center;">Starter</th>
-                            <th style="padding: 1rem 1.5rem; font-size: 11px; font-weight: bold; text-transform: uppercase; text-align: center;">Pro</th>
-                            <th style="padding: 1rem 1.5rem; font-size: 11px; font-weight: bold; text-transform: uppercase; text-align: center;">Enterprise</th>
+                            @foreach (var plan in _availablePlans)
+                            {
+                                <th style="padding: 1rem 1.5rem; font-size: 11px; font-weight: bold; text-transform: uppercase; text-align: center;">@plan.Name</th>
+                            }
                         </tr>
                     </thead>
                     <tbody style="color: var(--cc-ink);">
                         <tr style="border-bottom: 1px solid #e2e8f0;">
-                            <td style="padding: 1rem 1.5rem; font-weight: 600;">Limite de Lotes</td>
-                            <td style="padding: 1rem 1.5rem; text-align: center;">5</td>
-                            <td style="padding: 1rem 1.5rem; text-align: center;">Ilimitado</td>
-                            <td style="padding: 1rem 1.5rem; text-align: center;">Ilimitado</td>
+                            <td style="padding: 1rem 1.5rem; font-weight: 600;">Limite de Cabeças / Matrizes</td>
+                            @foreach (var plan in _availablePlans)
+                            {
+                                <td style="padding: 1rem 1.5rem; text-align: center;">
+                                    @(plan.HeadCapacityLimit > 0 && plan.HeadCapacityLimit < 999999 ? plan.HeadCapacityLimit.ToString("N0") : "Ilimitado")
+                                </td>
+                            }
                         </tr>
                         <tr style="border-bottom: 1px solid #e2e8f0; background-color: var(--cc-canvas);">
-                            <td style="padding: 1rem 1.5rem; font-weight: 600;">Rastreabilidade Animal</td>
-                            <td style="padding: 1rem 1.5rem; text-align: center;">Básica</td>
-                            <td style="padding: 1rem 1.5rem; text-align: center;">Completa</td>
-                            <td style="padding: 1rem 1.5rem; text-align: center;">Completa</td>
+                            <td style="padding: 1rem 1.5rem; font-weight: 600;">Reprodução, IATF & Partos</td>
+                            @foreach (var plan in _availablePlans)
+                            {
+                                var hasFeature = plan.IncludedModules.Any(m => m.Contains("Breeding", StringComparison.OrdinalIgnoreCase) || m.Contains("Calving", StringComparison.OrdinalIgnoreCase))
+                                    || (plan.Features?.Any(f => (f.Key.Contains("Breeding", StringComparison.OrdinalIgnoreCase) || f.Key.Contains("Calving", StringComparison.OrdinalIgnoreCase)) && f.IsEnabled) ?? false);
+                                <td style="padding: 1rem 1.5rem; text-align: center;">
+                                    @if (hasFeature)
+                                    {
+                                        <span class="material-symbols-outlined" style="color: var(--cc-primary);">check</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="material-symbols-outlined" style="color: #ba1a1a;">close</span>
+                                    }
+                                </td>
+                            }
                         </tr>
                         <tr style="border-bottom: 1px solid #e2e8f0;">
-                            <td style="padding: 1rem 1.5rem; font-weight: 600;">Módulo de Ração e Nutrição</td>
-                            <td style="padding: 1rem 1.5rem; text-align: center;"><span class="material-symbols-outlined" style="color: #ba1a1a;">close</span></td>
-                            <td style="padding: 1rem 1.5rem; text-align: center;"><span class="material-symbols-outlined" style="color: var(--cc-primary);">check</span></td>
-                            <td style="padding: 1rem 1.5rem; text-align: center;"><span class="material-symbols-outlined" style="color: var(--cc-primary);">check</span></td>
+                            <td style="padding: 1rem 1.5rem; font-weight: 600;">Manejo, Crescimento & Pesagens</td>
+                            @foreach (var plan in _availablePlans)
+                            {
+                                var hasFeature = plan.IncludedModules.Any(m => m.Contains("Growth", StringComparison.OrdinalIgnoreCase))
+                                    || (plan.Features?.Any(f => f.Key.Contains("Growth", StringComparison.OrdinalIgnoreCase) && f.IsEnabled) ?? false);
+                                <td style="padding: 1rem 1.5rem; text-align: center;">
+                                    @if (hasFeature)
+                                    {
+                                        <span class="material-symbols-outlined" style="color: var(--cc-primary);">check</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="material-symbols-outlined" style="color: #ba1a1a;">close</span>
+                                    }
+                                </td>
+                            }
                         </tr>
                         <tr style="border-bottom: 1px solid #e2e8f0; background-color: var(--cc-canvas);">
-                            <td style="padding: 1rem 1.5rem; font-weight: 600;">Exportação de Dados (PDF/XLS)</td>
-                            <td style="padding: 1rem 1.5rem; text-align: center;"><span class="material-symbols-outlined" style="color: #ba1a1a;">close</span></td>
-                            <td style="padding: 1rem 1.5rem; text-align: center;"><span class="material-symbols-outlined" style="color: var(--cc-primary);">check</span></td>
-                            <td style="padding: 1rem 1.5rem; text-align: center;"><span class="material-symbols-outlined" style="color: var(--cc-primary);">check</span></td>
+                            <td style="padding: 1rem 1.5rem; font-weight: 600;">Sanitário & Vacinação Oficial</td>
+                            @foreach (var plan in _availablePlans)
+                            {
+                                var hasFeature = plan.IncludedModules.Any(m => m.Contains("Sanitary", StringComparison.OrdinalIgnoreCase))
+                                    || (plan.Features?.Any(f => f.Key.Contains("Sanitary", StringComparison.OrdinalIgnoreCase) && f.IsEnabled) ?? false);
+                                <td style="padding: 1rem 1.5rem; text-align: center;">
+                                    @if (hasFeature)
+                                    {
+                                        <span class="material-symbols-outlined" style="color: var(--cc-primary);">check</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="material-symbols-outlined" style="color: #ba1a1a;">close</span>
+                                    }
+                                </td>
+                            }
+                        </tr>
+                        <tr style="border-bottom: 1px solid #e2e8f0;">
+                            <td style="padding: 1rem 1.5rem; font-weight: 600;">Nutrição, Silos & Formulação de Ração</td>
+                            @foreach (var plan in _availablePlans)
+                            {
+                                var hasFeature = plan.IncludedModules.Any(m => m.Contains("Nutrition", StringComparison.OrdinalIgnoreCase))
+                                    || (plan.Features?.Any(f => f.Key.Contains("Nutrition", StringComparison.OrdinalIgnoreCase) && f.IsEnabled) ?? false);
+                                <td style="padding: 1rem 1.5rem; text-align: center;">
+                                    @if (hasFeature)
+                                    {
+                                        <span class="material-symbols-outlined" style="color: var(--cc-primary);">check</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="material-symbols-outlined" style="color: #ba1a1a;">close</span>
+                                    }
+                                </td>
+                            }
+                        </tr>
+                        <tr style="border-bottom: 1px solid #e2e8f0; background-color: var(--cc-canvas);">
+                            <td style="padding: 1rem 1.5rem; font-weight: 600;">Zootecnia Avançada & Análise de Custo por @@</td>
+                            @foreach (var plan in _availablePlans)
+                            {
+                                var hasFeature = plan.IncludedModules.Any(m => m.Contains("Analytics", StringComparison.OrdinalIgnoreCase))
+                                    || (plan.Features?.Any(f => f.Key.Contains("Analytics", StringComparison.OrdinalIgnoreCase) && f.IsEnabled) ?? false);
+                                <td style="padding: 1rem 1.5rem; text-align: center;">
+                                    @if (hasFeature)
+                                    {
+                                        <span class="material-symbols-outlined" style="color: var(--cc-primary);">check</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="material-symbols-outlined" style="color: #ba1a1a;">close</span>
+                                    }
+                                </td>
+                            }
                         </tr>
                         <tr style="border-bottom: none;">
-                            <td style="padding: 1rem 1.5rem; font-weight: 600;">Integração API (Developer Webhooks)</td>
-                            <td style="padding: 1rem 1.5rem; text-align: center;"><span class="material-symbols-outlined" style="color: #ba1a1a;">close</span></td>
-                            <td style="padding: 1rem 1.5rem; text-align: center;"><span class="material-symbols-outlined" style="color: #ba1a1a;">close</span></td>
-                            <td style="padding: 1rem 1.5rem; text-align: center;"><span class="material-symbols-outlined" style="color: var(--cc-primary);">check</span></td>
+                            <td style="padding: 1rem 1.5rem; font-weight: 600;">Modo Offline PWA no Curral</td>
+                            @foreach (var plan in _availablePlans)
+                            {
+                                var hasFeature = (plan.Features?.Any(f => f.Key.Contains("PwaOfflineMode", StringComparison.OrdinalIgnoreCase) && f.IsEnabled) ?? false)
+                                    || plan.IncludedModules.Any(m => m.Contains("PwaOfflineMode", StringComparison.OrdinalIgnoreCase));
+                                <td style="padding: 1rem 1.5rem; text-align: center;">
+                                    @if (hasFeature)
+                                    {
+                                        <span class="material-symbols-outlined" style="color: var(--cc-primary);">check</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="material-symbols-outlined" style="color: #ba1a1a;">close</span>
+                                    }
+                                </td>
+                            }
                         </tr>
                     </tbody>
                 </table>
@@ -312,15 +400,30 @@
     private bool _isAnnual = false;
     private bool _showAccordion = true;
     private bool _isSubmitting = false;
+    private bool _isLoadingPlans = true;
     private string? _message;
     private bool _isSuccessMessage;
+    private List<SubscriptionPlanModel> _availablePlans = new();
 
     private int _registeredAnimalsCount = 0;
     private int _reportsCount = 0;
 
     // Usage limits
-    private int _maxAnimalsAllowed => _activePlan == "Starter" ? 150 : (_activePlan == "Pro" ? 1000 : 99999);
-    private int _maxReportsAllowed => _activePlan == "Starter" ? 10 : (_activePlan == "Pro" ? 50 : 999);
+    private int _maxAnimalsAllowed
+    {
+        get
+        {
+            var plan = _availablePlans.FirstOrDefault(p => IsActivePlan(p.PlanId));
+            if (plan != null && plan.HeadCapacityLimit > 0)
+            {
+                return plan.HeadCapacityLimit;
+            }
+            return _activePlan.Equals("Starter", StringComparison.OrdinalIgnoreCase) ? 500 : 
+                   (_activePlan.Equals("Pro", StringComparison.OrdinalIgnoreCase) ? 2500 : 99999);
+        }
+    }
+    private int _maxReportsAllowed => _activePlan.Equals("Starter", StringComparison.OrdinalIgnoreCase) ? 10 : 
+                                      (_activePlan.Equals("Pro", StringComparison.OrdinalIgnoreCase) ? 50 : 999);
     private int _animalsPercentage => _maxAnimalsAllowed > 0 ? Math.Min(100, (_registeredAnimalsCount * 100) / _maxAnimalsAllowed) : 0;
     private int _reportsPercentage => _maxReportsAllowed > 0 ? Math.Min(100, (_reportsCount * 100) / _maxReportsAllowed) : 0;
 
@@ -346,6 +449,20 @@
                 {
                     _activePlan = _profile.SubscribedPlan;
                 }
+            }
+
+            try
+            {
+                _isLoadingPlans = true;
+                _availablePlans = await TenancyApiClient.GetSubscriptionPlansAsync();
+            }
+            catch
+            {
+                _availablePlans = TenancyApiClient.GetFallbackPlans();
+            }
+            finally
+            {
+                _isLoadingPlans = false;
             }
 
             try
@@ -377,21 +494,22 @@
         _showAccordion = !_showAccordion;
     }
 
-    private bool IsActivePlan(string planName)
+    private bool IsActivePlan(string planId)
     {
-        return string.Equals(_activePlan, planName, StringComparison.OrdinalIgnoreCase);
+        return string.Equals(_activePlan, planId, StringComparison.OrdinalIgnoreCase);
     }
 
-    private int GetPrice(string planName)
+    private decimal GetPrice(SubscriptionPlanModel plan)
     {
-        // 15% discount calculation matching mockup
-        if (planName.Equals("Starter", StringComparison.OrdinalIgnoreCase))
+        return _isAnnual ? plan.AnnualPriceMonthly : plan.MonthlyPrice;
+    }
+
+    private decimal GetPrice(string planName)
+    {
+        var plan = _availablePlans.FirstOrDefault(p => string.Equals(p.PlanId, planName, StringComparison.OrdinalIgnoreCase));
+        if (plan != null)
         {
-            return _isAnnual ? 126 : 149;
-        }
-        if (planName.Equals("Pro", StringComparison.OrdinalIgnoreCase))
-        {
-            return _isAnnual ? 330 : 389;
+            return _isAnnual ? plan.AnnualPriceMonthly : plan.MonthlyPrice;
         }
         return 0;
     }
