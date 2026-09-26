@@ -239,4 +239,8 @@ Acao recomendada:
 
 ## 13. Licenca
 
-Licenca ainda nao definida neste repositorio.
+Este projeto é um software proprietário e comercial. Todos os direitos reservados.
+O uso, distribuição, modificação ou implantação deste software estão sujeitos aos termos do [Contrato de Licença Comercial](LICENSE.md).
+
+Copyright (c) 2026 Ronaldo Estrela / CriaCerto.
+
