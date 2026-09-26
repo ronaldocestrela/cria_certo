@@ -216,11 +216,14 @@ public sealed class StripePaymentService : IStripePaymentService
                 stripeEvent = EventUtility.ConstructEvent(
                     jsonPayload,
                     stripeSignatureHeader,
-                    _options.WebhookSecret);
+                    _options.WebhookSecret,
+                    throwOnApiVersionMismatch: false);
             }
             else
             {
-                stripeEvent = EventUtility.ParseEvent(jsonPayload);
+                stripeEvent = EventUtility.ParseEvent(
+                    jsonPayload,
+                    throwOnApiVersionMismatch: false);
             }
         }
         catch (Exception ex)
