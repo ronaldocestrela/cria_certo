@@ -77,6 +77,17 @@ public sealed class Tenant
 
     public TenantStatus GetStatusEnum() => TenantLifecycle.ParseStatus(Status);
 
+    public bool HasActiveStripeSubscription()
+    {
+        if (string.IsNullOrWhiteSpace(StripeSubscriptionId))
+        {
+            return false;
+        }
+
+        return string.Equals(Status, TenantLifecycle.ToStatusString(TenantStatus.Active), StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(Status, TenantLifecycle.ToStatusString(TenantStatus.PastDue), StringComparison.OrdinalIgnoreCase);
+    }
+
     public Result ChangeStatus(TenantStatus target, string reason)
     {
         var validation = ValidateJustification(reason);

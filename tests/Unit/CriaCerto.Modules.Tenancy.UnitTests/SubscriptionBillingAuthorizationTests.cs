@@ -1,6 +1,7 @@
 using CriaCerto.BuildingBlocks.Abstractions.Results;
 using CriaCerto.Modules.Tenancy.Application.Abstractions;
 using CriaCerto.Modules.Tenancy.Application.Domain;
+using CriaCerto.Modules.Tenancy.Application.Domain.Errors;
 using CriaCerto.Modules.Tenancy.Application.Features.GetSubscriptionPlans;
 using CriaCerto.Modules.Tenancy.Application.Features.SubscriptionCheckout;
 using CriaCerto.Modules.Tenancy.Application.Features.SubscriptionPortal;
@@ -239,6 +240,151 @@ public class SubscriptionBillingAuthorizationTests : IDisposable
         result.IsFailure.Should().BeTrue();
         result.Error.Type.Should().Be(ErrorType.Validation);
         result.Error.Code.Should().Be("Subscription.InvalidRedirectUrl");
+    }
+
+    [Fact]
+    public async Task CreateCheckoutSession_Should_Fail_With_Conflict_When_Tenant_Already_Has_Active_StripeSubscription()
+    {
+        // Arrange
+        var tenant = new Tenant
+        {
+            Id = Guid.NewGuid(),
+            Name = "Fazenda Ouro Branco",
+            CNPJ = "12.345.678/0001-90",
+            Status = "Active",
+            SubscribedPlan = "Pro",
+            StripeCustomerId = "cus_existing_123",
+            StripeSubscriptionId = "sub_active_123"
+        };
+
+        var user = new User
+        {
+            Id = Guid.NewGuid(),
+            FullName = "Administrador Fazenda",
+            Email = "admin@ourobranco.com",
+            PasswordHash = "hash"
+        };
+
+        var userTenant = new UserTenant
+        {
+            UserId = user.Id,
+            TenantId = tenant.Id,
+            Role = UserRole.Admin,
+            JoinedAt = DateTime.UtcNow
+        };
+
+        _dbContext.Tenants.Add(tenant);
+        _dbContext.Users.Add(user);
+        _dbContext.UserTenants.Add(userTenant);
+        await _dbContext.SaveChangesAsync();
+
+        var handler = new CreateCheckoutSessionCommandHandler(_dbContext, _stripeService, _sender, _urlValidator);
+        var command = new CreateCheckoutSessionCommand(tenant.Id, user.Id, "Enterprise");
+
+        // Act
+        var result = await handler.Handle(command, CancellationToken.None);
+
+        // Assert
+        result.IsFailure.Should().BeTrue();
+        result.Error.Type.Should().Be(ErrorType.Conflict);
+        result.Error.Code.Should().Be(TenancyErrors.ActiveSubscriptionExists.Code);
+        result.Error.Message.Should().Contain("assinatura ativa no Stripe");
+    }
+
+    [Fact]
+    public async Task CreateCheckoutSession_Should_Fail_With_Conflict_When_Tenant_Has_PastDue_StripeSubscription()
+    {
+        // Arrange
+        var tenant = new Tenant
+        {
+            Id = Guid.NewGuid(),
+            Name = "Fazenda Santa Maria",
+            CNPJ = "98.765.432/0001-10",
+            Status = "PastDue",
+            SubscribedPlan = "Pro",
+            StripeCustomerId = "cus_existing_456",
+            StripeSubscriptionId = "sub_pastdue_456"
+        };
+
+        var user = new User
+        {
+            Id = Guid.NewGuid(),
+            FullName = "Administrador Fazenda",
+            Email = "admin@santamaria.com",
+            PasswordHash = "hash"
+        };
+
+        var userTenant = new UserTenant
+        {
+            UserId = user.Id,
+            TenantId = tenant.Id,
+            Role = UserRole.Admin,
+            JoinedAt = DateTime.UtcNow
+        };
+
+        _dbContext.Tenants.Add(tenant);
+        _dbContext.Users.Add(user);
+        _dbContext.UserTenants.Add(userTenant);
+        await _dbContext.SaveChangesAsync();
+
+        var handler = new CreateCheckoutSessionCommandHandler(_dbContext, _stripeService, _sender, _urlValidator);
+        var command = new CreateCheckoutSessionCommand(tenant.Id, user.Id, "Pro");
+
+        // Act
+        var result = await handler.Handle(command, CancellationToken.None);
+
+        // Assert
+        result.IsFailure.Should().BeTrue();
+        result.Error.Type.Should().Be(ErrorType.Conflict);
+        result.Error.Code.Should().Be(TenancyErrors.ActiveSubscriptionExists.Code);
+    }
+
+    [Fact]
+    public async Task CreateCheckoutSession_Should_Succeed_When_Tenant_Has_Cancelled_StripeSubscription()
+    {
+        // Arrange - Previous subscription was cancelled, tenant re-subscribing
+        var tenant = new Tenant
+        {
+            Id = Guid.NewGuid(),
+            Name = "Fazenda Esperança",
+            CNPJ = "11.222.333/0001-44",
+            Status = "Cancelled",
+            SubscribedPlan = "Starter",
+            StripeCustomerId = "cus_existing_789",
+            StripeSubscriptionId = "sub_old_cancelled"
+        };
+
+        var user = new User
+        {
+            Id = Guid.NewGuid(),
+            FullName = "Administrador Fazenda",
+            Email = "admin@esperanca.com",
+            PasswordHash = "hash"
+        };
+
+        var userTenant = new UserTenant
+        {
+            UserId = user.Id,
+            TenantId = tenant.Id,
+            Role = UserRole.Admin,
+            JoinedAt = DateTime.UtcNow
+        };
+
+        _dbContext.Tenants.Add(tenant);
+        _dbContext.Users.Add(user);
+        _dbContext.UserTenants.Add(userTenant);
+        await _dbContext.SaveChangesAsync();
+
+        var handler = new CreateCheckoutSessionCommandHandler(_dbContext, _stripeService, _sender, _urlValidator);
+        var command = new CreateCheckoutSessionCommand(tenant.Id, user.Id, "Pro");
+
+        // Act
+        var result = await handler.Handle(command, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Should().NotBeNull();
+        result.Value.Url.Should().Be("https://checkout.stripe.com/test-session");
     }
 
     [Theory]

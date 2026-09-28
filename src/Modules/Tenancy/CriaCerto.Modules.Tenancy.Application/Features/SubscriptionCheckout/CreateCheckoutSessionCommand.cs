@@ -2,6 +2,7 @@ using CriaCerto.BuildingBlocks.Abstractions.Licensing;
 using CriaCerto.BuildingBlocks.Abstractions.Results;
 using CriaCerto.Modules.Tenancy.Application.Abstractions;
 using CriaCerto.Modules.Tenancy.Application.Domain;
+using CriaCerto.Modules.Tenancy.Application.Domain.Errors;
 using CriaCerto.Modules.Tenancy.Application.Features.GetSubscriptionPlans;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -76,6 +77,12 @@ public sealed class CreateCheckoutSessionCommandHandler : IRequestHandler<Create
         {
             return Result.Failure<CheckoutSessionResult>(
                 Error.Unauthorized("Auth.ForbiddenBilling", "Apenas administradores da fazenda podem gerenciar planos e pagamentos."));
+        }
+
+        // Prevenção de assinaturas concorrentes / cobrança dupla no Stripe
+        if (tenant.HasActiveStripeSubscription())
+        {
+            return Result.Failure<CheckoutSessionResult>(TenancyErrors.ActiveSubscriptionExists);
         }
 
         // Consultar catálogo de planos para obter valores e identificadores de preço

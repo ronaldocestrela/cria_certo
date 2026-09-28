@@ -259,14 +259,14 @@
                     {
                         <button class="cc-btn cc-btn-primary w-full pressed-effect" @onclick='() => ChangePlan(plan.PlanId)'
                                 style="width: 100%; border: none; background-color: var(--cc-primary-container); color: white; border-radius: 8px; padding: 0.75rem; font-weight: bold; cursor: pointer;">
-                            Fazer Upgrade para @plan.Name
+                            @(HasActiveStripeSubscription ? $"Alterar para {plan.Name} (Portal Stripe)" : $"Fazer Upgrade para {plan.Name}")
                         </button>
                     }
                     else
                     {
                         <button class="cc-btn cc-btn-outline w-full pressed-effect" @onclick='() => ChangePlan(plan.PlanId)'
                                 style="width: 100%; border: 1px solid var(--cc-primary); border-radius: 8px; padding: 0.75rem; font-weight: bold; background: white; color: var(--cc-primary); cursor: pointer;">
-                            Downgrade para @plan.Name
+                            @(HasActiveStripeSubscription ? $"Alterar para {plan.Name} (Portal Stripe)" : $"Downgrade para {plan.Name}")
                         </button>
                     }
                 </div>
@@ -447,9 +447,19 @@
                     <button type="button" @onclick="CloseBillingModal" style="background: white; border: 1px solid var(--cc-border); border-radius: 8px; padding: 0.5rem 1.25rem; font-size: 13px; font-weight: 600; cursor: pointer; color: var(--cc-ink);">
                         Fechar
                     </button>
-                    <button type="button" @onclick="ContactSupport" style="background: var(--cc-primary); border: none; border-radius: 8px; padding: 0.5rem 1.25rem; font-size: 13px; font-weight: 600; color: white; cursor: pointer;">
-                        Falar com Suporte
-                    </button>
+                    @if (HasActiveStripeSubscription)
+                    {
+                        <button type="button" @onclick="OpenBillingPortalFromModal" style="background: #635bff; border: none; border-radius: 8px; padding: 0.5rem 1.25rem; font-size: 13px; font-weight: 600; color: white; cursor: pointer; display: flex; align-items: center; gap: 0.4rem;">
+                            <span class="material-symbols-outlined" style="font-size: 16px;">open_in_new</span>
+                            <span>Acessar Portal Stripe</span>
+                        </button>
+                    }
+                    else
+                    {
+                        <button type="button" @onclick="ContactSupport" style="background: var(--cc-primary); border: none; border-radius: 8px; padding: 0.5rem 1.25rem; font-size: 13px; font-weight: 600; color: white; cursor: pointer;">
+                            Falar com Suporte
+                        </button>
+                    }
                 </div>
             </div>
         </div>
@@ -471,6 +481,11 @@
     private List<SubscriptionPlanModel> _availablePlans = new();
     private bool _showBillingUnavailableModal = false;
     private string _billingUnavailableReason = "O serviço de faturamento seguro no Stripe está temporariamente indisponível.";
+
+    private bool HasActiveStripeSubscription => _profile != null &&
+        !string.IsNullOrWhiteSpace(_profile.StripeSubscriptionId) &&
+        (string.Equals(_profile.Status, "Active", StringComparison.OrdinalIgnoreCase) ||
+         string.Equals(_profile.Status, "PastDue", StringComparison.OrdinalIgnoreCase));
 
     private int _registeredAnimalsCount = 0;
     private int _reportsCount = 0;
@@ -608,6 +623,13 @@
         if (_isSubmitting || IsActivePlan(planName) || _tenantId == Guid.Empty)
             return;
 
+        // Prevenção de assinaturas concorrentes / cobrança dupla no Stripe
+        if (HasActiveStripeSubscription)
+        {
+            await OpenBillingPortal();
+            return;
+        }
+
         _isSubmitting = true;
         _message = null;
 
@@ -635,7 +657,14 @@
         }
         catch (Exception ex)
         {
-            _billingUnavailableReason = $"Ocorreu uma falha na integração de pagamentos: {ex.Message}. A alteração direta de planos sem confirmação financeira foi bloqueada.";
+            if (HasActiveStripeSubscription || ex.Message.Contains("assinatura ativa no Stripe", StringComparison.OrdinalIgnoreCase))
+            {
+                _billingUnavailableReason = "Sua fazenda já possui uma assinatura ativa gerenciada com segurança pelo Stripe. Para prevenir cobranças duplicadas e calcular o rateio proporcional automaticamente, a alteração de plano deve ser realizada através do Portal do Stripe.";
+            }
+            else
+            {
+                _billingUnavailableReason = $"Ocorreu uma falha na integração de pagamentos: {ex.Message}. A alteração direta de planos sem confirmação financeira foi bloqueada.";
+            }
             _showBillingUnavailableModal = true;
             _message = $"Erro ao conectar ao faturamento seguro: {ex.Message}";
             _isSuccessMessage = false;
@@ -692,6 +721,12 @@
     private void CloseBillingModal()
     {
         _showBillingUnavailableModal = false;
+    }
+
+    private async Task OpenBillingPortalFromModal()
+    {
+        CloseBillingModal();
+        await OpenBillingPortal();
     }
 
     private void ContactSupport()

@@ -95,4 +95,8 @@ public static class TenancyErrors
     public static readonly Error UsageExceedsCapacityRequiresGracePeriod = Error.Validation(
         "Tenant.UsageExceedsCapacityRequiresGracePeriod",
         "O uso atual excede os limites do novo plano. A alteração iniciará um Grace Period de 14 dias.");
+
+    public static readonly Error ActiveSubscriptionExists = Error.Conflict(
+        "Tenant.ActiveSubscriptionExists",
+        "A fazenda já possui uma assinatura ativa no Stripe. Alterações de plano ou ciclo de faturamento devem ser realizadas com segurança através do portal de gerenciamento de faturamento.");
 }

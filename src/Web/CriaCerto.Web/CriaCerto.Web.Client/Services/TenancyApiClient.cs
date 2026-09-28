@@ -42,6 +42,7 @@ public sealed record TenantProfileModel(
 
 public sealed record StripeCheckoutSessionResponse(string SessionId, string Url);
 public sealed record StripePortalSessionResponse(string Url);
+public sealed record ApiErrorDto(string? Code, string? Message, int? Type);
 
 public sealed record ProductionUnitModel(
     Guid Id,
@@ -188,6 +189,16 @@ public sealed class TenancyApiClient
             {
                 return await response.Content.ReadFromJsonAsync<StripeCheckoutSessionResponse>(cancellationToken: cancellationToken);
             }
+
+            if (response.StatusCode == System.Net.HttpStatusCode.Conflict)
+            {
+                var errorObj = await response.Content.ReadFromJsonAsync<ApiErrorDto>(cancellationToken: cancellationToken);
+                throw new InvalidOperationException(errorObj?.Message ?? "A fazenda já possui uma assinatura ativa no Stripe. Alterações de plano devem ser realizadas com segurança através do portal de gerenciamento de faturamento.");
+            }
+        }
+        catch (InvalidOperationException)
+        {
+            throw;
         }
         catch
         {

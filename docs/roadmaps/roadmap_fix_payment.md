@@ -160,14 +160,29 @@ Este documento consolida o plano de ação técnico para sanar as **vulnerabilid
   - `tests/Unit/CriaCerto.Modules.Tenancy.UnitTests/SubscriptionBillingAuthorizationTests.cs`
   - `tests/Unit/CriaCerto.Modules.Tenancy.UnitTests/StripeWebhookPlanMappingTests.cs`
 
-#### 2.2. Prevenção de Assinaturas Concorrentes (Cobrança Dupla)
+#### 2.2. Prevenção de Assinaturas Concorrentes (Cobrança Dupla) [CONCLUÍDO]
 * **Problema Identificado:** Se uma fazenda já possui `StripeSubscriptionId` ativo e solicita um novo checkout, o Stripe cria uma nova assinatura simultânea para o mesmo cliente, cobrando duplamente.
-* **Ações no Backend:**
-  * No `CreateCheckoutSessionCommandHandler`, checar se `tenant.StripeSubscriptionId` já existe e se o status é ativo.
-  * Se já houver assinatura ativa, retornar erro de domínio instruindo a transição de plano pelo Customer Portal, ou redirecionar automaticamente para a sessão do portal de gestão de faturamento.
+* **Ações no Backend Implementadas:**
+  * Em [TenancyErrors.cs](file:///home/rony/LPR/CriaCerto/src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Domain/Errors/TenancyErrors.cs), criado o erro de domínio `ActiveSubscriptionExists` com código `Tenant.ActiveSubscriptionExists` e tipo `ErrorType.Conflict` (mapeado para HTTP 409 Conflict).
+  * Em [Tenant.cs](file:///home/rony/LPR/CriaCerto/src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Domain/Tenant.cs), implementado o método de domínio `HasActiveStripeSubscription()`, validando a presença de `StripeSubscriptionId` conjugado com status operacional ativo (`Active` ou `PastDue`).
+  * Em [CreateCheckoutSessionCommandHandler.cs](file:///home/rony/LPR/CriaCerto/src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Features/SubscriptionCheckout/CreateCheckoutSessionCommand.cs), inserida guarda bloqueando a emissão de Checkout Session com `Result.Failure<CheckoutSessionResult>(TenancyErrors.ActiveSubscriptionExists)` quando o tenant já possui assinatura Stripe ativa.
+* **Ações no Frontend Implementadas (Blazor WebAssembly):**
+  * Em [TenancyApiClient.cs](file:///home/rony/LPR/CriaCerto/src/Web/CriaCerto.Web/CriaCerto.Web.Client/Services/TenancyApiClient.cs), adicionado parsing de resposta de erro HTTP 409 (`ApiErrorDto`) propagando mensagem orientadora da API em vez de silenciar a falha.
+  * Em [SubscriptionManagement.razor](file:///home/rony/LPR/CriaCerto/src/Web/CriaCerto.Web/CriaCerto.Web.Client/Pages/Settings/SubscriptionManagement.razor), adicionada a propriedade `HasActiveStripeSubscription`. Nos cards de plano, os botões de ação passam a indicar alternância via Portal Stripe (`Alterar para {Plan} (Portal Stripe)`). Ao clicar em alteração de plano, o produtor é conduzido diretamente ao Customer Portal seguro do Stripe (`OpenBillingPortal()`), prevenindo duplicação de assinaturas e garantindo cálculo pro-rata.
+  * Adicionado botão de atalho `Acessar Portal Stripe` no modal de faturamento em caso de interceptação de tentativa concorrente.
+* **Testes Automatizados (TDD):**
+  - [SubscriptionBillingAuthorizationTests.cs](file:///home/rony/LPR/CriaCerto/tests/Unit/CriaCerto.Modules.Tenancy.UnitTests/SubscriptionBillingAuthorizationTests.cs):
+    * `CreateCheckoutSession_Should_Fail_With_Conflict_When_Tenant_Already_Has_Active_StripeSubscription` (validação de rejeição 409 Conflict para tenant ativo com `StripeSubscriptionId`).
+    * `CreateCheckoutSession_Should_Fail_With_Conflict_When_Tenant_Has_PastDue_StripeSubscription` (validação de rejeição 409 Conflict para tenant em tolerância `PastDue`).
+    * `CreateCheckoutSession_Should_Succeed_When_Tenant_Has_Cancelled_StripeSubscription` (validação de permissão de nova assinatura caso a anterior tenha sido cancelada).
+    * `CreateCheckoutSession_Should_Succeed_When_Tenant_Has_No_StripeSubscription` (validação de fluxo normal de primeiro checkout).
 * **Arquivos Impactados:**
+  - `src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Domain/Errors/TenancyErrors.cs`
+  - `src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Domain/Tenant.cs`
   - `src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Features/SubscriptionCheckout/CreateCheckoutSessionCommand.cs`
+  - `src/Web/CriaCerto.Web/CriaCerto.Web.Client/Services/TenancyApiClient.cs`
   - `src/Web/CriaCerto.Web/CriaCerto.Web.Client/Pages/Settings/SubscriptionManagement.razor`
+  - `tests/Unit/CriaCerto.Modules.Tenancy.UnitTests/SubscriptionBillingAuthorizationTests.cs`
 
 #### 2.3. Renovação de Claims e JWT no Retorno do Stripe
 * **Problema Identificado:** Ao concluir a assinatura no Stripe e ser redirecionado para `/settings/subscription?success=true`, o usuário continua com o token JWT antigo gravado no navegador, mantendo o status desatualizado até efetuar logout.
