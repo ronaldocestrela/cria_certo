@@ -14,6 +14,8 @@ public sealed class TenantSubscriptionHistory
     public int SnapshotUnitCount { get; set; }
     public DateTime ChangedAtUtc { get; set; } = DateTime.UtcNow;
 
+    public static readonly Guid StripeSystemActorId = Guid.Empty;
+
     public static TenantSubscriptionHistory Create(
         Guid tenantId,
         Guid? previousPlanVersionId,
@@ -39,4 +41,30 @@ public sealed class TenantSubscriptionHistory
             ChangedAtUtc = DateTime.UtcNow
         };
     }
+
+    public static TenantSubscriptionHistory CreateFromStripeWebhook(
+        Guid tenantId,
+        SubscriptionActionType actionType,
+        string justification,
+        int snapshotHeadCount,
+        int snapshotUserCount = 1,
+        int snapshotUnitCount = 1,
+        Guid? previousPlanVersionId = null,
+        Guid? newPlanVersionId = null)
+    {
+        return new TenantSubscriptionHistory
+        {
+            TenantId = tenantId,
+            PreviousPlanVersionId = previousPlanVersionId,
+            NewPlanVersionId = newPlanVersionId ?? Guid.Empty,
+            ChangedByAdminUserId = StripeSystemActorId,
+            Justification = justification,
+            ActionType = actionType,
+            SnapshotHeadCount = snapshotHeadCount,
+            SnapshotUserCount = snapshotUserCount,
+            SnapshotUnitCount = snapshotUnitCount,
+            ChangedAtUtc = DateTime.UtcNow
+        };
+    }
 }
+

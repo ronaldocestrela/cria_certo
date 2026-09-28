@@ -17,8 +17,15 @@ public enum SubscriptionActionType
     DowngradeImmediate = 2,
     DowngradeGracePeriodStarted = 3,
     GracePeriodResolved = 4,
-    GracePeriodExpiredBlocked = 5
+    GracePeriodExpiredBlocked = 5,
+    NewSubscription = 6,
+    Renewal = 7,
+    PaymentFailed = 8,
+    Cancelled = 9,
+    PlanChanged = 10,
+    Suspended = 11
 }
+
 
 public sealed class TenantSubscription
 {

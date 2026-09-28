@@ -48,8 +48,15 @@ O módulo `Modules.Tenancy` gerencia as identidades dos usuários, organizaçõe
 
 ### Diretrizes de Segurança e Isolamento em Webhooks Stripe
 - **Sanitização de Chaves Nulas:** Todas as consultas e mutações disparadas por webhooks (`invoice.paid`, `invoice.payment_failed`, `customer.subscription.updated`, `customer.subscription.deleted`) realizam verificação defensiva prévia de `CustomerId` e `SubscriptionId`. Consultas ao banco nunca são executadas com valores nulos ou em branco, impedindo a contaminação acidental de tenants recém-criados (`StripeCustomerId == null`).
-- **Blindagem de Tenants Protegidos (`IsProtected`):** Organizações sinalizadas com `tenant.IsProtected == true` (ex.: contas governamentais, VIPs ou em regime especial) têm suas transições destrutivas (`Suspended`, `Cancelled`, `Archived`) bloqueadas perante eventos de cancelamento ou falha de pagamento do Stripe, registrando logs de aviso para auditoria sem interrupção de acesso.
+- **Blindagem de Tenants Protegidos (`IsProtected`):** Organizações sinalizadas com `tenant.IsProtected == true` (ex.: contas governamentais, VIPs ou em regime especial) têm suas transições destrutivas (`Suspended`, `Cancelled`, `Archived`) bloqueadas perante eventos de cancelamento ou falha de pagamento do Stripe, registrando logs de aviso para auditoria sem interrupção de acesso e persistindo no histórico a tentativa de desativação interceptada.
 - **Ativação Condicionada à Confirmação do Pagamento (`PaymentStatus == "paid"`):** No webhook `checkout.session.completed`, a transição para `Status = "Active"`, remoção de `StatusReason` e a atualização do plano (`SubscribedPlan`) e capacidade (`Capacity`) ocorrem exclusivamente quando `session.PaymentStatus` for `"paid"` (ou `"no_payment_required"`). Para pagamentos assíncronos ou pendentes (`PaymentStatus == "unpaid"`, como Boleto Bancário ou Pix em compensação), o sistema vincula os identificadores do cliente (`StripeCustomerId`) e assinatura (`StripeSubscriptionId`) para correlação futura, preserva o status atual do tenant (ex.: `Trial`) sem liberar módulos antecipadamente e grava justificativa informativa em `StatusReason`. A ativação definitiva é delegada para a liquidação da fatura via webhook `invoice.paid`.
+- **Rastreabilidade e Histórico de Assinaturas (`TenantSubscriptionHistories`):** Cada evento de faturamento e ciclo de vida originado no Stripe grava atomicamente uma entrada em `SubscriptionHistories` via `TenantSubscriptionHistory.CreateFromStripeWebhook` com o identificador de sistema `StripeSystemActorId = Guid.Empty`. Eventos mapeados:
+  * `checkout.session.completed` (com pagamento confirmado): `SubscriptionActionType.NewSubscription`.
+  * `invoice.paid`: `SubscriptionActionType.Renewal` (registrando a extensão do período garantido).
+  * `invoice.payment_failed`: `SubscriptionActionType.PaymentFailed` (documentando a entrada em `PastDue`).
+  * `customer.subscription.updated`: `SubscriptionActionType.PlanChanged` (atualização de plano/capacidade), `PaymentFailed` (`past_due`) ou `Suspended`.
+  * `customer.subscription.deleted`: `SubscriptionActionType.Cancelled` (ou registro de bloqueio por proteção de conta).
+
 
 ---
 

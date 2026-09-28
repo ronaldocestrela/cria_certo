@@ -408,6 +408,14 @@ public sealed class StripePaymentService : IStripePaymentService
             tenant.StatusChangedAtUtc = DateTime.UtcNow;
             tenant.UpdatedAtUtc = DateTime.UtcNow;
 
+            var history = TenantSubscriptionHistory.CreateFromStripeWebhook(
+                tenantId: tenant.Id,
+                actionType: SubscriptionActionType.NewSubscription,
+                justification: $"Assinatura ativada via Stripe Checkout (Sessão: {session.Id}, Plano: {tenant.SubscribedPlan}, Status: {session.PaymentStatus}).",
+                snapshotHeadCount: tenant.Capacity
+            );
+            _dbContext.SubscriptionHistories.Add(history);
+
             _logger.LogInformation("Tenant {TenantId} ativado após Checkout com pagamento confirmado ({PaymentStatus}) no Stripe.", tenant.Id, session.PaymentStatus);
         }
         else
@@ -452,6 +460,15 @@ public sealed class StripePaymentService : IStripePaymentService
         }
 
         tenant.UpdatedAtUtc = DateTime.UtcNow;
+
+        var history = TenantSubscriptionHistory.CreateFromStripeWebhook(
+            tenantId: tenant.Id,
+            actionType: SubscriptionActionType.Renewal,
+            justification: $"Fatura {invoice.Id} quitada via Stripe. Renovação até {tenant.CurrentPeriodEndUtc:yyyy-MM-dd HH:mm:ss} UTC.",
+            snapshotHeadCount: tenant.Capacity
+        );
+        _dbContext.SubscriptionHistories.Add(history);
+
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         _logger.LogInformation("Fatura quitada para o Tenant {TenantId}. Renovação garantida até {PeriodEnd}", tenant.Id, tenant.CurrentPeriodEndUtc);
@@ -477,6 +494,14 @@ public sealed class StripePaymentService : IStripePaymentService
         tenant.StatusReason = "Falha no pagamento da fatura recorrente via Stripe.";
         tenant.StatusChangedAtUtc = DateTime.UtcNow;
         tenant.UpdatedAtUtc = DateTime.UtcNow;
+
+        var history = TenantSubscriptionHistory.CreateFromStripeWebhook(
+            tenantId: tenant.Id,
+            actionType: SubscriptionActionType.PaymentFailed,
+            justification: $"Falha no pagamento da fatura recorrente {invoice.Id} via Stripe. Tenant marcado como PastDue.",
+            snapshotHeadCount: tenant.Capacity
+        );
+        _dbContext.SubscriptionHistories.Add(history);
 
         await _dbContext.SaveChangesAsync(cancellationToken);
         _logger.LogWarning("Tenant {TenantId} colocado em PastDue devido a falha no pagamento.", tenant.Id);
@@ -527,9 +552,15 @@ public sealed class StripePaymentService : IStripePaymentService
             rawUpdatedPlan = ResolvePlanFromPriceId(tenant.StripePriceId);
         }
 
+        bool planChanged = false;
         if (!string.IsNullOrWhiteSpace(rawUpdatedPlan))
         {
             var canonicalPlan = ModuleLicenseChecker.NormalizePlan(rawUpdatedPlan);
+            if (!string.Equals(tenant.SubscribedPlan, canonicalPlan, StringComparison.OrdinalIgnoreCase))
+            {
+                planChanged = true;
+            }
+
             tenant.SubscribedPlan = canonicalPlan;
             AdjustTenantCapacityForPlan(tenant, canonicalPlan);
         }
@@ -543,21 +574,52 @@ public sealed class StripePaymentService : IStripePaymentService
         {
             case "active":
                 tenant.Status = "Active";
+                if (planChanged)
+                {
+                    var planHistory = TenantSubscriptionHistory.CreateFromStripeWebhook(
+                        tenantId: tenant.Id,
+                        actionType: SubscriptionActionType.PlanChanged,
+                        justification: $"Plano atualizado via Stripe para {tenant.SubscribedPlan} (Capacidade: {tenant.Capacity}, Preço: {tenant.StripePriceId}).",
+                        snapshotHeadCount: tenant.Capacity
+                    );
+                    _dbContext.SubscriptionHistories.Add(planHistory);
+                }
                 break;
             case "past_due":
                 tenant.Status = "PastDue";
                 tenant.StatusReason = "Assinatura Stripe está com pendência de pagamento (past_due).";
+                var pastDueHistory = TenantSubscriptionHistory.CreateFromStripeWebhook(
+                    tenantId: tenant.Id,
+                    actionType: SubscriptionActionType.PaymentFailed,
+                    justification: $"Assinatura Stripe {subscription.Id} com pendência de pagamento (past_due).",
+                    snapshotHeadCount: tenant.Capacity
+                );
+                _dbContext.SubscriptionHistories.Add(pastDueHistory);
                 break;
             case "canceled":
             case "unpaid":
                 if (tenant.IsProtected)
                 {
                     _logger.LogWarning("Tentativa de suspender tenant protegido {TenantId} via Stripe Webhook ignorada (IsProtected=true).", tenant.Id);
+                    var protHistory = TenantSubscriptionHistory.CreateFromStripeWebhook(
+                        tenantId: tenant.Id,
+                        actionType: SubscriptionActionType.Suspended,
+                        justification: $"Tentativa de suspensão via Stripe ({subscription.Status}) ignorada devido a IsProtected=true.",
+                        snapshotHeadCount: tenant.Capacity
+                    );
+                    _dbContext.SubscriptionHistories.Add(protHistory);
                 }
                 else
                 {
                     tenant.Status = "Suspended";
                     tenant.StatusReason = $"Assinatura Stripe suspensa ({subscription.Status}).";
+                    var suspHistory = TenantSubscriptionHistory.CreateFromStripeWebhook(
+                        tenantId: tenant.Id,
+                        actionType: SubscriptionActionType.Suspended,
+                        justification: $"Assinatura suspensa via Stripe ({subscription.Status}). Subscrição: {subscription.Id}.",
+                        snapshotHeadCount: tenant.Capacity
+                    );
+                    _dbContext.SubscriptionHistories.Add(suspHistory);
                 }
                 break;
         }
@@ -591,6 +653,15 @@ public sealed class StripePaymentService : IStripePaymentService
             _logger.LogWarning("Tentativa de cancelar tenant protegido {TenantId} via Stripe Webhook ignorada (IsProtected=true).", tenant.Id);
             tenant.CancelAtPeriodEnd = false;
             tenant.UpdatedAtUtc = DateTime.UtcNow;
+
+            var protCancelHistory = TenantSubscriptionHistory.CreateFromStripeWebhook(
+                tenantId: tenant.Id,
+                actionType: SubscriptionActionType.Cancelled,
+                justification: $"Tentativa de cancelamento da assinatura {subscription.Id} no Stripe ignorada devido a IsProtected=true.",
+                snapshotHeadCount: tenant.Capacity
+            );
+            _dbContext.SubscriptionHistories.Add(protCancelHistory);
+
             await _dbContext.SaveChangesAsync(cancellationToken);
             return;
         }
@@ -601,9 +672,18 @@ public sealed class StripePaymentService : IStripePaymentService
         tenant.CancelAtPeriodEnd = false;
         tenant.UpdatedAtUtc = DateTime.UtcNow;
 
+        var cancelHistory = TenantSubscriptionHistory.CreateFromStripeWebhook(
+            tenantId: tenant.Id,
+            actionType: SubscriptionActionType.Cancelled,
+            justification: $"Assinatura {subscription.Id} cancelada no Stripe.",
+            snapshotHeadCount: tenant.Capacity
+        );
+        _dbContext.SubscriptionHistories.Add(cancelHistory);
+
         await _dbContext.SaveChangesAsync(cancellationToken);
         _logger.LogInformation("Assinatura do Tenant {TenantId} foi cancelada.", tenant.Id);
     }
+
 
     private static string? ResolvePlanFromPriceId(string? stripePriceId)
     {

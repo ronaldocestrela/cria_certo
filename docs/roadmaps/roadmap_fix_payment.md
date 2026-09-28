@@ -280,11 +280,32 @@ Este documento consolida o plano de ação técnico para sanar as **vulnerabilid
   - `docs/roadmaps/roadmap_fix_payment.md`
 
 #### 3.5. Registro de Histórico em `TenantSubscriptionHistories`
-* **Problema Identificado:** Eventos do Stripe não gravam histórico em `SubscriptionHistories`, deixando o Backoffice sem visibilidade das ações de faturamento do cliente.
-* **Ações no Backend:**
-  * Injetar a persistência de `TenantSubscriptionHistory` nos handlers de webhook para eventos de nova subscrição, renovação de fatura, cancelamento e falha de pagamento.
+* **Problema Identificado:** Eventos do Stripe não gravavam histórico em `SubscriptionHistories`, deixando o Backoffice sem visibilidade das ações de faturamento do cliente.
+* **Ações no Backend Implementadas:**
+  * No enum `SubscriptionActionType`: adicionados membros `NewSubscription`, `Renewal`, `PaymentFailed`, `Cancelled`, `PlanChanged` e `Suspended`.
+  * Em `TenantSubscriptionHistory`: adicionado método de fábrica `CreateFromStripeWebhook` com atribuição do ator canônico de sistema `StripeSystemActorId = Guid.Empty`.
+  * Em `StripePaymentService.cs`:
+    - `HandleCheckoutSessionCompletedAsync`: persiste `SubscriptionActionType.NewSubscription` com snapshot de capacidade e justificativa descritiva ao confirmar pagamento do Checkout.
+    - `HandleInvoicePaidAsync`: persiste `SubscriptionActionType.Renewal` registrando a extensão do período garantido.
+    - `HandleInvoicePaymentFailedAsync`: persiste `SubscriptionActionType.PaymentFailed` documentando a entrada em `PastDue`.
+    - `HandleSubscriptionUpdatedAsync`: persiste `SubscriptionActionType.PlanChanged` em caso de upgrade/downgrade de plano via portal, `PaymentFailed` para status `past_due`, ou `Suspended` (com registro explícito caso seja impedido por `tenant.IsProtected`).
+    - `HandleSubscriptionDeletedAsync`: persiste `SubscriptionActionType.Cancelled` em caso de cancelamento da assinatura no Stripe, ou registro de interceptação caso o tenant esteja protegido (`IsProtected = true`).
+* **Testes Automatizados (TDD):**
+  * Criada a suíte `tests/Unit/CriaCerto.Modules.Tenancy.UnitTests/StripeWebhookSubscriptionHistoryTests.cs` cobrindo:
+    - Gravação de `NewSubscription` no Checkout com pagamento confirmado.
+    - Gravação de `Renewal` no pagamento de fatura.
+    - Gravação de `PaymentFailed` na falha de cobrança.
+    - Gravação de `PlanChanged` com atualização de snapshot de capacidade na troca de plano.
+    - Gravação de `Cancelled` em cancelamento regular de assinatura.
+    - Gravação de bloqueio por proteção de tenant em cancelamento de conta protegida.
+    - Garantia de não duplicação de histórico em reenvio de webhook (idempotência).
 * **Arquivos Impactados:**
+  - `src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Domain/TenantSubscription.cs`
+  - `src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Domain/TenantSubscriptionHistory.cs`
   - `src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Infrastructure/Services/StripePaymentService.cs`
+  - `tests/Unit/CriaCerto.Modules.Tenancy.UnitTests/StripeWebhookSubscriptionHistoryTests.cs`
+  - `docs/modules/tenancy.md`
+  - `docs/roadmaps/roadmap_fix_payment.md`
 
 ---
 
@@ -372,7 +393,7 @@ Este documento consolida o plano de ação técnico para sanar as **vulnerabilid
 | **3.2** | Adicionar verificação contra IDs de clientes nulos no webhook | `StripePaymentService.cs` | [x] |
 | **3.3** | Sincronizar trocas de plano feitas pelo Stripe Portal | `StripePaymentService.cs` | [x] |
 | **3.4** | Validar `PaymentStatus == "paid"` antes de ativar conta | `StripePaymentService.cs` | [x] |
-| **3.5** | Gravar histórico em `TenantSubscriptionHistories` via webhook | `StripePaymentService.cs` | [ ] |
+| **3.5** | Gravar histórico em `TenantSubscriptionHistories` via webhook | `StripePaymentService.cs` | [x] |
 | **4.1** | Bloquear acesso no `TenantAccessGuard` para trials vencidos | `TenantAccessGuard.cs` | [ ] |
 | **4.2** | Criar `SubscriptionLifecycleWorker` para expiração e grace period | `SubscriptionLifecycleWorker.cs` | [ ] |
 | **4.3** | Travar plano e capacidade padrão no onboarding | `CreateTenantCommand.cs` | [ ] |
