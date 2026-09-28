@@ -46,6 +46,10 @@ O módulo `Modules.Tenancy` gerencia as identidades dos usuários, organizaçõe
 
 - **StripeWebhookEvent**: Registro de idempotência de eventos Stripe recebidos (`EventId` único, `EventType`, `ProcessedAtUtc`, `PayloadJson`) para evitar reprocessamento em retentativas automáticas e concorrência.
 
+### Diretrizes de Segurança e Isolamento em Webhooks Stripe
+- **Sanitização de Chaves Nulas:** Todas as consultas e mutações disparadas por webhooks (`invoice.paid`, `invoice.payment_failed`, `customer.subscription.updated`, `customer.subscription.deleted`) realizam verificação defensiva prévia de `CustomerId` e `SubscriptionId`. Consultas ao banco nunca são executadas com valores nulos ou em branco, impedindo a contaminação acidental de tenants recém-criados (`StripeCustomerId == null`).
+- **Blindagem de Tenants Protegidos (`IsProtected`):** Organizações sinalizadas com `tenant.IsProtected == true` (ex.: contas governamentais, VIPs ou em regime especial) têm suas transições destrutivas (`Suspended`, `Cancelled`, `Archived`) bloqueadas perante eventos de cancelamento ou falha de pagamento do Stripe, registrando logs de aviso para auditoria sem interrupção de acesso.
+
 ---
 
 ## 2. Endpoints da API (`/api/auth`)
@@ -160,4 +164,6 @@ Erros: `Tenant.InvalidTransition`, `Tenant.JustificationRequired`, `Tenant.Prote
 - `CreateTenantCommandValidatorTests`: Testes de validação de dados da fazenda e plano.
 - `ForgotPasswordCommandHandlerTests`: Testes de geração de token e expiração.
 - `ResetPasswordCommandHandlerTests`: Testes de alteração de senha e rejeição de tokens expirados/inválidos.
+- `StripeWebhookIdempotencyTests`: Testes de deduplicação e idempotência de eventos Stripe via tabela dedicada.
+- `StripeWebhookNullKeyAndTenantProtectionTests`: Testes de sanitização de chaves nulas/vazias e salvaguarda de tenants protegidos (`IsProtected`).
 - `OnboardingIntegrationTests`: Teste de integração end-to-end do fluxo Registro -> Onboarding da Fazenda -> Login sem erro `Auth.NoTenantAssociation`.

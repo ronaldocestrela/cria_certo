@@ -236,19 +236,26 @@ Este documento consolida o plano de ação técnico para sanar as **vulnerabilid
   - `docs/modules/tenancy.md`
   - `docs/roadmaps/roadmap_fix_payment.md`
 
-#### 3.2. Sanitização de Chaves Nulas e Proteção de Tenants
-* **Problema Identificado:** Consultas com `t.StripeCustomerId == invoice.CustomerId` sem validar string nula podem associar faturas ao primeiro tenant com `StripeCustomerId == null`.
-* **Ações no Backend:**
-  * Em todos os handlers de webhook (`HandleInvoicePaidAsync`, `HandleSubscriptionUpdatedAsync`, `HandleSubscriptionDeletedAsync`), adicionar guarda explícita:
-    ```csharp
-    if (string.IsNullOrWhiteSpace(invoice.CustomerId))
-    {
-        _logger.LogWarning("Evento recebido com CustomerId vazio/nulo.");
-        return;
-    }
-    ```
+#### 3.2. Sanitização de Chaves Nulas e Proteção de Tenants [CONCLUÍDO]
+* **Problema Identificado:** Consultas com `t.StripeCustomerId == invoice.CustomerId` ou `t.StripeCustomerId == subscription.CustomerId` sem validar string nula/vazia faziam o EF Core gerar `IS NULL` em SQL, associando faturas, inadimplências ou cancelamentos indevidos ao primeiro tenant com `StripeCustomerId == null`. Além disso, eventos de cancelamento ou suspensão ignoravam a flag `tenant.IsProtected`, desativando contas protegidas.
+* **Ações no Backend Implementadas:**
+  * Em [StripePaymentService.cs](file:///home/rony/LPR/CriaCerto/src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Infrastructure/Services/StripePaymentService.cs):
+    - **Guardas prévias de chaves nulas:** Em `HandleInvoicePaidAsync` e `HandleInvoicePaymentFailedAsync`, adicionada validação antecipada com `string.IsNullOrWhiteSpace(invoice.CustomerId)`, abortando com log de advertência antes de consultar o banco.
+    - **Validação de identificadores em assinaturas:** Em `HandleSubscriptionUpdatedAsync` e `HandleSubscriptionDeletedAsync`, implementada validação de `subscription.Id` e `subscription.CustomerId`, assegurando que a consulta ao banco só filtre por identificadores válidos (`hasSubId` e `hasCustId`), evitando qualquer correspondência acidental com campos nulos.
+    - **Sanitização de checkout:** Em `HandleCheckoutSessionCompletedAsync`, assegurada a atribuição condicional de `session.CustomerId` e `session.SubscriptionId` apenas quando não vazios.
+    - **Proteção de Tenants (`tenant.IsProtected`):** Em `HandleSubscriptionUpdatedAsync` (para status `canceled`/`unpaid`) e em `HandleSubscriptionDeletedAsync`, inserida salvaguarda verificando `tenant.IsProtected`. Se verdadeiro, impede a transição destrutiva para `Suspended` ou `Cancelled`, registrando log de advertência e preservando o status e direitos de acesso da organização protegida.
+* **Testes Automatizados (TDD):**
+  * Criada a suíte [StripeWebhookNullKeyAndTenantProtectionTests.cs](file:///home/rony/LPR/CriaCerto/tests/Unit/CriaCerto.Modules.Tenancy.UnitTests/StripeWebhookNullKeyAndTenantProtectionTests.cs) cobrindo:
+    - Webhooks `invoice.paid` e `invoice.payment_failed` com `CustomerId` nulo, vazio ou espaços em branco não afetam tenants sem Stripe.
+    - Webhooks `customer.subscription.updated` e `customer.subscription.deleted` com chaves nulas não alteram status de tenants não vinculados.
+    - Webhook `customer.subscription.deleted` em tenant com `IsProtected = true` tem cancelamento bloqueado e status preservado.
+    - Webhook `customer.subscription.updated` com status `canceled`/`unpaid` em tenant com `IsProtected = true` tem suspensão bloqueada.
+    - Webhook `customer.subscription.deleted` em tenant normal (`IsProtected = false`) continua executando cancelamento com sucesso.
 * **Arquivos Impactados:**
   - `src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Infrastructure/Services/StripePaymentService.cs`
+  - `tests/Unit/CriaCerto.Modules.Tenancy.UnitTests/StripeWebhookNullKeyAndTenantProtectionTests.cs`
+  - `docs/modules/tenancy.md`
+  - `docs/roadmaps/roadmap_fix_payment.md`
 
 #### 3.3. Sincronização Completa de Alterações pelo Stripe Portal
 * **Problema Identificado:** No evento `customer.subscription.updated`, o backend atualiza apenas status e `StripePriceId`, ignorando trocas de plano feitas pelo cliente no portal do Stripe.

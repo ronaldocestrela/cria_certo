@@ -368,8 +368,15 @@ public sealed class StripePaymentService : IStripePaymentService
             return;
         }
 
-        tenant.StripeCustomerId = session.CustomerId;
-        tenant.StripeSubscriptionId = session.SubscriptionId;
+        if (!string.IsNullOrWhiteSpace(session.CustomerId))
+        {
+            tenant.StripeCustomerId = session.CustomerId;
+        }
+
+        if (!string.IsNullOrWhiteSpace(session.SubscriptionId))
+        {
+            tenant.StripeSubscriptionId = session.SubscriptionId;
+        }
 
         string? rawPlan = null;
         if (session.Metadata != null)
@@ -402,6 +409,12 @@ public sealed class StripePaymentService : IStripePaymentService
         Stripe.Invoice invoice,
         CancellationToken cancellationToken)
     {
+        if (string.IsNullOrWhiteSpace(invoice.CustomerId))
+        {
+            _logger.LogWarning("InvoicePaid recebido com CustomerId vazio ou nulo. Ignorando processamento.");
+            return;
+        }
+
         var tenant = await _dbContext.Tenants.FirstOrDefaultAsync(
             t => t.StripeCustomerId == invoice.CustomerId,
             cancellationToken);
@@ -432,6 +445,12 @@ public sealed class StripePaymentService : IStripePaymentService
         Stripe.Invoice invoice,
         CancellationToken cancellationToken)
     {
+        if (string.IsNullOrWhiteSpace(invoice.CustomerId))
+        {
+            _logger.LogWarning("InvoicePaymentFailed recebido com CustomerId vazio ou nulo. Ignorando processamento.");
+            return;
+        }
+
         var tenant = await _dbContext.Tenants.FirstOrDefaultAsync(
             t => t.StripeCustomerId == invoice.CustomerId,
             cancellationToken);
@@ -451,8 +470,18 @@ public sealed class StripePaymentService : IStripePaymentService
         Stripe.Subscription subscription,
         CancellationToken cancellationToken)
     {
+        var hasSubId = !string.IsNullOrWhiteSpace(subscription.Id);
+        var hasCustId = !string.IsNullOrWhiteSpace(subscription.CustomerId);
+
+        if (!hasSubId && !hasCustId)
+        {
+            _logger.LogWarning("SubscriptionUpdated recebido sem SubscriptionId e sem CustomerId. Ignorando processamento.");
+            return;
+        }
+
         var tenant = await _dbContext.Tenants.FirstOrDefaultAsync(
-            t => t.StripeSubscriptionId == subscription.Id || t.StripeCustomerId == subscription.CustomerId,
+            t => (hasSubId && t.StripeSubscriptionId == subscription.Id) ||
+                 (hasCustId && t.StripeCustomerId == subscription.CustomerId),
             cancellationToken);
 
         if (tenant == null) return;
@@ -495,8 +524,15 @@ public sealed class StripePaymentService : IStripePaymentService
                 break;
             case "canceled":
             case "unpaid":
-                tenant.Status = "Suspended";
-                tenant.StatusReason = $"Assinatura Stripe suspensa ({subscription.Status}).";
+                if (tenant.IsProtected)
+                {
+                    _logger.LogWarning("Tentativa de suspender tenant protegido {TenantId} via Stripe Webhook ignorada (IsProtected=true).", tenant.Id);
+                }
+                else
+                {
+                    tenant.Status = "Suspended";
+                    tenant.StatusReason = $"Assinatura Stripe suspensa ({subscription.Status}).";
+                }
                 break;
         }
 
@@ -508,11 +544,30 @@ public sealed class StripePaymentService : IStripePaymentService
         Stripe.Subscription subscription,
         CancellationToken cancellationToken)
     {
+        var hasSubId = !string.IsNullOrWhiteSpace(subscription.Id);
+        var hasCustId = !string.IsNullOrWhiteSpace(subscription.CustomerId);
+
+        if (!hasSubId && !hasCustId)
+        {
+            _logger.LogWarning("SubscriptionDeleted recebido sem SubscriptionId e sem CustomerId. Ignorando processamento.");
+            return;
+        }
+
         var tenant = await _dbContext.Tenants.FirstOrDefaultAsync(
-            t => t.StripeSubscriptionId == subscription.Id || t.StripeCustomerId == subscription.CustomerId,
+            t => (hasSubId && t.StripeSubscriptionId == subscription.Id) ||
+                 (hasCustId && t.StripeCustomerId == subscription.CustomerId),
             cancellationToken);
 
         if (tenant == null) return;
+
+        if (tenant.IsProtected)
+        {
+            _logger.LogWarning("Tentativa de cancelar tenant protegido {TenantId} via Stripe Webhook ignorada (IsProtected=true).", tenant.Id);
+            tenant.CancelAtPeriodEnd = false;
+            tenant.UpdatedAtUtc = DateTime.UtcNow;
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            return;
+        }
 
         tenant.Status = "Cancelled";
         tenant.StatusReason = "Assinatura cancelada no Stripe.";
