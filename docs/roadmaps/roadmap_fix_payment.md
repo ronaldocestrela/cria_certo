@@ -361,14 +361,31 @@ Este documento consolida o plano de ação técnico para sanar as **vulnerabilid
   - `tests/Integration/CriaCerto.Architecture.IntegrationTests/SubscriptionLifecycleWorkerIntegrationTests.cs`
 
 #### 4.3. Validação Estrita de Dados de Onboarding
-* **Problema Identificado:** O endpoint `POST /api/v1/tenancy/farms` aceita qualquer valor para `SubscribedPlan` e `Capacity` enviados no payload.
+* **Problema Identificado:** O endpoint `POST /api/v1/tenancy/farms` aceitava qualquer valor para `SubscribedPlan` e `Capacity` enviados no payload.
 * **Ações no Backend:**
-  * No `CreateTenantCommandHandler`:
-    - Padronizar todo novo cadastro para iniciar no plano padrão de trial (`Starter` ou plano de teste configurado na plataforma).
-    - Fixar a capacidade correspondente ao plano do trial em vez de aceitar valores arbitrários do cliente (ex: 999.999 cabeças).
+  * No `CreateTenantCommand` e `CreateTenantCommandHandler`:
+    - Definidas as constantes canônicas `DefaultTrialPlan = "Starter"` e `DefaultTrialCapacity = PlanCapacityLimits.StarterLimit` (500).
+    - Parâmetros `SubscribedPlan` e `Capacity` padronizados com os defaults de trial seguro.
+    - O handler força a criação em `SubscribedPlan = DefaultTrialPlan` e limita a capacidade estritamente ao teto do plano Starter (`request.Capacity is > 0 and <= 500 ? request.Capacity : 500`).
+    - Aplicação da segmentação padrão via `tenant.ApplyDefaultSegmentation()`.
+  * No `CreateTenantCommandValidator`:
+    - Validação restrita permitindo unicamente o plano padrão `Starter` no onboarding gratuito.
+    - Validação de capacidade limitando a faixa permitida de 1 a 500 cabeças (`PlanCapacityLimits.StarterLimit`), rejeitando payloads com valores arbitrários (> 500 ou <= 0).
+* **Ações no Frontend:**
+  * Em `OnboardingWizard.razor`, ajustado o campo de capacidade e a seleção de planos para orientar o limite de até 500 cabeças no teste gratuito e enviar payload padronizado com `Starter` e capacidade limitada a 500.
+* **Testes Automatizados (TDD):**
+  * `CreateTenantCommandValidatorTests.cs`: Testes cobrindo validação com sucesso (500 cabeças e Starter) e falha estrita para planos comerciais (`Pro`, `Enterprise`, planos inválidos) e capacidades além do teto (> 500 ou <= 0).
+  * `CreateTenantCommandHandlerTests.cs`: Testes cobrindo criação com plano e capacidade padrão de trial, defesa em profundidade neutralizando payloads forjados e respeito a capacidades válidas customizadas inferiores a 500.
+  * `OnboardingIntegrationTests.cs`: Fluxo de onboarding completo de ponta a ponta validado com sucesso.
 * **Arquivos Impactados:**
   - `src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Features/CreateTenant/CreateTenantCommand.cs`
   - `src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Features/CreateTenant/CreateTenantCommandValidator.cs`
+  - `src/Web/CriaCerto.Web/CriaCerto.Web.Client/Pages/OnboardingWizard.razor`
+  - `tests/Unit/CriaCerto.Modules.Tenancy.UnitTests/CreateTenantCommandValidatorTests.cs`
+  - `tests/Unit/CriaCerto.Modules.Tenancy.UnitTests/CreateTenantCommandHandlerTests.cs`
+  - `tests/Integration/CriaCerto.Architecture.IntegrationTests/OnboardingIntegrationTests.cs`
+  - `docs/modules/tenancy.md`
+  - `docs/roadmaps/roadmap_fix_payment.md`
 
 ---
 
@@ -416,7 +433,7 @@ Este documento consolida o plano de ação técnico para sanar as **vulnerabilid
 | **3.5** | Gravar histórico em `TenantSubscriptionHistories` via webhook | `StripePaymentService.cs` | [x] |
 | **4.1** | Bloquear acesso no `TenantAccessGuard` para trials vencidos | `TenantAccessGuard.cs` | [x] |
 | **4.2** | Criar `SubscriptionLifecycleWorker` para expiração e grace period | `SubscriptionLifecycleWorker.cs` | [x] |
-| **4.3** | Travar plano e capacidade padrão no onboarding | `CreateTenantCommand.cs` | [ ] |
+| **4.3** | Travar plano e capacidade padrão no onboarding | `CreateTenantCommand.cs` | [x] |
 | **5.1** | Implementar testes unitários para fluxo financeiro | `tests/Modules/Tenancy/` | [ ] |
 | **5.2** | Homologar com Stripe CLI e documentar rotina de testes | `docs/operations/` | [ ] |
 

@@ -86,7 +86,7 @@ public class CreateTenantCommandHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task Handle_Should_Create_Tenant_And_UserTenant_When_User_Exists()
+    public async Task Handle_Should_Create_Tenant_And_UserTenant_With_Default_Trial_Plan_And_Capacity()
     {
         // Arrange
         var user = new User
@@ -108,8 +108,8 @@ public class CreateTenantCommandHandlerTests : IDisposable
             "Sinop",
             "12345678",
             1200,
-            "Pro",
-            5000
+            "Starter",
+            500
         );
 
         // Act
@@ -124,14 +124,94 @@ public class CreateTenantCommandHandlerTests : IDisposable
         var tenantInDb = await _dbContext.Tenants.FirstOrDefaultAsync(t => t.Name == "Fazenda Esperança");
         tenantInDb.Should().NotBeNull();
         tenantInDb!.State.Should().Be("MT");
-        tenantInDb.SubscribedPlan.Should().Be("Pro");
-        tenantInDb.Capacity.Should().Be(5000);
+        tenantInDb.SubscribedPlan.Should().Be("Starter");
+        tenantInDb.Capacity.Should().Be(500);
         tenantInDb.Status.Should().Be("Trial");
         tenantInDb.CurrentPeriodEndUtc.Should().NotBeNull();
 
         var userTenantInDb = await _dbContext.UserTenants
             .FirstOrDefaultAsync(ut => ut.UserId == user.Id && ut.TenantId == tenantInDb.Id);
         userTenantInDb.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task Handle_Should_Enforce_Starter_Plan_And_Cap_Capacity_When_Payload_Has_Arbitrary_Values()
+    {
+        // Arrange
+        var user = new User
+        {
+            Id = Guid.NewGuid(),
+            FullName = "Roberto Bypasser",
+            Email = "roberto@fazenda.com.br",
+            PasswordHash = "hash"
+        };
+        _dbContext.Users.Add(user);
+        await _dbContext.SaveChangesAsync();
+
+        var handler = new CreateTenantCommandHandler(_dbContext, _jwtService, new NoOpTenantDatabaseProvisioner());
+        var command = new CreateTenantCommand(
+            user.Id,
+            "Fazenda Ilimitada Forjada",
+            "12.345.678/0001-90",
+            "GO",
+            "Jataí",
+            "12345678",
+            5000,
+            "Enterprise",
+            999999
+        );
+
+        // Act
+        var result = await handler.Handle(command, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.Should().BeTrue();
+
+        var tenantInDb = await _dbContext.Tenants.FirstOrDefaultAsync(t => t.Name == "Fazenda Ilimitada Forjada");
+        tenantInDb.Should().NotBeNull();
+        tenantInDb!.SubscribedPlan.Should().Be("Starter");
+        tenantInDb.Capacity.Should().Be(500);
+        tenantInDb.Status.Should().Be("Trial");
+    }
+
+    [Fact]
+    public async Task Handle_Should_Respect_Valid_Custom_Capacity_Within_Starter_Limit()
+    {
+        // Arrange
+        var user = new User
+        {
+            Id = Guid.NewGuid(),
+            FullName = "Joao Pequeno Produtor",
+            Email = "joao@pequena.com.br",
+            PasswordHash = "hash"
+        };
+        _dbContext.Users.Add(user);
+        await _dbContext.SaveChangesAsync();
+
+        var handler = new CreateTenantCommandHandler(_dbContext, _jwtService, new NoOpTenantDatabaseProvisioner());
+        var command = new CreateTenantCommand(
+            user.Id,
+            "Fazenda Pequena",
+            "12.345.678/0001-90",
+            "MS",
+            "Bonito",
+            "12345678",
+            200,
+            "Starter",
+            250
+        );
+
+        // Act
+        var result = await handler.Handle(command, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.Should().BeTrue();
+
+        var tenantInDb = await _dbContext.Tenants.FirstOrDefaultAsync(t => t.Name == "Fazenda Pequena");
+        tenantInDb.Should().NotBeNull();
+        tenantInDb!.SubscribedPlan.Should().Be("Starter");
+        tenantInDb.Capacity.Should().Be(250);
+        tenantInDb.Status.Should().Be("Trial");
     }
 
     [Fact]

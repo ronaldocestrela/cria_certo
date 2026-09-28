@@ -133,9 +133,9 @@ Erros: `Tenant.InvalidTransition`, `Tenant.JustificationRequired`, `Tenant.Prote
 - **Regra de Negócio:** Se o e-mail já estiver cadastrado, retorna `Result.Failure(Error.Conflict("User.EmailAlreadyExists", ...))`.
 
 ### 3.2 `CreateTenantCommand`
-- **Contrato:** `CreateTenantCommand(Guid UserId, string Name, string CNPJ, string State, string City, string StateRegistration, decimal AreaInHectares, string SubscribedPlan, int Capacity)`
-- **Validações (`CreateTenantCommandValidator`):** Nome da fazenda obrigatório, UF com 2 caracteres, capacidade maior que zero e plano válido (`Starter`, `Pro`, `Enterprise`).
-- **Regra de Negócio:** Cria o `Tenant` e associa o usuário em `UserTenant`. Retorna um `AuthResponse` com JWT válido assinado para a fazenda recém-criada.
+- **Contrato:** `CreateTenantCommand(Guid? UserId, string Name, string CNPJ, string State, string City, string StateRegistration, decimal AreaInHectares, string SubscribedPlan = "Starter", int Capacity = 500, string? UserEmail = null)`
+- **Validações (`CreateTenantCommandValidator`):** Nome da fazenda obrigatório (3-150 caracteres), UF com exatamente 2 caracteres, capacidade restrita à faixa de teste de 1 a 500 cabeças (`PlanCapacityLimits.StarterLimit`) e plano restrito exclusivamente ao plano padrão de trial (`Starter`). Tentativas de passar outros planos (`Pro`, `Enterprise`) ou capacidades acima de 500 no onboarding gratuito são rejeitadas preventivamente.
+- **Regra de Negócio:** Cria o `Tenant` forçando o plano padrão de testes (`Starter`), capacidade limitada a até 500 cabeças, status inicial `Trial` (14 dias) e aplica a segmentação padrão via `tenant.ApplyDefaultSegmentation()`. Associa o usuário em `UserTenant` e retorna `AuthResponse` com JWT válido assinado para a fazenda recém-criada.
 
 ### 3.3 `ForgotPasswordCommand`
 - **Contrato:** `ForgotPasswordCommand(string Email)`

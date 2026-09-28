@@ -19,7 +19,7 @@ public class CreateTenantCommandValidatorTests
             "IE999",
             800,
             "Starter",
-            1000
+            500
         );
 
         var result = _validator.Validate(command);
@@ -27,10 +27,15 @@ public class CreateTenantCommandValidatorTests
     }
 
     [Theory]
-    [InlineData("", "MS", 1000, "Starter")]
-    [InlineData("Fazenda", "M", 1000, "Starter")]
+    [InlineData("", "MS", 500, "Starter")]
+    [InlineData("Fazenda", "M", 500, "Starter")]
     [InlineData("Fazenda", "MS", 0, "Starter")]
-    [InlineData("Fazenda", "MS", 1000, "PlanoInvalido")]
+    [InlineData("Fazenda", "MS", -10, "Starter")]
+    [InlineData("Fazenda", "MS", 501, "Starter")]
+    [InlineData("Fazenda", "MS", 1000, "Starter")]
+    [InlineData("Fazenda", "MS", 500, "Pro")]
+    [InlineData("Fazenda", "MS", 500, "Enterprise")]
+    [InlineData("Fazenda", "MS", 500, "PlanoInvalido")]
     public void Validate_Should_Fail_When_Inputs_Are_Invalid(string name, string state, int capacity, string plan)
     {
         var command = new CreateTenantCommand(

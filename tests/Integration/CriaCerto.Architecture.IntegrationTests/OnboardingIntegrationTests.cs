@@ -69,7 +69,7 @@ public class OnboardingIntegrationTests : IDisposable
             "IE7890",
             1500,
             "Starter",
-            1500
+            500
         );
 
         var onboardingResult = await createTenantHandler.Handle(createTenantCommand, CancellationToken.None);

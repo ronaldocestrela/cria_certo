@@ -1,11 +1,10 @@
+using CriaCerto.Modules.Tenancy.Application.Domain;
 using FluentValidation;
 
 namespace CriaCerto.Modules.Tenancy.Application.Features.CreateTenant;
 
 public sealed class CreateTenantCommandValidator : AbstractValidator<CreateTenantCommand>
 {
-    private static readonly string[] AllowedPlans = ["Starter", "Pro", "Enterprise"];
-
     public CreateTenantCommandValidator()
     {
         RuleFor(x => x)
@@ -22,10 +21,11 @@ public sealed class CreateTenantCommandValidator : AbstractValidator<CreateTenan
             .Length(2).WithMessage("O estado (UF) deve ter exatamente 2 letras.");
 
         RuleFor(x => x.Capacity)
-            .GreaterThan(0).WithMessage("A capacidade inicial de cabeças deve ser maior que zero.");
+            .InclusiveBetween(1, PlanCapacityLimits.StarterLimit)
+            .WithMessage($"A capacidade inicial para o período de testes no plano Starter deve ser de 1 a {PlanCapacityLimits.StarterLimit} cabeças.");
 
         RuleFor(x => x.SubscribedPlan)
-            .Must(plan => AllowedPlans.Contains(plan, StringComparer.OrdinalIgnoreCase))
-            .WithMessage("O plano selecionado é inválido. Escolha entre Starter, Pro ou Enterprise.");
+            .Must(plan => string.Equals(plan, CreateTenantCommand.DefaultTrialPlan, StringComparison.OrdinalIgnoreCase))
+            .WithMessage($"O plano inicial de onboarding deve ser {CreateTenantCommand.DefaultTrialPlan} (período de testes gratuito).");
     }
 }
