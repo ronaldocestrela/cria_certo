@@ -44,6 +44,8 @@ O módulo `Modules.Tenancy` gerencia as identidades dos usuários, organizaçõe
 
 - **UserTenant**: Tabela associativa entre `User` e `Tenant`.
 
+- **StripeWebhookEvent**: Registro de idempotência de eventos Stripe recebidos (`EventId` único, `EventType`, `ProcessedAtUtc`, `PayloadJson`) para evitar reprocessamento em retentativas automáticas e concorrência.
+
 ---
 
 ## 2. Endpoints da API (`/api/auth`)

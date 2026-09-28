@@ -246,6 +246,22 @@ public sealed class StripePaymentService : IStripePaymentService
 
         _logger.LogInformation("Processando webhook Stripe: {EventType} (Id: {EventId})", stripeEvent.Type, stripeEvent.Id);
 
+        if (!string.IsNullOrWhiteSpace(stripeEvent.Id))
+        {
+            var alreadyProcessed = await _dbContext.StripeWebhookEvents
+                .AnyAsync(e => e.EventId == stripeEvent.Id, cancellationToken);
+
+            if (alreadyProcessed)
+            {
+                _logger.LogInformation(
+                    "Evento Stripe {EventId} ({EventType}) já processado anteriormente. Ignorando reexecução (idempotência).",
+                    stripeEvent.Id,
+                    stripeEvent.Type);
+
+                return new StripeWebhookResult(true, stripeEvent.Type, "Evento já processado anteriormente (idempotente).");
+            }
+        }
+
         try
         {
             switch (stripeEvent.Type)
@@ -298,6 +314,25 @@ public sealed class StripePaymentService : IStripePaymentService
                 default:
                     _logger.LogDebug("Evento Stripe não tratado explicitamente: {EventType}", stripeEvent.Type);
                     break;
+            }
+
+            if (!string.IsNullOrWhiteSpace(stripeEvent.Id))
+            {
+                var webhookRecord = StripeWebhookEvent.Create(
+                    stripeEvent.Id,
+                    stripeEvent.Type ?? string.Empty,
+                    jsonPayload);
+
+                _dbContext.StripeWebhookEvents.Add(webhookRecord);
+
+                try
+                {
+                    await _dbContext.SaveChangesAsync(cancellationToken);
+                }
+                catch (DbUpdateException dbEx)
+                {
+                    _logger.LogWarning(dbEx, "Concorrência detectada ao salvar evento Stripe {EventId}. Tratando como idempotente.", stripeEvent.Id);
+                }
             }
 
             return new StripeWebhookResult(true, stripeEvent.Type, "Processado com sucesso.");

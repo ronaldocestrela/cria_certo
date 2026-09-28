@@ -209,19 +209,32 @@ Este documento consolida o plano de ação técnico para sanar as **vulnerabilid
 
 ### Fase 3: Idempotência de Webhook, Sincronização do Portal e Auditoria [PRIORIDADE 3]
 
-#### 3.1. Tabela de Idempotência para Eventos Stripe
-* **Problema Identificado:** O Stripe reenvia webhooks em retentativas automáticas. Não há deduplicação de eventos pelo `stripeEvent.Id`.
-* **Ações no Backend:**
-  * Criar entidade `StripeWebhookEvent` no schema `tenancy` com campos:
-    - `EventId` (chave única / indexada, ex: `evt_...`)
-    - `EventType` (ex: `invoice.paid`)
-    - `ProcessedAtUtc` (DateTime)
-    - `PayloadJson`
-  * No `StripePaymentService.ProcessWebhookAsync`, verificar se o evento já foi processado antes de executar handlers; se sim, responder `Success` imediatamente sem re-executar operações em banco.
+#### 3.1. Tabela de Idempotência para Eventos Stripe [CONCLUÍDO]
+* **Problema Identificado:** O Stripe reenvia webhooks em retentativas automáticas. Não havia deduplicação de eventos pelo `stripeEvent.Id`, gerando risco de reprocessamento redundante ou inconsistências sob concorrência.
+* **Ações no Backend Implementadas:**
+  * Criada a entidade de domínio [StripeWebhookEvent.cs](file:///home/rony/LPR/CriaCerto/src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Domain/StripeWebhookEvent.cs) com `Id`, `EventId` (chave de negócio única com índice exclusivo), `EventType`, `ProcessedAtUtc` e `PayloadJson`.
+  * Atualizada a interface [ITenancyDbContext.cs](file:///home/rony/LPR/CriaCerto/src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Abstractions/ITenancyDbContext.cs) e o contexto [TenancyDbContext.cs](file:///home/rony/LPR/CriaCerto/src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Infrastructure/Persistence/TenancyDbContext.cs), mapeando a tabela `StripeWebhookEvents` no schema `tenancy` com índice único em `EventId`.
+  * Criada a migration [20260928124500_AddStripeWebhookEventsTable.cs](file:///home/rony/LPR/CriaCerto/src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Infrastructure/Persistence/Migrations/20260928124500_AddStripeWebhookEventsTable.cs) e atualizado o snapshot [TenancyDbContextModelSnapshot.cs](file:///home/rony/LPR/CriaCerto/src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Infrastructure/Persistence/Migrations/TenancyDbContextModelSnapshot.cs).
+  * Em [StripePaymentService.cs](file:///home/rony/LPR/CriaCerto/src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Infrastructure/Services/StripePaymentService.cs), no método `ProcessWebhookAsync`:
+    - Adicionada verificação prévia de `EventId` existente na tabela `StripeWebhookEvents`; se já existir, retorna imediatamente `Success = true` com mensagem informativa de idempotência sem reexecutar os handlers.
+    - Após o processamento dos handlers de negócio, persiste o registro do evento e trata graciosamente possíveis colisões concorrentes de inserção (`DbUpdateException`).
+* **Testes Automatizados (TDD):**
+  * Criada a suíte [StripeWebhookIdempotencyTests.cs](file:///home/rony/LPR/CriaCerto/tests/Unit/CriaCerto.Modules.Tenancy.UnitTests/StripeWebhookIdempotencyTests.cs) cobrindo:
+    - Processamento e persistência na primeira recepção do evento.
+    - Deduplicação e retorno de sucesso imediato sem reexecutar regras de negócio em chamadas repetidas.
+    - Ignorar eventos pré-existentes na base.
+    - Prevenção de duplicidade por restrição de unicidade no banco de dados.
 * **Arquivos Impactados:**
+  - `src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Domain/StripeWebhookEvent.cs`
+  - `src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Abstractions/ITenancyDbContext.cs`
   - `src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Infrastructure/Persistence/TenancyDbContext.cs`
   - `src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Infrastructure/Services/StripePaymentService.cs`
-  - Nova migration de banco de dados (`AddStripeWebhookEventsTable`).
+  - `src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Infrastructure/Persistence/Migrations/20260928124500_AddStripeWebhookEventsTable.cs`
+  - `src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Infrastructure/Persistence/Migrations/20260928124500_AddStripeWebhookEventsTable.Designer.cs`
+  - `src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Infrastructure/Persistence/Migrations/TenancyDbContextModelSnapshot.cs`
+  - `tests/Unit/CriaCerto.Modules.Tenancy.UnitTests/StripeWebhookIdempotencyTests.cs`
+  - `docs/modules/tenancy.md`
+  - `docs/roadmaps/roadmap_fix_payment.md`
 
 #### 3.2. Sanitização de Chaves Nulas e Proteção de Tenants
 * **Problema Identificado:** Consultas com `t.StripeCustomerId == invoice.CustomerId` sem validar string nula podem associar faturas ao primeiro tenant com `StripeCustomerId == null`.
