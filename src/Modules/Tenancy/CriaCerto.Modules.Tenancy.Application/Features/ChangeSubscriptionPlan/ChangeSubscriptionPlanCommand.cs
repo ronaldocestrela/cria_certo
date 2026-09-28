@@ -62,6 +62,12 @@ public class ChangeSubscriptionPlanCommandHandler : IRequestHandler<ChangeSubscr
                 Error.Unauthorized("Auth.UnauthorizedTenant", "Usuário não pertence a esta organização/fazenda."));
         }
 
+        if (userTenant.Role != UserRole.Admin)
+        {
+            return Result.Failure<ChangeSubscriptionPlanResult>(
+                Error.Unauthorized("Auth.ForbiddenPlanChange", "Apenas administradores podem solicitar alteração de plano."));
+        }
+
         tenant.SubscribedPlan = request.NewPlan;
         await _dbContext.SaveChangesAsync(cancellationToken);
 

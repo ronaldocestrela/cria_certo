@@ -41,7 +41,6 @@ using CriaCerto.Modules.Tenancy.Application.Features.SelectTenant;
 using CriaCerto.Modules.Tenancy.Application.Features.GetSubscriptionPlans;
 using CriaCerto.Modules.Tenancy.Application.Features.GetTenantProfile;
 using CriaCerto.Modules.Tenancy.Application.Features.UpdateTenantProfile;
-using CriaCerto.Modules.Tenancy.Application.Features.ChangeSubscriptionPlan;
 using CriaCerto.Modules.Tenancy.Application.Features.SubscriptionCheckout;
 using CriaCerto.Modules.Tenancy.Application.Features.SubscriptionPortal;
 using CriaCerto.Modules.Tenancy.Application.Features.ProcessStripeWebhook;
@@ -1241,22 +1240,6 @@ app.MapGet("/api/v1/tenancy/profile", async (Guid tenantId, ISender sender) =>
 
 app.MapPut("/api/v1/tenancy/profile", async (UpdateTenantProfileCommand command, ISender sender) =>
 {
-    var result = await sender.Send(command);
-    return ToHttpResult(result);
-}).RequireAuthorization().WithTags("Tenancy");
-
-app.MapPut("/api/v1/tenancy/subscription", async (ChangeSubscriptionPlanRequest request, System.Security.Claims.ClaimsPrincipal userClaims, ISender sender) =>
-{
-    var sub = userClaims.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value 
-           ?? userClaims.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value 
-           ?? userClaims.FindFirst("sub")?.Value;
-
-    if (!Guid.TryParse(sub, out var userId))
-    {
-        return Results.Unauthorized();
-    }
-
-    var command = new ChangeSubscriptionPlanCommand(request.TenantId, userId, request.NewPlan);
     var result = await sender.Send(command);
     return ToHttpResult(result);
 }).RequireAuthorization().WithTags("Tenancy");

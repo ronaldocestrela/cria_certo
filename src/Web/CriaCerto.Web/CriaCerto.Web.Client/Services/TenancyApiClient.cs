@@ -68,16 +68,6 @@ public sealed record UpdateTenantProfileRequest(
     string Type
 );
 
-public sealed record ChangeSubscriptionPlanRequest(
-    Guid TenantId,
-    string NewPlan
-);
-
-public sealed record ChangeSubscriptionPlanResponse(
-    string Token,
-    TenantProfileModel Profile
-);
-
 public sealed record CreateProductionUnitRequest(
     Guid TenantId,
     string Name,
@@ -172,24 +162,6 @@ public sealed class TenancyApiClient
         {
             return false;
         }
-    }
-
-    public async Task<ChangeSubscriptionPlanResponse?> ChangeSubscriptionPlanAsync(ChangeSubscriptionPlanRequest request, CancellationToken cancellationToken = default)
-    {
-        await AttachTokenAsync();
-        try
-        {
-            var response = await _httpClient.PutAsJsonAsync("/api/v1/tenancy/subscription", request, cancellationToken);
-            if (response.IsSuccessStatusCode)
-            {
-                return await response.Content.ReadFromJsonAsync<ChangeSubscriptionPlanResponse>(cancellationToken: cancellationToken);
-            }
-        }
-        catch
-        {
-        }
-
-        return null;
     }
 
     public async Task<StripeCheckoutSessionResponse?> CreateSubscriptionCheckoutAsync(

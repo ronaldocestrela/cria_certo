@@ -391,6 +391,39 @@
         }
     </section>
 
+    @if (_showBillingUnavailableModal)
+    {
+        <div class="modal-overlay" @onclick="CloseBillingModal" style="position: fixed; inset: 0; background: rgba(15, 23, 42, 0.7); display: flex; align-items: center; justify-content: center; z-index: 1050; padding: 1rem;">
+            <div class="modal-card" @onclick:stopPropagation="true" style="background: white; border-radius: 16px; width: min(480px, 95vw); box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.04); overflow: hidden; border: 1px solid var(--cc-border);">
+                <div style="background: #fef2f2; padding: 1.25rem 1.5rem; display: flex; align-items: center; gap: 0.75rem; border-bottom: 1px solid #fee2e2;">
+                    <div style="width: 40px; height: 40px; border-radius: 10px; background: #fee2e2; color: #dc2626; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                        <span class="material-symbols-outlined" style="font-size: 24px;">lock_clock</span>
+                    </div>
+                    <div>
+                        <h3 style="margin: 0; font-size: 16px; font-weight: 700; color: #991b1b;">Faturamento Temporariamente Indisponível</h3>
+                        <p style="margin: 0.15rem 0 0; font-size: 12px; color: #b91c1c;">Segurança & Conformidade de Pagamento</p>
+                    </div>
+                </div>
+                <div style="padding: 1.5rem; color: var(--cc-ink); font-size: 14px; line-height: 1.5;">
+                    <p style="margin: 0 0 1rem 0;">
+                        @_billingUnavailableReason
+                    </p>
+                    <div style="background: #f8fafc; border-left: 4px solid var(--cc-primary); border-radius: 4px; padding: 0.75rem 1rem; margin-bottom: 1rem; font-size: 13px; color: var(--cc-ink-muted);">
+                        <strong>Aviso de Segurança:</strong> As alterações de plano na plataforma CriaCerto exigem confirmação pelo Stripe ou autorização expressa documentada pelo Backoffice. Seu plano atual permanece inalterado.
+                    </div>
+                </div>
+                <div style="padding: 1rem 1.5rem; background: #f8fafc; border-top: 1px solid var(--cc-border); display: flex; justify-content: flex-end; gap: 0.75rem;">
+                    <button type="button" @onclick="CloseBillingModal" style="background: white; border: 1px solid var(--cc-border); border-radius: 8px; padding: 0.5rem 1.25rem; font-size: 13px; font-weight: 600; cursor: pointer; color: var(--cc-ink);">
+                        Fechar
+                    </button>
+                    <button type="button" @onclick="ContactSupport" style="background: var(--cc-primary); border: none; border-radius: 8px; padding: 0.5rem 1.25rem; font-size: 13px; font-weight: 600; color: white; cursor: pointer;">
+                        Falar com Suporte
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+
 </div>
 
 @code {
@@ -404,6 +437,8 @@
     private string? _message;
     private bool _isSuccessMessage;
     private List<SubscriptionPlanModel> _availablePlans = new();
+    private bool _showBillingUnavailableModal = false;
+    private string _billingUnavailableReason = "O serviço de faturamento seguro no Stripe está temporariamente indisponível.";
 
     private int _registeredAnimalsCount = 0;
     private int _reportsCount = 0;
@@ -524,7 +559,7 @@
 
         try
         {
-            // Tenta criar checkout com o Stripe
+            // Tenta criar checkout seguro com o Stripe
             var checkoutSession = await TenancyApiClient.CreateSubscriptionCheckoutAsync(
                 _tenantId,
                 planName,
@@ -538,29 +573,17 @@
                 return;
             }
 
-            // Fallback direto caso o Stripe ainda não tenha chaves ativas no ambiente
-            var response = await TenancyApiClient.ChangeSubscriptionPlanAsync(new ChangeSubscriptionPlanRequest(_tenantId, planName));
-            if (response != null && response.Profile != null)
-            {
-                _profile = response.Profile;
-                _activePlan = response.Profile.SubscribedPlan;
-                _message = $"Plano alterado para '{_activePlan}' com sucesso!";
-                _isSuccessMessage = true;
-
-                if (!string.IsNullOrEmpty(response.Token) && AuthStateProvider is CustomAuthStateProvider customAuthProvider)
-                {
-                    await customAuthProvider.MarkUserAsAuthenticated(response.Token);
-                }
-            }
-            else
-            {
-                _message = "Erro ao alterar o plano de assinatura. Tente novamente.";
-                _isSuccessMessage = false;
-            }
+            // Eliminação do bypass gratuito: notifica indisponibilidade e bloqueia concessão sem pagamento
+            _billingUnavailableReason = "Não foi possível iniciar a sessão de faturamento seguro no Stripe para este plano. O serviço pode estar temporariamente indisponível ou em manutenção. Nenhuma cobrança foi efetuada e seu plano atual permanece inalterado.";
+            _showBillingUnavailableModal = true;
+            _message = "O faturamento online para este plano está temporariamente indisponível. Entre em contato com o suporte para regularizar sua assinatura.";
+            _isSuccessMessage = false;
         }
         catch (Exception ex)
         {
-            _message = $"Erro ao processar alteração de plano: {ex.Message}";
+            _billingUnavailableReason = $"Ocorreu uma falha na integração de pagamentos: {ex.Message}. A alteração direta de planos sem confirmação financeira foi bloqueada.";
+            _showBillingUnavailableModal = true;
+            _message = $"Erro ao conectar ao faturamento seguro: {ex.Message}";
             _isSuccessMessage = false;
         }
         finally
@@ -586,12 +609,16 @@
             }
             else
             {
-                _message = "Não foi possível abrir o portal Stripe. Verifique as credenciais no servidor.";
+                _billingUnavailableReason = "Não foi possível abrir o portal de autoatendimento Stripe. Verifique se sua fazenda possui uma assinatura ativa ou contate o suporte.";
+                _showBillingUnavailableModal = true;
+                _message = "Portal de autoatendimento Stripe indisponível no momento.";
                 _isSuccessMessage = false;
             }
         }
         catch (Exception ex)
         {
+            _billingUnavailableReason = $"Erro ao acessar o portal de faturamento: {ex.Message}";
+            _showBillingUnavailableModal = true;
             _message = $"Erro ao abrir portal de cobrança: {ex.Message}";
             _isSuccessMessage = false;
         }
@@ -599,6 +626,17 @@
         {
             _isSubmitting = false;
         }
+    }
+
+    private void CloseBillingModal()
+    {
+        _showBillingUnavailableModal = false;
+    }
+
+    private void ContactSupport()
+    {
+        _showBillingUnavailableModal = false;
+        Navigation.NavigateTo("settings/organization");
     }
 
     private void GoToSettings()
