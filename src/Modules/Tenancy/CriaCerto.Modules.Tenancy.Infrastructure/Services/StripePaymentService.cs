@@ -506,11 +506,21 @@ public sealed class StripePaymentService : IStripePaymentService
             }
         }
 
+        if (string.IsNullOrWhiteSpace(rawUpdatedPlan) && !string.IsNullOrWhiteSpace(tenant.StripePriceId))
+        {
+            rawUpdatedPlan = ResolvePlanFromPriceId(tenant.StripePriceId);
+        }
+
         if (!string.IsNullOrWhiteSpace(rawUpdatedPlan))
         {
             var canonicalPlan = ModuleLicenseChecker.NormalizePlan(rawUpdatedPlan);
             tenant.SubscribedPlan = canonicalPlan;
             AdjustTenantCapacityForPlan(tenant, canonicalPlan);
+        }
+
+        if (firstItem?.CurrentPeriodEnd != null)
+        {
+            tenant.CurrentPeriodEndUtc = firstItem.CurrentPeriodEnd;
         }
 
         switch (subscription.Status)
@@ -577,6 +587,32 @@ public sealed class StripePaymentService : IStripePaymentService
 
         await _dbContext.SaveChangesAsync(cancellationToken);
         _logger.LogInformation("Assinatura do Tenant {TenantId} foi cancelada.", tenant.Id);
+    }
+
+    private static string? ResolvePlanFromPriceId(string? stripePriceId)
+    {
+        if (string.IsNullOrWhiteSpace(stripePriceId))
+        {
+            return null;
+        }
+
+        var normalized = stripePriceId.Trim();
+        if (normalized.Contains("enterprise", StringComparison.OrdinalIgnoreCase))
+        {
+            return ModuleLicenseChecker.EnterprisePlan;
+        }
+
+        if (normalized.Contains("pro", StringComparison.OrdinalIgnoreCase))
+        {
+            return ModuleLicenseChecker.ProPlan;
+        }
+
+        if (normalized.Contains("starter", StringComparison.OrdinalIgnoreCase))
+        {
+            return ModuleLicenseChecker.StarterPlan;
+        }
+
+        return null;
     }
 
     private static void AdjustTenantCapacityForPlan(Tenant tenant, string planName)

@@ -284,4 +284,67 @@ public class StripeWebhookPlanMappingTests : IDisposable
         updatedTenant!.SubscribedPlan.Should().Be("Pro");
         updatedTenant.Capacity.Should().Be(2500);
     }
+
+    [Fact]
+    public async Task ProcessWebhookAsync_WhenSubscriptionUpdatedHasPriceIdWithoutMetadata_ShouldSyncPlanAndPeriodFromPortalChange()
+    {
+        // Arrange
+        var tenant = new Tenant
+        {
+            Id = Guid.NewGuid(),
+            Name = "Fazenda Portal Update",
+            CNPJ = "12.345.678/0001-95",
+            Status = "Active",
+            SubscribedPlan = "Starter",
+            Capacity = 500,
+            StripeCustomerId = "cus_update_portal_1",
+            StripeSubscriptionId = "sub_update_portal_1",
+            CurrentPeriodEndUtc = DateTime.UtcNow.AddDays(-10)
+        };
+        _dbContext.Tenants.Add(tenant);
+        await _dbContext.SaveChangesAsync();
+
+        var payload = $$"""
+        {
+          "id": "evt_test_sub_update_portal",
+          "object": "event",
+          "type": "customer.subscription.updated",
+          "data": {
+            "object": {
+              "id": "sub_update_portal_1",
+              "object": "subscription",
+              "customer": "cus_update_portal_1",
+              "status": "active",
+              "cancel_at_period_end": false,
+              "items": {
+                "data": [
+                  {
+                    "current_period_end": 1893456000,
+                    "price": {
+                      "id": "price_enterprise_monthly"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+        """;
+
+        var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var signature = GenerateStripeSignature(payload, WebhookSecret, timestamp);
+
+        // Act
+        var result = await _service.ProcessWebhookAsync(payload, signature);
+
+        // Assert
+        result.Success.Should().BeTrue();
+
+        var updatedTenant = await _dbContext.Tenants.FindAsync(tenant.Id);
+        updatedTenant.Should().NotBeNull();
+        updatedTenant!.SubscribedPlan.Should().Be("Enterprise");
+        updatedTenant.Capacity.Should().Be(100000);
+        updatedTenant.CurrentPeriodEndUtc.Should().NotBeNull();
+        updatedTenant.CurrentPeriodEndUtc.Should().Be(DateTime.SpecifyKind(new DateTime(2030, 1, 1, 0, 0, 0, DateTimeKind.Utc), DateTimeKind.Utc));
+    }
 }
