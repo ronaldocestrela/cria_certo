@@ -27,8 +27,13 @@ public sealed class ProcessStripeWebhookCommandHandler : IRequestHandler<Process
 
         if (!result.Success)
         {
+            var errorCode = result.Message?.Contains("Signature", StringComparison.OrdinalIgnoreCase) == true
+                || result.Message?.Contains("Assinatura", StringComparison.OrdinalIgnoreCase) == true
+                ? "Stripe.InvalidSignature"
+                : "Stripe.WebhookError";
+
             return Result.Failure<StripeWebhookResult>(
-                Error.Failure("Stripe.WebhookError", result.Message ?? "Erro ao processar evento do Stripe."));
+                Error.Failure(errorCode, result.Message ?? "Erro ao processar evento do Stripe."));
         }
 
         return Result.Success(result);

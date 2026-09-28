@@ -208,28 +208,36 @@ public sealed class StripePaymentService : IStripePaymentService
         string stripeSignatureHeader,
         CancellationToken cancellationToken = default)
     {
+        if (string.IsNullOrWhiteSpace(_options.WebhookSecret))
+        {
+            _logger.LogCritical("Tentativa de processar webhook Stripe sem STRIPE_WEBHOOK_SECRET configurado. Rejeitando requisição por segurança.");
+            return new StripeWebhookResult(false, null, "Webhook signature verification required: WebhookSecret is not configured.");
+        }
+
+        if (string.IsNullOrWhiteSpace(stripeSignatureHeader))
+        {
+            _logger.LogWarning("Webhook Stripe recebido sem o cabeçalho Stripe-Signature.");
+            return new StripeWebhookResult(false, null, "Cabeçalho Stripe-Signature ausente ou inválido.");
+        }
+
         Event stripeEvent;
         try
         {
-            if (!string.IsNullOrWhiteSpace(_options.WebhookSecret))
-            {
-                stripeEvent = EventUtility.ConstructEvent(
-                    jsonPayload,
-                    stripeSignatureHeader,
-                    _options.WebhookSecret,
-                    throwOnApiVersionMismatch: false);
-            }
-            else
-            {
-                stripeEvent = EventUtility.ParseEvent(
-                    jsonPayload,
-                    throwOnApiVersionMismatch: false);
-            }
+            stripeEvent = EventUtility.ConstructEvent(
+                jsonPayload,
+                stripeSignatureHeader,
+                _options.WebhookSecret,
+                throwOnApiVersionMismatch: false);
+        }
+        catch (StripeException ex)
+        {
+            _logger.LogError(ex, "Falha na validação criptográfica da assinatura do Webhook Stripe.");
+            return new StripeWebhookResult(false, null, $"Assinatura inválida: {ex.Message}");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Falha na validação da assinatura do Webhook Stripe.");
-            return new StripeWebhookResult(false, null, $"Assinatura inválida: {ex.Message}");
+            _logger.LogError(ex, "Erro inesperado ao validar assinatura do Webhook Stripe.");
+            return new StripeWebhookResult(false, null, $"Falha na validação do webhook: {ex.Message}");
         }
 
         _logger.LogInformation("Processando webhook Stripe: {EventType} (Id: {EventId})", stripeEvent.Type, stripeEvent.Id);

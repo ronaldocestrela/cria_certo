@@ -60,15 +60,20 @@ Este documento consolida o plano de ação técnico para sanar as **vulnerabilid
   - `src/Web/CriaCerto.Web/CriaCerto.Web.Client/Pages/Settings/SubscriptionManagement.razor`
   - `src/Web/CriaCerto.Web/CriaCerto.Web.Client/Services/TenancyApiClient.cs`
 
-#### 1.2. Blindagem de Assinatura Criptográfica do Webhook Stripe
-* **Problema Identificado:** Se `Stripe:WebhookSecret` estiver em branco ou nulo, o método `StripePaymentService.ProcessWebhookAsync` invoca `EventUtility.ParseEvent(...)` sem validar `Stripe-Signature`, aceitando payloads forjados de qualquer origem na web.
-* **Ações no Backend:**
-  * Modificar `StripePaymentService.ProcessWebhookAsync` para **sempre exigir** a validação via `EventUtility.ConstructEvent` com `WebhookSecret`.
-  * Se `WebhookSecret` não estiver configurado ou a assinatura for inválida, rejeitar imediatamente com erro `StripeWebhookResult(false, null, "Webhook signature verification required")` e registrar log de alerta de segurança.
-  * Validar na inicialização da API (`Program.cs` / `AddTenancyInfrastructure`) que em ambiente `Production` o segredo do webhook é obrigatório.
+#### 1.2. Blindagem de Assinatura Criptográfica do Webhook Stripe [CONCLUÍDO]
+* **Problema Identificado:** Se `Stripe:WebhookSecret` estivesse em branco ou nulo, o método `StripePaymentService.ProcessWebhookAsync` invocava `EventUtility.ParseEvent(...)` sem validar `Stripe-Signature`, aceitando payloads forjados de qualquer origem na web.
+* **Ações no Backend Implementadas:**
+  * `StripePaymentService.ProcessWebhookAsync` refatorado para **sempre exigir** a validação estrita via `EventUtility.ConstructEvent` com `WebhookSecret` e `Stripe-Signature`. Fallback inseguro removido por completo.
+  * Validações antecipadas (*guard clauses*) adicionadas: rejeição imediata com `StripeWebhookResult(false, null, ...)` e emissão de logs de segurança críticos caso o segredo ou o cabeçalho de assinatura estejam ausentes.
+  * Validação *fail-fast* de inicialização implementada via `AddOptions<StripeOptions>().Validate(...).ValidateOnStart()` em `AddTenancyInfrastructure`, bloqueando o início da aplicação em ambiente `Production` caso `STRIPE_WEBHOOK_SECRET` não esteja configurado.
+  * Mapeamento de erros refinado em `ProcessStripeWebhookCommandHandler` retornando código de erro específico `Stripe.InvalidSignature`.
+* **Testes Automatizados (TDD):**
+  - `tests/Unit/CriaCerto.Modules.Tenancy.UnitTests/StripeWebhookSecurityTests.cs` (10 cenários cobrindo ausência de segredo, ausência de assinatura, assinatura inválida, validação criptográfica HMAC-SHA256 e validação de startup em produção/desenvolvimento).
 * **Arquivos Impactados:**
   - `src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Infrastructure/Services/StripePaymentService.cs`
-  - `src/Host/CriaCerto.Api/Program.cs`
+  - `src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Infrastructure/DependencyInjection.cs`
+  - `src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Features/ProcessStripeWebhook/ProcessStripeWebhookCommand.cs`
+  - `tests/Unit/CriaCerto.Modules.Tenancy.UnitTests/StripeWebhookSecurityTests.cs`
 
 #### 1.3. Controle de Acesso Baseado em Papel (RBAC) para Faturamento
 * **Problema Identificado:** Handlers de checkout e portal Stripe (`CreateCheckoutSessionCommand` e `CreatePortalSessionCommand`) validam apenas a associação do usuário ao tenant, permitindo que operadores de curral ou leitores vejam dados de cartão e cancelem assinaturas.
