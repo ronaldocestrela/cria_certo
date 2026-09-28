@@ -311,22 +311,28 @@ Este documento consolida o plano de ação técnico para sanar as **vulnerabilid
 
 ### Fase 4: Gestão do Ciclo de Vida, Expiração de Trial e Inadimplência [PRIORIDADE 4]
 
-#### 4.1. Bloqueio Ativo de Período de Testes (*Trial*) Expirado
-* **Problema Identificado:** O tenant entra em `Trial` por 14 dias (`CurrentPeriodEndUtc = now.AddDays(14)`), mas `TenantLifecycle.CanProducerAccess("Trial")` nunca expira porque a data não é avaliada no middleware de acesso.
-* **Ações no Backend:**
-  * No `TenantAccessGuard.EnsureProducerAccessAsync`:
-    ```csharp
-    if (tenant.Status == "Trial" && tenant.CurrentPeriodEndUtc.HasValue && tenant.CurrentPeriodEndUtc.Value < DateTime.UtcNow)
-    {
-        return Result.Failure(TenancyErrors.TrialExpired);
-    }
-    ```
-* **Ações no Frontend:**
-  * Criar tela de bloqueio e redirecionamento para regularização com o Stripe quando o trial expirar.
+#### 4.1. Bloqueio Ativo de Período de Testes (*Trial*) Expirado [CONCLUÍDO]
+* **Problema Identificado:** O tenant entra em `Trial` por 14 dias (`CurrentPeriodEndUtc = now.AddDays(14)`), mas `TenantLifecycle.CanProducerAccess("Trial")` nunca expirava porque a data não era avaliada no middleware de acesso.
+* **Ações no Backend Implementadas:**
+  * Adicionado erro canônico `TenancyErrors.TrialExpired` com `ErrorType.Unauthorized` em `TenancyErrors.cs`.
+  * No `TenantAccessGuard.EnsureProducerAccessAsync`: checagem de `tenant.Status == "Trial" && tenant.CurrentPeriodEndUtc.HasValue && tenant.CurrentPeriodEndUtc.Value < DateTime.UtcNow`, retornando `Result.Failure(TenancyErrors.TrialExpired)`.
+  * No `TenantAccessMiddleware.cs`: bypass mantido e expandido para rotas de regularização de billing e perfil (`/api/v1/tenancy/profile`, `/api/v1/tenancy/subscription`, `/api/v1/payments`, `/api/v1/auth`), evitando deadlock operacional para o produtor regularizar a fazenda.
+* **Ações no Frontend Implementadas:**
+  * Componente `TrialExpiredLockout.razor` estilizado com identidade visual rica, bento cards e CTAs diretos para o checkout do Stripe e suporte.
+  * Página dedicada `/trial-expired` (`TrialExpired.razor`).
+  * Banner de destaque contextual com alerta de regularização pendente no topo de `SubscriptionManagement.razor`.
+* **Testes Automatizados (TDD):**
+  * `TenantAccessGuardTests.cs`: validação do ciclo Red/Green cobrindo Active, Trial ativo, Trial expirado, inexistente e suspenso/cancelado.
+  * `BillingLifecycleIntegrationTests.cs`: validação do bypass de rotas de faturamento no middleware e bloqueio HTTP 403 Forbidden para rotas operacionais quando o trial expira.
 * **Arquivos Impactados:**
-  - `src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Infrastructure/Services/TenantAccessGuard.cs`
   - `src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Domain/Errors/TenancyErrors.cs`
+  - `src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Infrastructure/Services/TenantAccessGuard.cs`
   - `src/Host/CriaCerto.Api/Middleware/TenantAccessMiddleware.cs`
+  - `src/Web/CriaCerto.Web/CriaCerto.Web.Client/Components/TrialExpiredLockout.razor`
+  - `src/Web/CriaCerto.Web/CriaCerto.Web.Client/Pages/TrialExpired.razor`
+  - `src/Web/CriaCerto.Web/CriaCerto.Web.Client/Pages/Settings/SubscriptionManagement.razor`
+  - `tests/Unit/CriaCerto.Modules.Tenancy.UnitTests/TenantAccessGuardTests.cs`
+  - `tests/Integration/CriaCerto.Architecture.IntegrationTests/BillingLifecycleIntegrationTests.cs`
 
 #### 4.2. Worker de Segundo Plano para Expiração e Carência de Inadimplência
 * **Problema Identificado:** Não há serviço em background processando o vencimento diário de contas em trial ou contas inadimplentes há muito tempo.

@@ -99,4 +99,8 @@ public static class TenancyErrors
     public static readonly Error ActiveSubscriptionExists = Error.Conflict(
         "Tenant.ActiveSubscriptionExists",
         "A fazenda já possui uma assinatura ativa no Stripe. Alterações de plano ou ciclo de faturamento devem ser realizadas com segurança através do portal de gerenciamento de faturamento.");
+
+    public static readonly Error TrialExpired = Error.Unauthorized(
+        "Tenant.TrialExpired",
+        "O período de testes (Trial) desta organização/fazenda expirou. Por favor, regularize a assinatura para continuar utilizando o Cria Certo.");
 }

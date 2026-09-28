@@ -111,8 +111,10 @@ Estados: `Trial`, `Active`, `PastDue`, `Suspended`, `Cancelled`, `Archived`.
 Transições administrativas exigem justificativa (mín. 15 caracteres) e permissão `tenants.suspend`.
 
 Acesso do produtor permitido em: `Trial`, `Active`, `PastDue`. Bloqueado em: `Suspended`, `Cancelled`, `Archived`.
+- **Expiração Ativa de Período de Testes (Trial):** Tenants no estado `Trial` possuem prazo padrão de 14 dias registrado em `CurrentPeriodEndUtc`. Quando `CurrentPeriodEndUtc < UtcNow`, o `TenantAccessGuard` intercepta requisições de manejo e dados operacionais retornando `TenancyErrors.TrialExpired` (`Tenant.TrialExpired` / HTTP 403 Forbidden).
+- **Prevenção de Deadlock de Faturamento:** O middleware de acesso `TenantAccessMiddleware` autoriza bypass da checagem para endpoints de consulta de perfil (`/api/v1/tenancy/profile`), catálogo de planos (`/api/v1/tenancy/plans`) e sessões seguras do Stripe (`/api/v1/tenancy/subscription/*`), viabilizando que o produtor bloqueado acesse a tela de contratação e conclua o pagamento sem impedimentos.
 
-Erros: `Tenant.InvalidTransition`, `Tenant.JustificationRequired`, `Tenant.ProtectedTenant`, `Tenant.NotAccessible`.
+Erros: `Tenant.InvalidTransition`, `Tenant.JustificationRequired`, `Tenant.ProtectedTenant`, `Tenant.NotAccessible`, `Tenant.TrialExpired`.
 
 
 ## 3. Casos de Uso (CQRS / MediatR)
