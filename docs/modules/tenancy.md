@@ -57,6 +57,10 @@ O módulo `Modules.Tenancy` gerencia as identidades dos usuários, organizaçõe
   * `customer.subscription.updated`: `SubscriptionActionType.PlanChanged` (atualização de plano/capacidade), `PaymentFailed` (`past_due`) ou `Suspended`.
   * `customer.subscription.deleted`: `SubscriptionActionType.Cancelled` (ou registro de bloqueio por proteção de conta).
 
+### Homologação e Testes de Integração com Stripe CLI
+- **Suíte de Testes Automatizados:** Implementada em `tests/Integration/CriaCerto.Architecture.IntegrationTests/StripeWebhookIntegrationTests.cs`, cobrindo o ciclo de vida completo (`checkout.session.completed`, `invoice.paid`, `invoice.payment_failed`, `customer.subscription.deleted`), salvaguarda de inquilinos protegidos (`IsProtected`), idempotência contra eventos duplicados e validação criptográfica HMAC-SHA256 (`Stripe.InvalidSignature`).
+- **Script Operacional:** Disponibilizado em `scripts/stripe-test-webhooks.sh` para escuta local (`listen`) e emissão em lote dos 4 eventos de faturamento (`trigger-all`).
+- **Procedimento Operacional Padrão (SOP):** Documentado integralmente em `docs/operations/homologacao_stripe_cli.md`.
 
 ---
 

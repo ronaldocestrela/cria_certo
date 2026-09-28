@@ -407,6 +407,11 @@ Este documento consolida o plano de ação técnico para sanar as **vulnerabilid
   stripe trigger customer.subscription.deleted
   ```
 * Validar que as transições no banco de dados ocorrem de forma atômica e correta.
+* **Status**: Concluído [x].
+* **Implementação**:
+  - Suíte de testes de integração automatizados em `tests/Integration/CriaCerto.Architecture.IntegrationTests/StripeWebhookIntegrationTests.cs`.
+  - Script automatizado de escuta e disparo de gatilhos em `scripts/stripe-test-webhooks.sh`.
+  - Playbook operacional documentado em `docs/operations/homologacao_stripe_cli.md`.
 
 #### 5.3. Observabilidade e Alertas
 * Adicionar logs estruturados com métricas para falhas em pagamentos:
@@ -435,7 +440,7 @@ Este documento consolida o plano de ação técnico para sanar as **vulnerabilid
 | **4.2** | Criar `SubscriptionLifecycleWorker` para expiração e grace period | `SubscriptionLifecycleWorker.cs` | [x] |
 | **4.3** | Travar plano e capacidade padrão no onboarding | `CreateTenantCommand.cs` | [x] |
 | **5.1** | Implementar testes unitários para fluxo financeiro | `tests/Modules/Tenancy/` | [ ] |
-| **5.2** | Homologar com Stripe CLI e documentar rotina de testes | `docs/operations/` | [ ] |
+| **5.2** | Homologar com Stripe CLI e documentar rotina de testes | `docs/operations/` | [x] |
 
 ---
 
