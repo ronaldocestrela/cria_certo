@@ -184,16 +184,26 @@ Este documento consolida o plano de ação técnico para sanar as **vulnerabilid
   - `src/Web/CriaCerto.Web/CriaCerto.Web.Client/Pages/Settings/SubscriptionManagement.razor`
   - `tests/Unit/CriaCerto.Modules.Tenancy.UnitTests/SubscriptionBillingAuthorizationTests.cs`
 
-#### 2.3. Renovação de Claims e JWT no Retorno do Stripe
-* **Problema Identificado:** Ao concluir a assinatura no Stripe e ser redirecionado para `/settings/subscription?success=true`, o usuário continua com o token JWT antigo gravado no navegador, mantendo o status desatualizado até efetuar logout.
-* **Ações no Backend:**
-  * Criar endpoint `POST /api/v1/auth/refresh-token` (ou re-emissão de claims atualizadas para o usuário e tenant ativo).
-* **Ações no Frontend:**
-  * No `SubscriptionManagement.razor`, ao detectar `success=true` na query string, chamar a atualização de token e acionar `AuthStateProvider.MarkUserAsAuthenticated(newToken)`.
+#### 2.3. Renovação de Claims e JWT no Retorno do Stripe [CONCLUÍDO]
+* **Problema Identificado:** Ao concluir a assinatura no Stripe e ser redirecionado para `/settings/subscription?success=true`, o usuário continuava com o token JWT antigo gravado no navegador, mantendo as claims de plano desatualizadas até efetuar logout.
+* **Ações no Backend Implementadas:**
+  * Criado o comando e handler [RefreshTokenCommand.cs](file:///home/rony/LPR/CriaCerto/src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Features/RefreshToken/RefreshTokenCommand.cs) no módulo `Modules.Tenancy`, validando existência do usuário, vínculo com a fazenda (`Auth.UnauthorizedTenant`) e acessibilidade operacional do tenant (`TenantLifecycle.CanProducerAccess`), gerando novo JWT via `IJwtService.GenerateToken` com claims do plano recém-contratado.
+  * Em [Program.cs](file:///home/rony/LPR/CriaCerto/src/Host/CriaCerto.Api/Program.cs), expostos os endpoints autenticados `POST /api/v1/auth/refresh-token` e `POST /api/auth/refresh-token` protegidos por `.RequireAuthorization()`, extraindo `UserId` e `TenantId` das credenciais ativas.
+* **Ações no Frontend Implementadas (Blazor WebAssembly):**
+  * Em [TenancyApiClient.cs](file:///home/rony/LPR/CriaCerto/src/Web/CriaCerto.Web/CriaCerto.Web.Client/Services/TenancyApiClient.cs), adicionado o método `RefreshTokenAsync(Guid? tenantId)`.
+  * Em [SubscriptionManagement.razor](file:///home/rony/LPR/CriaCerto/src/Web/CriaCerto.Web/CriaCerto.Web.Client/Pages/Settings/SubscriptionManagement.razor), adicionada captura de query parameters `success` e `canceled` via `[SupplyParameterFromQuery]`. Ao detectar `success=true`, invoca `RefreshTokenAsync`, aciona `CustomAuthStateProvider.MarkUserAsAuthenticated(newToken)`, recarrega o perfil do tenant e exibe feedback imediato ao usuário. Também atualizada a URL de retorno do Stripe Customer Portal para propagar `success=true`.
+* **Testes Automatizados (TDD):**
+  * [RefreshTokenCommandHandlerTests.cs](file:///home/rony/LPR/CriaCerto/tests/Unit/CriaCerto.Modules.Tenancy.UnitTests/RefreshTokenCommandHandlerTests.cs): cobertura de renovação de token bem-sucedida com plano atualizado, rejeição para usuário inexistente, rejeição para usuário fora do tenant e bloqueio para tenant com status restrito (`Suspended`, `Cancelled`, `Archived`).
+  * [CustomAuthStateProviderTests.cs](file:///home/rony/LPR/CriaCerto/tests/Unit/CriaCerto.Web.Client.UnitTests/Auth/CustomAuthStateProviderTests.cs): validação de extração de claims de plano e tenant renovados a partir de JWT.
 * **Arquivos Impactados:**
+  - `src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Features/RefreshToken/RefreshTokenCommand.cs`
   - `src/Host/CriaCerto.Api/Program.cs`
-  - `src/Web/CriaCerto.Web/CriaCerto.Web.Client/Pages/Settings/SubscriptionManagement.razor`
   - `src/Web/CriaCerto.Web/CriaCerto.Web.Client/Services/TenancyApiClient.cs`
+  - `src/Web/CriaCerto.Web/CriaCerto.Web.Client/Pages/Settings/SubscriptionManagement.razor`
+  - `tests/Unit/CriaCerto.Modules.Tenancy.UnitTests/RefreshTokenCommandHandlerTests.cs`
+  - `tests/Unit/CriaCerto.Web.Client.UnitTests/Auth/CustomAuthStateProviderTests.cs`
+  - `docs/modules/tenancy.md`
+  - `docs/roadmaps/roadmap_fix_payment.md`
 
 ---
 

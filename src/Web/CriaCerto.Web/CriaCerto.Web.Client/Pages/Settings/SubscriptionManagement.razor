@@ -4,7 +4,7 @@
 @using CriaCerto.Web.Client.Auth
 @using CriaCerto.BuildingBlocks.Abstractions.Licensing
 @using System.Security.Claims
-@inject AuthenticationStateProvider AuthStateProvider
+@inject CustomAuthStateProvider AuthStateProvider
 @inject TenancyApiClient TenancyApiClient
 @inject PlantelApiClient PlantelApiClient
 @inject NavigationManager Navigation
@@ -482,6 +482,14 @@
     private bool _showBillingUnavailableModal = false;
     private string _billingUnavailableReason = "O serviço de faturamento seguro no Stripe está temporariamente indisponível.";
 
+    [SupplyParameterFromQuery(Name = "success")]
+    public bool? StripeSuccess { get; set; }
+
+    [SupplyParameterFromQuery(Name = "canceled")]
+    public bool? StripeCanceled { get; set; }
+
+    private bool _stripeProcessed = false;
+
     private bool HasActiveStripeSubscription => _profile != null &&
         !string.IsNullOrWhiteSpace(_profile.StripeSubscriptionId) &&
         (string.Equals(_profile.Status, "Active", StringComparison.OrdinalIgnoreCase) ||
@@ -538,6 +546,31 @@
             if (Guid.TryParse(tenantIdClaim, out var tenantId))
             {
                 _tenantId = tenantId;
+
+                // Renovação de Claims e JWT no Retorno do Stripe (Fase 2.3)
+                if (StripeSuccess == true && !_stripeProcessed)
+                {
+                    _stripeProcessed = true;
+                    var refreshedToken = await TenancyApiClient.RefreshTokenAsync(_tenantId);
+                    if (!string.IsNullOrEmpty(refreshedToken))
+                    {
+                        await AuthStateProvider.MarkUserAsAuthenticated(refreshedToken);
+                        _message = "Assinatura confirmada com sucesso pelo Stripe! Seu plano e permissões de acesso foram atualizados.";
+                        _isSuccessMessage = true;
+                    }
+                    else
+                    {
+                        _message = "Pagamento concluído no Stripe! Suas novas cotas e permissões estão sendo sincronizadas.";
+                        _isSuccessMessage = true;
+                    }
+                }
+                else if (StripeCanceled == true && !_stripeProcessed)
+                {
+                    _stripeProcessed = true;
+                    _message = "A operação de assinatura no Stripe foi cancelada. Seu plano atual permanece inalterado.";
+                    _isSuccessMessage = false;
+                }
+
                 _profile = await TenancyApiClient.GetTenantProfileAsync(tenantId);
                 if (_profile != null && !string.IsNullOrEmpty(_profile.SubscribedPlan))
                 {
@@ -691,7 +724,7 @@
         {
             var portalSession = await TenancyApiClient.CreateSubscriptionPortalAsync(
                 _tenantId,
-                Navigation.ToAbsoluteUri("/settings/subscription").ToString());
+                Navigation.ToAbsoluteUri("/settings/subscription?success=true").ToString());
 
             if (portalSession != null && !string.IsNullOrWhiteSpace(portalSession.Url))
             {

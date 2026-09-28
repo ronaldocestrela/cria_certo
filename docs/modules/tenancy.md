@@ -55,6 +55,7 @@ O módulo `Modules.Tenancy` gerencia as identidades dos usuários, organizaçõe
 | `POST` | `/api/auth/register` | Auto-cadastro de novo usuário (Sign-Up) | Não | `201 Created` (`UserDto`) |
 | `POST` | `/api/auth/forgot-password` | Solicitação de código/token para redefinição de senha | Não | `200 OK` (token) |
 | `POST` | `/api/auth/reset-password` | Redefinição de senha com token de verificação | Não | `200 OK` |
+| `POST` | `/api/v1/auth/refresh-token` | Renovação de claims e token JWT para o tenant ativo | Sim | `200 OK` (`RefreshTokenResult`) |
 | `POST` | `/api/v1/tenancy/farms` | Onboarding de fazenda e associação automática de tenant | Não | `201 Created` (`AuthResponse`) |
 | `GET` | `/api/v1/tenancy/plans` | Consulta de planos de assinatura comercial | Não | `200 OK` (`List<SubscriptionPlanDto>`) |
 

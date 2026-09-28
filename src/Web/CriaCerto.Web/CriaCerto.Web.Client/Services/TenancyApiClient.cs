@@ -42,6 +42,7 @@ public sealed record TenantProfileModel(
 
 public sealed record StripeCheckoutSessionResponse(string SessionId, string Url);
 public sealed record StripePortalSessionResponse(string Url);
+public sealed record RefreshTokenResponseDto(string Token, Guid TenantId, string SubscribedPlan, string Role);
 public sealed record ApiErrorDto(string? Code, string? Message, int? Type);
 
 public sealed record ProductionUnitModel(
@@ -150,6 +151,29 @@ public sealed class TenancyApiClient
             return null;
         }
     }
+
+        public async Task<string?> RefreshTokenAsync(
+            Guid? tenantId = null,
+            CancellationToken cancellationToken = default)
+        {
+            await AttachTokenAsync();
+            try
+            {
+                var payload = new { TenantId = tenantId };
+                var response = await _httpClient.PostAsJsonAsync("/api/v1/auth/refresh-token", payload, cancellationToken);
+                if (response.IsSuccessStatusCode)
+                {
+                    var result = await response.Content.ReadFromJsonAsync<RefreshTokenResponseDto>(cancellationToken: cancellationToken);
+                    return result?.Token;
+                }
+            }
+            catch
+            {
+                // Fallback for network/offline scenario
+            }
+
+            return null;
+        }
 
     public async Task<bool> UpdateTenantProfileAsync(UpdateTenantProfileRequest request, CancellationToken cancellationToken = default)
     {

@@ -52,6 +52,7 @@ using CriaCerto.Modules.Tenancy.Application.Features.GetTeamMembers;
 using CriaCerto.Modules.Tenancy.Application.Features.AcceptTeamInvite;
 using CriaCerto.Modules.Tenancy.Application.Features.RevokeTeamInvite;
 using CriaCerto.Modules.Tenancy.Application.Features.RemoveTeamMember;
+using CriaCerto.Modules.Tenancy.Application.Features.RefreshToken;
 using CriaCerto.Modules.Tenancy.Application.Domain;
 using CriaCerto.Modules.Tenancy.Infrastructure;
 
@@ -1215,6 +1216,64 @@ app.MapPost("/api/auth/select-tenant", async (SelectTenantCommand command, ISend
         ? Results.Ok(result.Value) 
         : Results.Json(result.Error, statusCode: 400);
 });
+
+app.MapPost("/api/v1/auth/refresh-token", async (RefreshTokenRequest? req, ClaimsPrincipal userClaims, ISender sender) =>
+{
+    var sub = userClaims.FindFirst(ClaimTypes.NameIdentifier)?.Value 
+           ?? userClaims.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value 
+           ?? userClaims.FindFirst("sub")?.Value
+           ?? userClaims.FindFirst("UserId")?.Value;
+
+    if (!Guid.TryParse(sub, out var userId))
+    {
+        return Results.Unauthorized();
+    }
+
+    Guid tenantId = req?.TenantId ?? Guid.Empty;
+    if (tenantId == Guid.Empty)
+    {
+        var tenantClaim = userClaims.FindFirst("TenantId")?.Value;
+        if (!Guid.TryParse(tenantClaim, out tenantId))
+        {
+            return Results.Json(
+                CriaCerto.BuildingBlocks.Abstractions.Results.Error.Validation("Auth.TenantRequired", "TenantId não informado e ausente nas credenciais ativas."),
+                statusCode: StatusCodes.Status400BadRequest);
+        }
+    }
+
+    var command = new RefreshTokenCommand(userId, tenantId);
+    var result = await sender.Send(command);
+    return ToHttpResult(result);
+}).RequireAuthorization().WithTags("Auth");
+
+app.MapPost("/api/auth/refresh-token", async (RefreshTokenRequest? req, ClaimsPrincipal userClaims, ISender sender) =>
+{
+    var sub = userClaims.FindFirst(ClaimTypes.NameIdentifier)?.Value 
+           ?? userClaims.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value 
+           ?? userClaims.FindFirst("sub")?.Value
+           ?? userClaims.FindFirst("UserId")?.Value;
+
+    if (!Guid.TryParse(sub, out var userId))
+    {
+        return Results.Unauthorized();
+    }
+
+    Guid tenantId = req?.TenantId ?? Guid.Empty;
+    if (tenantId == Guid.Empty)
+    {
+        var tenantClaim = userClaims.FindFirst("TenantId")?.Value;
+        if (!Guid.TryParse(tenantClaim, out tenantId))
+        {
+            return Results.Json(
+                CriaCerto.BuildingBlocks.Abstractions.Results.Error.Validation("Auth.TenantRequired", "TenantId não informado e ausente nas credenciais ativas."),
+                statusCode: StatusCodes.Status400BadRequest);
+        }
+    }
+
+    var command = new RefreshTokenCommand(userId, tenantId);
+    var result = await sender.Send(command);
+    return ToHttpResult(result);
+}).RequireAuthorization().WithTags("Auth");
 
 app.MapGet("/api/v1/tenancy/plans", async (ISender sender) =>
 {

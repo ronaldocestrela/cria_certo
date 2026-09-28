@@ -38,6 +38,27 @@ public class CustomAuthStateProviderTests
             .Should().BeEquivalentTo(["Admin", "Operator"]);
     }
 
+    [Fact]
+    public void ParseClaimsFromJwt_ShouldExtractRefreshedTenantAndPlanClaims()
+    {
+        var tenantId = Guid.NewGuid().ToString();
+        var token = CreateJwt(new Dictionary<string, object>
+        {
+            ["sub"] = "user-123",
+            ["TenantId"] = tenantId,
+            ["TenantName"] = "Fazenda Santa Fé",
+            ["SubscribedPlan"] = "Enterprise",
+            ["Role"] = "Admin"
+        });
+
+        var claims = CustomAuthStateProvider.ParseClaimsFromJwt(token).ToList();
+
+        claims.Should().Contain(c => c.Type == "TenantId" && c.Value == tenantId);
+        claims.Should().Contain(c => c.Type == "TenantName" && c.Value == "Fazenda Santa Fé");
+        claims.Should().Contain(c => c.Type == "SubscribedPlan" && c.Value == "Enterprise");
+        claims.Should().Contain(c => c.Type == "Role" && c.Value == "Admin");
+    }
+
     private static string CreateJwt(Dictionary<string, object> payload)
     {
         var header = Convert.ToBase64String(Encoding.UTF8.GetBytes("{\"alg\":\"none\",\"typ\":\"JWT\"}"));
