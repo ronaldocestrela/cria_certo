@@ -44,6 +44,37 @@ O módulo `Modules.Tenancy` gerencia as identidades dos usuários, organizaçõe
 
 - **UserTenant**: Tabela associativa entre `User` e `Tenant`.
 
+- **StripeWebhookEvent**: Registro de idempotência de eventos Stripe recebidos (`EventId` único, `EventType`, `ProcessedAtUtc`, `PayloadJson`) para evitar reprocessamento em retentativas automáticas e concorrência.
+
+### Diretrizes de Segurança e Isolamento em Webhooks Stripe
+- **Sanitização de Chaves Nulas:** Todas as consultas e mutações disparadas por webhooks (`invoice.paid`, `invoice.payment_failed`, `customer.subscription.updated`, `customer.subscription.deleted`) realizam verificação defensiva prévia de `CustomerId` e `SubscriptionId`. Consultas ao banco nunca são executadas com valores nulos ou em branco, impedindo a contaminação acidental de tenants recém-criados (`StripeCustomerId == null`).
+- **Blindagem de Tenants Protegidos (`IsProtected`):** Organizações sinalizadas com `tenant.IsProtected == true` (ex.: contas governamentais, VIPs ou em regime especial) têm suas transições destrutivas (`Suspended`, `Cancelled`, `Archived`) bloqueadas perante eventos de cancelamento ou falha de pagamento do Stripe, registrando logs de aviso para auditoria sem interrupção de acesso e persistindo no histórico a tentativa de desativação interceptada.
+- **Ativação Condicionada à Confirmação do Pagamento (`PaymentStatus == "paid"`):** No webhook `checkout.session.completed`, a transição para `Status = "Active"`, remoção de `StatusReason` e a atualização do plano (`SubscribedPlan`) e capacidade (`Capacity`) ocorrem exclusivamente quando `session.PaymentStatus` for `"paid"` (ou `"no_payment_required"`). Para pagamentos assíncronos ou pendentes (`PaymentStatus == "unpaid"`, como Boleto Bancário ou Pix em compensação), o sistema vincula os identificadores do cliente (`StripeCustomerId`) e assinatura (`StripeSubscriptionId`) para correlação futura, preserva o status atual do tenant (ex.: `Trial`) sem liberar módulos antecipadamente e grava justificativa informativa em `StatusReason`. A ativação definitiva é delegada para a liquidação da fatura via webhook `invoice.paid`.
+- **Rastreabilidade e Histórico de Assinaturas (`TenantSubscriptionHistories`):** Cada evento de faturamento e ciclo de vida originado no Stripe grava atomicamente uma entrada em `SubscriptionHistories` via `TenantSubscriptionHistory.CreateFromStripeWebhook` com o identificador de sistema `StripeSystemActorId = Guid.Empty`. Eventos mapeados:
+  * `checkout.session.completed` (com pagamento confirmado): `SubscriptionActionType.NewSubscription`.
+  * `invoice.paid`: `SubscriptionActionType.Renewal` (registrando a extensão do período garantido).
+  * `invoice.payment_failed`: `SubscriptionActionType.PaymentFailed` (documentando a entrada em `PastDue`).
+  * `customer.subscription.updated`: `SubscriptionActionType.PlanChanged` (atualização de plano/capacidade), `PaymentFailed` (`past_due`) ou `Suspended`.
+  * `customer.subscription.deleted`: `SubscriptionActionType.Cancelled` (ou registro de bloqueio por proteção de conta).
+
+### Homologação e Testes de Integração com Stripe CLI
+- **Suíte de Testes Automatizados:** Implementada em `tests/Integration/CriaCerto.Architecture.IntegrationTests/StripeWebhookIntegrationTests.cs`, cobrindo o ciclo de vida completo (`checkout.session.completed`, `invoice.paid`, `invoice.payment_failed`, `customer.subscription.deleted`), salvaguarda de inquilinos protegidos (`IsProtected`), idempotência contra eventos duplicados e validação criptográfica HMAC-SHA256 (`Stripe.InvalidSignature`).
+- **Script Operacional:** Disponibilizado em `scripts/stripe-test-webhooks.sh` para escuta local (`listen`) e emissão em lote dos 4 eventos de faturamento (`trigger-all`).
+- **Procedimento Operacional Padrão (SOP):** Documentado integralmente em `docs/operations/homologacao_stripe_cli.md`.
+
+### Observabilidade, Métricas e Alertas de Pagamento
+- **Métricas Nativas (.NET 10 Telemetry):** Instrumentadas via `PaymentTelemetry` (`Meter: CriaCerto.Modules.Tenancy.Payments`):
+  * `payments.webhook.events.total`: Contagem total de eventos de webhook processados, classificados por tipo de evento e status (`success`, `failed`, `duplicate`).
+  * `payments.webhook.signature_failures.total`: Contador de falhas de autenticação criptográfica por motivo (`missing_header`, `secret_unconfigured`, `invalid_signature`).
+  * `payments.invoice.failures.total`: Monitoramento de falhas de débito de faturas categorizado por moeda (`BRL`), motivo e valor.
+  * `payments.webhook.duration_ms`: Histograma de latência de processamento em milissegundos.
+- **Eventos de Integração In-Process:**
+  * `WebhookSignatureFailedIntegrationEvent`: Disparado perante falhas criptográficas na validação do cabeçalho `Stripe-Signature` para alertar operações sobre possíveis ataques de replay/spoofing ou segredos desatualizados.
+  * `PaymentInvoiceFailedIntegrationEvent`: Emitido ao receber `invoice.payment_failed` com contexto do produtor (`TenantId`, `TenantName`), fatura (`InvoiceId`), valor e motivo da recusa.
+- **Integração com a Central de Incidentes do Backoffice:** O handler `PaymentAlertEventHandler` intercepta os eventos in-process e gera alertas operacionais rastreáveis em `/backoffice/observability`:
+  * `ALR_WEBHOOK_SIGNATURE_INVALID` (Severidade Crítica): Alerta com agregação horária para investigação de incidentes de segurança ou rotação de segredo.
+  * `ALR_PAYMENT_INVOICE_FAILED` (Severidade Atenção): Alerta vinculado ao tenant com deduplicação por fatura para ação proativa da equipe de CS/Suporte antes do vencimento do período de carência.
+
 ---
 
 ## 2. Endpoints da API (`/api/auth`)
@@ -55,6 +86,7 @@ O módulo `Modules.Tenancy` gerencia as identidades dos usuários, organizaçõe
 | `POST` | `/api/auth/register` | Auto-cadastro de novo usuário (Sign-Up) | Não | `201 Created` (`UserDto`) |
 | `POST` | `/api/auth/forgot-password` | Solicitação de código/token para redefinição de senha | Não | `200 OK` (token) |
 | `POST` | `/api/auth/reset-password` | Redefinição de senha com token de verificação | Não | `200 OK` |
+| `POST` | `/api/v1/auth/refresh-token` | Renovação de claims e token JWT para o tenant ativo | Sim | `200 OK` (`RefreshTokenResult`) |
 | `POST` | `/api/v1/tenancy/farms` | Onboarding de fazenda e associação automática de tenant | Não | `201 Created` (`AuthResponse`) |
 | `GET` | `/api/v1/tenancy/plans` | Consulta de planos de assinatura comercial | Não | `200 OK` (`List<SubscriptionPlanDto>`) |
 
@@ -96,8 +128,15 @@ Estados: `Trial`, `Active`, `PastDue`, `Suspended`, `Cancelled`, `Archived`.
 Transições administrativas exigem justificativa (mín. 15 caracteres) e permissão `tenants.suspend`.
 
 Acesso do produtor permitido em: `Trial`, `Active`, `PastDue`. Bloqueado em: `Suspended`, `Cancelled`, `Archived`.
+- **Expiração Ativa de Período de Testes (Trial):** Tenants no estado `Trial` possuem prazo padrão de 14 dias registrado em `CurrentPeriodEndUtc`. Quando `CurrentPeriodEndUtc < UtcNow`, o `TenantAccessGuard` intercepta requisições de manejo e dados operacionais retornando `TenancyErrors.TrialExpired` (`Tenant.TrialExpired` / HTTP 403 Forbidden).
+- **Worker de Segundo Plano (`SubscriptionLifecycleWorker`):** Executa periodicamente no host (a cada 6 horas por padrão, configurável via `SubscriptionLifecycleOptions`) invocando `ISubscriptionLifecycleService`:
+  - **Varredura de Trials:** Tenants em `Trial` com `CurrentPeriodEndUtc < UtcNow` são transicionados formalmente para `Suspended` (`StatusReason = "Período de testes expirado."`).
+  - **Carência de Inadimplência (*PastDue Grace Period*):** Tenants em `PastDue` cujo tempo de inadimplência excede a tolerância de 7 dias (`(StatusChangedAtUtc ?? UpdatedAtUtc) <= UtcNow.AddDays(-7)`) são transicionados para `Suspended` (`StatusReason = "Inadimplência não regularizada após prazo de tolerância."`).
+  - **Salvaguarda de Tenants Protegidos (`IsProtected == true`):** A suspensão é contida para evitar cortes indevidos em contas estratégicas ou institucionais, gerando registro de auditoria em `TenantSubscriptionHistories` com o motivo de proteção preservada.
+  - **Rastreabilidade:** Cada alteração automática efetuada pelo worker grava atomicamente uma entrada em `TenantSubscriptionHistories` com `SubscriptionActionType.Suspended`.
+- **Prevenção de Deadlock de Faturamento:** O middleware de acesso `TenantAccessMiddleware` autoriza bypass da checagem para endpoints de consulta de perfil (`/api/v1/tenancy/profile`), catálogo de planos (`/api/v1/tenancy/plans`) e sessões seguras do Stripe (`/api/v1/tenancy/subscription/*`), viabilizando que o produtor bloqueado acesse a tela de contratação e conclua o pagamento sem impedimentos.
 
-Erros: `Tenant.InvalidTransition`, `Tenant.JustificationRequired`, `Tenant.ProtectedTenant`, `Tenant.NotAccessible`.
+Erros: `Tenant.InvalidTransition`, `Tenant.JustificationRequired`, `Tenant.ProtectedTenant`, `Tenant.NotAccessible`, `Tenant.TrialExpired`.
 
 
 ## 3. Casos de Uso (CQRS / MediatR)
@@ -111,9 +150,9 @@ Erros: `Tenant.InvalidTransition`, `Tenant.JustificationRequired`, `Tenant.Prote
 - **Regra de Negócio:** Se o e-mail já estiver cadastrado, retorna `Result.Failure(Error.Conflict("User.EmailAlreadyExists", ...))`.
 
 ### 3.2 `CreateTenantCommand`
-- **Contrato:** `CreateTenantCommand(Guid UserId, string Name, string CNPJ, string State, string City, string StateRegistration, decimal AreaInHectares, string SubscribedPlan, int Capacity)`
-- **Validações (`CreateTenantCommandValidator`):** Nome da fazenda obrigatório, UF com 2 caracteres, capacidade maior que zero e plano válido (`Starter`, `Pro`, `Enterprise`).
-- **Regra de Negócio:** Cria o `Tenant` e associa o usuário em `UserTenant`. Retorna um `AuthResponse` com JWT válido assinado para a fazenda recém-criada.
+- **Contrato:** `CreateTenantCommand(Guid? UserId, string Name, string CNPJ, string State, string City, string StateRegistration, decimal AreaInHectares, string SubscribedPlan = "Starter", int Capacity = 500, string? UserEmail = null)`
+- **Validações (`CreateTenantCommandValidator`):** Nome da fazenda obrigatório (3-150 caracteres), UF com exatamente 2 caracteres, capacidade restrita à faixa de teste de 1 a 500 cabeças (`PlanCapacityLimits.StarterLimit`) e plano restrito exclusivamente ao plano padrão de trial (`Starter`). Tentativas de passar outros planos (`Pro`, `Enterprise`) ou capacidades acima de 500 no onboarding gratuito são rejeitadas preventivamente.
+- **Regra de Negócio:** Cria o `Tenant` forçando o plano padrão de testes (`Starter`), capacidade limitada a até 500 cabeças, status inicial `Trial` (14 dias) e aplica a segmentação padrão via `tenant.ApplyDefaultSegmentation()`. Associa o usuário em `UserTenant` e retorna `AuthResponse` com JWT válido assinado para a fazenda recém-criada.
 
 ### 3.3 `ForgotPasswordCommand`
 - **Contrato:** `ForgotPasswordCommand(string Email)`
@@ -157,4 +196,6 @@ Erros: `Tenant.InvalidTransition`, `Tenant.JustificationRequired`, `Tenant.Prote
 - `CreateTenantCommandValidatorTests`: Testes de validação de dados da fazenda e plano.
 - `ForgotPasswordCommandHandlerTests`: Testes de geração de token e expiração.
 - `ResetPasswordCommandHandlerTests`: Testes de alteração de senha e rejeição de tokens expirados/inválidos.
+- `StripeWebhookIdempotencyTests`: Testes de deduplicação e idempotência de eventos Stripe via tabela dedicada.
+- `StripeWebhookNullKeyAndTenantProtectionTests`: Testes de sanitização de chaves nulas/vazias e salvaguarda de tenants protegidos (`IsProtected`).
 - `OnboardingIntegrationTests`: Teste de integração end-to-end do fluxo Registro -> Onboarding da Fazenda -> Login sem erro `Auth.NoTenantAssociation`.

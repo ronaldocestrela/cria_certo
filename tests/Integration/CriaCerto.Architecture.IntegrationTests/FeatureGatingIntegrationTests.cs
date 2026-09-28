@@ -39,4 +39,40 @@ public class FeatureGatingIntegrationTests
         ModuleLicenseChecker.HasAccess("Starter", "Calving").Should().BeTrue();
         ModuleLicenseChecker.HasAccess("Starter", "Feedlot").Should().BeFalse();
     }
+
+    [Fact]
+    public async Task ModuleAccessBehavior_WhenPlanIsCommercialNameProFazenda_ShouldAllowNutrition()
+    {
+        var tenantContext = Substitute.For<ITenantContext>();
+        tenantContext.SubscribedPlan.Returns("Pro Fazenda");
+
+        var behavior = new ModuleAccessBehavior<TestNutritionCommand, Result<string>>(tenantContext);
+
+        RequestHandlerDelegate<Result<string>> next = () => Task.FromResult(Result.Success("OK"));
+
+        var result = await behavior.Handle(new TestNutritionCommand(), next, CancellationToken.None);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Should().Be("OK");
+    }
+
+    [Fact]
+    public async Task ModuleAccessBehavior_WhenPlanIsCommercialNameEnterpriseConfinamento_ShouldAllowFeedlot()
+    {
+        var tenantContext = Substitute.For<ITenantContext>();
+        tenantContext.SubscribedPlan.Returns("Enterprise Confinamento");
+
+        var behavior = new ModuleAccessBehavior<TestLockedCommand, Result<string>>(tenantContext);
+
+        RequestHandlerDelegate<Result<string>> next = () => Task.FromResult(Result.Success("OK"));
+
+        var result = await behavior.Handle(new TestLockedCommand(), next, CancellationToken.None);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Should().Be("OK");
+    }
 }
+
+[RequiresModule("Nutrition")]
+public record TestNutritionCommand : ICommand<string>;
+

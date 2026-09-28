@@ -1,3 +1,4 @@
+using CriaCerto.BuildingBlocks.Abstractions.Licensing;
 using CriaCerto.BuildingBlocks.Abstractions.Results;
 using CriaCerto.BuildingBlocks.Abstractions.Tenancy;
 using CriaCerto.Modules.Tenancy.Application.Abstractions;
@@ -17,10 +18,14 @@ public record CreateTenantCommand(
     string City,
     string StateRegistration,
     decimal AreaInHectares,
-    string SubscribedPlan,
-    int Capacity,
+    string SubscribedPlan = CreateTenantCommand.DefaultTrialPlan,
+    int Capacity = CreateTenantCommand.DefaultTrialCapacity,
     string? UserEmail = null
-) : IRequest<Result<AuthResponse>>;
+) : IRequest<Result<AuthResponse>>
+{
+    public const string DefaultTrialPlan = "Starter";
+    public const int DefaultTrialCapacity = PlanCapacityLimits.StarterLimit; // 500
+}
 
 public sealed class CreateTenantCommandHandler : IRequestHandler<CreateTenantCommand, Result<AuthResponse>>
 {
@@ -60,8 +65,10 @@ public sealed class CreateTenantCommandHandler : IRequestHandler<CreateTenantCom
                 Error.NotFound("User.NotFound", "Usuário não encontrado para criação da fazenda. Por favor, faça o cadastro novamente."));
         }
 
-        var plan = string.IsNullOrWhiteSpace(request.SubscribedPlan) ? "Starter" : request.SubscribedPlan.Trim();
-        var capacity = request.Capacity > 0 ? request.Capacity : 1000;
+        var plan = CreateTenantCommand.DefaultTrialPlan;
+        var capacity = request.Capacity is > 0 and <= PlanCapacityLimits.StarterLimit
+            ? request.Capacity
+            : CreateTenantCommand.DefaultTrialCapacity;
         var cnpjNormalized = CnpjNormalizer.Normalize(request.CNPJ);
 
         if (!CnpjNormalizer.IsValidCnpjOrCpf(request.CNPJ))
@@ -95,6 +102,7 @@ public sealed class CreateTenantCommandHandler : IRequestHandler<CreateTenantCom
             CreatedAtUtc = now,
             UpdatedAtUtc = now
         };
+        tenant.ApplyDefaultSegmentation();
 
         var userTenant = new UserTenant
         {

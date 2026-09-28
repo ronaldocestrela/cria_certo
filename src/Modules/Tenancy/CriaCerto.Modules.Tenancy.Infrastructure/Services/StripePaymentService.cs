@@ -1,5 +1,10 @@
+using System.Diagnostics;
+using CriaCerto.BuildingBlocks.Abstractions.Licensing;
 using CriaCerto.Modules.Tenancy.Application.Abstractions;
 using CriaCerto.Modules.Tenancy.Application.Domain;
+using CriaCerto.Modules.Tenancy.Application.Events;
+using CriaCerto.Modules.Tenancy.Application.Telemetry;
+using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -14,15 +19,18 @@ public sealed class StripePaymentService : IStripePaymentService
     private readonly ITenancyDbContext _dbContext;
     private readonly StripeOptions _options;
     private readonly ILogger<StripePaymentService> _logger;
+    private readonly IPublisher? _publisher;
 
     public StripePaymentService(
         ITenancyDbContext dbContext,
         IOptions<StripeOptions> options,
-        ILogger<StripePaymentService> logger)
+        ILogger<StripePaymentService> logger,
+        IPublisher? publisher = null)
     {
         _dbContext = dbContext;
         _options = options.Value;
         _logger = logger;
+        _publisher = publisher;
 
         if (!string.IsNullOrWhiteSpace(_options.ApiKey))
         {
@@ -86,6 +94,7 @@ public sealed class StripePaymentService : IStripePaymentService
     public async Task<CheckoutSessionResult> CreateCheckoutSessionAsync(
         Tenant tenant,
         User user,
+        string planId,
         string planName,
         string billingCycle,
         decimal unitAmount,
@@ -113,6 +122,7 @@ public sealed class StripePaymentService : IStripePaymentService
             Metadata = new Dictionary<string, string>
             {
                 { "TenantId", tenant.Id.ToString() },
+                { "PlanId", planId },
                 { "PlanName", planName },
                 { "BillingCycle", billingCycle }
             },
@@ -121,6 +131,7 @@ public sealed class StripePaymentService : IStripePaymentService
                 Metadata = new Dictionary<string, string>
                 {
                     { "TenantId", tenant.Id.ToString() },
+                    { "PlanId", planId },
                     { "PlanName", planName },
                     { "BillingCycle", billingCycle }
                 }
@@ -208,31 +219,104 @@ public sealed class StripePaymentService : IStripePaymentService
         string stripeSignatureHeader,
         CancellationToken cancellationToken = default)
     {
+        var stopwatch = Stopwatch.StartNew();
+
+        if (string.IsNullOrWhiteSpace(_options.WebhookSecret))
+        {
+            PaymentTelemetry.RecordSignatureFailure("secret_unconfigured");
+            _logger.LogCritical("Tentativa de processar webhook Stripe sem STRIPE_WEBHOOK_SECRET configurado. Rejeitando requisição por segurança.");
+
+            if (_publisher != null)
+            {
+                await _publisher.Publish(new WebhookSignatureFailedIntegrationEvent(
+                    "Webhook signature verification required: WebhookSecret is not configured.",
+                    null,
+                    jsonPayload?.Length ?? 0,
+                    DateTime.UtcNow), cancellationToken);
+            }
+
+            return new StripeWebhookResult(false, null, "Webhook signature verification required: WebhookSecret is not configured.");
+        }
+
+        if (string.IsNullOrWhiteSpace(stripeSignatureHeader))
+        {
+            PaymentTelemetry.RecordSignatureFailure("missing_header");
+            _logger.LogWarning("Webhook Stripe recebido sem o cabeçalho Stripe-Signature. PayloadLength: {PayloadLength}", jsonPayload?.Length ?? 0);
+
+            if (_publisher != null)
+            {
+                await _publisher.Publish(new WebhookSignatureFailedIntegrationEvent(
+                    "Cabeçalho Stripe-Signature ausente ou inválido.",
+                    null,
+                    jsonPayload?.Length ?? 0,
+                    DateTime.UtcNow), cancellationToken);
+            }
+
+            return new StripeWebhookResult(false, null, "Cabeçalho Stripe-Signature ausente ou inválido.");
+        }
+
         Event stripeEvent;
         try
         {
-            if (!string.IsNullOrWhiteSpace(_options.WebhookSecret))
+            stripeEvent = EventUtility.ConstructEvent(
+                jsonPayload,
+                stripeSignatureHeader,
+                _options.WebhookSecret,
+                throwOnApiVersionMismatch: false);
+        }
+        catch (StripeException ex)
+        {
+            PaymentTelemetry.RecordSignatureFailure("invalid_signature");
+            _logger.LogError(ex, "Falha na validação criptográfica da assinatura do Webhook Stripe. PayloadLength: {PayloadLength}", jsonPayload?.Length ?? 0);
+
+            if (_publisher != null)
             {
-                stripeEvent = EventUtility.ConstructEvent(
-                    jsonPayload,
-                    stripeSignatureHeader,
-                    _options.WebhookSecret,
-                    throwOnApiVersionMismatch: false);
+                await _publisher.Publish(new WebhookSignatureFailedIntegrationEvent(
+                    $"Assinatura inválida: {ex.Message}",
+                    null,
+                    jsonPayload?.Length ?? 0,
+                    DateTime.UtcNow), cancellationToken);
             }
-            else
-            {
-                stripeEvent = EventUtility.ParseEvent(
-                    jsonPayload,
-                    throwOnApiVersionMismatch: false);
-            }
+
+            return new StripeWebhookResult(false, null, $"Assinatura inválida: {ex.Message}");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Falha na validação da assinatura do Webhook Stripe.");
-            return new StripeWebhookResult(false, null, $"Assinatura inválida: {ex.Message}");
+            PaymentTelemetry.RecordSignatureFailure("unexpected_validation_error");
+            _logger.LogError(ex, "Erro inesperado ao validar assinatura do Webhook Stripe.");
+
+            if (_publisher != null)
+            {
+                await _publisher.Publish(new WebhookSignatureFailedIntegrationEvent(
+                    $"Falha na validação do webhook: {ex.Message}",
+                    null,
+                    jsonPayload?.Length ?? 0,
+                    DateTime.UtcNow), cancellationToken);
+            }
+
+            return new StripeWebhookResult(false, null, $"Falha na validação do webhook: {ex.Message}");
         }
 
         _logger.LogInformation("Processando webhook Stripe: {EventType} (Id: {EventId})", stripeEvent.Type, stripeEvent.Id);
+
+        if (!string.IsNullOrWhiteSpace(stripeEvent.Id))
+        {
+            var alreadyProcessed = await _dbContext.StripeWebhookEvents
+                .AnyAsync(e => e.EventId == stripeEvent.Id, cancellationToken);
+
+            if (alreadyProcessed)
+            {
+                _logger.LogInformation(
+                    "Evento Stripe {EventId} ({EventType}) já processado anteriormente. Ignorando reexecução (idempotência).",
+                    stripeEvent.Id,
+                    stripeEvent.Type);
+
+                PaymentTelemetry.RecordWebhookEvent(stripeEvent.Type, "duplicate");
+                PaymentTelemetry.RecordWebhookDuration(stripeEvent.Type, true, stopwatch.Elapsed.TotalMilliseconds);
+
+                return new StripeWebhookResult(true, stripeEvent.Type, "Evento já processado anteriormente (idempotente).");
+            }
+        }
 
         try
         {
@@ -288,12 +372,36 @@ public sealed class StripePaymentService : IStripePaymentService
                     break;
             }
 
+            if (!string.IsNullOrWhiteSpace(stripeEvent.Id))
+            {
+                var webhookRecord = StripeWebhookEvent.Create(
+                    stripeEvent.Id,
+                    stripeEvent.Type ?? string.Empty,
+                    jsonPayload);
+
+                _dbContext.StripeWebhookEvents.Add(webhookRecord);
+
+                try
+                {
+                    await _dbContext.SaveChangesAsync(cancellationToken);
+                }
+                catch (DbUpdateException dbEx)
+                {
+                    _logger.LogWarning(dbEx, "Concorrência detectada ao salvar evento Stripe {EventId}. Tratando como idempotente.", stripeEvent.Id);
+                }
+            }
+
+            PaymentTelemetry.RecordWebhookEvent(stripeEvent.Type ?? "unknown", "success");
+            PaymentTelemetry.RecordWebhookDuration(stripeEvent.Type ?? "unknown", true, stopwatch.Elapsed.TotalMilliseconds);
+
             return new StripeWebhookResult(true, stripeEvent.Type, "Processado com sucesso.");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Erro ao processar evento Stripe {EventType}", stripeEvent.Type);
-            return new StripeWebhookResult(false, stripeEvent.Type, ex.Message);
+            _logger.LogError(ex, "Erro ao processar evento Stripe {EventType}", stripeEvent?.Type ?? "unknown");
+            PaymentTelemetry.RecordWebhookEvent(stripeEvent?.Type ?? "unknown", "failed");
+            PaymentTelemetry.RecordWebhookDuration(stripeEvent?.Type ?? "unknown", false, stopwatch.Elapsed.TotalMilliseconds);
+            return new StripeWebhookResult(false, stripeEvent?.Type ?? "unknown", ex.Message);
         }
     }
 
@@ -321,26 +429,77 @@ public sealed class StripePaymentService : IStripePaymentService
             return;
         }
 
-        tenant.StripeCustomerId = session.CustomerId;
-        tenant.StripeSubscriptionId = session.SubscriptionId;
-
-        if (session.Metadata != null && session.Metadata.TryGetValue("PlanName", out var planName) && !string.IsNullOrWhiteSpace(planName))
+        if (!string.IsNullOrWhiteSpace(session.CustomerId))
         {
-            tenant.SubscribedPlan = planName;
-            AdjustTenantCapacityForPlan(tenant, planName);
+            tenant.StripeCustomerId = session.CustomerId;
         }
 
-        tenant.Status = "Active";
-        tenant.UpdatedAtUtc = DateTime.UtcNow;
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        if (!string.IsNullOrWhiteSpace(session.SubscriptionId))
+        {
+            tenant.StripeSubscriptionId = session.SubscriptionId;
+        }
 
-        _logger.LogInformation("Tenant {TenantId} ativado após Checkout bem-sucedido no Stripe.", tenant.Id);
+        string? rawPlan = null;
+        if (session.Metadata != null)
+        {
+            if (session.Metadata.TryGetValue("PlanId", out var pid) && !string.IsNullOrWhiteSpace(pid))
+            {
+                rawPlan = pid;
+            }
+            else if (session.Metadata.TryGetValue("PlanName", out var pname) && !string.IsNullOrWhiteSpace(pname))
+            {
+                rawPlan = pname;
+            }
+        }
+
+        var isPaymentConfirmed = string.Equals(session.PaymentStatus, "paid", StringComparison.OrdinalIgnoreCase) ||
+                                 string.Equals(session.PaymentStatus, "no_payment_required", StringComparison.OrdinalIgnoreCase);
+
+        if (isPaymentConfirmed)
+        {
+            if (!string.IsNullOrWhiteSpace(rawPlan))
+            {
+                var canonicalPlan = ModuleLicenseChecker.NormalizePlan(rawPlan);
+                tenant.SubscribedPlan = canonicalPlan;
+                AdjustTenantCapacityForPlan(tenant, canonicalPlan);
+            }
+
+            tenant.Status = "Active";
+            tenant.StatusReason = null;
+            tenant.StatusChangedAtUtc = DateTime.UtcNow;
+            tenant.UpdatedAtUtc = DateTime.UtcNow;
+
+            var history = TenantSubscriptionHistory.CreateFromStripeWebhook(
+                tenantId: tenant.Id,
+                actionType: SubscriptionActionType.NewSubscription,
+                justification: $"Assinatura ativada via Stripe Checkout (Sessão: {session.Id}, Plano: {tenant.SubscribedPlan}, Status: {session.PaymentStatus}).",
+                snapshotHeadCount: tenant.Capacity
+            );
+            _dbContext.SubscriptionHistories.Add(history);
+
+            _logger.LogInformation("Tenant {TenantId} ativado após Checkout com pagamento confirmado ({PaymentStatus}) no Stripe.", tenant.Id, session.PaymentStatus);
+        }
+        else
+        {
+            tenant.StatusReason = "Aguardando confirmação de pagamento via Stripe (checkout pendente).";
+            tenant.UpdatedAtUtc = DateTime.UtcNow;
+
+            _logger.LogInformation("Checkout concluído para Tenant {TenantId}, mas pagamento está pendente (PaymentStatus: {PaymentStatus}). Aguardando liquidação para ativação.", tenant.Id, session.PaymentStatus);
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
     private async Task HandleInvoicePaidAsync(
         Stripe.Invoice invoice,
         CancellationToken cancellationToken)
     {
+        if (string.IsNullOrWhiteSpace(invoice.CustomerId))
+        {
+            _logger.LogWarning("InvoicePaid recebido com CustomerId vazio ou nulo. Ignorando processamento.");
+            return;
+        }
+
         var tenant = await _dbContext.Tenants.FirstOrDefaultAsync(
             t => t.StripeCustomerId == invoice.CustomerId,
             cancellationToken);
@@ -362,6 +521,15 @@ public sealed class StripePaymentService : IStripePaymentService
         }
 
         tenant.UpdatedAtUtc = DateTime.UtcNow;
+
+        var history = TenantSubscriptionHistory.CreateFromStripeWebhook(
+            tenantId: tenant.Id,
+            actionType: SubscriptionActionType.Renewal,
+            justification: $"Fatura {invoice.Id} quitada via Stripe. Renovação até {tenant.CurrentPeriodEndUtc:yyyy-MM-dd HH:mm:ss} UTC.",
+            snapshotHeadCount: tenant.Capacity
+        );
+        _dbContext.SubscriptionHistories.Add(history);
+
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         _logger.LogInformation("Fatura quitada para o Tenant {TenantId}. Renovação garantida até {PeriodEnd}", tenant.Id, tenant.CurrentPeriodEndUtc);
@@ -371,27 +539,75 @@ public sealed class StripePaymentService : IStripePaymentService
         Stripe.Invoice invoice,
         CancellationToken cancellationToken)
     {
+        if (string.IsNullOrWhiteSpace(invoice.CustomerId))
+        {
+            _logger.LogWarning("InvoicePaymentFailed recebido com CustomerId vazio ou nulo. Ignorando processamento.");
+            return;
+        }
+
         var tenant = await _dbContext.Tenants.FirstOrDefaultAsync(
             t => t.StripeCustomerId == invoice.CustomerId,
             cancellationToken);
 
         if (tenant == null) return;
 
+        var amountDue = invoice.AmountDue / 100m;
+        var currency = invoice.Currency?.ToUpperInvariant() ?? "BRL";
+        PaymentTelemetry.RecordInvoiceFailure(currency, "payment_failed", invoice.AmountDue);
+
         tenant.Status = "PastDue";
         tenant.StatusReason = "Falha no pagamento da fatura recorrente via Stripe.";
         tenant.StatusChangedAtUtc = DateTime.UtcNow;
         tenant.UpdatedAtUtc = DateTime.UtcNow;
 
+        var history = TenantSubscriptionHistory.CreateFromStripeWebhook(
+            tenantId: tenant.Id,
+            actionType: SubscriptionActionType.PaymentFailed,
+            justification: $"Falha no pagamento da fatura recorrente {invoice.Id} via Stripe. Tenant marcado como PastDue.",
+            snapshotHeadCount: tenant.Capacity
+        );
+        _dbContext.SubscriptionHistories.Add(history);
+
         await _dbContext.SaveChangesAsync(cancellationToken);
-        _logger.LogWarning("Tenant {TenantId} colocado em PastDue devido a falha no pagamento.", tenant.Id);
+
+        _logger.LogWarning(
+            "Tenant {TenantId} ({TenantName}) colocado em PastDue devido a falha no pagamento da fatura {InvoiceId}. Valor: {Currency} {AmountDue:F2}",
+            tenant.Id,
+            tenant.Name,
+            invoice.Id,
+            currency,
+            amountDue);
+
+        if (_publisher != null)
+        {
+            await _publisher.Publish(new PaymentInvoiceFailedIntegrationEvent(
+                tenant.Id,
+                tenant.Name,
+                invoice.Id,
+                invoice.CustomerId,
+                amountDue,
+                currency,
+                "Falha no débito ou cobrança recorrente via Stripe.",
+                DateTime.UtcNow), cancellationToken);
+        }
     }
 
     private async Task HandleSubscriptionUpdatedAsync(
         Stripe.Subscription subscription,
         CancellationToken cancellationToken)
     {
+        var hasSubId = !string.IsNullOrWhiteSpace(subscription.Id);
+        var hasCustId = !string.IsNullOrWhiteSpace(subscription.CustomerId);
+
+        if (!hasSubId && !hasCustId)
+        {
+            _logger.LogWarning("SubscriptionUpdated recebido sem SubscriptionId e sem CustomerId. Ignorando processamento.");
+            return;
+        }
+
         var tenant = await _dbContext.Tenants.FirstOrDefaultAsync(
-            t => t.StripeSubscriptionId == subscription.Id || t.StripeCustomerId == subscription.CustomerId,
+            t => (hasSubId && t.StripeSubscriptionId == subscription.Id) ||
+                 (hasCustId && t.StripeCustomerId == subscription.CustomerId),
             cancellationToken);
 
         if (tenant == null) return;
@@ -403,19 +619,93 @@ public sealed class StripePaymentService : IStripePaymentService
             tenant.StripePriceId = firstItem.Price.Id;
         }
 
+        string? rawUpdatedPlan = null;
+        if (subscription.Metadata != null)
+        {
+            if (subscription.Metadata.TryGetValue("PlanId", out var pid) && !string.IsNullOrWhiteSpace(pid))
+            {
+                rawUpdatedPlan = pid;
+            }
+            else if (subscription.Metadata.TryGetValue("PlanName", out var pname) && !string.IsNullOrWhiteSpace(pname))
+            {
+                rawUpdatedPlan = pname;
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(rawUpdatedPlan) && !string.IsNullOrWhiteSpace(tenant.StripePriceId))
+        {
+            rawUpdatedPlan = ResolvePlanFromPriceId(tenant.StripePriceId);
+        }
+
+        bool planChanged = false;
+        if (!string.IsNullOrWhiteSpace(rawUpdatedPlan))
+        {
+            var canonicalPlan = ModuleLicenseChecker.NormalizePlan(rawUpdatedPlan);
+            if (!string.Equals(tenant.SubscribedPlan, canonicalPlan, StringComparison.OrdinalIgnoreCase))
+            {
+                planChanged = true;
+            }
+
+            tenant.SubscribedPlan = canonicalPlan;
+            AdjustTenantCapacityForPlan(tenant, canonicalPlan);
+        }
+
+        if (firstItem?.CurrentPeriodEnd != null)
+        {
+            tenant.CurrentPeriodEndUtc = firstItem.CurrentPeriodEnd;
+        }
+
         switch (subscription.Status)
         {
             case "active":
                 tenant.Status = "Active";
+                if (planChanged)
+                {
+                    var planHistory = TenantSubscriptionHistory.CreateFromStripeWebhook(
+                        tenantId: tenant.Id,
+                        actionType: SubscriptionActionType.PlanChanged,
+                        justification: $"Plano atualizado via Stripe para {tenant.SubscribedPlan} (Capacidade: {tenant.Capacity}, Preço: {tenant.StripePriceId}).",
+                        snapshotHeadCount: tenant.Capacity
+                    );
+                    _dbContext.SubscriptionHistories.Add(planHistory);
+                }
                 break;
             case "past_due":
                 tenant.Status = "PastDue";
                 tenant.StatusReason = "Assinatura Stripe está com pendência de pagamento (past_due).";
+                var pastDueHistory = TenantSubscriptionHistory.CreateFromStripeWebhook(
+                    tenantId: tenant.Id,
+                    actionType: SubscriptionActionType.PaymentFailed,
+                    justification: $"Assinatura Stripe {subscription.Id} com pendência de pagamento (past_due).",
+                    snapshotHeadCount: tenant.Capacity
+                );
+                _dbContext.SubscriptionHistories.Add(pastDueHistory);
                 break;
             case "canceled":
             case "unpaid":
-                tenant.Status = "Suspended";
-                tenant.StatusReason = $"Assinatura Stripe suspensa ({subscription.Status}).";
+                if (tenant.IsProtected)
+                {
+                    _logger.LogWarning("Tentativa de suspender tenant protegido {TenantId} via Stripe Webhook ignorada (IsProtected=true).", tenant.Id);
+                    var protHistory = TenantSubscriptionHistory.CreateFromStripeWebhook(
+                        tenantId: tenant.Id,
+                        actionType: SubscriptionActionType.Suspended,
+                        justification: $"Tentativa de suspensão via Stripe ({subscription.Status}) ignorada devido a IsProtected=true.",
+                        snapshotHeadCount: tenant.Capacity
+                    );
+                    _dbContext.SubscriptionHistories.Add(protHistory);
+                }
+                else
+                {
+                    tenant.Status = "Suspended";
+                    tenant.StatusReason = $"Assinatura Stripe suspensa ({subscription.Status}).";
+                    var suspHistory = TenantSubscriptionHistory.CreateFromStripeWebhook(
+                        tenantId: tenant.Id,
+                        actionType: SubscriptionActionType.Suspended,
+                        justification: $"Assinatura suspensa via Stripe ({subscription.Status}). Subscrição: {subscription.Id}.",
+                        snapshotHeadCount: tenant.Capacity
+                    );
+                    _dbContext.SubscriptionHistories.Add(suspHistory);
+                }
                 break;
         }
 
@@ -427,11 +717,39 @@ public sealed class StripePaymentService : IStripePaymentService
         Stripe.Subscription subscription,
         CancellationToken cancellationToken)
     {
+        var hasSubId = !string.IsNullOrWhiteSpace(subscription.Id);
+        var hasCustId = !string.IsNullOrWhiteSpace(subscription.CustomerId);
+
+        if (!hasSubId && !hasCustId)
+        {
+            _logger.LogWarning("SubscriptionDeleted recebido sem SubscriptionId e sem CustomerId. Ignorando processamento.");
+            return;
+        }
+
         var tenant = await _dbContext.Tenants.FirstOrDefaultAsync(
-            t => t.StripeSubscriptionId == subscription.Id || t.StripeCustomerId == subscription.CustomerId,
+            t => (hasSubId && t.StripeSubscriptionId == subscription.Id) ||
+                 (hasCustId && t.StripeCustomerId == subscription.CustomerId),
             cancellationToken);
 
         if (tenant == null) return;
+
+        if (tenant.IsProtected)
+        {
+            _logger.LogWarning("Tentativa de cancelar tenant protegido {TenantId} via Stripe Webhook ignorada (IsProtected=true).", tenant.Id);
+            tenant.CancelAtPeriodEnd = false;
+            tenant.UpdatedAtUtc = DateTime.UtcNow;
+
+            var protCancelHistory = TenantSubscriptionHistory.CreateFromStripeWebhook(
+                tenantId: tenant.Id,
+                actionType: SubscriptionActionType.Cancelled,
+                justification: $"Tentativa de cancelamento da assinatura {subscription.Id} no Stripe ignorada devido a IsProtected=true.",
+                snapshotHeadCount: tenant.Capacity
+            );
+            _dbContext.SubscriptionHistories.Add(protCancelHistory);
+
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            return;
+        }
 
         tenant.Status = "Cancelled";
         tenant.StatusReason = "Assinatura cancelada no Stripe.";
@@ -439,21 +757,57 @@ public sealed class StripePaymentService : IStripePaymentService
         tenant.CancelAtPeriodEnd = false;
         tenant.UpdatedAtUtc = DateTime.UtcNow;
 
+        var cancelHistory = TenantSubscriptionHistory.CreateFromStripeWebhook(
+            tenantId: tenant.Id,
+            actionType: SubscriptionActionType.Cancelled,
+            justification: $"Assinatura {subscription.Id} cancelada no Stripe.",
+            snapshotHeadCount: tenant.Capacity
+        );
+        _dbContext.SubscriptionHistories.Add(cancelHistory);
+
         await _dbContext.SaveChangesAsync(cancellationToken);
         _logger.LogInformation("Assinatura do Tenant {TenantId} foi cancelada.", tenant.Id);
     }
 
+
+    private static string? ResolvePlanFromPriceId(string? stripePriceId)
+    {
+        if (string.IsNullOrWhiteSpace(stripePriceId))
+        {
+            return null;
+        }
+
+        var normalized = stripePriceId.Trim();
+        if (normalized.Contains("enterprise", StringComparison.OrdinalIgnoreCase))
+        {
+            return ModuleLicenseChecker.EnterprisePlan;
+        }
+
+        if (normalized.Contains("pro", StringComparison.OrdinalIgnoreCase))
+        {
+            return ModuleLicenseChecker.ProPlan;
+        }
+
+        if (normalized.Contains("starter", StringComparison.OrdinalIgnoreCase))
+        {
+            return ModuleLicenseChecker.StarterPlan;
+        }
+
+        return null;
+    }
+
     private static void AdjustTenantCapacityForPlan(Tenant tenant, string planName)
     {
-        if (planName.Contains("Starter", StringComparison.OrdinalIgnoreCase))
+        var plan = ModuleLicenseChecker.NormalizePlan(planName);
+        if (string.Equals(plan, ModuleLicenseChecker.StarterPlan, StringComparison.OrdinalIgnoreCase))
         {
             tenant.Capacity = 500;
         }
-        else if (planName.Contains("Pro", StringComparison.OrdinalIgnoreCase))
+        else if (string.Equals(plan, ModuleLicenseChecker.ProPlan, StringComparison.OrdinalIgnoreCase))
         {
             tenant.Capacity = 2500;
         }
-        else if (planName.Contains("Enterprise", StringComparison.OrdinalIgnoreCase))
+        else if (string.Equals(plan, ModuleLicenseChecker.EnterprisePlan, StringComparison.OrdinalIgnoreCase))
         {
             tenant.Capacity = 100000;
         }

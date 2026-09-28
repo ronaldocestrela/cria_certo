@@ -19,6 +19,7 @@ public sealed class TenancyDbContext : DbContext, ITenancyDbContext
     public DbSet<OperationalTag> OperationalTags => Set<OperationalTag>();
     public DbSet<TenantOperationalTag> TenantOperationalTags => Set<TenantOperationalTag>();
     public DbSet<TenantSubscriptionHistory> SubscriptionHistories => Set<TenantSubscriptionHistory>();
+    public DbSet<StripeWebhookEvent> StripeWebhookEvents => Set<StripeWebhookEvent>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -176,6 +177,17 @@ public sealed class TenancyDbContext : DbContext, ITenancyDbContext
             builder.Property(h => h.ActionType).HasConversion<string>().HasMaxLength(50).IsRequired();
             builder.Property(h => h.ChangedAtUtc).IsRequired();
             builder.HasIndex(h => h.TenantId);
+        });
+
+        modelBuilder.Entity<StripeWebhookEvent>(builder =>
+        {
+            builder.ToTable("StripeWebhookEvents");
+            builder.HasKey(e => e.Id);
+            builder.Property(e => e.EventId).HasMaxLength(100).IsRequired();
+            builder.HasIndex(e => e.EventId).IsUnique();
+            builder.Property(e => e.EventType).HasMaxLength(100).IsRequired();
+            builder.Property(e => e.ProcessedAtUtc).IsRequired();
+            builder.Property(e => e.PayloadJson).IsRequired();
         });
     }
 }

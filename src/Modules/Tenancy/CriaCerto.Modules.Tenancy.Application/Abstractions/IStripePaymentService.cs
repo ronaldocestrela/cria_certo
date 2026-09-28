@@ -15,6 +15,7 @@ public interface IStripePaymentService
     Task<CheckoutSessionResult> CreateCheckoutSessionAsync(
         Tenant tenant,
         User user,
+        string planId,
         string planName,
         string billingCycle,
         decimal unitAmount,

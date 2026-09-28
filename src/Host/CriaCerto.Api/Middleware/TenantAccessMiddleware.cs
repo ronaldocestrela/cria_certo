@@ -23,8 +23,12 @@ public class TenantAccessMiddleware
 
         if (path.StartsWith("/api/v1/backoffice", StringComparison.OrdinalIgnoreCase)
             || path.StartsWith("/api/auth", StringComparison.OrdinalIgnoreCase)
+            || path.StartsWith("/api/v1/auth", StringComparison.OrdinalIgnoreCase)
+            || path.StartsWith("/api/v1/payments", StringComparison.OrdinalIgnoreCase)
             || path.StartsWith("/api/v1/tenancy/farms", StringComparison.OrdinalIgnoreCase)
-            || path.StartsWith("/api/v1/tenancy/plans", StringComparison.OrdinalIgnoreCase))
+            || path.StartsWith("/api/v1/tenancy/plans", StringComparison.OrdinalIgnoreCase)
+            || path.StartsWith("/api/v1/tenancy/profile", StringComparison.OrdinalIgnoreCase)
+            || path.StartsWith("/api/v1/tenancy/subscription", StringComparison.OrdinalIgnoreCase))
         {
             await _next(context);
             return;

@@ -1,5 +1,8 @@
+using CriaCerto.BuildingBlocks.Abstractions.Licensing;
 using CriaCerto.BuildingBlocks.Abstractions.Results;
 using CriaCerto.Modules.Tenancy.Application.Abstractions;
+using CriaCerto.Modules.Tenancy.Application.Domain;
+using CriaCerto.Modules.Tenancy.Application.Domain.Errors;
 using CriaCerto.Modules.Tenancy.Application.Features.GetSubscriptionPlans;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -28,15 +31,18 @@ public sealed class CreateCheckoutSessionCommandHandler : IRequestHandler<Create
     private readonly ITenancyDbContext _dbContext;
     private readonly IStripePaymentService _stripePaymentService;
     private readonly ISender _sender;
+    private readonly ISubscriptionUrlValidator _urlValidator;
 
     public CreateCheckoutSessionCommandHandler(
         ITenancyDbContext dbContext,
         IStripePaymentService stripePaymentService,
-        ISender sender)
+        ISender sender,
+        ISubscriptionUrlValidator urlValidator)
     {
         _dbContext = dbContext;
         _stripePaymentService = stripePaymentService;
         _sender = sender;
+        _urlValidator = urlValidator;
     }
 
     public async Task<Result<CheckoutSessionResult>> Handle(CreateCheckoutSessionCommand request, CancellationToken cancellationToken)
@@ -67,13 +73,31 @@ public sealed class CreateCheckoutSessionCommandHandler : IRequestHandler<Create
                 Error.Unauthorized("Auth.UnauthorizedTenant", "Usuário não pertence a esta organização/fazenda."));
         }
 
+        if (userTenant.Role != UserRole.Admin)
+        {
+            return Result.Failure<CheckoutSessionResult>(
+                Error.Unauthorized("Auth.ForbiddenBilling", "Apenas administradores da fazenda podem gerenciar planos e pagamentos."));
+        }
+
+        // Prevenção de assinaturas concorrentes / cobrança dupla no Stripe
+        if (tenant.HasActiveStripeSubscription())
+        {
+            return Result.Failure<CheckoutSessionResult>(TenancyErrors.ActiveSubscriptionExists);
+        }
+
         // Consultar catálogo de planos para obter valores e identificadores de preço
         var plansResult = await _sender.Send(new GetSubscriptionPlansQuery(), cancellationToken);
         var plans = plansResult.IsSuccess ? plansResult.Value : new List<SubscriptionPlanDto>();
 
+        var canonicalPlan = ModuleLicenseChecker.NormalizePlan(request.PlanId);
+
         var selectedPlan = plans.FirstOrDefault(p =>
             string.Equals(p.PlanId, request.PlanId, StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(p.Name, request.PlanId, StringComparison.OrdinalIgnoreCase));
+            string.Equals(p.Name, request.PlanId, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(p.PlanId, canonicalPlan, StringComparison.OrdinalIgnoreCase));
+
+        string canonicalPlanId = selectedPlan?.PlanId ?? canonicalPlan;
+        string planName = selectedPlan?.Name ?? canonicalPlanId;
 
         bool isAnnual = string.Equals(request.BillingCycle, "annual", StringComparison.OrdinalIgnoreCase) ||
                         string.Equals(request.BillingCycle, "anual", StringComparison.OrdinalIgnoreCase);
@@ -86,17 +110,34 @@ public sealed class CreateCheckoutSessionCommandHandler : IRequestHandler<Create
             ? selectedPlan?.StripePriceIdAnnual
             : selectedPlan?.StripePriceIdMonthly;
 
-        string planName = selectedPlan?.Name ?? request.PlanId;
         string cycle = isAnnual ? "year" : "month";
+
+        // Validação estrita e sanitização contra ataques de Open Redirect (CWE-601)
+        var safeSuccessUrlResult = _urlValidator.ResolveSafeUrl(
+            request.SuccessUrl,
+            "http://localhost:8081/settings/subscription?success=true");
+        if (safeSuccessUrlResult.IsFailure)
+        {
+            return Result.Failure<CheckoutSessionResult>(safeSuccessUrlResult.Error);
+        }
+
+        var safeCancelUrlResult = _urlValidator.ResolveSafeUrl(
+            request.CancelUrl,
+            "http://localhost:8081/settings/subscription?canceled=true");
+        if (safeCancelUrlResult.IsFailure)
+        {
+            return Result.Failure<CheckoutSessionResult>(safeCancelUrlResult.Error);
+        }
 
         var sessionResult = await _stripePaymentService.CreateCheckoutSessionAsync(
             tenant,
             user,
+            canonicalPlanId,
             planName,
             cycle,
             amount,
-            request.SuccessUrl ?? string.Empty,
-            request.CancelUrl ?? string.Empty,
+            safeSuccessUrlResult.Value,
+            safeCancelUrlResult.Value,
             stripePriceId,
             cancellationToken);
 

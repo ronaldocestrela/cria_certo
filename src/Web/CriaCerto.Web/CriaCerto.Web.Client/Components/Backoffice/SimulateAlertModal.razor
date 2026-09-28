@@ -30,6 +30,8 @@
                         <option value="@BackofficeAlertRules.OffHoursCriticalAction">Ação Crítica Fora de Janela (@BackofficeAlertRules.OffHoursCriticalAction)</option>
                         <option value="@BackofficeAlertRules.ImpersonationBurst">Surto de Impersonação (@BackofficeAlertRules.ImpersonationBurst)</option>
                         <option value="@BackofficeAlertRules.ForensicTamperDetected">Violação Forense de Integridade (@BackofficeAlertRules.ForensicTamperDetected)</option>
+                        <option value="@BackofficeAlertRules.WebhookSignatureInvalid">Falha de Assinatura Webhook (@BackofficeAlertRules.WebhookSignatureInvalid)</option>
+                        <option value="@BackofficeAlertRules.PaymentInvoiceFailed">Fatura de Pagamento Falhada (@BackofficeAlertRules.PaymentInvoiceFailed)</option>
                         <option value="@BackofficeAlertRules.SimulatedAlert">Alerta Genérico de Teste (@BackofficeAlertRules.SimulatedAlert)</option>
                     </select>
                 </div>
@@ -314,6 +316,8 @@
             BackofficeAlertRules.OffHoursCriticalAction => "Ação administrativa crítica acionada às 23:45 BRT sem autorização prévia.",
             BackofficeAlertRules.ImpersonationBurst => "Operador iniciou 4 sessões simultâneas de impersonação em menos de 10 minutos.",
             BackofficeAlertRules.ForensicTamperDetected => "Simulação de quebra de hash SHA-256 no bloco #128 da trilha de auditoria.",
+            BackofficeAlertRules.WebhookSignatureInvalid => "Falha na validação da assinatura criptográfica do Webhook Stripe (potencial ataque ou segredo descompassado).",
+            BackofficeAlertRules.PaymentInvoiceFailed => "Fatura recorrente inv_sim_123 falhou no Stripe para o produtor Fazenda Modelo. Risco de inadimplência e suspensão.",
             _ => "Alerta sintético disparado para fins de validação do subsistema de observabilidade."
         };
 

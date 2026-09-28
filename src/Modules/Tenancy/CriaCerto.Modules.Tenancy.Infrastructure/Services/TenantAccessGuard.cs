@@ -17,18 +17,25 @@ public sealed class TenantAccessGuard : ITenantAccessGuard
 
     public async Task<Result> EnsureProducerAccessAsync(Guid tenantId, CancellationToken cancellationToken = default)
     {
-        var status = await _dbContext.Tenants
+        var tenantData = await _dbContext.Tenants
             .AsNoTracking()
             .Where(t => t.Id == tenantId)
-            .Select(t => t.Status)
+            .Select(t => new { t.Status, t.CurrentPeriodEndUtc })
             .FirstOrDefaultAsync(cancellationToken);
 
-        if (status is null)
+        if (tenantData is null)
         {
             return Result.Failure(TenancyErrors.TenantNotFound);
         }
 
-        if (!TenantLifecycle.CanProducerAccess(status))
+        if (string.Equals(tenantData.Status, TenantLifecycle.ToStatusString(TenantStatus.Trial), StringComparison.OrdinalIgnoreCase)
+            && tenantData.CurrentPeriodEndUtc.HasValue
+            && tenantData.CurrentPeriodEndUtc.Value < DateTime.UtcNow)
+        {
+            return Result.Failure(TenancyErrors.TrialExpired);
+        }
+
+        if (!TenantLifecycle.CanProducerAccess(tenantData.Status))
         {
             return Result.Failure(TenancyErrors.TenantNotAccessible);
         }

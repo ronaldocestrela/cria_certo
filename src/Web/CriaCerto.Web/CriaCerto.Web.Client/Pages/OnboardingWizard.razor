@@ -312,8 +312,11 @@
                     </div>
 
                     <div style="margin-bottom: 1.5rem;">
-                        <label class="font-mono text-[12px] font-bold block" style="display: block; margin-bottom: 0.35rem; text-transform: uppercase; color: var(--cc-ink-muted);">CAPACIDADE ESTIMADA DE CABEÇAS *</label>
-                        <input type="number" @bind="Capacity" class="w-full h-[46px] px-4 rounded-lg border font-headline" style="width: 100%; height: 46px; padding: 0 1rem; border-radius: 8px; border: 1px solid var(--cc-border); background-color: var(--cc-canvas);" />
+                        <label class="font-mono text-[12px] font-bold block" style="display: block; margin-bottom: 0.35rem; text-transform: uppercase; color: var(--cc-ink-muted);">CAPACIDADE ESTIMADA DE CABEÇAS (ATÉ 500 NO TESTE) *</label>
+                        <input type="number" min="1" max="500" @bind="Capacity" class="w-full h-[46px] px-4 rounded-lg border font-headline" style="width: 100%; height: 46px; padding: 0 1rem; border-radius: 8px; border: 1px solid var(--cc-border); background-color: var(--cc-canvas);" />
+                        <p class="text-xs text-gray-500 mt-1" style="font-size: 11px; color: var(--cc-ink-muted); margin-top: 0.35rem;">
+                            O plano Starter de teste comporta até 500 cabeças. Você poderá migrar de plano a qualquer momento após o teste.
+                        </p>
                     </div>
 
                     <div class="flex justify-between pt-4" style="display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; flex-wrap: wrap; gap: 1rem;">
@@ -369,7 +372,7 @@
     private string StateRegistration = string.Empty;
     private decimal AreaInHectares = 500;
     private string SubscribedPlan = "Starter";
-    private int Capacity = 1000;
+    private int Capacity = 500;
     private DateTime TrialEndDate => DateTime.Today.AddDays(14);
     private string TrialEndDateFormatted => TrialEndDate.ToString("dd/MM/yyyy");
 
@@ -433,15 +436,15 @@
     private void SelectPlan(SubscriptionPlanModel plan)
     {
         SubscribedPlan = plan.PlanId;
-        Capacity = plan.HeadCapacityLimit > 0 && plan.HeadCapacityLimit < 999999
+        Capacity = plan.HeadCapacityLimit > 0 && plan.HeadCapacityLimit <= 500
             ? plan.HeadCapacityLimit
-            : 1000;
+            : 500;
     }
 
     private void SelectPlan(string plan, int defaultCapacity)
     {
         SubscribedPlan = plan;
-        Capacity = defaultCapacity;
+        Capacity = defaultCapacity > 0 && defaultCapacity <= 500 ? defaultCapacity : 500;
     }
 
     private async Task CompleteOnboarding()
@@ -464,6 +467,8 @@
                 parsedUserId = g;
             }
 
+            var effectiveCapacity = Capacity > 0 && Capacity <= 500 ? Capacity : 500;
+
             var payload = new
             {
                 UserId = parsedUserId,
@@ -474,8 +479,8 @@
                 City = City,
                 StateRegistration = StateRegistration,
                 AreaInHectares = AreaInHectares,
-                SubscribedPlan = SubscribedPlan,
-                Capacity = Capacity
+                SubscribedPlan = "Starter",
+                Capacity = effectiveCapacity
             };
 
             var response = await Http.PostAsJsonAsync("/api/v1/tenancy/farms", payload);

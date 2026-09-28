@@ -42,6 +42,8 @@ public sealed record TenantProfileModel(
 
 public sealed record StripeCheckoutSessionResponse(string SessionId, string Url);
 public sealed record StripePortalSessionResponse(string Url);
+public sealed record RefreshTokenResponseDto(string Token, Guid TenantId, string SubscribedPlan, string Role);
+public sealed record ApiErrorDto(string? Code, string? Message, int? Type);
 
 public sealed record ProductionUnitModel(
     Guid Id,
@@ -66,16 +68,6 @@ public sealed record UpdateTenantProfileRequest(
     decimal AreaInHectares,
     int Capacity,
     string Type
-);
-
-public sealed record ChangeSubscriptionPlanRequest(
-    Guid TenantId,
-    string NewPlan
-);
-
-public sealed record ChangeSubscriptionPlanResponse(
-    string Token,
-    TenantProfileModel Profile
 );
 
 public sealed record CreateProductionUnitRequest(
@@ -160,6 +152,29 @@ public sealed class TenancyApiClient
         }
     }
 
+        public async Task<string?> RefreshTokenAsync(
+            Guid? tenantId = null,
+            CancellationToken cancellationToken = default)
+        {
+            await AttachTokenAsync();
+            try
+            {
+                var payload = new { TenantId = tenantId };
+                var response = await _httpClient.PostAsJsonAsync("/api/v1/auth/refresh-token", payload, cancellationToken);
+                if (response.IsSuccessStatusCode)
+                {
+                    var result = await response.Content.ReadFromJsonAsync<RefreshTokenResponseDto>(cancellationToken: cancellationToken);
+                    return result?.Token;
+                }
+            }
+            catch
+            {
+                // Fallback for network/offline scenario
+            }
+
+            return null;
+        }
+
     public async Task<bool> UpdateTenantProfileAsync(UpdateTenantProfileRequest request, CancellationToken cancellationToken = default)
     {
         await AttachTokenAsync();
@@ -172,24 +187,6 @@ public sealed class TenancyApiClient
         {
             return false;
         }
-    }
-
-    public async Task<ChangeSubscriptionPlanResponse?> ChangeSubscriptionPlanAsync(ChangeSubscriptionPlanRequest request, CancellationToken cancellationToken = default)
-    {
-        await AttachTokenAsync();
-        try
-        {
-            var response = await _httpClient.PutAsJsonAsync("/api/v1/tenancy/subscription", request, cancellationToken);
-            if (response.IsSuccessStatusCode)
-            {
-                return await response.Content.ReadFromJsonAsync<ChangeSubscriptionPlanResponse>(cancellationToken: cancellationToken);
-            }
-        }
-        catch
-        {
-        }
-
-        return null;
     }
 
     public async Task<StripeCheckoutSessionResponse?> CreateSubscriptionCheckoutAsync(
@@ -216,6 +213,16 @@ public sealed class TenancyApiClient
             {
                 return await response.Content.ReadFromJsonAsync<StripeCheckoutSessionResponse>(cancellationToken: cancellationToken);
             }
+
+            if (response.StatusCode == System.Net.HttpStatusCode.Conflict)
+            {
+                var errorObj = await response.Content.ReadFromJsonAsync<ApiErrorDto>(cancellationToken: cancellationToken);
+                throw new InvalidOperationException(errorObj?.Message ?? "A fazenda já possui uma assinatura ativa no Stripe. Alterações de plano devem ser realizadas com segurança através do portal de gerenciamento de faturamento.");
+            }
+        }
+        catch (InvalidOperationException)
+        {
+            throw;
         }
         catch
         {

@@ -2,7 +2,9 @@
 @rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
 @attribute [Authorize]
 @using CriaCerto.Web.Client.Auth
-@inject AuthenticationStateProvider AuthStateProvider
+@using CriaCerto.BuildingBlocks.Abstractions.Licensing
+@using System.Security.Claims
+@inject CustomAuthStateProvider AuthStateProvider
 @inject TenancyApiClient TenancyApiClient
 @inject PlantelApiClient PlantelApiClient
 @inject NavigationManager Navigation
@@ -25,6 +27,30 @@
             Gerencie o plano da sua granja, acompanhe o uso de cotas e mude de categoria a qualquer momento.
         </p>
     </div>
+
+    @if (!_isAdmin)
+    {
+        <div style="padding: 1rem 1.25rem; border-radius: 8px; margin-bottom: 1.5rem; background-color: #f8fafc; color: var(--cc-ink); border: 1px solid var(--cc-border); display: flex; align-items: center; gap: 0.75rem;">
+            <span class="material-symbols-outlined" style="font-size: 22px; color: var(--cc-primary);">admin_panel_settings</span>
+            <div style="font-size: 13px;">
+                <strong>Modo Somente Leitura (RBAC):</strong> Você está visualizando o catálogo e as cotas do plano. Apenas administradores da fazenda possuem permissão para contratar planos, solicitar upgrades ou gerenciar formas de pagamento.
+            </div>
+        </div>
+    }
+
+    @if (_profile != null && string.Equals(_profile.Status, "Trial", StringComparison.OrdinalIgnoreCase) && _profile.CurrentPeriodEndUtc.HasValue && _profile.CurrentPeriodEndUtc.Value < DateTime.UtcNow)
+    {
+        <div style="padding: 1.25rem 1.5rem; border-radius: 12px; margin-bottom: 1.5rem; background-color: #fff7ed; color: #9a3412; border: 1px solid #fed7aa; display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;">
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+                <span class="material-symbols-outlined" style="font-size: 28px; color: #ea580c;">timer_off</span>
+                <div>
+                    <strong style="font-size: 14px;">Período de testes (Trial) expirado:</strong>
+                    <div style="font-size: 13px; color: #7c2d12;">Seu período gratuito de 14 dias terminou. Selecione um dos planos abaixo para regularizar via Stripe e reativar o acesso total aos módulos do Cria Certo.</div>
+                </div>
+            </div>
+            <span class="font-mono" style="font-size: 11px; padding: 0.25rem 0.65rem; border-radius: 99px; background: #ea580c; color: white; font-weight: 700;">REGULARIZAÇÃO PENDENTE</span>
+        </div>
+    }
 
     @if (!string.IsNullOrEmpty(_message))
     {
@@ -58,11 +84,21 @@
                 </div>
             </div>
             <div>
-                <button class="cc-btn cc-btn-outline font-mono text-xs" @onclick="OpenBillingPortal" disabled="@_isSubmitting"
-                        style="border: 1px solid #635bff; color: #635bff; background: white; padding: 0.6rem 1.2rem; border-radius: 8px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 0.5rem;">
-                    <span class="material-symbols-outlined" style="font-size: 16px;">open_in_new</span>
-                    <span>Gerenciar Cobrança & Cartões</span>
-                </button>
+                @if (_isAdmin)
+                {
+                    <button class="cc-btn cc-btn-outline font-mono text-xs" @onclick="OpenBillingPortal" disabled="@_isSubmitting"
+                            style="border: 1px solid #635bff; color: #635bff; background: white; padding: 0.6rem 1.2rem; border-radius: 8px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 0.5rem;">
+                        <span class="material-symbols-outlined" style="font-size: 16px;">open_in_new</span>
+                        <span>Gerenciar Cobrança & Cartões</span>
+                    </button>
+                }
+                else
+                {
+                    <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; border-radius: 8px; background: #f1f5f9; color: var(--cc-ink-muted); font-size: 12px; font-weight: 600;" class="font-mono">
+                        <span class="material-symbols-outlined" style="font-size: 16px;">lock</span>
+                        <span>Faturamento Restrito a Administradores</span>
+                    </div>
+                }
             </div>
         </div>
     }
@@ -217,6 +253,15 @@
                             Plano Atual
                         </button>
                     }
+                    else if (!_isAdmin)
+                    {
+                        <button class="cc-btn cc-btn-outline w-full" disabled
+                                title="Apenas administradores da fazenda podem gerenciar planos"
+                                style="width: 100%; border: 1px solid var(--cc-border); border-radius: 8px; padding: 0.75rem; font-weight: bold; background: #f8fafc; color: var(--cc-ink-muted); cursor: not-allowed; display: flex; align-items: center; justify-content: center; gap: 0.4rem;">
+                            <span class="material-symbols-outlined" style="font-size: 16px;">lock</span>
+                            <span>Apenas Administradores</span>
+                        </button>
+                    }
                     else if (currentPrice == 0)
                     {
                         <button class="cc-btn cc-btn-outline w-full pressed-effect" @onclick='() => ChangePlan(plan.PlanId)'
@@ -228,14 +273,14 @@
                     {
                         <button class="cc-btn cc-btn-primary w-full pressed-effect" @onclick='() => ChangePlan(plan.PlanId)'
                                 style="width: 100%; border: none; background-color: var(--cc-primary-container); color: white; border-radius: 8px; padding: 0.75rem; font-weight: bold; cursor: pointer;">
-                            Fazer Upgrade para @plan.Name
+                            @(HasActiveStripeSubscription ? $"Alterar para {plan.Name} (Portal Stripe)" : $"Fazer Upgrade para {plan.Name}")
                         </button>
                     }
                     else
                     {
                         <button class="cc-btn cc-btn-outline w-full pressed-effect" @onclick='() => ChangePlan(plan.PlanId)'
                                 style="width: 100%; border: 1px solid var(--cc-primary); border-radius: 8px; padding: 0.75rem; font-weight: bold; background: white; color: var(--cc-primary); cursor: pointer;">
-                            Downgrade para @plan.Name
+                            @(HasActiveStripeSubscription ? $"Alterar para {plan.Name} (Portal Stripe)" : $"Downgrade para {plan.Name}")
                         </button>
                     }
                 </div>
@@ -391,12 +436,56 @@
         }
     </section>
 
+    @if (_showBillingUnavailableModal)
+    {
+        <div class="modal-overlay" @onclick="CloseBillingModal" style="position: fixed; inset: 0; background: rgba(15, 23, 42, 0.7); display: flex; align-items: center; justify-content: center; z-index: 1050; padding: 1rem;">
+            <div class="modal-card" @onclick:stopPropagation="true" style="background: white; border-radius: 16px; width: min(480px, 95vw); box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.04); overflow: hidden; border: 1px solid var(--cc-border);">
+                <div style="background: #fef2f2; padding: 1.25rem 1.5rem; display: flex; align-items: center; gap: 0.75rem; border-bottom: 1px solid #fee2e2;">
+                    <div style="width: 40px; height: 40px; border-radius: 10px; background: #fee2e2; color: #dc2626; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                        <span class="material-symbols-outlined" style="font-size: 24px;">lock_clock</span>
+                    </div>
+                    <div>
+                        <h3 style="margin: 0; font-size: 16px; font-weight: 700; color: #991b1b;">Faturamento Temporariamente Indisponível</h3>
+                        <p style="margin: 0.15rem 0 0; font-size: 12px; color: #b91c1c;">Segurança & Conformidade de Pagamento</p>
+                    </div>
+                </div>
+                <div style="padding: 1.5rem; color: var(--cc-ink); font-size: 14px; line-height: 1.5;">
+                    <p style="margin: 0 0 1rem 0;">
+                        @_billingUnavailableReason
+                    </p>
+                    <div style="background: #f8fafc; border-left: 4px solid var(--cc-primary); border-radius: 4px; padding: 0.75rem 1rem; margin-bottom: 1rem; font-size: 13px; color: var(--cc-ink-muted);">
+                        <strong>Aviso de Segurança:</strong> As alterações de plano na plataforma CriaCerto exigem confirmação pelo Stripe ou autorização expressa documentada pelo Backoffice. Seu plano atual permanece inalterado.
+                    </div>
+                </div>
+                <div style="padding: 1rem 1.5rem; background: #f8fafc; border-top: 1px solid var(--cc-border); display: flex; justify-content: flex-end; gap: 0.75rem;">
+                    <button type="button" @onclick="CloseBillingModal" style="background: white; border: 1px solid var(--cc-border); border-radius: 8px; padding: 0.5rem 1.25rem; font-size: 13px; font-weight: 600; cursor: pointer; color: var(--cc-ink);">
+                        Fechar
+                    </button>
+                    @if (HasActiveStripeSubscription)
+                    {
+                        <button type="button" @onclick="OpenBillingPortalFromModal" style="background: #635bff; border: none; border-radius: 8px; padding: 0.5rem 1.25rem; font-size: 13px; font-weight: 600; color: white; cursor: pointer; display: flex; align-items: center; gap: 0.4rem;">
+                            <span class="material-symbols-outlined" style="font-size: 16px;">open_in_new</span>
+                            <span>Acessar Portal Stripe</span>
+                        </button>
+                    }
+                    else
+                    {
+                        <button type="button" @onclick="ContactSupport" style="background: var(--cc-primary); border: none; border-radius: 8px; padding: 0.5rem 1.25rem; font-size: 13px; font-weight: 600; color: white; cursor: pointer;">
+                            Falar com Suporte
+                        </button>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+
 </div>
 
 @code {
     private Guid _tenantId = Guid.Empty;
     private TenantProfileModel? _profile;
     private string _activePlan = "Starter";
+    private bool _isAdmin = false;
     private bool _isAnnual = false;
     private bool _showAccordion = true;
     private bool _isSubmitting = false;
@@ -404,6 +493,21 @@
     private string? _message;
     private bool _isSuccessMessage;
     private List<SubscriptionPlanModel> _availablePlans = new();
+    private bool _showBillingUnavailableModal = false;
+    private string _billingUnavailableReason = "O serviço de faturamento seguro no Stripe está temporariamente indisponível.";
+
+    [SupplyParameterFromQuery(Name = "success")]
+    public bool? StripeSuccess { get; set; }
+
+    [SupplyParameterFromQuery(Name = "canceled")]
+    public bool? StripeCanceled { get; set; }
+
+    private bool _stripeProcessed = false;
+
+    private bool HasActiveStripeSubscription => _profile != null &&
+        !string.IsNullOrWhiteSpace(_profile.StripeSubscriptionId) &&
+        (string.Equals(_profile.Status, "Active", StringComparison.OrdinalIgnoreCase) ||
+         string.Equals(_profile.Status, "PastDue", StringComparison.OrdinalIgnoreCase));
 
     private int _registeredAnimalsCount = 0;
     private int _reportsCount = 0;
@@ -418,12 +522,20 @@
             {
                 return plan.HeadCapacityLimit;
             }
-            return _activePlan.Equals("Starter", StringComparison.OrdinalIgnoreCase) ? 500 : 
-                   (_activePlan.Equals("Pro", StringComparison.OrdinalIgnoreCase) ? 2500 : 99999);
+            var normalized = ModuleLicenseChecker.NormalizePlan(_activePlan);
+            return normalized.Equals("Starter", StringComparison.OrdinalIgnoreCase) ? 500 : 
+                   (normalized.Equals("Pro", StringComparison.OrdinalIgnoreCase) ? 2500 : 99999);
         }
     }
-    private int _maxReportsAllowed => _activePlan.Equals("Starter", StringComparison.OrdinalIgnoreCase) ? 10 : 
-                                      (_activePlan.Equals("Pro", StringComparison.OrdinalIgnoreCase) ? 50 : 999);
+    private int _maxReportsAllowed
+    {
+        get
+        {
+            var normalized = ModuleLicenseChecker.NormalizePlan(_activePlan);
+            return normalized.Equals("Starter", StringComparison.OrdinalIgnoreCase) ? 10 : 
+                   (normalized.Equals("Pro", StringComparison.OrdinalIgnoreCase) ? 50 : 999);
+        }
+    }
     private int _animalsPercentage => _maxAnimalsAllowed > 0 ? Math.Min(100, (_registeredAnimalsCount * 100) / _maxAnimalsAllowed) : 0;
     private int _reportsPercentage => _maxReportsAllowed > 0 ? Math.Min(100, (_reportsCount * 100) / _maxReportsAllowed) : 0;
 
@@ -434,20 +546,49 @@
 
         if (user.Identity?.IsAuthenticated == true)
         {
+            var roleClaim = user.FindFirst(ClaimTypes.Role)?.Value 
+                         ?? user.FindFirst("Role")?.Value;
+            _isAdmin = user.IsInRole("Admin") || string.Equals(roleClaim, "Admin", StringComparison.OrdinalIgnoreCase);
+
             var planClaim = user.FindFirst("SubscribedPlan")?.Value;
             if (!string.IsNullOrEmpty(planClaim))
             {
-                _activePlan = planClaim;
+                _activePlan = ModuleLicenseChecker.NormalizePlan(planClaim);
             }
 
             var tenantIdClaim = user.FindFirst("TenantId")?.Value;
             if (Guid.TryParse(tenantIdClaim, out var tenantId))
             {
                 _tenantId = tenantId;
+
+                // Renovação de Claims e JWT no Retorno do Stripe (Fase 2.3)
+                if (StripeSuccess == true && !_stripeProcessed)
+                {
+                    _stripeProcessed = true;
+                    var refreshedToken = await TenancyApiClient.RefreshTokenAsync(_tenantId);
+                    if (!string.IsNullOrEmpty(refreshedToken))
+                    {
+                        await AuthStateProvider.MarkUserAsAuthenticated(refreshedToken);
+                        _message = "Assinatura confirmada com sucesso pelo Stripe! Seu plano e permissões de acesso foram atualizados.";
+                        _isSuccessMessage = true;
+                    }
+                    else
+                    {
+                        _message = "Pagamento concluído no Stripe! Suas novas cotas e permissões estão sendo sincronizadas.";
+                        _isSuccessMessage = true;
+                    }
+                }
+                else if (StripeCanceled == true && !_stripeProcessed)
+                {
+                    _stripeProcessed = true;
+                    _message = "A operação de assinatura no Stripe foi cancelada. Seu plano atual permanece inalterado.";
+                    _isSuccessMessage = false;
+                }
+
                 _profile = await TenancyApiClient.GetTenantProfileAsync(tenantId);
                 if (_profile != null && !string.IsNullOrEmpty(_profile.SubscribedPlan))
                 {
-                    _activePlan = _profile.SubscribedPlan;
+                    _activePlan = ModuleLicenseChecker.NormalizePlan(_profile.SubscribedPlan);
                 }
             }
 
@@ -496,7 +637,10 @@
 
     private bool IsActivePlan(string planId)
     {
-        return string.Equals(_activePlan, planId, StringComparison.OrdinalIgnoreCase);
+        return string.Equals(
+            ModuleLicenseChecker.NormalizePlan(_activePlan),
+            ModuleLicenseChecker.NormalizePlan(planId),
+            StringComparison.OrdinalIgnoreCase);
     }
 
     private decimal GetPrice(SubscriptionPlanModel plan)
@@ -516,15 +660,29 @@
 
     private async Task ChangePlan(string planName)
     {
+        if (!_isAdmin)
+        {
+            _message = "Apenas administradores da fazenda possuem permissão para alterar o plano de assinatura.";
+            _isSuccessMessage = false;
+            return;
+        }
+
         if (_isSubmitting || IsActivePlan(planName) || _tenantId == Guid.Empty)
             return;
+
+        // Prevenção de assinaturas concorrentes / cobrança dupla no Stripe
+        if (HasActiveStripeSubscription)
+        {
+            await OpenBillingPortal();
+            return;
+        }
 
         _isSubmitting = true;
         _message = null;
 
         try
         {
-            // Tenta criar checkout com o Stripe
+            // Tenta criar checkout seguro com o Stripe
             var checkoutSession = await TenancyApiClient.CreateSubscriptionCheckoutAsync(
                 _tenantId,
                 planName,
@@ -538,29 +696,24 @@
                 return;
             }
 
-            // Fallback direto caso o Stripe ainda não tenha chaves ativas no ambiente
-            var response = await TenancyApiClient.ChangeSubscriptionPlanAsync(new ChangeSubscriptionPlanRequest(_tenantId, planName));
-            if (response != null && response.Profile != null)
-            {
-                _profile = response.Profile;
-                _activePlan = response.Profile.SubscribedPlan;
-                _message = $"Plano alterado para '{_activePlan}' com sucesso!";
-                _isSuccessMessage = true;
-
-                if (!string.IsNullOrEmpty(response.Token) && AuthStateProvider is CustomAuthStateProvider customAuthProvider)
-                {
-                    await customAuthProvider.MarkUserAsAuthenticated(response.Token);
-                }
-            }
-            else
-            {
-                _message = "Erro ao alterar o plano de assinatura. Tente novamente.";
-                _isSuccessMessage = false;
-            }
+            // Eliminação do bypass gratuito: notifica indisponibilidade e bloqueia concessão sem pagamento
+            _billingUnavailableReason = "Não foi possível iniciar a sessão de faturamento seguro no Stripe para este plano. O serviço pode estar temporariamente indisponível ou em manutenção. Nenhuma cobrança foi efetuada e seu plano atual permanece inalterado.";
+            _showBillingUnavailableModal = true;
+            _message = "O faturamento online para este plano está temporariamente indisponível. Entre em contato com o suporte para regularizar sua assinatura.";
+            _isSuccessMessage = false;
         }
         catch (Exception ex)
         {
-            _message = $"Erro ao processar alteração de plano: {ex.Message}";
+            if (HasActiveStripeSubscription || ex.Message.Contains("assinatura ativa no Stripe", StringComparison.OrdinalIgnoreCase))
+            {
+                _billingUnavailableReason = "Sua fazenda já possui uma assinatura ativa gerenciada com segurança pelo Stripe. Para prevenir cobranças duplicadas e calcular o rateio proporcional automaticamente, a alteração de plano deve ser realizada através do Portal do Stripe.";
+            }
+            else
+            {
+                _billingUnavailableReason = $"Ocorreu uma falha na integração de pagamentos: {ex.Message}. A alteração direta de planos sem confirmação financeira foi bloqueada.";
+            }
+            _showBillingUnavailableModal = true;
+            _message = $"Erro ao conectar ao faturamento seguro: {ex.Message}";
             _isSuccessMessage = false;
         }
         finally
@@ -571,6 +724,13 @@
 
     private async Task OpenBillingPortal()
     {
+        if (!_isAdmin)
+        {
+            _message = "Apenas administradores da fazenda possuem permissão para acessar o portal de faturamento Stripe.";
+            _isSuccessMessage = false;
+            return;
+        }
+
         if (_tenantId == Guid.Empty) return;
 
         _isSubmitting = true;
@@ -578,7 +738,7 @@
         {
             var portalSession = await TenancyApiClient.CreateSubscriptionPortalAsync(
                 _tenantId,
-                Navigation.ToAbsoluteUri("/settings/subscription").ToString());
+                Navigation.ToAbsoluteUri("/settings/subscription?success=true").ToString());
 
             if (portalSession != null && !string.IsNullOrWhiteSpace(portalSession.Url))
             {
@@ -586,12 +746,16 @@
             }
             else
             {
-                _message = "Não foi possível abrir o portal Stripe. Verifique as credenciais no servidor.";
+                _billingUnavailableReason = "Não foi possível abrir o portal de autoatendimento Stripe. Verifique se sua fazenda possui uma assinatura ativa ou contate o suporte.";
+                _showBillingUnavailableModal = true;
+                _message = "Portal de autoatendimento Stripe indisponível no momento.";
                 _isSuccessMessage = false;
             }
         }
         catch (Exception ex)
         {
+            _billingUnavailableReason = $"Erro ao acessar o portal de faturamento: {ex.Message}";
+            _showBillingUnavailableModal = true;
             _message = $"Erro ao abrir portal de cobrança: {ex.Message}";
             _isSuccessMessage = false;
         }
@@ -599,6 +763,23 @@
         {
             _isSubmitting = false;
         }
+    }
+
+    private void CloseBillingModal()
+    {
+        _showBillingUnavailableModal = false;
+    }
+
+    private async Task OpenBillingPortalFromModal()
+    {
+        CloseBillingModal();
+        await OpenBillingPortal();
+    }
+
+    private void ContactSupport()
+    {
+        _showBillingUnavailableModal = false;
+        Navigation.NavigateTo("settings/organization");
     }
 
     private void GoToSettings()

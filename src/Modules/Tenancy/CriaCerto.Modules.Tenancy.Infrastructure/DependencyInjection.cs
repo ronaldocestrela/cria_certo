@@ -31,29 +31,58 @@ public static class DependencyInjection
         services.AddScoped<IJwtService, JwtService>();
         services.AddScoped<ITenantAccessGuard, TenantAccessGuard>();
 
-        services.Configure<StripeOptions>(options =>
+        var allowedOrigins = configuration.GetSection("Cors:AllowedOrigins").Get<string[]>();
+        var stripeSection = configuration.GetSection(StripeOptions.SectionName);
+        var returnUrl = stripeSection["ReturnUrl"] ?? configuration["STRIPE_RETURN_URL"];
+
+        string? defaultOrigin = null;
+        if (!string.IsNullOrWhiteSpace(returnUrl) && Uri.TryCreate(returnUrl, UriKind.Absolute, out var returnUri))
         {
-            configuration.GetSection(StripeOptions.SectionName).Bind(options);
+            defaultOrigin = returnUri.GetLeftPart(UriPartial.Authority);
+        }
 
-            var apiKey = configuration["STRIPE_API_KEY"] ?? Environment.GetEnvironmentVariable("STRIPE_API_KEY");
-            if (!string.IsNullOrWhiteSpace(apiKey)) options.ApiKey = apiKey;
+        services.AddSingleton<ISubscriptionUrlValidator>(new CriaCerto.Modules.Tenancy.Application.Services.SubscriptionUrlValidator(allowedOrigins, defaultOrigin));
 
-            var pubKey = configuration["STRIPE_PUBLISHABLE_KEY"] ?? Environment.GetEnvironmentVariable("STRIPE_PUBLISHABLE_KEY");
-            if (!string.IsNullOrWhiteSpace(pubKey)) options.PublishableKey = pubKey;
+        services.AddOptions<StripeOptions>()
+            .Configure(options =>
+            {
+                configuration.GetSection(StripeOptions.SectionName).Bind(options);
 
-            var webhookSecret = configuration["STRIPE_WEBHOOK_SECRET"] ?? Environment.GetEnvironmentVariable("STRIPE_WEBHOOK_SECRET");
-            if (!string.IsNullOrWhiteSpace(webhookSecret)) options.WebhookSecret = webhookSecret;
+                var apiKey = configuration["STRIPE_API_KEY"] ?? Environment.GetEnvironmentVariable("STRIPE_API_KEY");
+                if (!string.IsNullOrWhiteSpace(apiKey)) options.ApiKey = apiKey;
 
-            var successUrl = configuration["STRIPE_SUCCESS_URL"] ?? Environment.GetEnvironmentVariable("STRIPE_SUCCESS_URL");
-            if (!string.IsNullOrWhiteSpace(successUrl)) options.SuccessUrl = successUrl;
+                var pubKey = configuration["STRIPE_PUBLISHABLE_KEY"] ?? Environment.GetEnvironmentVariable("STRIPE_PUBLISHABLE_KEY");
+                if (!string.IsNullOrWhiteSpace(pubKey)) options.PublishableKey = pubKey;
 
-            var cancelUrl = configuration["STRIPE_CANCEL_URL"] ?? Environment.GetEnvironmentVariable("STRIPE_CANCEL_URL");
-            if (!string.IsNullOrWhiteSpace(cancelUrl)) options.CancelUrl = cancelUrl;
+                var webhookSecret = configuration["STRIPE_WEBHOOK_SECRET"] ?? Environment.GetEnvironmentVariable("STRIPE_WEBHOOK_SECRET");
+                if (!string.IsNullOrWhiteSpace(webhookSecret)) options.WebhookSecret = webhookSecret;
 
-            var returnUrl = configuration["STRIPE_RETURN_URL"] ?? Environment.GetEnvironmentVariable("STRIPE_RETURN_URL");
-            if (!string.IsNullOrWhiteSpace(returnUrl)) options.ReturnUrl = returnUrl;
-        });
+                var successUrl = configuration["STRIPE_SUCCESS_URL"] ?? Environment.GetEnvironmentVariable("STRIPE_SUCCESS_URL");
+                if (!string.IsNullOrWhiteSpace(successUrl)) options.SuccessUrl = successUrl;
+
+                var cancelUrl = configuration["STRIPE_CANCEL_URL"] ?? Environment.GetEnvironmentVariable("STRIPE_CANCEL_URL");
+                if (!string.IsNullOrWhiteSpace(cancelUrl)) options.CancelUrl = cancelUrl;
+
+                var returnUrl = configuration["STRIPE_RETURN_URL"] ?? Environment.GetEnvironmentVariable("STRIPE_RETURN_URL");
+                if (!string.IsNullOrWhiteSpace(returnUrl)) options.ReturnUrl = returnUrl;
+            })
+            .Validate(options =>
+            {
+                var env = configuration["ASPNETCORE_ENVIRONMENT"] ?? Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+                if (string.Equals(env, "Production", StringComparison.OrdinalIgnoreCase))
+                {
+                    return !string.IsNullOrWhiteSpace(options.WebhookSecret);
+                }
+                return true;
+            }, "A configuração STRIPE_WEBHOOK_SECRET é obrigatória em ambiente de Produção.")
+            .ValidateOnStart();
+
         services.AddScoped<IStripePaymentService, StripePaymentService>();
+
+        services.AddOptions<CriaCerto.Modules.Tenancy.Application.Options.SubscriptionLifecycleOptions>()
+            .Bind(configuration.GetSection(CriaCerto.Modules.Tenancy.Application.Options.SubscriptionLifecycleOptions.SectionName));
+
+        services.AddScoped<ISubscriptionLifecycleService, SubscriptionLifecycleService>();
 
         return services;
     }

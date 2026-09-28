@@ -1,3 +1,4 @@
+using CriaCerto.BuildingBlocks.Abstractions.Licensing;
 using CriaCerto.BuildingBlocks.Abstractions.Results;
 using CriaCerto.Modules.Tenancy.Application.Abstractions;
 using CriaCerto.Modules.Tenancy.Application.Contracts;
@@ -62,7 +63,13 @@ public class ChangeSubscriptionPlanCommandHandler : IRequestHandler<ChangeSubscr
                 Error.Unauthorized("Auth.UnauthorizedTenant", "Usuário não pertence a esta organização/fazenda."));
         }
 
-        tenant.SubscribedPlan = request.NewPlan;
+        if (userTenant.Role != UserRole.Admin)
+        {
+            return Result.Failure<ChangeSubscriptionPlanResult>(
+                Error.Unauthorized("Auth.ForbiddenPlanChange", "Apenas administradores podem solicitar alteração de plano."));
+        }
+
+        tenant.SubscribedPlan = ModuleLicenseChecker.NormalizePlan(request.NewPlan);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         var newToken = _jwtService.GenerateToken(user, tenant, userTenant.Role);

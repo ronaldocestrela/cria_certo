@@ -13,6 +13,6 @@ public interface ITenancyDbContext
     DbSet<OperationalTag> OperationalTags { get; }
     DbSet<TenantOperationalTag> TenantOperationalTags { get; }
     DbSet<TenantSubscriptionHistory> SubscriptionHistories { get; }
+    DbSet<StripeWebhookEvent> StripeWebhookEvents { get; }
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
-
 }

@@ -139,6 +139,53 @@ public class ChangeSubscriptionPlanCommandHandlerTests : IDisposable
         result.Error.Code.Should().Be("Auth.UnauthorizedTenant");
     }
 
+    [Theory]
+    [InlineData(UserRole.Veterinario)]
+    [InlineData(UserRole.OperadorCurral)]
+    public async Task Handle_Should_Fail_When_User_Is_Not_Admin(UserRole nonAdminRole)
+    {
+        // Arrange
+        var tenant = new Tenant
+        {
+            Id = Guid.NewGuid(),
+            Name = "Fazenda Ouro Verde",
+            CNPJ = "33.333.333/0001-33",
+            Status = "Active",
+            SubscribedPlan = "Starter"
+        };
+
+        var user = new User
+        {
+            Id = Guid.NewGuid(),
+            FullName = "Carlos Peão",
+            Email = "carlos@ouroverde.com",
+            PasswordHash = "hash"
+        };
+
+        var userTenant = new UserTenant
+        {
+            UserId = user.Id,
+            TenantId = tenant.Id,
+            Role = nonAdminRole,
+            JoinedAt = DateTime.UtcNow
+        };
+
+        _dbContext.Tenants.Add(tenant);
+        _dbContext.Users.Add(user);
+        _dbContext.UserTenants.Add(userTenant);
+        await _dbContext.SaveChangesAsync();
+
+        var handler = new ChangeSubscriptionPlanCommandHandler(_dbContext, _jwtService);
+        var command = new ChangeSubscriptionPlanCommand(tenant.Id, user.Id, "Enterprise");
+
+        // Act
+        var result = await handler.Handle(command, CancellationToken.None);
+
+        // Assert
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("Auth.ForbiddenPlanChange");
+    }
+
     private sealed class FakeJwtService : IJwtService
     {
         public string GenerateToken(User user, Tenant tenant, UserRole role = UserRole.Admin)

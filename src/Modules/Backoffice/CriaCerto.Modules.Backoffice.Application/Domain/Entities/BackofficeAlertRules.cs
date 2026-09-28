@@ -9,6 +9,8 @@ public static class BackofficeAlertRules
     public const string ImpersonationBurst = "ALR_IMPERSONATION_BURST";
     public const string ForensicTamperDetected = "ALR_FORENSIC_TAMPER_DETECTED";
     public const string SimulatedAlert = "ALR_SIMULATED_ALERT";
+    public const string WebhookSignatureInvalid = "ALR_WEBHOOK_SIGNATURE_INVALID";
+    public const string PaymentInvoiceFailed = "ALR_PAYMENT_INVOICE_FAILED";
 
     public static string GetDefaultTitle(string ruleCode) => ruleCode switch
     {
@@ -17,6 +19,8 @@ public static class BackofficeAlertRules
         ImpersonationBurst => "Surto Anômalo de Sessões de Impersonação",
         ForensicTamperDetected => "Violação Crítica de Integridade na Trilha Forense",
         SimulatedAlert => "Alerta Operacional Simulado para Validação",
+        WebhookSignatureInvalid => "Falha Crítica na Assinatura do Webhook Stripe",
+        PaymentInvoiceFailed => "Falha no Pagamento de Fatura Recorrente (Inadimplência)",
         _ => "Alerta Operacional do Backoffice"
     };
 
@@ -27,6 +31,8 @@ public static class BackofficeAlertRules
         ImpersonationBurst => AlertSeverity.Warning,
         ForensicTamperDetected => AlertSeverity.Critical,
         SimulatedAlert => AlertSeverity.Info,
+        WebhookSignatureInvalid => AlertSeverity.Critical,
+        PaymentInvoiceFailed => AlertSeverity.Warning,
         _ => AlertSeverity.Info
     };
 }

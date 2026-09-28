@@ -1,0 +1,9 @@
+@page "/trial-expired"
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@using CriaCerto.Web.Client.Components
+
+<PageTitle>CriaCerto - Período de Testes Expirado</PageTitle>
+
+<div class="trial-expired-page" style="min-height: 80vh; display: flex; align-items: center; justify-content: center; padding: 2rem 1rem;">
+    <TrialExpiredLockout />
+</div>
