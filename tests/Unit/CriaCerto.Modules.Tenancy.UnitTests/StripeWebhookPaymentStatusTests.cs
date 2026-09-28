@@ -14,14 +14,14 @@ using Xunit;
 
 namespace CriaCerto.Modules.Tenancy.UnitTests;
 
-public class StripeWebhookPlanMappingTests : IDisposable
+public class StripeWebhookPaymentStatusTests : IDisposable
 {
-    private const string WebhookSecret = "whsec_test_secret_plan_mapping_123";
+    private const string WebhookSecret = "whsec_test_secret_payment_status_999";
     private readonly SqliteConnection _sqliteConnection;
     private readonly TenancyDbContext _dbContext;
     private readonly StripePaymentService _service;
 
-    public StripeWebhookPlanMappingTests()
+    public StripeWebhookPaymentStatusTests()
     {
         _sqliteConnection = new SqliteConnection("Filename=:memory:");
         _sqliteConnection.Open();
@@ -35,7 +35,7 @@ public class StripeWebhookPlanMappingTests : IDisposable
 
         var stripeOptions = new StripeOptions
         {
-            ApiKey = "sk_test_123",
+            ApiKey = "sk_test_mock_123",
             WebhookSecret = WebhookSecret
         };
 
@@ -62,32 +62,33 @@ public class StripeWebhookPlanMappingTests : IDisposable
     }
 
     [Fact]
-    public async Task ProcessWebhookAsync_WhenCheckoutSessionHasCanonicalPlanId_ShouldSaveCanonicalPlanAndSetProCapacity()
+    public async Task ProcessWebhookAsync_WhenPaymentStatusIsPaid_ShouldActivateTenantAndUpgradePlan()
     {
         // Arrange
         var tenant = new Tenant
         {
             Id = Guid.NewGuid(),
-            Name = "Fazenda Plan Test",
-            CNPJ = "12.345.678/0001-99",
+            Name = "Fazenda Pagamento Confirmado",
+            CNPJ = "12.345.678/0001-01",
             Status = "Trial",
             SubscribedPlan = "Starter",
-            Capacity = 500
+            Capacity = 500,
+            StatusReason = "Cadastro inicial de teste."
         };
         _dbContext.Tenants.Add(tenant);
         await _dbContext.SaveChangesAsync();
 
         var payload = $$"""
         {
-          "id": "evt_test_checkout_1",
+          "id": "evt_test_paid_001",
           "object": "event",
           "type": "checkout.session.completed",
           "data": {
             "object": {
-              "id": "cs_test_session_1",
+              "id": "cs_test_paid_001",
               "object": "checkout.session",
-              "customer": "cus_stripe_1",
-              "subscription": "sub_stripe_1",
+              "customer": "cus_stripe_paid_1",
+              "subscription": "sub_stripe_paid_1",
               "payment_status": "paid",
               "metadata": {
                 "TenantId": "{{tenant.Id}}",
@@ -111,75 +112,24 @@ public class StripeWebhookPlanMappingTests : IDisposable
 
         var updatedTenant = await _dbContext.Tenants.FindAsync(tenant.Id);
         updatedTenant.Should().NotBeNull();
-        updatedTenant!.SubscribedPlan.Should().Be("Pro");
+        updatedTenant!.Status.Should().Be("Active");
+        updatedTenant.StatusReason.Should().BeNull();
+        updatedTenant.SubscribedPlan.Should().Be("Pro");
         updatedTenant.Capacity.Should().Be(2500);
-        updatedTenant.Status.Should().Be("Active");
+        updatedTenant.StripeCustomerId.Should().Be("cus_stripe_paid_1");
+        updatedTenant.StripeSubscriptionId.Should().Be("sub_stripe_paid_1");
+        updatedTenant.StatusChangedAtUtc.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(10));
     }
 
     [Fact]
-    public async Task ProcessWebhookAsync_WhenCheckoutSessionHasLegacyPlanNameOnly_ShouldNormalizeToCanonicalPlan()
+    public async Task ProcessWebhookAsync_WhenPaymentStatusIsUnpaid_ShouldNotActivateTenantAndSetInformativeReason()
     {
         // Arrange
         var tenant = new Tenant
         {
             Id = Guid.NewGuid(),
-            Name = "Fazenda Legacy Test",
-            CNPJ = "12.345.678/0001-98",
-            Status = "Trial",
-            SubscribedPlan = "Starter",
-            Capacity = 500
-        };
-        _dbContext.Tenants.Add(tenant);
-        await _dbContext.SaveChangesAsync();
-
-        // Sessão legada que possuía apenas PlanName
-        var payload = $$"""
-        {
-          "id": "evt_test_checkout_legacy",
-          "object": "event",
-          "type": "checkout.session.completed",
-          "data": {
-            "object": {
-              "id": "cs_test_session_legacy",
-              "object": "checkout.session",
-              "customer": "cus_stripe_legacy",
-              "subscription": "sub_stripe_legacy",
-              "payment_status": "paid",
-              "metadata": {
-                "TenantId": "{{tenant.Id}}",
-                "PlanName": "Pro Fazenda",
-                "BillingCycle": "monthly"
-              }
-            }
-          }
-        }
-        """;
-
-        var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        var signature = GenerateStripeSignature(payload, WebhookSecret, timestamp);
-
-        // Act
-        var result = await _service.ProcessWebhookAsync(payload, signature);
-
-        // Assert
-        result.Success.Should().BeTrue();
-
-        var updatedTenant = await _dbContext.Tenants.FindAsync(tenant.Id);
-        updatedTenant.Should().NotBeNull();
-        updatedTenant!.SubscribedPlan.Should().Be("Pro");
-        updatedTenant.Capacity.Should().Be(2500);
-        updatedTenant.Status.Should().Be("Active");
-    }
-
-    [Fact]
-    public async Task ProcessWebhookAsync_WhenCheckoutSessionHasEnterpriseCommercialName_ShouldSetEnterpriseAndCapacity()
-    {
-        // Arrange
-        var tenant = new Tenant
-        {
-            Id = Guid.NewGuid(),
-            Name = "Fazenda Confinamento Grande",
-            CNPJ = "12.345.678/0001-97",
+            Name = "Fazenda Boleto Pendente",
+            CNPJ = "12.345.678/0001-02",
             Status = "Trial",
             SubscribedPlan = "Starter",
             Capacity = 500
@@ -189,20 +139,21 @@ public class StripeWebhookPlanMappingTests : IDisposable
 
         var payload = $$"""
         {
-          "id": "evt_test_checkout_ent",
+          "id": "evt_test_unpaid_002",
           "object": "event",
           "type": "checkout.session.completed",
           "data": {
             "object": {
-              "id": "cs_test_session_ent",
+              "id": "cs_test_unpaid_002",
               "object": "checkout.session",
-              "customer": "cus_stripe_ent",
-              "subscription": "sub_stripe_ent",
-              "payment_status": "paid",
+              "customer": "cus_stripe_unpaid_2",
+              "subscription": "sub_stripe_unpaid_2",
+              "payment_status": "unpaid",
               "metadata": {
                 "TenantId": "{{tenant.Id}}",
+                "PlanId": "Enterprise",
                 "PlanName": "Enterprise Confinamento",
-                "BillingCycle": "annual"
+                "BillingCycle": "monthly"
               }
             }
           }
@@ -220,53 +171,50 @@ public class StripeWebhookPlanMappingTests : IDisposable
 
         var updatedTenant = await _dbContext.Tenants.FindAsync(tenant.Id);
         updatedTenant.Should().NotBeNull();
-        updatedTenant!.SubscribedPlan.Should().Be("Enterprise");
-        updatedTenant.Capacity.Should().Be(100000);
-        updatedTenant.Status.Should().Be("Active");
+        // O status deve permanecer Trial, NÃO pode ser ativado para Active
+        updatedTenant!.Status.Should().Be("Trial");
+        // O plano não deve ser liberado antes do pagamento
+        updatedTenant.SubscribedPlan.Should().Be("Starter");
+        updatedTenant.Capacity.Should().Be(500);
+        // CustomerId e SubscriptionId devem ser vinculados para permitir correlação futura com invoice.paid
+        updatedTenant.StripeCustomerId.Should().Be("cus_stripe_unpaid_2");
+        updatedTenant.StripeSubscriptionId.Should().Be("sub_stripe_unpaid_2");
+        updatedTenant.StatusReason.Should().Contain("Aguardando confirmação de pagamento");
     }
 
     [Fact]
-    public async Task ProcessWebhookAsync_WhenSubscriptionUpdatedHasPlanMetadata_ShouldSyncCanonicalPlan()
+    public async Task ProcessWebhookAsync_WhenPaymentStatusIsNoPaymentRequired_ShouldActivateTenant()
     {
         // Arrange
         var tenant = new Tenant
         {
             Id = Guid.NewGuid(),
-            Name = "Fazenda Subscription Update",
-            CNPJ = "12.345.678/0001-96",
-            Status = "Active",
+            Name = "Fazenda Free Trial Checkout",
+            CNPJ = "12.345.678/0001-03",
+            Status = "Trial",
             SubscribedPlan = "Starter",
-            Capacity = 500,
-            StripeCustomerId = "cus_update_1",
-            StripeSubscriptionId = "sub_update_1"
+            Capacity = 500
         };
         _dbContext.Tenants.Add(tenant);
         await _dbContext.SaveChangesAsync();
 
         var payload = $$"""
         {
-          "id": "evt_test_sub_update",
+          "id": "evt_test_nopay_003",
           "object": "event",
-          "type": "customer.subscription.updated",
+          "type": "checkout.session.completed",
           "data": {
             "object": {
-              "id": "sub_update_1",
-              "object": "subscription",
-              "customer": "cus_update_1",
-              "status": "active",
-              "cancel_at_period_end": false,
+              "id": "cs_test_nopay_003",
+              "object": "checkout.session",
+              "customer": "cus_stripe_nopay_3",
+              "subscription": "sub_stripe_nopay_3",
+              "payment_status": "no_payment_required",
               "metadata": {
+                "TenantId": "{{tenant.Id}}",
                 "PlanId": "Pro",
-                "PlanName": "Pro Fazenda"
-              },
-              "items": {
-                "data": [
-                  {
-                    "price": {
-                      "id": "price_pro_monthly"
-                    }
-                  }
-                ]
+                "PlanName": "Pro Fazenda",
+                "BillingCycle": "monthly"
               }
             }
           }
@@ -284,47 +232,77 @@ public class StripeWebhookPlanMappingTests : IDisposable
 
         var updatedTenant = await _dbContext.Tenants.FindAsync(tenant.Id);
         updatedTenant.Should().NotBeNull();
-        updatedTenant!.SubscribedPlan.Should().Be("Pro");
+        updatedTenant!.Status.Should().Be("Active");
+        updatedTenant.SubscribedPlan.Should().Be("Pro");
         updatedTenant.Capacity.Should().Be(2500);
     }
 
     [Fact]
-    public async Task ProcessWebhookAsync_WhenSubscriptionUpdatedHasPriceIdWithoutMetadata_ShouldSyncPlanAndPeriodFromPortalChange()
+    public async Task ProcessWebhookAsync_WhenCheckoutSessionIsUnpaidThenInvoicePaidArrives_ShouldActivateTenant()
     {
         // Arrange
         var tenant = new Tenant
         {
             Id = Guid.NewGuid(),
-            Name = "Fazenda Portal Update",
-            CNPJ = "12.345.678/0001-95",
-            Status = "Active",
+            Name = "Fazenda Boleto Conciliado",
+            CNPJ = "12.345.678/0001-04",
+            Status = "Trial",
             SubscribedPlan = "Starter",
-            Capacity = 500,
-            StripeCustomerId = "cus_update_portal_1",
-            StripeSubscriptionId = "sub_update_portal_1",
-            CurrentPeriodEndUtc = DateTime.UtcNow.AddDays(-10)
+            Capacity = 500
         };
         _dbContext.Tenants.Add(tenant);
         await _dbContext.SaveChangesAsync();
 
-        var payload = $$"""
+        var customerId = "cus_stripe_boleto_4";
+
+        var unpaidCheckoutPayload = $$"""
         {
-          "id": "evt_test_sub_update_portal",
+          "id": "evt_test_step1_unpaid",
           "object": "event",
-          "type": "customer.subscription.updated",
+          "type": "checkout.session.completed",
           "data": {
             "object": {
-              "id": "sub_update_portal_1",
-              "object": "subscription",
-              "customer": "cus_update_portal_1",
-              "status": "active",
-              "cancel_at_period_end": false,
-              "items": {
+              "id": "cs_test_step1_unpaid",
+              "object": "checkout.session",
+              "customer": "{{customerId}}",
+              "subscription": "sub_stripe_boleto_4",
+              "payment_status": "unpaid",
+              "metadata": {
+                "TenantId": "{{tenant.Id}}",
+                "PlanId": "Pro"
+              }
+            }
+          }
+        }
+        """;
+
+        var timestamp1 = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var signature1 = GenerateStripeSignature(unpaidCheckoutPayload, WebhookSecret, timestamp1);
+
+        // Step 1: Checkout Session Unpaid
+        var result1 = await _service.ProcessWebhookAsync(unpaidCheckoutPayload, signature1);
+        result1.Success.Should().BeTrue();
+
+        var tenantAfterStep1 = await _dbContext.Tenants.FindAsync(tenant.Id);
+        tenantAfterStep1!.Status.Should().Be("Trial");
+        tenantAfterStep1.StripeCustomerId.Should().Be(customerId);
+
+        // Step 2: Invoice Paid arrives
+        var invoicePaidPayload = $$"""
+        {
+          "id": "evt_test_step2_paid",
+          "object": "event",
+          "type": "invoice.paid",
+          "data": {
+            "object": {
+              "id": "in_test_step2_paid",
+              "object": "invoice",
+              "customer": "{{customerId}}",
+              "lines": {
                 "data": [
                   {
-                    "current_period_end": 1893456000,
-                    "price": {
-                      "id": "price_enterprise_monthly"
+                    "period": {
+                      "end": 1893456000
                     }
                   }
                 ]
@@ -334,20 +312,16 @@ public class StripeWebhookPlanMappingTests : IDisposable
         }
         """;
 
-        var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        var signature = GenerateStripeSignature(payload, WebhookSecret, timestamp);
+        var timestamp2 = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var signature2 = GenerateStripeSignature(invoicePaidPayload, WebhookSecret, timestamp2);
 
-        // Act
-        var result = await _service.ProcessWebhookAsync(payload, signature);
+        var result2 = await _service.ProcessWebhookAsync(invoicePaidPayload, signature2);
+        result2.Success.Should().BeTrue();
 
-        // Assert
-        result.Success.Should().BeTrue();
-
-        var updatedTenant = await _dbContext.Tenants.FindAsync(tenant.Id);
-        updatedTenant.Should().NotBeNull();
-        updatedTenant!.SubscribedPlan.Should().Be("Enterprise");
-        updatedTenant.Capacity.Should().Be(100000);
-        updatedTenant.CurrentPeriodEndUtc.Should().NotBeNull();
-        updatedTenant.CurrentPeriodEndUtc.Should().Be(DateTime.SpecifyKind(new DateTime(2030, 1, 1, 0, 0, 0, DateTimeKind.Utc), DateTimeKind.Utc));
+        var finalTenant = await _dbContext.Tenants.FindAsync(tenant.Id);
+        finalTenant.Should().NotBeNull();
+        finalTenant!.Status.Should().Be("Active");
+        finalTenant.StatusReason.Should().BeNull();
+        finalTenant.CurrentPeriodEndUtc.Should().NotBeNull();
     }
 }

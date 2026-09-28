@@ -391,18 +391,34 @@ public sealed class StripePaymentService : IStripePaymentService
             }
         }
 
-        if (!string.IsNullOrWhiteSpace(rawPlan))
+        var isPaymentConfirmed = string.Equals(session.PaymentStatus, "paid", StringComparison.OrdinalIgnoreCase) ||
+                                 string.Equals(session.PaymentStatus, "no_payment_required", StringComparison.OrdinalIgnoreCase);
+
+        if (isPaymentConfirmed)
         {
-            var canonicalPlan = ModuleLicenseChecker.NormalizePlan(rawPlan);
-            tenant.SubscribedPlan = canonicalPlan;
-            AdjustTenantCapacityForPlan(tenant, canonicalPlan);
+            if (!string.IsNullOrWhiteSpace(rawPlan))
+            {
+                var canonicalPlan = ModuleLicenseChecker.NormalizePlan(rawPlan);
+                tenant.SubscribedPlan = canonicalPlan;
+                AdjustTenantCapacityForPlan(tenant, canonicalPlan);
+            }
+
+            tenant.Status = "Active";
+            tenant.StatusReason = null;
+            tenant.StatusChangedAtUtc = DateTime.UtcNow;
+            tenant.UpdatedAtUtc = DateTime.UtcNow;
+
+            _logger.LogInformation("Tenant {TenantId} ativado após Checkout com pagamento confirmado ({PaymentStatus}) no Stripe.", tenant.Id, session.PaymentStatus);
+        }
+        else
+        {
+            tenant.StatusReason = "Aguardando confirmação de pagamento via Stripe (checkout pendente).";
+            tenant.UpdatedAtUtc = DateTime.UtcNow;
+
+            _logger.LogInformation("Checkout concluído para Tenant {TenantId}, mas pagamento está pendente (PaymentStatus: {PaymentStatus}). Aguardando liquidação para ativação.", tenant.Id, session.PaymentStatus);
         }
 
-        tenant.Status = "Active";
-        tenant.UpdatedAtUtc = DateTime.UtcNow;
         await _dbContext.SaveChangesAsync(cancellationToken);
-
-        _logger.LogInformation("Tenant {TenantId} ativado após Checkout bem-sucedido no Stripe.", tenant.Id);
     }
 
     private async Task HandleInvoicePaidAsync(

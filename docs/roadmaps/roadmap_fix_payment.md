@@ -275,6 +275,9 @@ Este documento consolida o plano de ação técnico para sanar as **vulnerabilid
     - Se `PaymentStatus == "unpaid"` (ex: boleto ou pix pendente), manter o tenant em status informativo ou aguardar o evento definitivo `invoice.paid`.
 * **Arquivos Impactados:**
   - `src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Infrastructure/Services/StripePaymentService.cs`
+  - `tests/Unit/CriaCerto.Modules.Tenancy.UnitTests/StripeWebhookPaymentStatusTests.cs`
+  - `docs/modules/tenancy.md`
+  - `docs/roadmaps/roadmap_fix_payment.md`
 
 #### 3.5. Registro de Histórico em `TenantSubscriptionHistories`
 * **Problema Identificado:** Eventos do Stripe não gravam histórico em `SubscriptionHistories`, deixando o Backoffice sem visibilidade das ações de faturamento do cliente.
@@ -363,12 +366,12 @@ Este documento consolida o plano de ação técnico para sanar as **vulnerabilid
 | **1.3** | Adicionar checagem de papel `Admin` para checkout e portal | `CreateCheckoutSessionCommand.cs` | [x] |
 | **1.4** | Sanitizar URLs de retorno contra Open Redirect | `CreateCheckoutSessionCommand.cs` | [x] |
 | **2.1** | Unificar identificadores canônicos de plano no Stripe e no banco | `CreateCheckoutSessionCommand.cs` / `ModuleLicenseChecker.cs` | [x] |
-| **2.2** | Bloquear checkout para quem já possui assinatura ativa | `CreateCheckoutSessionCommand.cs` | [ ] |
-| **2.3** | Implementar renovação de token no retorno do checkout | `SubscriptionManagement.razor` / `Program.cs` | [ ] |
-| **3.1** | Criar tabela e validação de idempotência para webhooks | `TenancyDbContext.cs` / `StripePaymentService.cs` | [ ] |
-| **3.2** | Adicionar verificação contra IDs de clientes nulos no webhook | `StripePaymentService.cs` | [ ] |
-| **3.3** | Sincronizar trocas de plano feitas pelo Stripe Portal | `StripePaymentService.cs` | [ ] |
-| **3.4** | Validar `PaymentStatus == "paid"` antes de ativar conta | `StripePaymentService.cs` | [ ] |
+| **2.2** | Bloquear checkout para quem já possui assinatura ativa | `CreateCheckoutSessionCommand.cs` | [x] |
+| **2.3** | Implementar renovação de token no retorno do checkout | `SubscriptionManagement.razor` / `Program.cs` | [x] |
+| **3.1** | Criar tabela e validação de idempotência para webhooks | `TenancyDbContext.cs` | [x] |
+| **3.2** | Adicionar verificação contra IDs de clientes nulos no webhook | `StripePaymentService.cs` | [x] |
+| **3.3** | Sincronizar trocas de plano feitas pelo Stripe Portal | `StripePaymentService.cs` | [x] |
+| **3.4** | Validar `PaymentStatus == "paid"` antes de ativar conta | `StripePaymentService.cs` | [x] |
 | **3.5** | Gravar histórico em `TenantSubscriptionHistories` via webhook | `StripePaymentService.cs` | [ ] |
 | **4.1** | Bloquear acesso no `TenantAccessGuard` para trials vencidos | `TenantAccessGuard.cs` | [ ] |
 | **4.2** | Criar `SubscriptionLifecycleWorker` para expiração e grace period | `SubscriptionLifecycleWorker.cs` | [ ] |

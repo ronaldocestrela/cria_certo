@@ -89,6 +89,7 @@ public class StripeWebhookIdempotencyTests : IDisposable
               "object": "checkout.session",
               "customer": "cus_stripe_idemp_1",
               "subscription": "sub_stripe_idemp_1",
+              "payment_status": "paid",
               "metadata": {
                 "TenantId": "{{tenant.Id}}",
                 "PlanId": "Pro",
@@ -153,6 +154,7 @@ public class StripeWebhookIdempotencyTests : IDisposable
               "object": "checkout.session",
               "customer": "cus_stripe_idemp_2",
               "subscription": "sub_stripe_idemp_2",
+              "payment_status": "paid",
               "metadata": {
                 "TenantId": "{{tenant.Id}}",
                 "PlanId": "Pro",
