@@ -75,22 +75,30 @@ Este documento consolida o plano de ação técnico para sanar as **vulnerabilid
   - `src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Features/ProcessStripeWebhook/ProcessStripeWebhookCommand.cs`
   - `tests/Unit/CriaCerto.Modules.Tenancy.UnitTests/StripeWebhookSecurityTests.cs`
 
-#### 1.3. Controle de Acesso Baseado em Papel (RBAC) para Faturamento
-* **Problema Identificado:** Handlers de checkout e portal Stripe (`CreateCheckoutSessionCommand` e `CreatePortalSessionCommand`) validam apenas a associação do usuário ao tenant, permitindo que operadores de curral ou leitores vejam dados de cartão e cancelem assinaturas.
-* **Ações no Backend:**
-  * Nos handlers `CreateCheckoutSessionCommandHandler` e `CreatePortalSessionCommandHandler`, validar:
+#### 1.3. Controle de Acesso Baseado em Papel (RBAC) para Faturamento [CONCLUÍDO]
+* **Problema Identificado:** Handlers de checkout e portal Stripe (`CreateCheckoutSessionCommand` e `CreatePortalSessionCommand`) validavam apenas a associação do usuário ao tenant, permitindo que operadores de curral, veterinários ou zootecnistas criassem sessões de checkout, alterassem planos ou acessassem o Customer Portal da fazenda.
+* **Ações no Backend Implementadas:**
+  * Nos handlers `CreateCheckoutSessionCommandHandler` e `CreatePortalSessionCommandHandler`, validação estrita de papel adicionada com padrão Result:
     ```csharp
     if (userTenant.Role != UserRole.Admin)
     {
         return Result.Failure<...>(Error.Unauthorized("Auth.ForbiddenBilling", "Apenas administradores da fazenda podem gerenciar planos e pagamentos."));
     }
     ```
-* **Ações no Frontend:**
-  * No Blazor, restringir a visibilidade do botão de alteração de plano e do portal Stripe para perfis não administrativos.
+  * Mapeamento de `ErrorType.Unauthorized` para `403 Forbidden` preservado na camada de transporte HTTP via `ToHttpResult`.
+* **Ações no Frontend Implementadas (Blazor WebAssembly):**
+  * Em `SubscriptionManagement.razor`, implementada detecção reativa de papel administrativo via `ClaimsPrincipal` (`user.IsInRole("Admin")` / `ClaimTypes.Role` / `Role`).
+  * Inserido banner informativo de modo somente leitura para colaboradores não administrativos.
+  * Bloqueado o botão de acesso ao portal do Stripe (`OpenBillingPortal`), exibindo selo de acesso restrito a administradores.
+  * Botões de contratação e upgrade/downgrade de planos desabilitados com indicação de bloqueio ("Apenas Administradores") para perfis não administrativos.
+  * Guardas defensivas adicionadas nos métodos `ChangePlan` e `OpenBillingPortal` bloqueando invocações diretas no client-side.
+* **Testes Automatizados (TDD):**
+  - `tests/Unit/CriaCerto.Modules.Tenancy.UnitTests/SubscriptionBillingAuthorizationTests.cs` (10 cenários cobrindo negação para `Veterinario`, `OperadorCurral` e `Zootecnista` com código `Auth.ForbiddenBilling`, sucesso para `Admin`, e isolamento multi-tenant com `Auth.UnauthorizedTenant`).
 * **Arquivos Impactados:**
   - `src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Features/SubscriptionCheckout/CreateCheckoutSessionCommand.cs`
   - `src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Features/SubscriptionPortal/CreatePortalSessionCommand.cs`
   - `src/Web/CriaCerto.Web/CriaCerto.Web.Client/Pages/Settings/SubscriptionManagement.razor`
+  - `tests/Unit/CriaCerto.Modules.Tenancy.UnitTests/SubscriptionBillingAuthorizationTests.cs`
 
 #### 1.4. Proteção contra Open Redirect em URLs de Checkout e Portal
 * **Problema Identificado:** `SuccessUrl`, `CancelUrl` e `ReturnUrl` são repassados ao Stripe sem validação de domínio, possibilitando ataques de phishing após o checkout.

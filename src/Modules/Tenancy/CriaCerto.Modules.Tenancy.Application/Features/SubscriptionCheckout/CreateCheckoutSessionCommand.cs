@@ -1,5 +1,6 @@
 using CriaCerto.BuildingBlocks.Abstractions.Results;
 using CriaCerto.Modules.Tenancy.Application.Abstractions;
+using CriaCerto.Modules.Tenancy.Application.Domain;
 using CriaCerto.Modules.Tenancy.Application.Features.GetSubscriptionPlans;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -65,6 +66,12 @@ public sealed class CreateCheckoutSessionCommandHandler : IRequestHandler<Create
         {
             return Result.Failure<CheckoutSessionResult>(
                 Error.Unauthorized("Auth.UnauthorizedTenant", "Usuário não pertence a esta organização/fazenda."));
+        }
+
+        if (userTenant.Role != UserRole.Admin)
+        {
+            return Result.Failure<CheckoutSessionResult>(
+                Error.Unauthorized("Auth.ForbiddenBilling", "Apenas administradores da fazenda podem gerenciar planos e pagamentos."));
         }
 
         // Consultar catálogo de planos para obter valores e identificadores de preço

@@ -2,6 +2,7 @@
 @rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
 @attribute [Authorize]
 @using CriaCerto.Web.Client.Auth
+@using System.Security.Claims
 @inject AuthenticationStateProvider AuthStateProvider
 @inject TenancyApiClient TenancyApiClient
 @inject PlantelApiClient PlantelApiClient
@@ -25,6 +26,16 @@
             Gerencie o plano da sua granja, acompanhe o uso de cotas e mude de categoria a qualquer momento.
         </p>
     </div>
+
+    @if (!_isAdmin)
+    {
+        <div style="padding: 1rem 1.25rem; border-radius: 8px; margin-bottom: 1.5rem; background-color: #f8fafc; color: var(--cc-ink); border: 1px solid var(--cc-border); display: flex; align-items: center; gap: 0.75rem;">
+            <span class="material-symbols-outlined" style="font-size: 22px; color: var(--cc-primary);">admin_panel_settings</span>
+            <div style="font-size: 13px;">
+                <strong>Modo Somente Leitura (RBAC):</strong> Você está visualizando o catálogo e as cotas do plano. Apenas administradores da fazenda possuem permissão para contratar planos, solicitar upgrades ou gerenciar formas de pagamento.
+            </div>
+        </div>
+    }
 
     @if (!string.IsNullOrEmpty(_message))
     {
@@ -58,11 +69,21 @@
                 </div>
             </div>
             <div>
-                <button class="cc-btn cc-btn-outline font-mono text-xs" @onclick="OpenBillingPortal" disabled="@_isSubmitting"
-                        style="border: 1px solid #635bff; color: #635bff; background: white; padding: 0.6rem 1.2rem; border-radius: 8px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 0.5rem;">
-                    <span class="material-symbols-outlined" style="font-size: 16px;">open_in_new</span>
-                    <span>Gerenciar Cobrança & Cartões</span>
-                </button>
+                @if (_isAdmin)
+                {
+                    <button class="cc-btn cc-btn-outline font-mono text-xs" @onclick="OpenBillingPortal" disabled="@_isSubmitting"
+                            style="border: 1px solid #635bff; color: #635bff; background: white; padding: 0.6rem 1.2rem; border-radius: 8px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 0.5rem;">
+                        <span class="material-symbols-outlined" style="font-size: 16px;">open_in_new</span>
+                        <span>Gerenciar Cobrança & Cartões</span>
+                    </button>
+                }
+                else
+                {
+                    <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; border-radius: 8px; background: #f1f5f9; color: var(--cc-ink-muted); font-size: 12px; font-weight: 600;" class="font-mono">
+                        <span class="material-symbols-outlined" style="font-size: 16px;">lock</span>
+                        <span>Faturamento Restrito a Administradores</span>
+                    </div>
+                }
             </div>
         </div>
     }
@@ -215,6 +236,15 @@
                         <button class="cc-btn cc-btn-outline w-full pressed-effect" disabled
                                 style="width: 100%; border: 1px solid var(--cc-primary); border-radius: 8px; padding: 0.75rem; font-weight: bold; background: white; color: var(--cc-primary); cursor: default;">
                             Plano Atual
+                        </button>
+                    }
+                    else if (!_isAdmin)
+                    {
+                        <button class="cc-btn cc-btn-outline w-full" disabled
+                                title="Apenas administradores da fazenda podem gerenciar planos"
+                                style="width: 100%; border: 1px solid var(--cc-border); border-radius: 8px; padding: 0.75rem; font-weight: bold; background: #f8fafc; color: var(--cc-ink-muted); cursor: not-allowed; display: flex; align-items: center; justify-content: center; gap: 0.4rem;">
+                            <span class="material-symbols-outlined" style="font-size: 16px;">lock</span>
+                            <span>Apenas Administradores</span>
                         </button>
                     }
                     else if (currentPrice == 0)
@@ -430,6 +460,7 @@
     private Guid _tenantId = Guid.Empty;
     private TenantProfileModel? _profile;
     private string _activePlan = "Starter";
+    private bool _isAdmin = false;
     private bool _isAnnual = false;
     private bool _showAccordion = true;
     private bool _isSubmitting = false;
@@ -469,6 +500,10 @@
 
         if (user.Identity?.IsAuthenticated == true)
         {
+            var roleClaim = user.FindFirst(ClaimTypes.Role)?.Value 
+                         ?? user.FindFirst("Role")?.Value;
+            _isAdmin = user.IsInRole("Admin") || string.Equals(roleClaim, "Admin", StringComparison.OrdinalIgnoreCase);
+
             var planClaim = user.FindFirst("SubscribedPlan")?.Value;
             if (!string.IsNullOrEmpty(planClaim))
             {
@@ -551,6 +586,13 @@
 
     private async Task ChangePlan(string planName)
     {
+        if (!_isAdmin)
+        {
+            _message = "Apenas administradores da fazenda possuem permissão para alterar o plano de assinatura.";
+            _isSuccessMessage = false;
+            return;
+        }
+
         if (_isSubmitting || IsActivePlan(planName) || _tenantId == Guid.Empty)
             return;
 
@@ -594,6 +636,13 @@
 
     private async Task OpenBillingPortal()
     {
+        if (!_isAdmin)
+        {
+            _message = "Apenas administradores da fazenda possuem permissão para acessar o portal de faturamento Stripe.";
+            _isSuccessMessage = false;
+            return;
+        }
+
         if (_tenantId == Guid.Empty) return;
 
         _isSubmitting = true;

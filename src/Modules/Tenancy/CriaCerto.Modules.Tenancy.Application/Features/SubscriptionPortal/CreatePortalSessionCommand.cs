@@ -1,5 +1,6 @@
 using CriaCerto.BuildingBlocks.Abstractions.Results;
 using CriaCerto.Modules.Tenancy.Application.Abstractions;
+using CriaCerto.Modules.Tenancy.Application.Domain;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -55,6 +56,12 @@ public sealed class CreatePortalSessionCommandHandler : IRequestHandler<CreatePo
         {
             return Result.Failure<CustomerPortalSessionResult>(
                 Error.Unauthorized("Auth.UnauthorizedTenant", "Usuário não pertence a esta organização/fazenda."));
+        }
+
+        if (userTenant.Role != UserRole.Admin)
+        {
+            return Result.Failure<CustomerPortalSessionResult>(
+                Error.Unauthorized("Auth.ForbiddenBilling", "Apenas administradores da fazenda podem gerenciar planos e pagamentos."));
         }
 
         if (string.IsNullOrWhiteSpace(tenant.StripeCustomerId))
