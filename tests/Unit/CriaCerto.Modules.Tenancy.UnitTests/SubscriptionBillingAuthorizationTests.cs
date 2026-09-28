@@ -139,6 +139,54 @@ public class SubscriptionBillingAuthorizationTests : IDisposable
         result.IsSuccess.Should().BeTrue();
         result.Value.Should().NotBeNull();
         result.Value.Url.Should().Be("https://checkout.stripe.com/test-session");
+        _stripeService.LastPlanId.Should().Be("Pro");
+        _stripeService.LastPlanName.Should().Be("Plano Pro");
+    }
+
+    [Fact]
+    public async Task CreateCheckoutSession_WhenGivenCommercialPlanName_ShouldPassCanonicalPlanIdAndPlanName()
+    {
+        // Arrange
+        var tenant = new Tenant
+        {
+            Id = Guid.NewGuid(),
+            Name = "Fazenda Ouro Branco",
+            CNPJ = "12.345.678/0001-90",
+            Status = "Active",
+            SubscribedPlan = "Starter"
+        };
+
+        var user = new User
+        {
+            Id = Guid.NewGuid(),
+            FullName = "Administrador Fazenda",
+            Email = "admin@ourobranco.com",
+            PasswordHash = "hash"
+        };
+
+        var userTenant = new UserTenant
+        {
+            UserId = user.Id,
+            TenantId = tenant.Id,
+            Role = UserRole.Admin,
+            JoinedAt = DateTime.UtcNow
+        };
+
+        _dbContext.Tenants.Add(tenant);
+        _dbContext.Users.Add(user);
+        _dbContext.UserTenants.Add(userTenant);
+        await _dbContext.SaveChangesAsync();
+
+        var handler = new CreateCheckoutSessionCommandHandler(_dbContext, _stripeService, _sender, _urlValidator);
+        var command = new CreateCheckoutSessionCommand(tenant.Id, user.Id, "Pro Fazenda");
+
+        // Act
+        var result = await handler.Handle(command, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.Should().BeTrue();
+        _stripeService.LastPlanId.Should().Be("Pro");
+        _stripeService.LastPlanName.Should().Be("Plano Pro");
     }
 
     [Fact]
@@ -412,6 +460,9 @@ public class SubscriptionBillingAuthorizationTests : IDisposable
 
     private sealed class FakeStripePaymentService : IStripePaymentService
     {
+        public string? LastPlanId { get; private set; }
+        public string? LastPlanName { get; private set; }
+
         public Task<string> GetOrCreateCustomerAsync(Tenant tenant, User user, CancellationToken cancellationToken = default)
         {
             return Task.FromResult("cus_fake_123");
@@ -420,6 +471,7 @@ public class SubscriptionBillingAuthorizationTests : IDisposable
         public Task<CheckoutSessionResult> CreateCheckoutSessionAsync(
             Tenant tenant,
             User user,
+            string planId,
             string planName,
             string billingCycle,
             decimal unitAmount,
@@ -428,6 +480,8 @@ public class SubscriptionBillingAuthorizationTests : IDisposable
             string? priceId = null,
             CancellationToken cancellationToken = default)
         {
+            LastPlanId = planId;
+            LastPlanName = planName;
             return Task.FromResult(new CheckoutSessionResult("cs_test_123", "https://checkout.stripe.com/test-session"));
         }
 

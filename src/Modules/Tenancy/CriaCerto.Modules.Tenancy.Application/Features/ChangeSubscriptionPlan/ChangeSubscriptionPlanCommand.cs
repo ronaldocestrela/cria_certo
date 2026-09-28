@@ -1,3 +1,4 @@
+using CriaCerto.BuildingBlocks.Abstractions.Licensing;
 using CriaCerto.BuildingBlocks.Abstractions.Results;
 using CriaCerto.Modules.Tenancy.Application.Abstractions;
 using CriaCerto.Modules.Tenancy.Application.Contracts;
@@ -68,7 +69,7 @@ public class ChangeSubscriptionPlanCommandHandler : IRequestHandler<ChangeSubscr
                 Error.Unauthorized("Auth.ForbiddenPlanChange", "Apenas administradores podem solicitar alteração de plano."));
         }
 
-        tenant.SubscribedPlan = request.NewPlan;
+        tenant.SubscribedPlan = ModuleLicenseChecker.NormalizePlan(request.NewPlan);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         var newToken = _jwtService.GenerateToken(user, tenant, userTenant.Role);

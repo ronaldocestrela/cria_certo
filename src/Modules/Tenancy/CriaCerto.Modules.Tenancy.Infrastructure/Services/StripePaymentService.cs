@@ -1,3 +1,4 @@
+using CriaCerto.BuildingBlocks.Abstractions.Licensing;
 using CriaCerto.Modules.Tenancy.Application.Abstractions;
 using CriaCerto.Modules.Tenancy.Application.Domain;
 using Microsoft.EntityFrameworkCore;
@@ -86,6 +87,7 @@ public sealed class StripePaymentService : IStripePaymentService
     public async Task<CheckoutSessionResult> CreateCheckoutSessionAsync(
         Tenant tenant,
         User user,
+        string planId,
         string planName,
         string billingCycle,
         decimal unitAmount,
@@ -113,6 +115,7 @@ public sealed class StripePaymentService : IStripePaymentService
             Metadata = new Dictionary<string, string>
             {
                 { "TenantId", tenant.Id.ToString() },
+                { "PlanId", planId },
                 { "PlanName", planName },
                 { "BillingCycle", billingCycle }
             },
@@ -121,6 +124,7 @@ public sealed class StripePaymentService : IStripePaymentService
                 Metadata = new Dictionary<string, string>
                 {
                     { "TenantId", tenant.Id.ToString() },
+                    { "PlanId", planId },
                     { "PlanName", planName },
                     { "BillingCycle", billingCycle }
                 }
@@ -332,10 +336,24 @@ public sealed class StripePaymentService : IStripePaymentService
         tenant.StripeCustomerId = session.CustomerId;
         tenant.StripeSubscriptionId = session.SubscriptionId;
 
-        if (session.Metadata != null && session.Metadata.TryGetValue("PlanName", out var planName) && !string.IsNullOrWhiteSpace(planName))
+        string? rawPlan = null;
+        if (session.Metadata != null)
         {
-            tenant.SubscribedPlan = planName;
-            AdjustTenantCapacityForPlan(tenant, planName);
+            if (session.Metadata.TryGetValue("PlanId", out var pid) && !string.IsNullOrWhiteSpace(pid))
+            {
+                rawPlan = pid;
+            }
+            else if (session.Metadata.TryGetValue("PlanName", out var pname) && !string.IsNullOrWhiteSpace(pname))
+            {
+                rawPlan = pname;
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(rawPlan))
+        {
+            var canonicalPlan = ModuleLicenseChecker.NormalizePlan(rawPlan);
+            tenant.SubscribedPlan = canonicalPlan;
+            AdjustTenantCapacityForPlan(tenant, canonicalPlan);
         }
 
         tenant.Status = "Active";
@@ -411,6 +429,26 @@ public sealed class StripePaymentService : IStripePaymentService
             tenant.StripePriceId = firstItem.Price.Id;
         }
 
+        string? rawUpdatedPlan = null;
+        if (subscription.Metadata != null)
+        {
+            if (subscription.Metadata.TryGetValue("PlanId", out var pid) && !string.IsNullOrWhiteSpace(pid))
+            {
+                rawUpdatedPlan = pid;
+            }
+            else if (subscription.Metadata.TryGetValue("PlanName", out var pname) && !string.IsNullOrWhiteSpace(pname))
+            {
+                rawUpdatedPlan = pname;
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(rawUpdatedPlan))
+        {
+            var canonicalPlan = ModuleLicenseChecker.NormalizePlan(rawUpdatedPlan);
+            tenant.SubscribedPlan = canonicalPlan;
+            AdjustTenantCapacityForPlan(tenant, canonicalPlan);
+        }
+
         switch (subscription.Status)
         {
             case "active":
@@ -453,15 +491,16 @@ public sealed class StripePaymentService : IStripePaymentService
 
     private static void AdjustTenantCapacityForPlan(Tenant tenant, string planName)
     {
-        if (planName.Contains("Starter", StringComparison.OrdinalIgnoreCase))
+        var plan = ModuleLicenseChecker.NormalizePlan(planName);
+        if (string.Equals(plan, ModuleLicenseChecker.StarterPlan, StringComparison.OrdinalIgnoreCase))
         {
             tenant.Capacity = 500;
         }
-        else if (planName.Contains("Pro", StringComparison.OrdinalIgnoreCase))
+        else if (string.Equals(plan, ModuleLicenseChecker.ProPlan, StringComparison.OrdinalIgnoreCase))
         {
             tenant.Capacity = 2500;
         }
-        else if (planName.Contains("Enterprise", StringComparison.OrdinalIgnoreCase))
+        else if (string.Equals(plan, ModuleLicenseChecker.EnterprisePlan, StringComparison.OrdinalIgnoreCase))
         {
             tenant.Capacity = 100000;
         }

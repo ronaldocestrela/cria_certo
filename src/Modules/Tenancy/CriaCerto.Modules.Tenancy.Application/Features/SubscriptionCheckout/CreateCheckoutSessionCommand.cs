@@ -1,3 +1,4 @@
+using CriaCerto.BuildingBlocks.Abstractions.Licensing;
 using CriaCerto.BuildingBlocks.Abstractions.Results;
 using CriaCerto.Modules.Tenancy.Application.Abstractions;
 using CriaCerto.Modules.Tenancy.Application.Domain;
@@ -81,9 +82,15 @@ public sealed class CreateCheckoutSessionCommandHandler : IRequestHandler<Create
         var plansResult = await _sender.Send(new GetSubscriptionPlansQuery(), cancellationToken);
         var plans = plansResult.IsSuccess ? plansResult.Value : new List<SubscriptionPlanDto>();
 
+        var canonicalPlan = ModuleLicenseChecker.NormalizePlan(request.PlanId);
+
         var selectedPlan = plans.FirstOrDefault(p =>
             string.Equals(p.PlanId, request.PlanId, StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(p.Name, request.PlanId, StringComparison.OrdinalIgnoreCase));
+            string.Equals(p.Name, request.PlanId, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(p.PlanId, canonicalPlan, StringComparison.OrdinalIgnoreCase));
+
+        string canonicalPlanId = selectedPlan?.PlanId ?? canonicalPlan;
+        string planName = selectedPlan?.Name ?? canonicalPlanId;
 
         bool isAnnual = string.Equals(request.BillingCycle, "annual", StringComparison.OrdinalIgnoreCase) ||
                         string.Equals(request.BillingCycle, "anual", StringComparison.OrdinalIgnoreCase);
@@ -96,7 +103,6 @@ public sealed class CreateCheckoutSessionCommandHandler : IRequestHandler<Create
             ? selectedPlan?.StripePriceIdAnnual
             : selectedPlan?.StripePriceIdMonthly;
 
-        string planName = selectedPlan?.Name ?? request.PlanId;
         string cycle = isAnnual ? "year" : "month";
 
         // Validação estrita e sanitização contra ataques de Open Redirect (CWE-601)
@@ -119,6 +125,7 @@ public sealed class CreateCheckoutSessionCommandHandler : IRequestHandler<Create
         var sessionResult = await _stripePaymentService.CreateCheckoutSessionAsync(
             tenant,
             user,
+            canonicalPlanId,
             planName,
             cycle,
             amount,

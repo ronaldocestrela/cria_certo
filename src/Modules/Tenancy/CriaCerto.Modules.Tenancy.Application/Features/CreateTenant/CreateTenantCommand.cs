@@ -1,3 +1,4 @@
+using CriaCerto.BuildingBlocks.Abstractions.Licensing;
 using CriaCerto.BuildingBlocks.Abstractions.Results;
 using CriaCerto.BuildingBlocks.Abstractions.Tenancy;
 using CriaCerto.Modules.Tenancy.Application.Abstractions;
@@ -60,7 +61,7 @@ public sealed class CreateTenantCommandHandler : IRequestHandler<CreateTenantCom
                 Error.NotFound("User.NotFound", "Usuário não encontrado para criação da fazenda. Por favor, faça o cadastro novamente."));
         }
 
-        var plan = string.IsNullOrWhiteSpace(request.SubscribedPlan) ? "Starter" : request.SubscribedPlan.Trim();
+        var plan = ModuleLicenseChecker.NormalizePlan(request.SubscribedPlan);
         var capacity = request.Capacity > 0 ? request.Capacity : 1000;
         var cnpjNormalized = CnpjNormalizer.Normalize(request.CNPJ);
 

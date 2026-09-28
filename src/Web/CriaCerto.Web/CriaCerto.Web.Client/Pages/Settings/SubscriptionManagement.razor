@@ -2,6 +2,7 @@
 @rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
 @attribute [Authorize]
 @using CriaCerto.Web.Client.Auth
+@using CriaCerto.BuildingBlocks.Abstractions.Licensing
 @using System.Security.Claims
 @inject AuthenticationStateProvider AuthStateProvider
 @inject TenancyApiClient TenancyApiClient
@@ -484,12 +485,20 @@
             {
                 return plan.HeadCapacityLimit;
             }
-            return _activePlan.Equals("Starter", StringComparison.OrdinalIgnoreCase) ? 500 : 
-                   (_activePlan.Equals("Pro", StringComparison.OrdinalIgnoreCase) ? 2500 : 99999);
+            var normalized = ModuleLicenseChecker.NormalizePlan(_activePlan);
+            return normalized.Equals("Starter", StringComparison.OrdinalIgnoreCase) ? 500 : 
+                   (normalized.Equals("Pro", StringComparison.OrdinalIgnoreCase) ? 2500 : 99999);
         }
     }
-    private int _maxReportsAllowed => _activePlan.Equals("Starter", StringComparison.OrdinalIgnoreCase) ? 10 : 
-                                      (_activePlan.Equals("Pro", StringComparison.OrdinalIgnoreCase) ? 50 : 999);
+    private int _maxReportsAllowed
+    {
+        get
+        {
+            var normalized = ModuleLicenseChecker.NormalizePlan(_activePlan);
+            return normalized.Equals("Starter", StringComparison.OrdinalIgnoreCase) ? 10 : 
+                   (normalized.Equals("Pro", StringComparison.OrdinalIgnoreCase) ? 50 : 999);
+        }
+    }
     private int _animalsPercentage => _maxAnimalsAllowed > 0 ? Math.Min(100, (_registeredAnimalsCount * 100) / _maxAnimalsAllowed) : 0;
     private int _reportsPercentage => _maxReportsAllowed > 0 ? Math.Min(100, (_reportsCount * 100) / _maxReportsAllowed) : 0;
 
@@ -507,7 +516,7 @@
             var planClaim = user.FindFirst("SubscribedPlan")?.Value;
             if (!string.IsNullOrEmpty(planClaim))
             {
-                _activePlan = planClaim;
+                _activePlan = ModuleLicenseChecker.NormalizePlan(planClaim);
             }
 
             var tenantIdClaim = user.FindFirst("TenantId")?.Value;
@@ -517,7 +526,7 @@
                 _profile = await TenancyApiClient.GetTenantProfileAsync(tenantId);
                 if (_profile != null && !string.IsNullOrEmpty(_profile.SubscribedPlan))
                 {
-                    _activePlan = _profile.SubscribedPlan;
+                    _activePlan = ModuleLicenseChecker.NormalizePlan(_profile.SubscribedPlan);
                 }
             }
 
@@ -566,7 +575,10 @@
 
     private bool IsActivePlan(string planId)
     {
-        return string.Equals(_activePlan, planId, StringComparison.OrdinalIgnoreCase);
+        return string.Equals(
+            ModuleLicenseChecker.NormalizePlan(_activePlan),
+            ModuleLicenseChecker.NormalizePlan(planId),
+            StringComparison.OrdinalIgnoreCase);
     }
 
     private decimal GetPrice(SubscriptionPlanModel plan)

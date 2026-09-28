@@ -17,6 +17,12 @@ The system maps tenants to modules via the `ModuleLicenseChecker` using their JW
 | **Nutrition** (Feeds & Costs) | **Locked** | Yes | Yes |
 | **Sanitary** (Vaccines & Logs) | **Locked** | **Locked** | Yes |
 
+### Canonical Plan Identifiers & Resilient Alias Normalization
+To prevent access denial due to discrepancies between commercial branding (e.g., Stripe line items or marketing catalogs) and the authorization engine, `ModuleLicenseChecker.NormalizePlan(string? plan)` acts as the single source of truth for canonicalization:
+- **Canonical Keys:** `Starter`, `Pro`, `Enterprise`.
+- **Supported Aliases:** "Pro Fazenda", "Plano Pro", "Starter Pecuária", "Enterprise Confinamento", versioned releases (e.g. "Pro 2026.1"), and case-insensitive variations.
+- **Fail-safe Fallback:** Empty/null inputs safely default to `Starter` tier.
+
 ---
 
 ## Backend Gating Pipeline

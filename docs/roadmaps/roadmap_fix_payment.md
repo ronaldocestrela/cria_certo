@@ -130,19 +130,35 @@ Este documento consolida o plano de ação técnico para sanar as **vulnerabilid
 
 ### Fase 2: Consistência de Planos, Licenciamento e Token JWT [PRIORIDADE 2]
 
-#### 2.1. Descasamento de Identificadores de Plano e Bloqueio de Acesso
-* **Problema Identificado:** No checkout, o backend envia ao Stripe o `Name` comercial ("Pro Fazenda"). No retorno do webhook, grava `tenant.SubscribedPlan = "Pro Fazenda"`. O `ModuleLicenseChecker` busca estritamente as chaves `"Starter"`, `"Pro"` e `"Enterprise"`, fazendo com que produtores pagantes tenham o acesso negado aos módulos.
-* **Ações no Backend:**
-  * No `CreateCheckoutSessionCommandHandler`, passar obrigatoriamente o `PlanId` canônico nos metadados da sessão Stripe:
-    ```csharp
-    string canonicalPlanId = selectedPlan?.PlanId ?? "Starter";
-    ```
-  * No webhook `HandleCheckoutSessionCompletedAsync`, gravar `tenant.SubscribedPlan = canonicalPlanId`.
-  * No `ModuleLicenseChecker`, adicionar suporte resiliente a nomes comerciais ou aliases históricos para evitar quebras retroativas de contas existentes.
+#### 2.1. Descasamento de Identificadores de Plano e Bloqueio de Acesso [CONCLUÍDO]
+* **Problema Identificado:** No checkout, o backend enviava ao Stripe apenas o `Name` comercial ("Pro Fazenda"). No retorno do webhook, gravava `tenant.SubscribedPlan = "Pro Fazenda"`. O `ModuleLicenseChecker` buscava estritamente as chaves `"Starter"`, `"Pro"` e `"Enterprise"`, fazendo com que produtores pagantes tivessem o acesso negado aos módulos no MediatR pipeline e na interface Blazor.
+* **Ações no Backend Implementadas:**
+  * No [ModuleLicenseChecker](file:///home/rony/LPR/CriaCerto/src/BuildingBlocks/CriaCerto.BuildingBlocks.Abstractions/Licensing/ModuleLicenseChecker.cs), implementado o método `NormalizePlan(string? plan)` com mapeamento de aliases comerciais ("Pro Fazenda", "Starter Pecuária", "Enterprise Confinamento", "Plano Pro") e heurística resiliente para variações e versões de Backoffice (ex.: "Pro 2026.1"), com fallback seguro para "Starter".
+  * Atualizado `ModuleLicenseChecker.HasAccess` para normalizar automaticamente o plano do tenant antes de verificar permissões na matriz `PlanAccess`, assegurando retrocompatibilidade total com contas legadas já gravadas.
+  * Em [IStripePaymentService](file:///home/rony/LPR/CriaCerto/src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Abstractions/IStripePaymentService.cs) e [StripePaymentService](file:///home/rony/LPR/CriaCerto/src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Infrastructure/Services/StripePaymentService.cs), atualizado `CreateCheckoutSessionAsync` para receber `string planId` canônico e `string planName` comercial, persistindo ambos em `sessionOptions.Metadata` e `SubscriptionData.Metadata`.
+  * Em [CreateCheckoutSessionCommandHandler](file:///home/rony/LPR/CriaCerto/src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Features/SubscriptionCheckout/CreateCheckoutSessionCommand.cs), implementada resolução canônica antecipada: `canonicalPlanId = selectedPlan?.PlanId ?? ModuleLicenseChecker.NormalizePlan(request.PlanId);`, combinando com busca enriquecida no catálogo.
+  * No webhook `HandleCheckoutSessionCompletedAsync` e em `HandleSubscriptionUpdatedAsync`, extraído preferencialmente `PlanId` com fallback para `PlanName` e aplicado `NormalizePlan` antes de gravar em `tenant.SubscribedPlan` e ajustar capacidade via `AdjustTenantCapacityForPlan`.
+  * Em [CreateTenantCommand](file:///home/rony/LPR/CriaCerto/src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Features/CreateTenant/CreateTenantCommand.cs) e [ChangeSubscriptionPlanCommand](file:///home/rony/LPR/CriaCerto/src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Features/ChangeSubscriptionPlan/ChangeSubscriptionPlanCommand.cs), aplicada a normalização preventiva antes da persistência.
+* **Ações no Frontend Implementadas (Blazor WebAssembly):**
+  * Em [SubscriptionManagement.razor](file:///home/rony/LPR/CriaCerto/src/Web/CriaCerto.Web/CriaCerto.Web.Client/Pages/Settings/SubscriptionManagement.razor), atualizado `IsActivePlan` para comparar planos normalizados via `ModuleLicenseChecker.NormalizePlan`.
+  * Normalizado `_activePlan` na inicialização do componente ao carregar claims JWT ou perfil do tenant, garantindo consistência no cálculo de cotas (`_maxAnimalsAllowed` e `_maxReportsAllowed`).
+* **Testes Automatizados (TDD):**
+  - [ModuleLicenseCheckerTests.cs](file:///home/rony/LPR/CriaCerto/tests/Unit/CriaCerto.BuildingBlocks.UnitTests/Licensing/ModuleLicenseCheckerTests.cs) (cobertura exaustiva de canônicos, aliases comerciais, versões do Backoffice, nulos e avaliação de permissões).
+  - [FeatureGatingIntegrationTests.cs](file:///home/rony/LPR/CriaCerto/tests/Integration/CriaCerto.Architecture.IntegrationTests/FeatureGatingIntegrationTests.cs) (testes de integração no pipeline MediatR para "Pro Fazenda" e "Enterprise Confinamento").
+  - [SubscriptionBillingAuthorizationTests.cs](file:///home/rony/LPR/CriaCerto/tests/Unit/CriaCerto.Modules.Tenancy.UnitTests/SubscriptionBillingAuthorizationTests.cs) (validação do repasse de `PlanId` e `PlanName` no handler).
+  - [StripeWebhookPlanMappingTests.cs](file:///home/rony/LPR/CriaCerto/tests/Unit/CriaCerto.Modules.Tenancy.UnitTests/StripeWebhookPlanMappingTests.cs) (validação de webhook Stripe com payload `PlanId`, fallback de `PlanName` legado, plano Enterprise e sincronização de update de subscrição).
 * **Arquivos Impactados:**
+  - `src/BuildingBlocks/CriaCerto.BuildingBlocks.Abstractions/Licensing/ModuleLicenseChecker.cs`
+  - `src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Abstractions/IStripePaymentService.cs`
   - `src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Features/SubscriptionCheckout/CreateCheckoutSessionCommand.cs`
   - `src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Infrastructure/Services/StripePaymentService.cs`
-  - `src/BuildingBlocks/CriaCerto.BuildingBlocks.Abstractions/Licensing/ModuleLicenseChecker.cs`
+  - `src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Features/CreateTenant/CreateTenantCommand.cs`
+  - `src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Features/ChangeSubscriptionPlan/ChangeSubscriptionPlanCommand.cs`
+  - `src/Web/CriaCerto.Web/CriaCerto.Web.Client/Pages/Settings/SubscriptionManagement.razor`
+  - `tests/Unit/CriaCerto.BuildingBlocks.UnitTests/Licensing/ModuleLicenseCheckerTests.cs`
+  - `tests/Integration/CriaCerto.Architecture.IntegrationTests/FeatureGatingIntegrationTests.cs`
+  - `tests/Unit/CriaCerto.Modules.Tenancy.UnitTests/SubscriptionBillingAuthorizationTests.cs`
+  - `tests/Unit/CriaCerto.Modules.Tenancy.UnitTests/StripeWebhookPlanMappingTests.cs`
 
 #### 2.2. Prevenção de Assinaturas Concorrentes (Cobrança Dupla)
 * **Problema Identificado:** Se uma fazenda já possui `StripeSubscriptionId` ativo e solicita um novo checkout, o Stripe cria uma nova assinatura simultânea para o mesmo cliente, cobrando duplamente.
@@ -298,10 +314,10 @@ Este documento consolida o plano de ação técnico para sanar as **vulnerabilid
 | Item | Descrição da Tarefa | Arquivo Principal | Status |
 | :---: | :--- | :--- | :---: |
 | **1.1** | Remover endpoint público de troca de plano gratuita | `Program.cs` / `ChangeSubscriptionPlanCommand.cs` | [x] |
-| **1.2** | Exigir validação criptográfica obrigatória no Webhook | `StripePaymentService.cs` | [ ] |
-| **1.3** | Adicionar checagem de papel `Admin` para checkout e portal | `CreateCheckoutSessionCommand.cs` | [ ] |
-| **1.4** | Sanitizar URLs de retorno contra Open Redirect | `CreateCheckoutSessionCommand.cs` | [ ] |
-| **2.1** | Unificar identificadores canônicos de plano no Stripe e no banco | `CreateCheckoutSessionCommand.cs` / `ModuleLicenseChecker.cs` | [ ] |
+| **1.2** | Exigir validação criptográfica obrigatória no Webhook | `StripePaymentService.cs` | [x] |
+| **1.3** | Adicionar checagem de papel `Admin` para checkout e portal | `CreateCheckoutSessionCommand.cs` | [x] |
+| **1.4** | Sanitizar URLs de retorno contra Open Redirect | `CreateCheckoutSessionCommand.cs` | [x] |
+| **2.1** | Unificar identificadores canônicos de plano no Stripe e no banco | `CreateCheckoutSessionCommand.cs` / `ModuleLicenseChecker.cs` | [x] |
 | **2.2** | Bloquear checkout para quem já possui assinatura ativa | `CreateCheckoutSessionCommand.cs` | [ ] |
 | **2.3** | Implementar renovação de token no retorno do checkout | `SubscriptionManagement.razor` / `Program.cs` | [ ] |
 | **3.1** | Criar tabela e validação de idempotência para webhooks | `TenancyDbContext.cs` / `StripePaymentService.cs` | [ ] |
