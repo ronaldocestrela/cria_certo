@@ -31,6 +31,18 @@ public static class DependencyInjection
         services.AddScoped<IJwtService, JwtService>();
         services.AddScoped<ITenantAccessGuard, TenantAccessGuard>();
 
+        var allowedOrigins = configuration.GetSection("Cors:AllowedOrigins").Get<string[]>();
+        var stripeSection = configuration.GetSection(StripeOptions.SectionName);
+        var returnUrl = stripeSection["ReturnUrl"] ?? configuration["STRIPE_RETURN_URL"];
+
+        string? defaultOrigin = null;
+        if (!string.IsNullOrWhiteSpace(returnUrl) && Uri.TryCreate(returnUrl, UriKind.Absolute, out var returnUri))
+        {
+            defaultOrigin = returnUri.GetLeftPart(UriPartial.Authority);
+        }
+
+        services.AddSingleton<ISubscriptionUrlValidator>(new CriaCerto.Modules.Tenancy.Application.Services.SubscriptionUrlValidator(allowedOrigins, defaultOrigin));
+
         services.AddOptions<StripeOptions>()
             .Configure(options =>
             {

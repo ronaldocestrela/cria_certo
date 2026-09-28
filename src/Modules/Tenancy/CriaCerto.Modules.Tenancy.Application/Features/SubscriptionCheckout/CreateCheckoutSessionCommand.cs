@@ -29,15 +29,18 @@ public sealed class CreateCheckoutSessionCommandHandler : IRequestHandler<Create
     private readonly ITenancyDbContext _dbContext;
     private readonly IStripePaymentService _stripePaymentService;
     private readonly ISender _sender;
+    private readonly ISubscriptionUrlValidator _urlValidator;
 
     public CreateCheckoutSessionCommandHandler(
         ITenancyDbContext dbContext,
         IStripePaymentService stripePaymentService,
-        ISender sender)
+        ISender sender,
+        ISubscriptionUrlValidator urlValidator)
     {
         _dbContext = dbContext;
         _stripePaymentService = stripePaymentService;
         _sender = sender;
+        _urlValidator = urlValidator;
     }
 
     public async Task<Result<CheckoutSessionResult>> Handle(CreateCheckoutSessionCommand request, CancellationToken cancellationToken)
@@ -96,14 +99,31 @@ public sealed class CreateCheckoutSessionCommandHandler : IRequestHandler<Create
         string planName = selectedPlan?.Name ?? request.PlanId;
         string cycle = isAnnual ? "year" : "month";
 
+        // Validação estrita e sanitização contra ataques de Open Redirect (CWE-601)
+        var safeSuccessUrlResult = _urlValidator.ResolveSafeUrl(
+            request.SuccessUrl,
+            "http://localhost:8081/settings/subscription?success=true");
+        if (safeSuccessUrlResult.IsFailure)
+        {
+            return Result.Failure<CheckoutSessionResult>(safeSuccessUrlResult.Error);
+        }
+
+        var safeCancelUrlResult = _urlValidator.ResolveSafeUrl(
+            request.CancelUrl,
+            "http://localhost:8081/settings/subscription?canceled=true");
+        if (safeCancelUrlResult.IsFailure)
+        {
+            return Result.Failure<CheckoutSessionResult>(safeCancelUrlResult.Error);
+        }
+
         var sessionResult = await _stripePaymentService.CreateCheckoutSessionAsync(
             tenant,
             user,
             planName,
             cycle,
             amount,
-            request.SuccessUrl ?? string.Empty,
-            request.CancelUrl ?? string.Empty,
+            safeSuccessUrlResult.Value,
+            safeCancelUrlResult.Value,
             stripePriceId,
             cancellationToken);
 

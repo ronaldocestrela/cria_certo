@@ -100,13 +100,31 @@ Este documento consolida o plano de ação técnico para sanar as **vulnerabilid
   - `src/Web/CriaCerto.Web/CriaCerto.Web.Client/Pages/Settings/SubscriptionManagement.razor`
   - `tests/Unit/CriaCerto.Modules.Tenancy.UnitTests/SubscriptionBillingAuthorizationTests.cs`
 
-#### 1.4. Proteção contra Open Redirect em URLs de Checkout e Portal
-* **Problema Identificado:** `SuccessUrl`, `CancelUrl` e `ReturnUrl` são repassados ao Stripe sem validação de domínio, possibilitando ataques de phishing após o checkout.
-* **Ações no Backend:**
-  * Implementar validação estrita em `CreateCheckoutSessionCommand` e `CreatePortalSessionCommand` garantindo que as URLs pertençam à lista de origens confiáveis (`Cors:AllowedOrigins`) ou reescrever as URLs diretamente no backend a partir da configuração de base da aplicação.
+#### 1.4. Proteção contra Open Redirect em URLs de Checkout e Portal [CONCLUÍDO]
+* **Problema Identificado:** `SuccessUrl`, `CancelUrl` e `ReturnUrl` eram repassados ao Stripe sem validação de domínio, possibilitando ataques de phishing pós-checkout (CWE-601).
+* **Ações no Backend Implementadas:**
+  * Criada a abstração [ISubscriptionUrlValidator](file:///home/rony/LPR/CriaCerto/src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Abstractions/ISubscriptionUrlValidator.cs) e o serviço [SubscriptionUrlValidator](file:///home/rony/LPR/CriaCerto/src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Services/SubscriptionUrlValidator.cs), validando estritamente as origens permitidas contra `Cors:AllowedOrigins` e permitindo caminhos relativos seguros normalizados com a autoridade confiável.
+  * Bloqueio explícito de esquemas inseguros (`javascript:`, `data:`, `file:`, `ftp:`), URLs com protocolo relativo (`//attacker.com`), evasão por subdomínio (`https://criacerto.com.br.evil.com`) eUserInfo (`https://user:pass@evil.com`).
+  * Criados validadores declarativos FluentValidation:
+    - [CreateCheckoutSessionCommandValidator](file:///home/rony/LPR/CriaCerto/src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Features/SubscriptionCheckout/CreateCheckoutSessionCommandValidator.cs)
+    - [CreatePortalSessionCommandValidator](file:///home/rony/LPR/CriaCerto/src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Features/SubscriptionPortal/CreatePortalSessionCommandValidator.cs)
+  * Injetada validação defensiva em [CreateCheckoutSessionCommandHandler](file:///home/rony/LPR/CriaCerto/src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Features/SubscriptionCheckout/CreateCheckoutSessionCommand.cs) e [CreatePortalSessionCommandHandler](file:///home/rony/LPR/CriaCerto/src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Features/SubscriptionPortal/CreatePortalSessionCommand.cs), retornando `Result.Failure` com código `Subscription.InvalidRedirectUrl` (`ErrorType.Validation`) caso URLs externas não autorizadas sejam fornecidas.
+  * Registrado `ISubscriptionUrlValidator` como singleton em [DependencyInjection.cs](file:///home/rony/LPR/CriaCerto/src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Infrastructure/DependencyInjection.cs) com carga dinâmica de `Cors:AllowedOrigins` e URL de retorno padrão.
+* **Testes Automatizados (TDD):**
+  - [SubscriptionRedirectUrlValidatorTests.cs](file:///home/rony/LPR/CriaCerto/tests/Unit/CriaCerto.Modules.Tenancy.UnitTests/SubscriptionRedirectUrlValidatorTests.cs) (12 cenários cobrindo URLs absolutas autorizadas, relativas, esquemas maliciosos, subdomínios, fallbacks seguros e evasão de autenticação).
+  - [SubscriptionCommandValidatorsTests.cs](file:///home/rony/LPR/CriaCerto/tests/Unit/CriaCerto.Modules.Tenancy.UnitTests/SubscriptionCommandValidatorsTests.cs) (6 cenários validando integração de regras FluentValidation para Checkout e Portal).
+  - [SubscriptionBillingAuthorizationTests.cs](file:///home/rony/LPR/CriaCerto/tests/Unit/CriaCerto.Modules.Tenancy.UnitTests/SubscriptionBillingAuthorizationTests.cs) (cenários adicionais garantindo rejeição no handler com `Subscription.InvalidRedirectUrl`).
 * **Arquivos Impactados:**
+  - `src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Abstractions/ISubscriptionUrlValidator.cs`
+  - `src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Services/SubscriptionUrlValidator.cs`
+  - `src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Features/SubscriptionCheckout/CreateCheckoutSessionCommandValidator.cs`
+  - `src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Features/SubscriptionPortal/CreatePortalSessionCommandValidator.cs`
   - `src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Features/SubscriptionCheckout/CreateCheckoutSessionCommand.cs`
   - `src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Features/SubscriptionPortal/CreatePortalSessionCommand.cs`
+  - `src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Infrastructure/DependencyInjection.cs`
+  - `tests/Unit/CriaCerto.Modules.Tenancy.UnitTests/SubscriptionRedirectUrlValidatorTests.cs`
+  - `tests/Unit/CriaCerto.Modules.Tenancy.UnitTests/SubscriptionCommandValidatorsTests.cs`
+  - `tests/Unit/CriaCerto.Modules.Tenancy.UnitTests/SubscriptionBillingAuthorizationTests.cs`
 
 ---
 

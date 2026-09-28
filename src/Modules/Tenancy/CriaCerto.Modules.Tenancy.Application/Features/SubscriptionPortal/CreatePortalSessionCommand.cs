@@ -21,13 +21,16 @@ public sealed class CreatePortalSessionCommandHandler : IRequestHandler<CreatePo
 {
     private readonly ITenancyDbContext _dbContext;
     private readonly IStripePaymentService _stripePaymentService;
+    private readonly ISubscriptionUrlValidator _urlValidator;
 
     public CreatePortalSessionCommandHandler(
         ITenancyDbContext dbContext,
-        IStripePaymentService stripePaymentService)
+        IStripePaymentService stripePaymentService,
+        ISubscriptionUrlValidator urlValidator)
     {
         _dbContext = dbContext;
         _stripePaymentService = stripePaymentService;
+        _urlValidator = urlValidator;
     }
 
     public async Task<Result<CustomerPortalSessionResult>> Handle(CreatePortalSessionCommand request, CancellationToken cancellationToken)
@@ -64,6 +67,15 @@ public sealed class CreatePortalSessionCommandHandler : IRequestHandler<CreatePo
                 Error.Unauthorized("Auth.ForbiddenBilling", "Apenas administradores da fazenda podem gerenciar planos e pagamentos."));
         }
 
+        // Validação estrita e sanitização contra ataques de Open Redirect (CWE-601)
+        var safeReturnUrlResult = _urlValidator.ResolveSafeUrl(
+            request.ReturnUrl,
+            "http://localhost:8081/settings/subscription");
+        if (safeReturnUrlResult.IsFailure)
+        {
+            return Result.Failure<CustomerPortalSessionResult>(safeReturnUrlResult.Error);
+        }
+
         if (string.IsNullOrWhiteSpace(tenant.StripeCustomerId))
         {
             // Se ainda não tem StripeCustomerId, cria o Customer no Stripe
@@ -72,7 +84,7 @@ public sealed class CreatePortalSessionCommandHandler : IRequestHandler<CreatePo
 
         var portalResult = await _stripePaymentService.CreateCustomerPortalSessionAsync(
             tenant,
-            request.ReturnUrl ?? string.Empty,
+            safeReturnUrlResult.Value,
             cancellationToken);
 
         return Result.Success(portalResult);

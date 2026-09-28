@@ -4,6 +4,7 @@ using CriaCerto.Modules.Tenancy.Application.Domain;
 using CriaCerto.Modules.Tenancy.Application.Features.GetSubscriptionPlans;
 using CriaCerto.Modules.Tenancy.Application.Features.SubscriptionCheckout;
 using CriaCerto.Modules.Tenancy.Application.Features.SubscriptionPortal;
+using CriaCerto.Modules.Tenancy.Application.Services;
 using CriaCerto.Modules.Tenancy.Infrastructure.Persistence;
 using FluentAssertions;
 using MediatR;
@@ -18,6 +19,7 @@ public class SubscriptionBillingAuthorizationTests : IDisposable
     private readonly TenancyDbContext _dbContext;
     private readonly FakeStripePaymentService _stripeService;
     private readonly FakeSender _sender;
+    private readonly SubscriptionUrlValidator _urlValidator;
 
     public SubscriptionBillingAuthorizationTests()
     {
@@ -33,6 +35,7 @@ public class SubscriptionBillingAuthorizationTests : IDisposable
 
         _stripeService = new FakeStripePaymentService();
         _sender = new FakeSender();
+        _urlValidator = new SubscriptionUrlValidator();
     }
 
     public void Dispose()
@@ -79,7 +82,7 @@ public class SubscriptionBillingAuthorizationTests : IDisposable
         _dbContext.UserTenants.Add(userTenant);
         await _dbContext.SaveChangesAsync();
 
-        var handler = new CreateCheckoutSessionCommandHandler(_dbContext, _stripeService, _sender);
+        var handler = new CreateCheckoutSessionCommandHandler(_dbContext, _stripeService, _sender, _urlValidator);
         var command = new CreateCheckoutSessionCommand(tenant.Id, user.Id, "Pro");
 
         // Act
@@ -126,7 +129,7 @@ public class SubscriptionBillingAuthorizationTests : IDisposable
         _dbContext.UserTenants.Add(userTenant);
         await _dbContext.SaveChangesAsync();
 
-        var handler = new CreateCheckoutSessionCommandHandler(_dbContext, _stripeService, _sender);
+        var handler = new CreateCheckoutSessionCommandHandler(_dbContext, _stripeService, _sender, _urlValidator);
         var command = new CreateCheckoutSessionCommand(tenant.Id, user.Id, "Pro");
 
         // Act
@@ -136,6 +139,58 @@ public class SubscriptionBillingAuthorizationTests : IDisposable
         result.IsSuccess.Should().BeTrue();
         result.Value.Should().NotBeNull();
         result.Value.Url.Should().Be("https://checkout.stripe.com/test-session");
+    }
+
+    [Fact]
+    public async Task CreateCheckoutSession_Should_Fail_With_Validation_When_SuccessUrl_Or_CancelUrl_Is_OpenRedirect()
+    {
+        // Arrange
+        var tenant = new Tenant
+        {
+            Id = Guid.NewGuid(),
+            Name = "Fazenda Ouro Branco",
+            CNPJ = "12.345.678/0001-90",
+            Status = "Active",
+            SubscribedPlan = "Starter"
+        };
+
+        var user = new User
+        {
+            Id = Guid.NewGuid(),
+            FullName = "Administrador Fazenda",
+            Email = "admin@ourobranco.com",
+            PasswordHash = "hash"
+        };
+
+        var userTenant = new UserTenant
+        {
+            UserId = user.Id,
+            TenantId = tenant.Id,
+            Role = UserRole.Admin,
+            JoinedAt = DateTime.UtcNow
+        };
+
+        _dbContext.Tenants.Add(tenant);
+        _dbContext.Users.Add(user);
+        _dbContext.UserTenants.Add(userTenant);
+        await _dbContext.SaveChangesAsync();
+
+        var handler = new CreateCheckoutSessionCommandHandler(_dbContext, _stripeService, _sender, _urlValidator);
+        var command = new CreateCheckoutSessionCommand(
+            tenant.Id,
+            user.Id,
+            "Pro",
+            "monthly",
+            SuccessUrl: "https://evil-phishing.com/steal",
+            CancelUrl: "http://localhost:8081/settings/subscription?canceled=true");
+
+        // Act
+        var result = await handler.Handle(command, CancellationToken.None);
+
+        // Assert
+        result.IsFailure.Should().BeTrue();
+        result.Error.Type.Should().Be(ErrorType.Validation);
+        result.Error.Code.Should().Be("Subscription.InvalidRedirectUrl");
     }
 
     [Theory]
@@ -176,7 +231,7 @@ public class SubscriptionBillingAuthorizationTests : IDisposable
         _dbContext.UserTenants.Add(userTenant);
         await _dbContext.SaveChangesAsync();
 
-        var handler = new CreatePortalSessionCommandHandler(_dbContext, _stripeService);
+        var handler = new CreatePortalSessionCommandHandler(_dbContext, _stripeService, _urlValidator);
         var command = new CreatePortalSessionCommand(tenant.Id, user.Id);
 
         // Act
@@ -224,7 +279,7 @@ public class SubscriptionBillingAuthorizationTests : IDisposable
         _dbContext.UserTenants.Add(userTenant);
         await _dbContext.SaveChangesAsync();
 
-        var handler = new CreatePortalSessionCommandHandler(_dbContext, _stripeService);
+        var handler = new CreatePortalSessionCommandHandler(_dbContext, _stripeService, _urlValidator);
         var command = new CreatePortalSessionCommand(tenant.Id, user.Id);
 
         // Act
@@ -234,6 +289,53 @@ public class SubscriptionBillingAuthorizationTests : IDisposable
         result.IsSuccess.Should().BeTrue();
         result.Value.Should().NotBeNull();
         result.Value.Url.Should().Be("https://billing.stripe.com/test-portal");
+    }
+
+    [Fact]
+    public async Task CreatePortalSession_Should_Fail_With_Validation_When_ReturnUrl_Is_OpenRedirect()
+    {
+        // Arrange
+        var tenant = new Tenant
+        {
+            Id = Guid.NewGuid(),
+            Name = "Fazenda Esperança",
+            CNPJ = "98.765.432/0001-10",
+            Status = "Active",
+            SubscribedPlan = "Pro",
+            StripeCustomerId = "cus_12345"
+        };
+
+        var user = new User
+        {
+            Id = Guid.NewGuid(),
+            FullName = "Admin Esperança",
+            Email = "admin@esperanca.com",
+            PasswordHash = "hash"
+        };
+
+        var userTenant = new UserTenant
+        {
+            UserId = user.Id,
+            TenantId = tenant.Id,
+            Role = UserRole.Admin,
+            JoinedAt = DateTime.UtcNow
+        };
+
+        _dbContext.Tenants.Add(tenant);
+        _dbContext.Users.Add(user);
+        _dbContext.UserTenants.Add(userTenant);
+        await _dbContext.SaveChangesAsync();
+
+        var handler = new CreatePortalSessionCommandHandler(_dbContext, _stripeService, _urlValidator);
+        var command = new CreatePortalSessionCommand(tenant.Id, user.Id, ReturnUrl: "https://evil.com/fake-return");
+
+        // Act
+        var result = await handler.Handle(command, CancellationToken.None);
+
+        // Assert
+        result.IsFailure.Should().BeTrue();
+        result.Error.Type.Should().Be(ErrorType.Validation);
+        result.Error.Code.Should().Be("Subscription.InvalidRedirectUrl");
     }
 
     [Fact]
@@ -261,7 +363,7 @@ public class SubscriptionBillingAuthorizationTests : IDisposable
         _dbContext.Users.Add(user);
         await _dbContext.SaveChangesAsync();
 
-        var handler = new CreateCheckoutSessionCommandHandler(_dbContext, _stripeService, _sender);
+        var handler = new CreateCheckoutSessionCommandHandler(_dbContext, _stripeService, _sender, _urlValidator);
         var command = new CreateCheckoutSessionCommand(tenant.Id, user.Id, "Pro");
 
         // Act
@@ -297,7 +399,7 @@ public class SubscriptionBillingAuthorizationTests : IDisposable
         _dbContext.Users.Add(user);
         await _dbContext.SaveChangesAsync();
 
-        var handler = new CreatePortalSessionCommandHandler(_dbContext, _stripeService);
+        var handler = new CreatePortalSessionCommandHandler(_dbContext, _stripeService, _urlValidator);
         var command = new CreatePortalSessionCommand(tenant.Id, user.Id);
 
         // Act
