@@ -79,6 +79,11 @@ public static class DependencyInjection
 
         services.AddScoped<IStripePaymentService, StripePaymentService>();
 
+        services.AddOptions<CriaCerto.Modules.Tenancy.Application.Options.SubscriptionLifecycleOptions>()
+            .Bind(configuration.GetSection(CriaCerto.Modules.Tenancy.Application.Options.SubscriptionLifecycleOptions.SectionName));
+
+        services.AddScoped<ISubscriptionLifecycleService, SubscriptionLifecycleService>();
+
         return services;
     }
 }

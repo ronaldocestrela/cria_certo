@@ -3,6 +3,7 @@ using System.Text;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.RateLimiting;
 using CriaCerto.Api.Middleware;
+using CriaCerto.Api.BackgroundServices;
 using CriaCerto.BuildingBlocks.Application.Features.GetReferenceBreeds;
 using CriaCerto.Api.Seeders;
 using CriaCerto.Modules.Sanitary.Application.Features.GetVaccineCalendar;
@@ -151,6 +152,9 @@ builder.Services.AddGrowthInfrastructure();
 builder.Services.AddNutritionInfrastructure();
 builder.Services.AddSanitaryModule(builder.Configuration);
 builder.Services.AddBackofficeInfrastructure(builder.Configuration);
+
+// Background Services
+builder.Services.AddHostedService<SubscriptionLifecycleWorker>();
 
 // Configure CORS Policy
 var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() 

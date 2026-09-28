@@ -334,17 +334,31 @@ Este documento consolida o plano de ação técnico para sanar as **vulnerabilid
   - `tests/Unit/CriaCerto.Modules.Tenancy.UnitTests/TenantAccessGuardTests.cs`
   - `tests/Integration/CriaCerto.Architecture.IntegrationTests/BillingLifecycleIntegrationTests.cs`
 
-#### 4.2. Worker de Segundo Plano para Expiração e Carência de Inadimplência
-* **Problema Identificado:** Não há serviço em background processando o vencimento diário de contas em trial ou contas inadimplentes há muito tempo.
-* **Ações no Backend:**
-  * Criar `SubscriptionLifecycleWorker : BackgroundService`:
-    - Execução periódica (ex: a cada 6 horas).
-    - Identificar tenants em `Trial` com `CurrentPeriodEndUtc < UtcNow` e transicionar para `Suspended` (motivo: "Período de testes expirado").
-    - Identificar tenants em `PastDue` há mais de 7 dias (período de tolerância/grace period) e transicionar para `Suspended` (motivo: "Inadimplência não regularizada após prazo de tolerância").
-    - Respeitar a regra de proteção `tenant.IsProtected == true`.
+#### 4.2. Worker de Segundo Plano para Expiração e Carência de Inadimplência [CONCLUÍDO]
+* **Problema Identificado:** Não havia serviço em background processando o vencimento diário de contas em trial ou contas inadimplentes há muito tempo.
+* **Ações no Backend Implementadas:**
+  * Criado contrato `ISubscriptionLifecycleService` e record `SubscriptionLifecycleExecutionResult` em `CriaCerto.Modules.Tenancy.Application/Abstractions/ISubscriptionLifecycleService.cs`.
+  * Criada classe de opções configuráveis `SubscriptionLifecycleOptions` em `CriaCerto.Modules.Tenancy.Application/Options/SubscriptionLifecycleOptions.cs` (`IntervalHours = 6`, `PastDueGracePeriodDays = 7`, `BatchSize = 100`).
+  * Implementado serviço de aplicação/domínio `SubscriptionLifecycleService` em `CriaCerto.Modules.Tenancy.Infrastructure/Services/SubscriptionLifecycleService.cs`:
+    - Varredura em lote de tenants com `Status == "Trial"` e `CurrentPeriodEndUtc < UtcNow`.
+    - Varredura em lote de tenants com `Status == "PastDue"` e `(StatusChangedAtUtc ?? UpdatedAtUtc) <= UtcNow.AddDays(-PastDueGracePeriodDays)`.
+    - Respeito estrito à proteção: se `tenant.IsProtected == true`, a suspensão é contida e gravado registro em `TenantSubscriptionHistories` com `SubscriptionActionType.Suspended` e justificativa de preservação.
+    - Se não protegido: transiciona status via `tenant.Suspend(reason)` com justificativas canônicas válidas (`"Período de testes expirado."` e `"Inadimplência não regularizada após prazo de tolerância."`) e grava histórico em `TenantSubscriptionHistories`.
+  * Criado o serviço hospedado `SubscriptionLifecycleWorker : BackgroundService` em `src/Host/CriaCerto.Api/BackgroundServices/SubscriptionLifecycleWorker.cs` gerenciando ciclo periódico resiliente via `PeriodicTimer`, criação de escopos e tratamento de cancelamento.
+  * Registrado `SubscriptionLifecycleOptions` e `ISubscriptionLifecycleService` em `DependencyInjection.cs` e `builder.Services.AddHostedService<SubscriptionLifecycleWorker>()` em `Program.cs`.
+* **Testes Automatizados (TDD):**
+  * `SubscriptionLifecycleServiceTests.cs`: Suíte de testes unitários cobrindo suspensão de trial vencido, manutenção de trial futuro/nulo, suspensão de inadimplência fora do prazo de tolerância, manutenção dentro do grace period, salvaguarda de tenant protegido, ignorar status ativos/já suspensos e idempotência.
+  * `SubscriptionLifecycleWorkerIntegrationTests.cs`: Teste de integração de ponta a ponta validando resolução por injeção de dependência via escopo e execução segura no worker.
 * **Arquivos Impactados:**
-  - Novo serviço em `src/Host/CriaCerto.Api/BackgroundServices/SubscriptionLifecycleWorker.cs`
-  - Registro em `Program.cs`.
+  - `src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Abstractions/ISubscriptionLifecycleService.cs`
+  - `src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Options/SubscriptionLifecycleOptions.cs`
+  - `src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Infrastructure/Services/SubscriptionLifecycleService.cs`
+  - `src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Infrastructure/DependencyInjection.cs`
+  - `src/Host/CriaCerto.Api/BackgroundServices/SubscriptionLifecycleWorker.cs`
+  - `src/Host/CriaCerto.Api/Program.cs`
+  - `src/Host/CriaCerto.Api/appsettings.json`
+  - `tests/Unit/CriaCerto.Modules.Tenancy.UnitTests/SubscriptionLifecycleServiceTests.cs`
+  - `tests/Integration/CriaCerto.Architecture.IntegrationTests/SubscriptionLifecycleWorkerIntegrationTests.cs`
 
 #### 4.3. Validação Estrita de Dados de Onboarding
 * **Problema Identificado:** O endpoint `POST /api/v1/tenancy/farms` aceita qualquer valor para `SubscribedPlan` e `Capacity` enviados no payload.
@@ -400,8 +414,8 @@ Este documento consolida o plano de ação técnico para sanar as **vulnerabilid
 | **3.3** | Sincronizar trocas de plano feitas pelo Stripe Portal | `StripePaymentService.cs` | [x] |
 | **3.4** | Validar `PaymentStatus == "paid"` antes de ativar conta | `StripePaymentService.cs` | [x] |
 | **3.5** | Gravar histórico em `TenantSubscriptionHistories` via webhook | `StripePaymentService.cs` | [x] |
-| **4.1** | Bloquear acesso no `TenantAccessGuard` para trials vencidos | `TenantAccessGuard.cs` | [ ] |
-| **4.2** | Criar `SubscriptionLifecycleWorker` para expiração e grace period | `SubscriptionLifecycleWorker.cs` | [ ] |
+| **4.1** | Bloquear acesso no `TenantAccessGuard` para trials vencidos | `TenantAccessGuard.cs` | [x] |
+| **4.2** | Criar `SubscriptionLifecycleWorker` para expiração e grace period | `SubscriptionLifecycleWorker.cs` | [x] |
 | **4.3** | Travar plano e capacidade padrão no onboarding | `CreateTenantCommand.cs` | [ ] |
 | **5.1** | Implementar testes unitários para fluxo financeiro | `tests/Modules/Tenancy/` | [ ] |
 | **5.2** | Homologar com Stripe CLI e documentar rotina de testes | `docs/operations/` | [ ] |

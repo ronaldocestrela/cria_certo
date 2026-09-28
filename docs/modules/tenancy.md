@@ -112,6 +112,11 @@ Transições administrativas exigem justificativa (mín. 15 caracteres) e permis
 
 Acesso do produtor permitido em: `Trial`, `Active`, `PastDue`. Bloqueado em: `Suspended`, `Cancelled`, `Archived`.
 - **Expiração Ativa de Período de Testes (Trial):** Tenants no estado `Trial` possuem prazo padrão de 14 dias registrado em `CurrentPeriodEndUtc`. Quando `CurrentPeriodEndUtc < UtcNow`, o `TenantAccessGuard` intercepta requisições de manejo e dados operacionais retornando `TenancyErrors.TrialExpired` (`Tenant.TrialExpired` / HTTP 403 Forbidden).
+- **Worker de Segundo Plano (`SubscriptionLifecycleWorker`):** Executa periodicamente no host (a cada 6 horas por padrão, configurável via `SubscriptionLifecycleOptions`) invocando `ISubscriptionLifecycleService`:
+  - **Varredura de Trials:** Tenants em `Trial` com `CurrentPeriodEndUtc < UtcNow` são transicionados formalmente para `Suspended` (`StatusReason = "Período de testes expirado."`).
+  - **Carência de Inadimplência (*PastDue Grace Period*):** Tenants em `PastDue` cujo tempo de inadimplência excede a tolerância de 7 dias (`(StatusChangedAtUtc ?? UpdatedAtUtc) <= UtcNow.AddDays(-7)`) são transicionados para `Suspended` (`StatusReason = "Inadimplência não regularizada após prazo de tolerância."`).
+  - **Salvaguarda de Tenants Protegidos (`IsProtected == true`):** A suspensão é contida para evitar cortes indevidos em contas estratégicas ou institucionais, gerando registro de auditoria em `TenantSubscriptionHistories` com o motivo de proteção preservada.
+  - **Rastreabilidade:** Cada alteração automática efetuada pelo worker grava atomicamente uma entrada em `TenantSubscriptionHistories` com `SubscriptionActionType.Suspended`.
 - **Prevenção de Deadlock de Faturamento:** O middleware de acesso `TenantAccessMiddleware` autoriza bypass da checagem para endpoints de consulta de perfil (`/api/v1/tenancy/profile`), catálogo de planos (`/api/v1/tenancy/plans`) e sessões seguras do Stripe (`/api/v1/tenancy/subscription/*`), viabilizando que o produtor bloqueado acesse a tela de contratação e conclua o pagamento sem impedimentos.
 
 Erros: `Tenant.InvalidTransition`, `Tenant.JustificationRequired`, `Tenant.ProtectedTenant`, `Tenant.NotAccessible`, `Tenant.TrialExpired`.
