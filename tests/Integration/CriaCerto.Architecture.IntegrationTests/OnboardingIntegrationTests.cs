@@ -78,6 +78,11 @@ public class OnboardingIntegrationTests : IDisposable
         onboardingResult.Value.Token.Should().Be("valid_jwt_onboarding_token");
         onboardingResult.Value.UserId.Should().Be(userId);
 
+        var createdTenant = await _dbContext.Tenants.FirstOrDefaultAsync(t => t.Name == "Fazenda Vista Alegre");
+        createdTenant.Should().NotBeNull();
+        createdTenant!.Status.Should().Be("Trial");
+        createdTenant.CurrentPeriodEndUtc.Should().BeCloseTo(DateTime.UtcNow.AddDays(30), TimeSpan.FromSeconds(30));
+
         // Step 4: Login AFTER onboarding (Should NOW succeed with valid JWT token)
         var loginPostOnboard = await loginHandler.Handle(new LoginCommand("produtor.onboarding@fazenda.com.br", "Senha@123"), CancellationToken.None);
 

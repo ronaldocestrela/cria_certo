@@ -128,7 +128,7 @@ Estados: `Trial`, `Active`, `PastDue`, `Suspended`, `Cancelled`, `Archived`.
 Transições administrativas exigem justificativa (mín. 15 caracteres) e permissão `tenants.suspend`.
 
 Acesso do produtor permitido em: `Trial`, `Active`, `PastDue`. Bloqueado em: `Suspended`, `Cancelled`, `Archived`.
-- **Expiração Ativa de Período de Testes (Trial):** Tenants no estado `Trial` possuem prazo padrão de 14 dias registrado em `CurrentPeriodEndUtc`. Quando `CurrentPeriodEndUtc < UtcNow`, o `TenantAccessGuard` intercepta requisições de manejo e dados operacionais retornando `TenancyErrors.TrialExpired` (`Tenant.TrialExpired` / HTTP 403 Forbidden).
+- **Expiração Ativa de Período de Testes (Trial):** Tenants no estado `Trial` possuem prazo padrão de 30 dias registrado em `CurrentPeriodEndUtc`. Quando `CurrentPeriodEndUtc < UtcNow`, o `TenantAccessGuard` intercepta requisições de manejo e dados operacionais retornando `TenancyErrors.TrialExpired` (`Tenant.TrialExpired` / HTTP 403 Forbidden).
 - **Worker de Segundo Plano (`SubscriptionLifecycleWorker`):** Executa periodicamente no host (a cada 6 horas por padrão, configurável via `SubscriptionLifecycleOptions`) invocando `ISubscriptionLifecycleService`:
   - **Varredura de Trials:** Tenants em `Trial` com `CurrentPeriodEndUtc < UtcNow` são transicionados formalmente para `Suspended` (`StatusReason = "Período de testes expirado."`).
   - **Carência de Inadimplência (*PastDue Grace Period*):** Tenants em `PastDue` cujo tempo de inadimplência excede a tolerância de 7 dias (`(StatusChangedAtUtc ?? UpdatedAtUtc) <= UtcNow.AddDays(-7)`) são transicionados para `Suspended` (`StatusReason = "Inadimplência não regularizada após prazo de tolerância."`).
@@ -152,7 +152,7 @@ Erros: `Tenant.InvalidTransition`, `Tenant.JustificationRequired`, `Tenant.Prote
 ### 3.2 `CreateTenantCommand`
 - **Contrato:** `CreateTenantCommand(Guid? UserId, string Name, string CNPJ, string State, string City, string StateRegistration, decimal AreaInHectares, string SubscribedPlan = "Starter", int Capacity = 500, string? UserEmail = null)`
 - **Validações (`CreateTenantCommandValidator`):** Nome da fazenda obrigatório (3-150 caracteres), UF com exatamente 2 caracteres, capacidade restrita à faixa de teste de 1 a 500 cabeças (`PlanCapacityLimits.StarterLimit`) e plano restrito exclusivamente ao plano padrão de trial (`Starter`). Tentativas de passar outros planos (`Pro`, `Enterprise`) ou capacidades acima de 500 no onboarding gratuito são rejeitadas preventivamente.
-- **Regra de Negócio:** Cria o `Tenant` forçando o plano padrão de testes (`Starter`), capacidade limitada a até 500 cabeças, status inicial `Trial` (14 dias) e aplica a segmentação padrão via `tenant.ApplyDefaultSegmentation()`. Associa o usuário em `UserTenant` e retorna `AuthResponse` com JWT válido assinado para a fazenda recém-criada.
+- **Regra de Negócio:** Cria o `Tenant` forçando o plano padrão de testes (`Starter`), capacidade limitada a até 500 cabeças, status inicial `Trial` (30 dias) e aplica a segmentação padrão via `tenant.ApplyDefaultSegmentation()`. Associa o usuário em `UserTenant` e retorna `AuthResponse` com JWT válido assinado para a fazenda recém-criada.
 
 ### 3.3 `ForgotPasswordCommand`
 - **Contrato:** `ForgotPasswordCommand(string Email)`

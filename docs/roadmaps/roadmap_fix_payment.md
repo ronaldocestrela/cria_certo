@@ -312,7 +312,7 @@ Este documento consolida o plano de ação técnico para sanar as **vulnerabilid
 ### Fase 4: Gestão do Ciclo de Vida, Expiração de Trial e Inadimplência [PRIORIDADE 4]
 
 #### 4.1. Bloqueio Ativo de Período de Testes (*Trial*) Expirado [CONCLUÍDO]
-* **Problema Identificado:** O tenant entra em `Trial` por 14 dias (`CurrentPeriodEndUtc = now.AddDays(14)`), mas `TenantLifecycle.CanProducerAccess("Trial")` nunca expirava porque a data não era avaliada no middleware de acesso.
+* **Problema Identificado:** O tenant entra em `Trial` por 30 dias (`CurrentPeriodEndUtc = now.AddDays(30)`), mas `TenantLifecycle.CanProducerAccess("Trial")` nunca expirava porque a data não era avaliada no middleware de acesso.
 * **Ações no Backend Implementadas:**
   * Adicionado erro canônico `TenancyErrors.TrialExpired` com `ErrorType.Unauthorized` em `TenancyErrors.cs`.
   * No `TenantAccessGuard.EnsureProducerAccessAsync`: checagem de `tenant.Status == "Trial" && tenant.CurrentPeriodEndUtc.HasValue && tenant.CurrentPeriodEndUtc.Value < DateTime.UtcNow`, retornando `Result.Failure(TenancyErrors.TrialExpired)`.
@@ -459,5 +459,5 @@ Este documento consolida o plano de ação técnico para sanar as **vulnerabilid
 1. **Zero Bypass:** Nenhuma conta pode obter ou alterar plano sem registro válido de pagamento e assinatura no Stripe ou autorização expressa documentada por Admin no Backoffice.
 2. **Acesso Imediato sem Falhas:** Ao pagar um plano no Stripe Checkout, o produtor deve ter seus módulos ativados imediatamente, com os claims sincronizados e sem bloqueio no `ModuleLicenseChecker`.
 3. **Segurança de Webhook:** Requisições para `/api/v1/payments/stripe-webhook` sem cabeçalho `Stripe-Signature` válido devem retornar `400 BadRequest`.
-4. **Fim do Trial Infinito:** Nenhuma conta com mais de 14 dias de cadastro sem plano ativo pode continuar acessando os módulos operacionais.
+4. **Fim do Trial Infinito:** Nenhuma conta com mais de 30 dias de cadastro sem plano ativo pode continuar acessando os módulos operacionais.
 5. **Cobertura de Testes:** Todos os novos comandos, validações e handlers devem possuir testes automatizados cobrindo os cenários de sucesso e falha.

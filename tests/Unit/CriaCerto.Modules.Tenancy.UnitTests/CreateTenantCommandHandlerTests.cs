@@ -128,6 +128,8 @@ public class CreateTenantCommandHandlerTests : IDisposable
         tenantInDb.Capacity.Should().Be(500);
         tenantInDb.Status.Should().Be("Trial");
         tenantInDb.CurrentPeriodEndUtc.Should().NotBeNull();
+        tenantInDb.CurrentPeriodEndUtc.Should().BeCloseTo(DateTime.UtcNow.AddDays(CreateTenantCommand.DefaultTrialDays), TimeSpan.FromSeconds(30));
+        CreateTenantCommand.DefaultTrialDays.Should().Be(30);
 
         var userTenantInDb = await _dbContext.UserTenants
             .FirstOrDefaultAsync(ut => ut.UserId == user.Id && ut.TenantId == tenantInDb.Id);

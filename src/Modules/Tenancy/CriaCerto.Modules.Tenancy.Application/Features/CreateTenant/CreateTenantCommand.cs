@@ -25,6 +25,7 @@ public record CreateTenantCommand(
 {
     public const string DefaultTrialPlan = "Starter";
     public const int DefaultTrialCapacity = PlanCapacityLimits.StarterLimit; // 500
+    public const int DefaultTrialDays = 30;
 }
 
 public sealed class CreateTenantCommandHandler : IRequestHandler<CreateTenantCommand, Result<AuthResponse>>
@@ -97,7 +98,7 @@ public sealed class CreateTenantCommandHandler : IRequestHandler<CreateTenantCom
             SubscribedPlan = plan,
             Capacity = capacity,
             Status = TenantLifecycle.ToStatusString(TenantStatus.Trial),
-            CurrentPeriodEndUtc = now.AddDays(14),
+            CurrentPeriodEndUtc = now.AddDays(CreateTenantCommand.DefaultTrialDays),
             Type = "Pecuária de Corte e Cria",
             CreatedAtUtc = now,
             UpdatedAtUtc = now

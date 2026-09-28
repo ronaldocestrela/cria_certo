@@ -95,6 +95,6 @@ O catálogo comercial configurado no Backoffice é a fonte única da verdade par
    - Disponibiliza os planos ativos na rota pública `GET /api/v1/tenancy/plans`.
 2. **Assistente de Onboarding (`OnboardingWizard.razor`):**
    - Carrega dinamicamente a lista de planos via `TenancyApiClient.GetSubscriptionPlansAsync()`.
-   - Permite seleção de planos com base no catálogo atualizado, preenchendo automaticamente capacidades e valores do período de teste de 14 dias.
+   - Permite seleção de planos com base no catálogo atualizado, preenchendo automaticamente capacidades e valores do período de teste de 30 dias.
 3. **Gestão de Assinatura (`/settings/subscription` - `SubscriptionManagement.razor`):**
    - Apresenta os cards de planos, limites de cabeças e matriz comparativa de funcionalidades dinamicamente conforme os preços e módulos cadastrados no Backoffice.

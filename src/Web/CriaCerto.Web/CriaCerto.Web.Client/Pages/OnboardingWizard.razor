@@ -179,12 +179,12 @@
                         <div>
                             <h3 class="font-headline text-lg font-bold" style="color: var(--cc-ink); margin: 0;">Passo 3: Escolha do Plano & Início do Teste</h3>
                             <p class="text-sm text-secondary" style="color: var(--cc-ink-muted); margin: 0.25rem 0 0 0;">
-                                Selecione o plano ideal para sua fazenda. Você terá <strong>14 dias de teste grátis</strong> com acesso irrestrito.
+                                Selecione o plano ideal para sua fazenda. Você terá <strong>30 dias de teste grátis</strong> com acesso irrestrito.
                             </p>
                         </div>
                         <span class="font-mono text-xs font-bold" style="background-color: #dcfce7; color: #166534; padding: 0.35rem 0.8rem; border-radius: 99px; border: 1px solid #86efac; display: inline-flex; align-items: center; gap: 0.35rem;">
                             <span class="material-symbols-outlined" style="font-size: 16px;">verified</span>
-                            14 DIAS GRÁTIS
+                            30 DIAS GRÁTIS
                         </span>
                     </div>
 
@@ -259,7 +259,7 @@
                                         @plan.Description
                                     </p>
                                     <div class="font-mono text-[11px] font-semibold" style="color: var(--cc-primary);">
-                                        14 dias R$ 0 &bull; após @TrialEndDateFormatted
+                                        30 dias R$ 0 &bull; após @TrialEndDateFormatted
                                     </div>
                                 </div>
                             }
@@ -284,25 +284,25 @@
                                     </span>
                                 </div>
                             </div>
-                            <!-- Etapa 2: Dia 10 -->
+                            <!-- Etapa 2: Dia 25 -->
                             <div style="display: flex; gap: 0.65rem;">
                                 <div style="width: 26px; height: 26px; border-radius: 50%; background-color: #f3f4f6; color: #374151; border: 1px solid #d1d5db; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 11px; flex-shrink: 0;">
                                     2
                                 </div>
                                 <div>
-                                    <span class="font-bold text-xs" style="color: var(--cc-ink); display: block;">Dia 10 (Aviso Prévio)</span>
+                                    <span class="font-bold text-xs" style="color: var(--cc-ink); display: block;">Dia 25 (Aviso Prévio)</span>
                                     <span style="font-size: 11px; color: var(--cc-ink-muted); line-height: 1.35; display: block;">
-                                        Enviaremos um lembrete informando que restam 4 dias para o fim da avaliação.
+                                        Enviaremos um lembrete informando que restam 5 dias para o fim da avaliação.
                                     </span>
                                 </div>
                             </div>
-                            <!-- Etapa 3: Dia 14 -->
+                            <!-- Etapa 3: Dia 30 -->
                             <div style="display: flex; gap: 0.65rem;">
                                 <div style="width: 26px; height: 26px; border-radius: 50%; background-color: #f3f4f6; color: #374151; border: 1px solid #d1d5db; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 11px; flex-shrink: 0;">
                                     3
                                 </div>
                                 <div>
-                                    <span class="font-bold text-xs" style="color: var(--cc-ink); display: block;">Dia 14 (@TrialEndDateFormatted)</span>
+                                    <span class="font-bold text-xs" style="color: var(--cc-ink); display: block;">Dia 30 (@TrialEndDateFormatted)</span>
                                     <span style="font-size: 11px; color: var(--cc-ink-muted); line-height: 1.35; display: block;">
                                         Você decide se deseja continuar cadastrando Cartão, Pix ou Boleto no Stripe.
                                     </span>
@@ -330,7 +330,7 @@
                             }
                             else
                             {
-                                <span>Iniciar Teste Grátis de 14 Dias & Acessar Fazenda &rarr;</span>
+                                <span>Iniciar Teste Grátis de 30 Dias & Acessar Fazenda &rarr;</span>
                             }
                         </button>
                     </div>
@@ -373,7 +373,7 @@
     private decimal AreaInHectares = 500;
     private string SubscribedPlan = "Starter";
     private int Capacity = 500;
-    private DateTime TrialEndDate => DateTime.Today.AddDays(14);
+    private DateTime TrialEndDate => DateTime.Today.AddDays(30);
     private string TrialEndDateFormatted => TrialEndDate.ToString("dd/MM/yyyy");
 
     private List<SubscriptionPlanModel> _availablePlans = new();
