@@ -1,6 +1,10 @@
+using System.Diagnostics;
 using CriaCerto.BuildingBlocks.Abstractions.Licensing;
 using CriaCerto.Modules.Tenancy.Application.Abstractions;
 using CriaCerto.Modules.Tenancy.Application.Domain;
+using CriaCerto.Modules.Tenancy.Application.Events;
+using CriaCerto.Modules.Tenancy.Application.Telemetry;
+using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -15,15 +19,18 @@ public sealed class StripePaymentService : IStripePaymentService
     private readonly ITenancyDbContext _dbContext;
     private readonly StripeOptions _options;
     private readonly ILogger<StripePaymentService> _logger;
+    private readonly IPublisher? _publisher;
 
     public StripePaymentService(
         ITenancyDbContext dbContext,
         IOptions<StripeOptions> options,
-        ILogger<StripePaymentService> logger)
+        ILogger<StripePaymentService> logger,
+        IPublisher? publisher = null)
     {
         _dbContext = dbContext;
         _options = options.Value;
         _logger = logger;
+        _publisher = publisher;
 
         if (!string.IsNullOrWhiteSpace(_options.ApiKey))
         {
@@ -212,15 +219,39 @@ public sealed class StripePaymentService : IStripePaymentService
         string stripeSignatureHeader,
         CancellationToken cancellationToken = default)
     {
+        var stopwatch = Stopwatch.StartNew();
+
         if (string.IsNullOrWhiteSpace(_options.WebhookSecret))
         {
+            PaymentTelemetry.RecordSignatureFailure("secret_unconfigured");
             _logger.LogCritical("Tentativa de processar webhook Stripe sem STRIPE_WEBHOOK_SECRET configurado. Rejeitando requisição por segurança.");
+
+            if (_publisher != null)
+            {
+                await _publisher.Publish(new WebhookSignatureFailedIntegrationEvent(
+                    "Webhook signature verification required: WebhookSecret is not configured.",
+                    null,
+                    jsonPayload?.Length ?? 0,
+                    DateTime.UtcNow), cancellationToken);
+            }
+
             return new StripeWebhookResult(false, null, "Webhook signature verification required: WebhookSecret is not configured.");
         }
 
         if (string.IsNullOrWhiteSpace(stripeSignatureHeader))
         {
-            _logger.LogWarning("Webhook Stripe recebido sem o cabeçalho Stripe-Signature.");
+            PaymentTelemetry.RecordSignatureFailure("missing_header");
+            _logger.LogWarning("Webhook Stripe recebido sem o cabeçalho Stripe-Signature. PayloadLength: {PayloadLength}", jsonPayload?.Length ?? 0);
+
+            if (_publisher != null)
+            {
+                await _publisher.Publish(new WebhookSignatureFailedIntegrationEvent(
+                    "Cabeçalho Stripe-Signature ausente ou inválido.",
+                    null,
+                    jsonPayload?.Length ?? 0,
+                    DateTime.UtcNow), cancellationToken);
+            }
+
             return new StripeWebhookResult(false, null, "Cabeçalho Stripe-Signature ausente ou inválido.");
         }
 
@@ -235,12 +266,34 @@ public sealed class StripePaymentService : IStripePaymentService
         }
         catch (StripeException ex)
         {
-            _logger.LogError(ex, "Falha na validação criptográfica da assinatura do Webhook Stripe.");
+            PaymentTelemetry.RecordSignatureFailure("invalid_signature");
+            _logger.LogError(ex, "Falha na validação criptográfica da assinatura do Webhook Stripe. PayloadLength: {PayloadLength}", jsonPayload?.Length ?? 0);
+
+            if (_publisher != null)
+            {
+                await _publisher.Publish(new WebhookSignatureFailedIntegrationEvent(
+                    $"Assinatura inválida: {ex.Message}",
+                    null,
+                    jsonPayload?.Length ?? 0,
+                    DateTime.UtcNow), cancellationToken);
+            }
+
             return new StripeWebhookResult(false, null, $"Assinatura inválida: {ex.Message}");
         }
         catch (Exception ex)
         {
+            PaymentTelemetry.RecordSignatureFailure("unexpected_validation_error");
             _logger.LogError(ex, "Erro inesperado ao validar assinatura do Webhook Stripe.");
+
+            if (_publisher != null)
+            {
+                await _publisher.Publish(new WebhookSignatureFailedIntegrationEvent(
+                    $"Falha na validação do webhook: {ex.Message}",
+                    null,
+                    jsonPayload?.Length ?? 0,
+                    DateTime.UtcNow), cancellationToken);
+            }
+
             return new StripeWebhookResult(false, null, $"Falha na validação do webhook: {ex.Message}");
         }
 
@@ -257,6 +310,9 @@ public sealed class StripePaymentService : IStripePaymentService
                     "Evento Stripe {EventId} ({EventType}) já processado anteriormente. Ignorando reexecução (idempotência).",
                     stripeEvent.Id,
                     stripeEvent.Type);
+
+                PaymentTelemetry.RecordWebhookEvent(stripeEvent.Type, "duplicate");
+                PaymentTelemetry.RecordWebhookDuration(stripeEvent.Type, true, stopwatch.Elapsed.TotalMilliseconds);
 
                 return new StripeWebhookResult(true, stripeEvent.Type, "Evento já processado anteriormente (idempotente).");
             }
@@ -335,12 +391,17 @@ public sealed class StripePaymentService : IStripePaymentService
                 }
             }
 
+            PaymentTelemetry.RecordWebhookEvent(stripeEvent.Type ?? "unknown", "success");
+            PaymentTelemetry.RecordWebhookDuration(stripeEvent.Type ?? "unknown", true, stopwatch.Elapsed.TotalMilliseconds);
+
             return new StripeWebhookResult(true, stripeEvent.Type, "Processado com sucesso.");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Erro ao processar evento Stripe {EventType}", stripeEvent.Type);
-            return new StripeWebhookResult(false, stripeEvent.Type, ex.Message);
+            _logger.LogError(ex, "Erro ao processar evento Stripe {EventType}", stripeEvent?.Type ?? "unknown");
+            PaymentTelemetry.RecordWebhookEvent(stripeEvent?.Type ?? "unknown", "failed");
+            PaymentTelemetry.RecordWebhookDuration(stripeEvent?.Type ?? "unknown", false, stopwatch.Elapsed.TotalMilliseconds);
+            return new StripeWebhookResult(false, stripeEvent?.Type ?? "unknown", ex.Message);
         }
     }
 
@@ -490,6 +551,10 @@ public sealed class StripePaymentService : IStripePaymentService
 
         if (tenant == null) return;
 
+        var amountDue = invoice.AmountDue / 100m;
+        var currency = invoice.Currency?.ToUpperInvariant() ?? "BRL";
+        PaymentTelemetry.RecordInvoiceFailure(currency, "payment_failed", invoice.AmountDue);
+
         tenant.Status = "PastDue";
         tenant.StatusReason = "Falha no pagamento da fatura recorrente via Stripe.";
         tenant.StatusChangedAtUtc = DateTime.UtcNow;
@@ -504,7 +569,27 @@ public sealed class StripePaymentService : IStripePaymentService
         _dbContext.SubscriptionHistories.Add(history);
 
         await _dbContext.SaveChangesAsync(cancellationToken);
-        _logger.LogWarning("Tenant {TenantId} colocado em PastDue devido a falha no pagamento.", tenant.Id);
+
+        _logger.LogWarning(
+            "Tenant {TenantId} ({TenantName}) colocado em PastDue devido a falha no pagamento da fatura {InvoiceId}. Valor: {Currency} {AmountDue:F2}",
+            tenant.Id,
+            tenant.Name,
+            invoice.Id,
+            currency,
+            amountDue);
+
+        if (_publisher != null)
+        {
+            await _publisher.Publish(new PaymentInvoiceFailedIntegrationEvent(
+                tenant.Id,
+                tenant.Name,
+                invoice.Id,
+                invoice.CustomerId,
+                amountDue,
+                currency,
+                "Falha no débito ou cobrança recorrente via Stripe.",
+                DateTime.UtcNow), cancellationToken);
+        }
     }
 
     private async Task HandleSubscriptionUpdatedAsync(

@@ -111,6 +111,25 @@
 
 ---
 
+### RUNBOOK-06: Investigação de Falhas de Assinatura de Webhook Stripe (`ALR_WEBHOOK_SIGNATURE_INVALID`)
+* **Objetivo**: Conter tentativas de requisições forjadas contra o endpoint `/api/v1/payments/stripe-webhook` ou corrigir descompasso de configuração no segredo de assinatura (`STRIPE_WEBHOOK_SECRET`).
+* **Gatilho**: Disparo do alerta crítico `ALR_WEBHOOK_SIGNATURE_INVALID` pelo subsistema de observabilidade.
+* **Responsável**: Engenharia de Plataforma / SecOps e Suporte N2.
+
+#### Procedimento de Execução:
+1. Acesse o console em `/backoffice/observability` e abra o card de detalhes do alerta `ALR_WEBHOOK_SIGNATURE_INVALID`.
+2. Inspecione o payload no campo `ContextJson` verificando o motivo da recusa (`reason`), o tamanho do payload (`payloadLength`) e a janela temporal.
+3. **Cenário A: Descompasso de Configuração (Ambiente Local / Homologação / Produção)**:
+   - Se houver múltiplos eventos legítimos sendo rejeitados simultaneamente, verifique se a variável de ambiente `STRIPE_WEBHOOK_SECRET` no container/AppService corresponde ao segredo configurado no dashboard do Stripe em **Developers ➔ Webhooks**.
+   - Em caso de rotação de segredo, atualize o segredo no Azure Key Vault / App Settings e realize o restart do serviço.
+4. **Cenário B: Tentativa de Ataque Externo (Replay ou Spoofing)**:
+   - Se o segredo estiver correto e o tráfego anômalo vier de IPs não pertencentes à rede oficial de webhooks do Stripe:
+   - Inspecione os logs de borda (WAF / Cloudflare) e aplique regra de bloqueio imediato para os IPs agressores.
+   - Valide se a lista oficial de IPs de Webhook do Stripe (`api.stripe.com`) está habilitada no Ingress.
+5. Marque o incidente como `Acknowledged` durante a triagem e como `Resolved` após validação no painel com notas técnicas.
+
+---
+
 ## 3. Protocolo Pós-Incidente (Post-Mortem Blameless)
 
 Após a declaração de encerramento do incidente:

@@ -417,6 +417,15 @@ Este documento consolida o plano de ação técnico para sanar as **vulnerabilid
 * Adicionar logs estruturados com métricas para falhas em pagamentos:
   - Alertas para assinaturas de webhook rejeitadas (potencial ataque ou segredo vencido).
   - Alertas para faturas falhadas no Stripe para notificação da equipe de CS/Suporte.
+* **Status**: Concluído [x].
+* **Implementação**:
+  - Telemetria nativa .NET 10 via `Meter("CriaCerto.Modules.Tenancy.Payments")` em `PaymentTelemetry.cs` com contadores de eventos, falhas de assinatura, falhas de faturas e histograma de latência.
+  - Eventos de integração in-process `WebhookSignatureFailedIntegrationEvent` e `PaymentInvoiceFailedIntegrationEvent` desacoplando Tenancy e Backoffice.
+  - Alertas operacionais registrados na Central de Incidentes do Backoffice (`ALR_WEBHOOK_SIGNATURE_INVALID` e `ALR_PAYMENT_INVOICE_FAILED`) via `PaymentAlertEventHandler.cs`.
+  - Suporte a testes e simulações em `SimulateAlertModal.razor`.
+  - Runbook de resposta a incidentes `RUNBOOK-06` em `docs/operations/runbook_incident_response.md`.
+  - Playbook de CS/Suporte N1/N2 em `docs/operations/playbook_support.md`.
+  - Suíte de testes unitários e de integração em `PaymentTelemetryTests.cs`, `PaymentAlertEventHandlerTests.cs` e `PaymentObservabilityIntegrationTests.cs`.
 
 ---
 
@@ -441,6 +450,7 @@ Este documento consolida o plano de ação técnico para sanar as **vulnerabilid
 | **4.3** | Travar plano e capacidade padrão no onboarding | `CreateTenantCommand.cs` | [x] |
 | **5.1** | Implementar testes unitários para fluxo financeiro | `tests/Modules/Tenancy/` | [ ] |
 | **5.2** | Homologar com Stripe CLI e documentar rotina de testes | `docs/operations/` | [x] |
+| **5.3** | Implementar observabilidade, métricas e central de alertas | `PaymentTelemetry.cs` / `PaymentAlertEventHandler.cs` | [x] |
 
 ---
 

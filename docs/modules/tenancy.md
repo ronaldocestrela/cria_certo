@@ -62,6 +62,19 @@ O módulo `Modules.Tenancy` gerencia as identidades dos usuários, organizaçõe
 - **Script Operacional:** Disponibilizado em `scripts/stripe-test-webhooks.sh` para escuta local (`listen`) e emissão em lote dos 4 eventos de faturamento (`trigger-all`).
 - **Procedimento Operacional Padrão (SOP):** Documentado integralmente em `docs/operations/homologacao_stripe_cli.md`.
 
+### Observabilidade, Métricas e Alertas de Pagamento
+- **Métricas Nativas (.NET 10 Telemetry):** Instrumentadas via `PaymentTelemetry` (`Meter: CriaCerto.Modules.Tenancy.Payments`):
+  * `payments.webhook.events.total`: Contagem total de eventos de webhook processados, classificados por tipo de evento e status (`success`, `failed`, `duplicate`).
+  * `payments.webhook.signature_failures.total`: Contador de falhas de autenticação criptográfica por motivo (`missing_header`, `secret_unconfigured`, `invalid_signature`).
+  * `payments.invoice.failures.total`: Monitoramento de falhas de débito de faturas categorizado por moeda (`BRL`), motivo e valor.
+  * `payments.webhook.duration_ms`: Histograma de latência de processamento em milissegundos.
+- **Eventos de Integração In-Process:**
+  * `WebhookSignatureFailedIntegrationEvent`: Disparado perante falhas criptográficas na validação do cabeçalho `Stripe-Signature` para alertar operações sobre possíveis ataques de replay/spoofing ou segredos desatualizados.
+  * `PaymentInvoiceFailedIntegrationEvent`: Emitido ao receber `invoice.payment_failed` com contexto do produtor (`TenantId`, `TenantName`), fatura (`InvoiceId`), valor e motivo da recusa.
+- **Integração com a Central de Incidentes do Backoffice:** O handler `PaymentAlertEventHandler` intercepta os eventos in-process e gera alertas operacionais rastreáveis em `/backoffice/observability`:
+  * `ALR_WEBHOOK_SIGNATURE_INVALID` (Severidade Crítica): Alerta com agregação horária para investigação de incidentes de segurança ou rotação de segredo.
+  * `ALR_PAYMENT_INVOICE_FAILED` (Severidade Atenção): Alerta vinculado ao tenant com deduplicação por fatura para ação proativa da equipe de CS/Suporte antes do vencimento do período de carência.
+
 ---
 
 ## 2. Endpoints da API (`/api/auth`)

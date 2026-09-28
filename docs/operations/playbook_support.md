@@ -44,6 +44,20 @@ Quando o produtor relatar que pesagens, partos ou vacinações realizadas no cur
    - Colete o identificador do dispositivo e crie um ticket no Jira/Zendesk sob a taxonomia `SUP-OFFLINE-SYNC`.
    - Escale o chamado imediatamente para o **Suporte N2**.
 
+### 3.3. Triagem Proativa de Falhas de Pagamento e Faturas Recorrentes (`ALR_PAYMENT_INVOICE_FAILED`)
+Quando o subsistema de pagamentos detectar a recusa de uma fatura de renovação no Stripe, um alerta `ALR_PAYMENT_INVOICE_FAILED` é emitido na Central de Incidentes:
+1. Acesse `/backoffice/observability` e filtre por alertas com regra `ALR_PAYMENT_INVOICE_FAILED`.
+2. Abra o card de inspeção para obter os detalhes:
+   - Identificador do produtor (`TargetTenantId`) e nome da fazenda.
+   - Código da fatura Stripe (`invoiceId`), valor em moeda e motivo da recusa (`failureReason`).
+3. Verifique o status da assinatura em `/backoffice/tenants`:
+   - A fazenda estará em estado `PastDue`. O produtor ainda possui acesso durante a janela de tolerância (*grace period*).
+4. Procedimento de Atendimento Pró-ativo:
+   - Entre em contato imediato via WhatsApp ou telefone institucional com o responsável financeiro da fazenda antes do término do período de carência.
+   - Forneça o link seguro para atualização do meio de pagamento ou emissão de nova via gerado via Customer Portal do Stripe (`POST /api/v1/tenancy/subscription/portal`).
+   - Oriente a regularização para evitar a suspensão automática das rotas operacionais do rebanho (`PastDue` ➔ `Suspended`).
+5. No modal do alerta, atualize o status para `Acknowledged` adicionando o ticket de chamado (`SUP-COB-XXXX`).
+
 ---
 
 ## 4. Procedimentos Operacionais: Suporte N2 (Operação Avançada)
