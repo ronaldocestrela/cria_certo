@@ -355,6 +355,7 @@ public static class BackofficeDataSeeder
             1,
             new[]
             {
+                PlanFeature.Create("Modules.Cows", "Módulo de Plantel Bovino & Matrizes (Cows)", true),
                 PlanFeature.Create("Modules.Breeding", "Módulo de Reprodução & IATF", true),
                 PlanFeature.Create("Modules.Calving", "Módulo de Partos & Bezerreiro", true)
             },
@@ -380,6 +381,7 @@ public static class BackofficeDataSeeder
             5,
             new[]
             {
+                PlanFeature.Create("Modules.Cows", "Módulo de Plantel Bovino & Matrizes (Cows)", true),
                 PlanFeature.Create("Modules.Breeding", "Módulo de Reprodução & IATF", true),
                 PlanFeature.Create("Modules.Calving", "Módulo de Partos & Bezerreiro", true),
                 PlanFeature.Create("Modules.Growth", "Módulo de Manejo & Pesagem", true),
@@ -408,11 +410,13 @@ public static class BackofficeDataSeeder
             20,
             new[]
             {
+                PlanFeature.Create("Modules.Cows", "Módulo de Plantel Bovino & Matrizes (Cows)", true),
                 PlanFeature.Create("Modules.Breeding", "Módulo de Reprodução & IATF", true),
                 PlanFeature.Create("Modules.Calving", "Módulo de Partos & Bezerreiro", true),
                 PlanFeature.Create("Modules.Growth", "Módulo de Manejo & Pesagem", true),
                 PlanFeature.Create("Modules.Sanitary", "Módulo Sanitário & Vacinação", true),
                 PlanFeature.Create("Modules.Nutrition", "Módulo Nutricional & Suplementação", true),
+                PlanFeature.Create("Modules.Feedlot", "Módulo de Confinamento & Trato TMR", true),
                 PlanFeature.Create("Modules.Analytics", "Zootecnia Avançada & Indicadores", true),
                 PlanFeature.Create("PwaOfflineMode", "Modo Offline PWA em Curral", true)
             },

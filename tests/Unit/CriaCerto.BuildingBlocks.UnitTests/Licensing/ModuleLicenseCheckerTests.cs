@@ -72,16 +72,52 @@ public class ModuleLicenseCheckerTests
     [InlineData("Pro Fazenda", "Nutrition", true)]
     [InlineData("Pro Fazenda", "Breeding", true)]
     [InlineData("Pro Fazenda", "Calving", true)]
+    [InlineData("Pro Fazenda", "Growth", true)]
+    [InlineData("Pro Fazenda", "Cows", true)]
+    [InlineData("Pro Fazenda", "cows", true)]
+    [InlineData("Pro Fazenda", "Modules.Cows", true)]
     [InlineData("Pro Fazenda", "Sanitary", false)]
     [InlineData("Starter Pecuária", "Breeding", true)]
     [InlineData("Starter Pecuária", "Calving", true)]
+    [InlineData("Starter Pecuária", "Cows", true)]
+    [InlineData("Starter Pecuária", "cows", true)]
+    [InlineData("Starter Pecuária", "Modules.Cows", true)]
     [InlineData("Starter Pecuária", "Nutrition", false)]
+    [InlineData("Starter Pecuária", "Feedlot", false)]
     [InlineData("Enterprise Confinamento", "Sanitary", true)]
     [InlineData("Enterprise Confinamento", "Feedlot", true)]
+    [InlineData("Enterprise Confinamento", "Cows", true)]
     [InlineData("Enterprise Confinamento", "QualquerModuloNovo", true)]
     public void HasAccess_WithCommercialNames_ShouldEvaluatePermissionsCorrectly(string plan, string module, bool expected)
     {
         var result = ModuleLicenseChecker.HasAccess(plan, module);
+
+        result.Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("v2.0 - Nova Revisão", "Cows", true)]
+    [InlineData("v2.0 - Nova Revisão", "cows", true)]
+    [InlineData("v2.0 - Nova Revisão", "Breeding", true)]
+    [InlineData("v2.0 - Nova Revisão", "Calving", true)]
+    [InlineData("v2.0 - Nova Revisão", "Feedlot", false)]
+    public void HasAccess_WithUnrecognizedVersionString_ShouldSafelyFallbackToStarterPlan(string plan, string module, bool expected)
+    {
+        var result = ModuleLicenseChecker.HasAccess(plan, module);
+
+        result.Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("Modules.Cows", "Cows")]
+    [InlineData("cows", "Cows")]
+    [InlineData("cattle", "Cows")]
+    [InlineData("plantel", "Cows")]
+    [InlineData("Modules.Breeding", "Breeding")]
+    [InlineData("Feedlot", "Feedlot")]
+    public void NormalizeModule_ShouldNormalizeKeysCorrectly(string input, string expected)
+    {
+        var result = ModuleLicenseChecker.NormalizeModule(input);
 
         result.Should().Be(expected);
     }
