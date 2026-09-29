@@ -31,6 +31,8 @@ public class SubscriptionUrlValidator : ISubscriptionUrlValidator
             _allowedOrigins.Add("http://localhost:5001");
             _allowedOrigins.Add("https://localhost:7001");
             _allowedOrigins.Add("http://localhost:5173");
+            _allowedOrigins.Add("http://localhost:5205");
+            _allowedOrigins.Add("https://localhost:7269");
             _allowedOrigins.Add("https://criacerto.com.br");
             _allowedOrigins.Add("https://app.criacerto.com.br");
         }

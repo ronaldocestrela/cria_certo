@@ -687,8 +687,8 @@
                 _tenantId,
                 planName,
                 _isAnnual ? "annual" : "monthly",
-                Navigation.ToAbsoluteUri("/settings/subscription?success=true").ToString(),
-                Navigation.ToAbsoluteUri("/settings/subscription?canceled=true").ToString());
+                "/settings/subscription?success=true",
+                "/settings/subscription?canceled=true");
 
             if (checkoutSession != null && !string.IsNullOrWhiteSpace(checkoutSession.Url))
             {
@@ -738,7 +738,7 @@
         {
             var portalSession = await TenancyApiClient.CreateSubscriptionPortalAsync(
                 _tenantId,
-                Navigation.ToAbsoluteUri("/settings/subscription?success=true").ToString());
+                "/settings/subscription?success=true");
 
             if (portalSession != null && !string.IsNullOrWhiteSpace(portalSession.Url))
             {
