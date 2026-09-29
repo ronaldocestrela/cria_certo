@@ -458,11 +458,13 @@
 
     private static readonly Dictionary<string, string> _availableFeatureKeys = new()
     {
+        { "Modules.Cows", "Módulo de Plantel Bovino & Matrizes (Cows)" },
         { "Modules.Breeding", "Módulo de Reprodução & IATF" },
         { "Modules.Calving", "Módulo de Partos & Bezerreiro" },
         { "Modules.Growth", "Módulo de Manejo & Pesagem" },
         { "Modules.Sanitary", "Módulo Sanitário & Vacinação" },
         { "Modules.Nutrition", "Módulo Nutricional & Suplementação" },
+        { "Modules.Feedlot", "Módulo de Confinamento & Trato TMR" },
         { "Modules.Analytics", "Zootecnia Avançada & Analytics" },
         { "PwaOfflineMode", "Modo Offline PWA em Curral" }
     };
@@ -528,6 +530,7 @@
             _newPlanCapacity,
             new List<PlanFeatureInputDto>
             {
+                new("Modules.Cows", "Módulo de Plantel Bovino & Matrizes (Cows)", true),
                 new("Modules.Breeding", "Módulo de Reprodução & IATF", true),
                 new("Modules.Calving", "Módulo de Partos & Bezerreiro", true)
             },
@@ -556,7 +559,7 @@
 
         var command = new CreatePlanVersionCommand(
             plan.Id,
-            $"v{(plan.Versions.Count + 1)}.0 - Nova Revisão",
+            $"{plan.Name} v{(plan.Versions.Count + 1)}.0",
             price,
             price * 0.85m,
             capacity,

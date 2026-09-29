@@ -323,6 +323,24 @@
                             }
                         </tr>
                         <tr style="border-bottom: 1px solid #e2e8f0; background-color: var(--cc-canvas);">
+                            <td style="padding: 1rem 1.5rem; font-weight: 600;">Plantel Bovino, Matrizes & Identificação</td>
+                            @foreach (var plan in _availablePlans)
+                            {
+                                var hasFeature = plan.IncludedModules.Any(m => m.Contains("Cows", StringComparison.OrdinalIgnoreCase) || m.Contains("Breeding", StringComparison.OrdinalIgnoreCase))
+                                    || (plan.Features?.Any(f => (f.Key.Contains("Cows", StringComparison.OrdinalIgnoreCase) || f.Key.Contains("Breeding", StringComparison.OrdinalIgnoreCase)) && f.IsEnabled) ?? false);
+                                <td style="padding: 1rem 1.5rem; text-align: center;">
+                                    @if (hasFeature)
+                                    {
+                                        <span class="material-symbols-outlined" style="color: var(--cc-primary);">check</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="material-symbols-outlined" style="color: #ba1a1a;">close</span>
+                                    }
+                                </td>
+                            }
+                        </tr>
+                        <tr style="border-bottom: 1px solid #e2e8f0;">
                             <td style="padding: 1rem 1.5rem; font-weight: 600;">Reprodução, IATF & Partos</td>
                             @foreach (var plan in _availablePlans)
                             {

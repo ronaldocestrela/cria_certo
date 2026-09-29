@@ -98,7 +98,21 @@ public sealed class ChangeTenantPlanCommandHandler : IRequestHandler<ChangeTenan
 
         if (!isGracePeriodActivated)
         {
-            tenant.SubscribedPlan = targetVersion.VersionName;
+            string planNameToSet = targetVersion.VersionName;
+            if (_backofficeDbContext != null)
+            {
+                var catalog = await _backofficeDbContext.Set<PlanCatalog>()
+                    .FirstOrDefaultAsync(c => c.Id == targetVersion.PlanCatalogId, cancellationToken);
+                if (catalog != null && !planNameToSet.Contains(catalog.Name, StringComparison.OrdinalIgnoreCase)
+                    && !planNameToSet.Contains("Starter", StringComparison.OrdinalIgnoreCase)
+                    && !planNameToSet.Contains("Pro", StringComparison.OrdinalIgnoreCase)
+                    && !planNameToSet.Contains("Enterprise", StringComparison.OrdinalIgnoreCase))
+                {
+                    planNameToSet = $"{catalog.Name} - {targetVersion.VersionName}";
+                }
+            }
+
+            tenant.SubscribedPlan = planNameToSet;
             tenant.Capacity = targetVersion.HeadCapacityLimit;
             tenant.UpdatedAtUtc = DateTime.UtcNow;
         }

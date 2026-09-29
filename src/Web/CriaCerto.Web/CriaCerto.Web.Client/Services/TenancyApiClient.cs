@@ -451,10 +451,11 @@ public sealed class TenancyApiClient
                 MonthlyPrice: 149.00m,
                 AnnualPriceMonthly: 119.00m,
                 HeadCapacityLimit: 500,
-                IncludedModules: new[] { "Breeding", "Calving" },
+                IncludedModules: new[] { "Cows", "Breeding", "Calving" },
                 IsPopular: false,
                 Features: new List<SubscriptionPlanFeatureModel>
                 {
+                    new("Modules.Cows", "Módulo de Plantel Bovino & Matrizes", true),
                     new("Modules.Breeding", "Módulo de Reprodução & IATF", true),
                     new("Modules.Calving", "Módulo de Partos & Bezerreiro", true),
                     new("PwaOfflineMode", "Modo Offline PWA em Curral", true)
@@ -467,10 +468,11 @@ public sealed class TenancyApiClient
                 MonthlyPrice: 349.00m,
                 AnnualPriceMonthly: 279.00m,
                 HeadCapacityLimit: 2500,
-                IncludedModules: new[] { "Breeding", "Calving", "Growth", "Nutrition", "Sanitary" },
+                IncludedModules: new[] { "Cows", "Breeding", "Calving", "Growth", "Nutrition", "Sanitary" },
                 IsPopular: true,
                 Features: new List<SubscriptionPlanFeatureModel>
                 {
+                    new("Modules.Cows", "Módulo de Plantel Bovino & Matrizes", true),
                     new("Modules.Breeding", "Módulo de Reprodução & IATF", true),
                     new("Modules.Calving", "Módulo de Partos & Bezerreiro", true),
                     new("Modules.Growth", "Módulo de Manejo & Pesagem", true),
@@ -486,15 +488,17 @@ public sealed class TenancyApiClient
                 MonthlyPrice: 799.00m,
                 AnnualPriceMonthly: 649.00m,
                 HeadCapacityLimit: int.MaxValue,
-                IncludedModules: new[] { "Breeding", "Calving", "Growth", "Nutrition", "Sanitary", "Analytics" },
+                IncludedModules: new[] { "Cows", "Breeding", "Calving", "Growth", "Nutrition", "Sanitary", "Feedlot", "Analytics" },
                 IsPopular: false,
                 Features: new List<SubscriptionPlanFeatureModel>
                 {
+                    new("Modules.Cows", "Módulo de Plantel Bovino & Matrizes", true),
                     new("Modules.Breeding", "Módulo de Reprodução & IATF", true),
                     new("Modules.Calving", "Módulo de Partos & Bezerreiro", true),
                     new("Modules.Growth", "Módulo de Manejo & Pesagem", true),
                     new("Modules.Sanitary", "Módulo Sanitário & Vacinação", true),
                     new("Modules.Nutrition", "Módulo Nutricional & Suplementação", true),
+                    new("Modules.Feedlot", "Módulo de Confinamento & Trato TMR", true),
                     new("Modules.Analytics", "Zootecnia Avançada & Analytics", true),
                     new("PwaOfflineMode", "Modo Offline PWA em Curral", true)
                 }

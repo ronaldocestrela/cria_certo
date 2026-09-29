@@ -137,10 +137,15 @@ else
     {
         return module.ToLower() switch
         {
+            "cows" or "matrizes" or "plantel" => "Plantel Bovino & Matrizes",
             "nutrition" or "nutrição" => "Nutrição e Ração",
-            "breeding" or "reprodução" => "Reprodução e Plantel",
-            "maternity" or "maternidade" => "Farrowing e Maternidade",
+            "breeding" or "reprodução" => "Reprodução e IATF",
+            "calving" or "partos" => "Partos e Bezerreiro",
+            "maternity" or "maternidade" => "Maternidade e Bezerros",
+            "growth" or "manejo" => "Manejo e Pesagem",
             "sanitary" or "sanidade" => "Sanidade e Vacinas",
+            "feedlot" or "confinamento" => "Confinamento & Trato TMR",
+            "analytics" or "indicadores" => "Zootecnia Avançada e Analytics",
             _ => module
         };
     }
@@ -149,8 +154,12 @@ else
     {
         return module.ToLower() switch
         {
+            "cows" or "matrizes" or "plantel" => "Gerencie matrizes, reprodutores, genealogia, escore corporal e identificação individual de animais com total rastreabilidade zootécnica.",
+            "feedlot" or "confinamento" => "Monitore bateladas diárias de TMR, leitura de cocho, conversão alimentar (CA) e eficiência nutricional para lotes em regime de confinamento.",
+            "growth" or "manejo" => "Acompanhe ganho médio diário (GMD), evolução de arrobas (@), curvas de pesagem e taxa de lotação UA/ha para máxima performance.",
             "nutrition" or "nutrição" => "Desbloqueie o controle total de formulação de rações, conversão alimentar e redução de custos por kg produzido. Otimize a performance do seu plantel com dados precisos.",
             "sanitary" or "sanidade" => "Monitore o ciclo sanitário completo, registre tratamentos e gerencie planos vacinais automáticos com alertas de carência farmacológica para garantir conformidade sanitária.",
+            "analytics" or "indicadores" => "Painéis executivos com gráficos de tendência zootécnica, IEP projetado e análise comparativa de custo por arroba em tempo real.",
             _ => "Acesse funcionalidades de BI, automações avançadas e relatórios dedicados assinando um de nossos planos superiores."
         };
     }
@@ -164,6 +173,26 @@ else
                 new("Formulação Personalizada", "Crie misturas balanceadas específicas para cada fase de crescimento dos animais.", "maps_ar", "#eff7ef", "#2e5f46"),
                 new("Conversão Alimentar", "Analise a eficiência de consumo e identifique desvios de ganho de peso rapidamente.", "monitoring", "#ffdbd0", "#832600"),
                 new("Custo por Kg Produzido", "Mensure a rentabilidade real cruzando custos diretos de nutrição por animal.", "payments", "#d8e3fb", "#111c2d")
+            };
+        }
+
+        if (module.Equals("feedlot", StringComparison.OrdinalIgnoreCase))
+        {
+            return new List<FeatureItem>
+            {
+                new("Trato TMR & Cocho", "Registro digital de bateladas e escore diário de cocho em tempo real.", "agriculture", "#eff7ef", "#2e5f46"),
+                new("Conversão Alimentar", "Cálculo matemático de consumo em matéria seca e conversão alimentar.", "monitoring", "#ffdbd0", "#832600"),
+                new("Custo por @ Produzida", "Rentabilidade precisa em reais por arroba no período de engorda.", "payments", "#d8e3fb", "#111c2d")
+            };
+        }
+
+        if (module.Equals("cows", StringComparison.OrdinalIgnoreCase) || module.Equals("breeding", StringComparison.OrdinalIgnoreCase))
+        {
+            return new List<FeatureItem>
+            {
+                new("Controle de Plantel", "Identificação individual via brinco visual, RFID, tatuagem e SISBOV.", "groups", "#eff7ef", "#2e5f46"),
+                new("Genealogia e ECC", "Escore de condição corporal e árvore genealógica de matrizes e touros.", "pets", "#ffdbd0", "#832600"),
+                new("Histórico Zootécnico", "Linha do tempo reprodutiva unificada para tomada de decisões.", "history", "#d8e3fb", "#111c2d")
             };
         }
         
