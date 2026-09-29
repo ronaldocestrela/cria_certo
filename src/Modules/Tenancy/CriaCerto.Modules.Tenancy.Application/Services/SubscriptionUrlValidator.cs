@@ -8,10 +8,32 @@ public class SubscriptionUrlValidator : ISubscriptionUrlValidator
     private readonly HashSet<string> _allowedOrigins;
     private readonly string _defaultOrigin;
 
+    private static readonly string[] DefaultTrustedOrigins =
+    [
+        "https://criacerto.com.br",
+        "https://app.criacerto.com.br",
+        "https://www.criacerto.com.br",
+        "http://localhost:8081",
+        "http://localhost:8080",
+        "http://localhost:5000",
+        "http://localhost:5001",
+        "https://localhost:7001",
+        "http://localhost:5173",
+        "http://localhost:5205",
+        "https://localhost:7269"
+    ];
+
     public SubscriptionUrlValidator(IEnumerable<string>? allowedOrigins = null, string? defaultOrigin = null)
     {
         _allowedOrigins = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
+        // Sempre incluir as origens canônicas oficiais da plataforma e portas locais padrão
+        foreach (var trusted in DefaultTrustedOrigins)
+        {
+            _allowedOrigins.Add(trusted);
+        }
+
+        // Adicionar origens complementares fornecidas pela configuração
         if (allowedOrigins != null)
         {
             foreach (var origin in allowedOrigins)
@@ -23,23 +45,9 @@ public class SubscriptionUrlValidator : ISubscriptionUrlValidator
             }
         }
 
-        if (_allowedOrigins.Count == 0)
-        {
-            _allowedOrigins.Add("http://localhost:8081");
-            _allowedOrigins.Add("http://localhost:8080");
-            _allowedOrigins.Add("http://localhost:5000");
-            _allowedOrigins.Add("http://localhost:5001");
-            _allowedOrigins.Add("https://localhost:7001");
-            _allowedOrigins.Add("http://localhost:5173");
-            _allowedOrigins.Add("http://localhost:5205");
-            _allowedOrigins.Add("https://localhost:7269");
-            _allowedOrigins.Add("https://criacerto.com.br");
-            _allowedOrigins.Add("https://app.criacerto.com.br");
-        }
-
         _defaultOrigin = !string.IsNullOrWhiteSpace(defaultOrigin)
             ? defaultOrigin.TrimEnd('/')
-            : _allowedOrigins.First();
+            : (_allowedOrigins.Contains("https://criacerto.com.br") ? "https://criacerto.com.br" : _allowedOrigins.First());
     }
 
     public string DefaultOrigin => _defaultOrigin;
@@ -82,7 +90,21 @@ public class SubscriptionUrlValidator : ISubscriptionUrlValidator
             }
 
             var authority = uri.GetLeftPart(UriPartial.Authority).TrimEnd('/');
-            return _allowedOrigins.Contains(authority);
+            if (_allowedOrigins.Contains(authority))
+            {
+                return true;
+            }
+
+            // Permitir subdomínios oficiais seguros sob criacerto.com.br em HTTPS na porta padrão
+            if (uri.Scheme == Uri.UriSchemeHttps &&
+                uri.IsDefaultPort &&
+                (string.Equals(uri.Host, "criacerto.com.br", StringComparison.OrdinalIgnoreCase) ||
+                 uri.Host.EndsWith(".criacerto.com.br", StringComparison.OrdinalIgnoreCase)))
+            {
+                return true;
+            }
+
+            return false;
         }
 
         return false;
@@ -107,10 +129,13 @@ public class SubscriptionUrlValidator : ISubscriptionUrlValidator
         if (trimmedUrl.StartsWith('/') && !trimmedUrl.StartsWith("//"))
         {
             string baseAuthority = _defaultOrigin;
-            if (Uri.TryCreate(fallbackUrl, UriKind.Absolute, out var fallbackUri) &&
-                _allowedOrigins.Contains(fallbackUri.GetLeftPart(UriPartial.Authority).TrimEnd('/')))
+            if (Uri.TryCreate(fallbackUrl, UriKind.Absolute, out var fallbackUri))
             {
-                baseAuthority = fallbackUri.GetLeftPart(UriPartial.Authority).TrimEnd('/');
+                var fallbackAuthority = fallbackUri.GetLeftPart(UriPartial.Authority).TrimEnd('/');
+                if (_allowedOrigins.Contains(fallbackAuthority) || IsAllowedUrl(fallbackAuthority))
+                {
+                    baseAuthority = fallbackAuthority;
+                }
             }
 
             return Result.Success($"{baseAuthority}{trimmedUrl}");

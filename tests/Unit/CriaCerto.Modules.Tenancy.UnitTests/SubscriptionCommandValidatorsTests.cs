@@ -115,4 +115,21 @@ public class SubscriptionCommandValidatorsTests
         result.IsValid.Should().BeFalse();
         result.Errors.Should().Contain(e => e.PropertyName == nameof(CreatePortalSessionCommand.ReturnUrl));
     }
+
+    [Fact]
+    public void PortalValidator_Should_Pass_For_Production_ReturnUrl_Even_With_Local_Only_Origins_Configured()
+    {
+        // Simula ambiente onde a configuração forneceu apenas localhost
+        var localOnlyValidator = new SubscriptionUrlValidator(new[] { "http://localhost:5205" });
+        var validator = new CreatePortalSessionCommandValidator(localOnlyValidator);
+
+        var command = new CreatePortalSessionCommand(
+            TenantId: Guid.Parse("6ec72352-5404-4397-97a3-b18816b76560"),
+            UserId: Guid.NewGuid(),
+            ReturnUrl: "https://criacerto.com.br/settings/subscription?success=true"
+        );
+
+        var result = validator.Validate(command);
+        result.IsValid.Should().BeTrue();
+    }
 }

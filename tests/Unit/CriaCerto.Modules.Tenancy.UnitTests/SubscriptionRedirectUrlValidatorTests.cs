@@ -139,4 +139,32 @@ public class SubscriptionRedirectUrlValidatorTests
         result.Error.Type.Should().Be(ErrorType.Validation);
         result.Error.Code.Should().Be("Subscription.InvalidRedirectUrl");
     }
+
+    [Theory]
+    [InlineData("https://criacerto.com.br/settings/subscription?success=true")]
+    [InlineData("https://app.criacerto.com.br/settings/subscription?success=true")]
+    [InlineData("https://www.criacerto.com.br/settings/subscription?success=true")]
+    [InlineData("https://admin.criacerto.com.br/billing")]
+    public void IsAllowedUrl_Should_Always_Allow_CriaCerto_Official_Domains_Even_When_Custom_Origins_Provided(string url)
+    {
+        // Instancia o validador com uma lista isolada que não inclui criacerto.com.br explicitamente
+        var isolatedValidator = new SubscriptionUrlValidator(new[] { "http://localhost:3000" });
+
+        var isAllowed = isolatedValidator.IsAllowedUrl(url);
+
+        isAllowed.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ResolveSafeUrl_Should_Succeed_For_Production_Portal_ReturnUrl()
+    {
+        var isolatedValidator = new SubscriptionUrlValidator(new[] { "http://localhost:5205" });
+        const string returnUrl = "https://criacerto.com.br/settings/subscription?success=true";
+        const string fallback = "https://criacerto.com.br/settings/subscription";
+
+        var result = isolatedValidator.ResolveSafeUrl(returnUrl, fallback);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Should().Be(returnUrl);
+    }
 }

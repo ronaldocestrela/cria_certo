@@ -31,17 +31,37 @@ public static class DependencyInjection
         services.AddScoped<IJwtService, JwtService>();
         services.AddScoped<ITenantAccessGuard, TenantAccessGuard>();
 
-        var allowedOrigins = configuration.GetSection("Cors:AllowedOrigins").Get<string[]>();
+        var allowedOrigins = configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? Array.Empty<string>();
+        var stripeAllowedOrigins = configuration.GetSection("Stripe:AllowedOrigins").Get<string[]>() ?? Array.Empty<string>();
         var stripeSection = configuration.GetSection(StripeOptions.SectionName);
         var returnUrl = stripeSection["ReturnUrl"] ?? configuration["STRIPE_RETURN_URL"];
+        var successUrl = stripeSection["SuccessUrl"] ?? configuration["STRIPE_SUCCESS_URL"];
+        var cancelUrl = stripeSection["CancelUrl"] ?? configuration["STRIPE_CANCEL_URL"];
+
+        var combinedOrigins = new HashSet<string>(allowedOrigins, StringComparer.OrdinalIgnoreCase);
+        foreach (var origin in stripeAllowedOrigins)
+        {
+            if (!string.IsNullOrWhiteSpace(origin))
+            {
+                combinedOrigins.Add(origin.Trim());
+            }
+        }
+
+        foreach (var url in new[] { returnUrl, successUrl, cancelUrl })
+        {
+            if (!string.IsNullOrWhiteSpace(url) && Uri.TryCreate(url.Trim(), UriKind.Absolute, out var uri))
+            {
+                combinedOrigins.Add(uri.GetLeftPart(UriPartial.Authority));
+            }
+        }
 
         string? defaultOrigin = null;
-        if (!string.IsNullOrWhiteSpace(returnUrl) && Uri.TryCreate(returnUrl, UriKind.Absolute, out var returnUri))
+        if (!string.IsNullOrWhiteSpace(returnUrl) && Uri.TryCreate(returnUrl.Trim(), UriKind.Absolute, out var returnUri))
         {
             defaultOrigin = returnUri.GetLeftPart(UriPartial.Authority);
         }
 
-        services.AddSingleton<ISubscriptionUrlValidator>(new CriaCerto.Modules.Tenancy.Application.Services.SubscriptionUrlValidator(allowedOrigins, defaultOrigin));
+        services.AddSingleton<ISubscriptionUrlValidator>(new CriaCerto.Modules.Tenancy.Application.Services.SubscriptionUrlValidator(combinedOrigins, defaultOrigin));
 
         services.AddOptions<StripeOptions>()
             .Configure(options =>
