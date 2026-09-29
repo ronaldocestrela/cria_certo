@@ -249,6 +249,27 @@ public sealed class TenancyApiClient
             {
                 return await response.Content.ReadFromJsonAsync<StripePortalSessionResponse>(cancellationToken: cancellationToken);
             }
+
+            try
+            {
+                var errorObj = await response.Content.ReadFromJsonAsync<ApiErrorDto>(cancellationToken: cancellationToken);
+                if (errorObj != null && !string.IsNullOrWhiteSpace(errorObj.Message))
+                {
+                    throw new InvalidOperationException(errorObj.Message);
+                }
+            }
+            catch (InvalidOperationException)
+            {
+                throw;
+            }
+            catch
+            {
+                // Silently fallback if body cannot be parsed as ApiErrorDto
+            }
+        }
+        catch (InvalidOperationException)
+        {
+            throw;
         }
         catch
         {
