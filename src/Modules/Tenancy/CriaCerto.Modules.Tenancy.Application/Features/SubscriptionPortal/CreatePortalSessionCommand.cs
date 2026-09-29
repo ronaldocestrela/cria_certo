@@ -70,7 +70,7 @@ public sealed class CreatePortalSessionCommandHandler : IRequestHandler<CreatePo
         // Validação estrita e sanitização contra ataques de Open Redirect (CWE-601)
         var safeReturnUrlResult = _urlValidator.ResolveSafeUrl(
             request.ReturnUrl,
-            "http://localhost:8081/settings/subscription");
+            $"{_urlValidator.DefaultOrigin}/settings/subscription");
         if (safeReturnUrlResult.IsFailure)
         {
             return Result.Failure<CustomerPortalSessionResult>(safeReturnUrlResult.Error);

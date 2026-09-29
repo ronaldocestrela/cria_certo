@@ -115,7 +115,7 @@ public sealed class CreateCheckoutSessionCommandHandler : IRequestHandler<Create
         // Validação estrita e sanitização contra ataques de Open Redirect (CWE-601)
         var safeSuccessUrlResult = _urlValidator.ResolveSafeUrl(
             request.SuccessUrl,
-            "http://localhost:8081/settings/subscription?success=true");
+            $"{_urlValidator.DefaultOrigin}/settings/subscription?success=true");
         if (safeSuccessUrlResult.IsFailure)
         {
             return Result.Failure<CheckoutSessionResult>(safeSuccessUrlResult.Error);
@@ -123,7 +123,7 @@ public sealed class CreateCheckoutSessionCommandHandler : IRequestHandler<Create
 
         var safeCancelUrlResult = _urlValidator.ResolveSafeUrl(
             request.CancelUrl,
-            "http://localhost:8081/settings/subscription?canceled=true");
+            $"{_urlValidator.DefaultOrigin}/settings/subscription?canceled=true");
         if (safeCancelUrlResult.IsFailure)
         {
             return Result.Failure<CheckoutSessionResult>(safeCancelUrlResult.Error);

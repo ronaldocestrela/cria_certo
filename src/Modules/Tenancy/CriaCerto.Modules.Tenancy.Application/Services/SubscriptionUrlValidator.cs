@@ -42,6 +42,8 @@ public class SubscriptionUrlValidator : ISubscriptionUrlValidator
             : _allowedOrigins.First();
     }
 
+    public string DefaultOrigin => _defaultOrigin;
+
     public bool IsAllowedUrl(string? url)
     {
         if (string.IsNullOrWhiteSpace(url))

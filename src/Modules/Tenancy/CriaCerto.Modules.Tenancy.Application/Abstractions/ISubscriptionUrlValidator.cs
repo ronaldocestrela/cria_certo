@@ -5,6 +5,11 @@ namespace CriaCerto.Modules.Tenancy.Application.Abstractions;
 public interface ISubscriptionUrlValidator
 {
     /// <summary>
+    /// Origem base padrão confiável da aplicação (ex.: http://localhost:5205 ou https://app.criacerto.com.br).
+    /// </summary>
+    string DefaultOrigin { get; }
+
+    /// <summary>
     /// Verifica se a URL informada é segura e pertence às origens confiáveis ou é um caminho relativo válido.
     /// </summary>
     bool IsAllowedUrl(string? url);
