@@ -184,28 +184,36 @@
     private string? _ownerUserEmail;
     private DateTime? _currentPeriodEnd;
     private string? _renewalDateString;
+    private bool _lastIsOpen;
+    private Guid _lastTenantId;
 
     protected override void OnParametersSet()
     {
-        _name = Name;
-        _legalName = LegalName;
-        _cnpj = CNPJ;
-        _externalIdentifier = ExternalIdentifier;
-        _state = State;
-        _city = City;
-        _stateRegistration = StateRegistration;
-        _areaInHectares = AreaInHectares;
-        _capacity = Capacity;
-        _type = Type;
-        _subscribedPlan = SubscribedPlan;
-        _technicalOwnerName = TechnicalOwnerName;
-        _technicalOwnerEmail = TechnicalOwnerEmail;
-        _commercialOwnerName = CommercialOwnerName;
-        _commercialOwnerEmail = CommercialOwnerEmail;
-        _currentPeriodEnd = CurrentPeriodEnd;
-        _renewalDateString = CurrentPeriodEnd.HasValue
-            ? CurrentPeriodEnd.Value.ToLocalTime().ToString("yyyy-MM-dd")
-            : null;
+        if (IsOpen && (!_lastIsOpen || _lastTenantId != TenantId))
+        {
+            _name = Name;
+            _legalName = LegalName;
+            _cnpj = CNPJ;
+            _externalIdentifier = ExternalIdentifier;
+            _state = State;
+            _city = City;
+            _stateRegistration = StateRegistration;
+            _areaInHectares = AreaInHectares;
+            _capacity = Capacity;
+            _type = Type;
+            _subscribedPlan = SubscribedPlan;
+            _technicalOwnerName = TechnicalOwnerName;
+            _technicalOwnerEmail = TechnicalOwnerEmail;
+            _commercialOwnerName = CommercialOwnerName;
+            _commercialOwnerEmail = CommercialOwnerEmail;
+            _currentPeriodEnd = CurrentPeriodEnd;
+            _renewalDateString = CurrentPeriodEnd.HasValue
+                ? CurrentPeriodEnd.Value.ToLocalTime().ToString("yyyy-MM-dd")
+                : null;
+        }
+
+        _lastIsOpen = IsOpen;
+        _lastTenantId = TenantId;
     }
 
     private void HandleRenewalDateChange(ChangeEventArgs e)

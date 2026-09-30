@@ -646,6 +646,14 @@ public class SubscriptionBillingAuthorizationTests : IDisposable
         {
             return Task.FromResult(new StripeWebhookResult(true, "checkout.session.completed", null));
         }
+
+        public Task<Result> UpdateSubscriptionBillingDateAsync(
+            string subscriptionId,
+            DateTime newBillingDateUtc,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(Result.Success());
+        }
     }
 
     private sealed class FakeSender : ISender

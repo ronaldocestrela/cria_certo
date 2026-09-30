@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using CriaCerto.BuildingBlocks.Abstractions.Licensing;
+using CriaCerto.BuildingBlocks.Abstractions.Results;
 using CriaCerto.Modules.Tenancy.Application.Abstractions;
 using CriaCerto.Modules.Tenancy.Application.Domain;
 using CriaCerto.Modules.Tenancy.Application.Events;
@@ -810,6 +811,67 @@ public sealed class StripePaymentService : IStripePaymentService
         else if (string.Equals(plan, ModuleLicenseChecker.EnterprisePlan, StringComparison.OrdinalIgnoreCase))
         {
             tenant.Capacity = 100000;
+        }
+    }
+
+    public async Task<Result> UpdateSubscriptionBillingDateAsync(
+        string subscriptionId,
+        DateTime newBillingDateUtc,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(subscriptionId))
+        {
+            return Result.Failure(Error.Validation("Stripe.SubscriptionRequired", "O identificador da assinatura Stripe é obrigatório."));
+        }
+
+        if (string.IsNullOrWhiteSpace(_options.ApiKey) && string.IsNullOrWhiteSpace(StripeConfiguration.ApiKey))
+        {
+            _logger.LogWarning("Chave Stripe não configurada. Atualização da data de cobrança da assinatura {SubscriptionId} ignorada no gateway.", subscriptionId);
+            return Result.Success();
+        }
+
+        EnsureApiKeyConfigured();
+
+        try
+        {
+            var subscriptionService = new SubscriptionService();
+            var options = new SubscriptionUpdateOptions
+            {
+                ProrationBehavior = "none"
+            };
+
+            var now = DateTime.UtcNow;
+            if (newBillingDateUtc > now)
+            {
+                options.TrialEnd = newBillingDateUtc;
+            }
+            else
+            {
+                options.TrialEnd = SubscriptionTrialEnd.Now;
+            }
+
+            var updatedSubscription = await subscriptionService.UpdateAsync(
+                subscriptionId,
+                options,
+                cancellationToken: cancellationToken);
+
+            _logger.LogInformation(
+                "Data de cobrança da assinatura Stripe {SubscriptionId} atualizada com sucesso para {NewDate:yyyy-MM-dd HH:mm:ss} UTC (Status: {Status}).",
+                subscriptionId,
+                newBillingDateUtc,
+                updatedSubscription.Status);
+
+            return Result.Success();
+        }
+        catch (StripeException ex)
+        {
+            _logger.LogError(ex, "Erro da API Stripe ao atualizar data de cobrança da assinatura {SubscriptionId}: {Message}", subscriptionId, ex.Message);
+            return Result.Failure(Error.Failure("Stripe.UpdateFailed", $"Falha ao atualizar data de cobrança no Stripe: {ex.Message}"));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Erro inesperado ao atualizar data de cobrança da assinatura {SubscriptionId}.", subscriptionId);
+            return Result.Failure(Error.Failure("Stripe.UnexpectedError", $"Erro inesperado ao sincronizar com Stripe: {ex.Message}"));
         }
     }
 }

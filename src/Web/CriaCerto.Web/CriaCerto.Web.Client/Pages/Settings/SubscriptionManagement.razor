@@ -74,7 +74,7 @@
                     <p style="margin: 0.2rem 0 0 0; font-size: 13px; color: var(--cc-ink-muted);">
                         @if (_profile.CurrentPeriodEndUtc.HasValue)
                         {
-                            <span>Próxima renovação em <strong>@_profile.CurrentPeriodEndUtc.Value.ToString("dd/MM/yyyy")</strong>.</span>
+                            <span>Próxima renovação em <strong>@_profile.CurrentPeriodEndUtc.Value.ToLocalTime().ToString("dd/MM/yyyy")</strong>.</span>
                         }
                         else
                         {

@@ -1,4 +1,5 @@
 using CriaCerto.BuildingBlocks.Abstractions.Results;
+using CriaCerto.Modules.Tenancy.Application.Abstractions;
 using CriaCerto.Modules.Tenancy.Application.Domain;
 using CriaCerto.Modules.Tenancy.Application.Features.BackofficeTenants;
 using CriaCerto.Modules.Tenancy.Infrastructure.Persistence;
@@ -161,5 +162,158 @@ public class UpdateTenantForAdminCommandHandlerTests : IDisposable
         var invalidResult = await validator.ValidateAsync(invalidUnmaskedCommand);
         invalidResult.IsValid.Should().BeFalse();
         invalidResult.Errors.Should().Contain(e => e.PropertyName == "CNPJ");
+    }
+
+    [Fact]
+    public async Task Handle_Should_Sync_With_StripePaymentService_When_Tenant_Has_StripeSubscriptionId()
+    {
+        var tenantId = Guid.NewGuid();
+        var subscriptionId = "sub_test_stripe_123";
+        var originalTenant = new Tenant
+        {
+            Id = tenantId,
+            Name = "Fazenda Stripe Sync",
+            CNPJ = "12.345.678/0001-90",
+            CnpjNormalized = "12345678000190",
+            State = "GO",
+            City = "Jataí",
+            Capacity = 500,
+            SubscribedPlan = "Pro",
+            Status = "Active",
+            StripeSubscriptionId = subscriptionId,
+            CurrentPeriodEndUtc = new DateTime(2026, 9, 1, 0, 0, 0, DateTimeKind.Utc)
+        };
+        _dbContext.Tenants.Add(originalTenant);
+        await _dbContext.SaveChangesAsync();
+
+        var stripePaymentService = new TestStripePaymentService();
+        var newBillingDate = new DateTime(2026, 11, 20, 12, 0, 0, DateTimeKind.Utc);
+
+        var handler = new UpdateTenantForAdminCommandHandler(_dbContext, stripePaymentService);
+        var command = new UpdateTenantForAdminCommand(
+            tenantId,
+            "Fazenda Stripe Sync",
+            null,
+            "12.345.678/0001-90",
+            null,
+            "GO",
+            "Jataí",
+            "",
+            300,
+            500,
+            "Corte",
+            null,
+            null,
+            null,
+            null,
+            CurrentPeriodEndUtc: newBillingDate,
+            UpdateCurrentPeriodEnd: true);
+
+        var result = await handler.Handle(command, CancellationToken.None);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.CurrentPeriodEndUtc.Should().Be(newBillingDate);
+
+        stripePaymentService.LastSubscriptionIdUpdated.Should().Be(subscriptionId);
+        stripePaymentService.LastBillingDateUpdated.Should().Be(newBillingDate);
+
+        var updatedTenant = await _dbContext.Tenants.FirstAsync(t => t.Id == tenantId);
+        updatedTenant.CurrentPeriodEndUtc.Should().Be(newBillingDate);
+
+        var history = await _dbContext.SubscriptionHistories
+            .FirstOrDefaultAsync(h => h.TenantId == tenantId && h.ActionType == SubscriptionActionType.Renewal);
+        history.Should().NotBeNull();
+        history!.Justification.Should().Contain("Data de cobrança/renovação alterada administrativamente");
+    }
+
+    [Fact]
+    public async Task Handle_Should_Return_Failure_When_StripePaymentService_Returns_Error()
+    {
+        var tenantId = Guid.NewGuid();
+        var subscriptionId = "sub_test_stripe_error";
+        var originalTenant = new Tenant
+        {
+            Id = tenantId,
+            Name = "Fazenda Stripe Error",
+            CNPJ = "12.345.678/0001-90",
+            CnpjNormalized = "12345678000190",
+            State = "GO",
+            City = "Jataí",
+            Capacity = 500,
+            SubscribedPlan = "Pro",
+            Status = "Active",
+            StripeSubscriptionId = subscriptionId,
+            CurrentPeriodEndUtc = new DateTime(2026, 9, 1, 0, 0, 0, DateTimeKind.Utc)
+        };
+        _dbContext.Tenants.Add(originalTenant);
+        await _dbContext.SaveChangesAsync();
+
+        var expectedError = Error.Failure("Stripe.UpdateFailed", "Subscription cannot be updated.");
+        var stripePaymentService = new TestStripePaymentService { ReturnError = expectedError };
+        var newBillingDate = new DateTime(2026, 11, 20, 12, 0, 0, DateTimeKind.Utc);
+
+        var handler = new UpdateTenantForAdminCommandHandler(_dbContext, stripePaymentService);
+        var command = new UpdateTenantForAdminCommand(
+            tenantId,
+            "Fazenda Stripe Error",
+            null,
+            "12.345.678/0001-90",
+            null,
+            "GO",
+            "Jataí",
+            "",
+            300,
+            500,
+            "Corte",
+            null,
+            null,
+            null,
+            null,
+            CurrentPeriodEndUtc: newBillingDate,
+            UpdateCurrentPeriodEnd: true);
+
+        var result = await handler.Handle(command, CancellationToken.None);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("Stripe.UpdateFailed");
+        result.Error.Message.Should().Be("Subscription cannot be updated.");
+    }
+
+    private sealed class TestStripePaymentService : IStripePaymentService
+    {
+        public string? LastSubscriptionIdUpdated { get; private set; }
+        public DateTime? LastBillingDateUpdated { get; private set; }
+        public Error? ReturnError { get; set; }
+
+        public Task<string> GetOrCreateCustomerAsync(Tenant tenant, User user, CancellationToken cancellationToken = default) =>
+            Task.FromResult("cus_test");
+
+        public Task<CheckoutSessionResult> CreateCheckoutSessionAsync(
+            Tenant tenant, User user, string planId, string planName, string billingCycle,
+            decimal unitAmount, string successUrl, string cancelUrl, string? priceId = null,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new CheckoutSessionResult("cs_test", "https://checkout.stripe.com/test"));
+
+        public Task<CustomerPortalSessionResult> CreateCustomerPortalSessionAsync(
+            Tenant tenant, string returnUrl, CancellationToken cancellationToken = default) =>
+            Task.FromResult(new CustomerPortalSessionResult("https://billing.stripe.com/portal"));
+
+        public Task<StripeWebhookResult> ProcessWebhookAsync(
+            string jsonPayload, string stripeSignatureHeader, CancellationToken cancellationToken = default) =>
+            Task.FromResult(new StripeWebhookResult(true, "test", null));
+
+        public Task<Result> UpdateSubscriptionBillingDateAsync(
+            string subscriptionId, DateTime newBillingDateUtc, CancellationToken cancellationToken = default)
+        {
+            LastSubscriptionIdUpdated = subscriptionId;
+            LastBillingDateUpdated = newBillingDateUtc;
+
+            if (ReturnError != null)
+            {
+                return Task.FromResult(Result.Failure(ReturnError));
+            }
+
+            return Task.FromResult(Result.Success());
+        }
     }
 }

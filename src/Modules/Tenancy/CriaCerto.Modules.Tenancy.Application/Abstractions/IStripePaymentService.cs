@@ -1,3 +1,4 @@
+using CriaCerto.BuildingBlocks.Abstractions.Results;
 using CriaCerto.Modules.Tenancy.Application.Domain;
 
 namespace CriaCerto.Modules.Tenancy.Application.Abstractions;
@@ -32,5 +33,10 @@ public interface IStripePaymentService
     Task<StripeWebhookResult> ProcessWebhookAsync(
         string jsonPayload,
         string stripeSignatureHeader,
+        CancellationToken cancellationToken = default);
+
+    Task<Result> UpdateSubscriptionBillingDateAsync(
+        string subscriptionId,
+        DateTime newBillingDateUtc,
         CancellationToken cancellationToken = default);
 }

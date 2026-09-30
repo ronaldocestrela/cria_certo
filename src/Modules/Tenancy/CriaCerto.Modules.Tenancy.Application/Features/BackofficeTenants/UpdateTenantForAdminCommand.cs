@@ -77,10 +77,14 @@ public sealed class UpdateTenantForAdminCommandValidator : AbstractValidator<Upd
 public sealed class UpdateTenantForAdminCommandHandler : IRequestHandler<UpdateTenantForAdminCommand, Result<TenantBackofficeDetailDto>>
 {
     private readonly ITenancyDbContext _dbContext;
+    private readonly IStripePaymentService? _stripePaymentService;
 
-    public UpdateTenantForAdminCommandHandler(ITenancyDbContext dbContext)
+    public UpdateTenantForAdminCommandHandler(
+        ITenancyDbContext dbContext,
+        IStripePaymentService? stripePaymentService = null)
     {
         _dbContext = dbContext;
+        _stripePaymentService = stripePaymentService;
     }
 
     public async Task<Result<TenantBackofficeDetailDto>> Handle(UpdateTenantForAdminCommand request, CancellationToken cancellationToken)
@@ -158,9 +162,38 @@ public sealed class UpdateTenantForAdminCommandHandler : IRequestHandler<UpdateT
         }
         if (request.UpdateCurrentPeriodEnd)
         {
+            var previousPeriodEnd = tenant.CurrentPeriodEndUtc;
             tenant.CurrentPeriodEndUtc = request.CurrentPeriodEndUtc.HasValue
                 ? DateTime.SpecifyKind(request.CurrentPeriodEndUtc.Value, DateTimeKind.Utc)
                 : null;
+
+            if (_stripePaymentService != null
+                && !string.IsNullOrWhiteSpace(tenant.StripeSubscriptionId)
+                && tenant.CurrentPeriodEndUtc.HasValue)
+            {
+                var stripeResult = await _stripePaymentService.UpdateSubscriptionBillingDateAsync(
+                    tenant.StripeSubscriptionId,
+                    tenant.CurrentPeriodEndUtc.Value,
+                    cancellationToken);
+
+                if (stripeResult.IsFailure)
+                {
+                    return Result.Failure<TenantBackofficeDetailDto>(stripeResult.Error);
+                }
+            }
+
+            if (previousPeriodEnd != tenant.CurrentPeriodEndUtc)
+            {
+                var history = TenantSubscriptionHistory.CreateFromStripeWebhook(
+                    tenantId: tenant.Id,
+                    actionType: SubscriptionActionType.Renewal,
+                    justification: tenant.CurrentPeriodEndUtc.HasValue
+                        ? $"Data de cobrança/renovação alterada administrativamente no backoffice para {tenant.CurrentPeriodEndUtc.Value:dd/MM/yyyy HH:mm:ss} UTC."
+                        : "Data de cobrança/renovação removida administrativamente no backoffice.",
+                    snapshotHeadCount: tenant.Capacity
+                );
+                _dbContext.SubscriptionHistories.Add(history);
+            }
         }
         tenant.UpdatedAtUtc = DateTime.UtcNow;
         tenant.CommercialRegion = TenantSegmentationCatalog.ResolveCommercialRegionFromState(tenant.State);
