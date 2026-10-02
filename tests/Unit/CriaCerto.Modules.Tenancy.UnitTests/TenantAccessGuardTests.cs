@@ -127,6 +127,71 @@ public class TenantAccessGuardTests : IDisposable
         result.Error.Code.Should().Be(TenancyErrors.TenantNotAccessible.Code);
     }
 
+    [Fact]
+    public async Task EnsureProducerAccessAsync_Should_ReturnSuccess_WhenTenantIsActiveAndPeriodInFuture()
+    {
+        // Arrange
+        var tenant = CreateTenant(TenantStatus.Active, currentPeriodEndUtc: DateTime.UtcNow.AddDays(30));
+        _dbContext.Tenants.Add(tenant);
+        await _dbContext.SaveChangesAsync();
+
+        // Act
+        var result = await _guard.EnsureProducerAccessAsync(tenant.Id);
+
+        // Assert
+        result.IsSuccess.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task EnsureProducerAccessAsync_Should_ReturnSubscriptionExpired_WhenTenantIsActiveAndPeriodInPast()
+    {
+        // Arrange
+        var tenant = CreateTenant(TenantStatus.Active, currentPeriodEndUtc: DateTime.UtcNow.AddMinutes(-10));
+        _dbContext.Tenants.Add(tenant);
+        await _dbContext.SaveChangesAsync();
+
+        // Act
+        var result = await _guard.EnsureProducerAccessAsync(tenant.Id);
+
+        // Assert
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be(TenancyErrors.SubscriptionExpired.Code);
+        result.Error.Type.Should().Be(ErrorType.Unauthorized);
+    }
+
+    [Fact]
+    public async Task EnsureProducerAccessAsync_Should_ReturnSubscriptionExpired_WhenTenantIsPastDueAndPeriodInPast()
+    {
+        // Arrange
+        var tenant = CreateTenant(TenantStatus.PastDue, currentPeriodEndUtc: DateTime.UtcNow.AddDays(-2));
+        _dbContext.Tenants.Add(tenant);
+        await _dbContext.SaveChangesAsync();
+
+        // Act
+        var result = await _guard.EnsureProducerAccessAsync(tenant.Id);
+
+        // Assert
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be(TenancyErrors.SubscriptionExpired.Code);
+        result.Error.Type.Should().Be(ErrorType.Unauthorized);
+    }
+
+    [Fact]
+    public async Task EnsureProducerAccessAsync_Should_ReturnSuccess_WhenTenantIsActiveAndPeriodInPast_ButIsProtected()
+    {
+        // Arrange
+        var tenant = CreateTenant(TenantStatus.Active, currentPeriodEndUtc: DateTime.UtcNow.AddDays(-5));
+        tenant.IsProtected = true;
+        _dbContext.Tenants.Add(tenant);
+        await _dbContext.SaveChangesAsync();
+
+        // Act
+        var result = await _guard.EnsureProducerAccessAsync(tenant.Id);
+
+        // Assert
+        result.IsSuccess.Should().BeTrue();
+    }
+
     private static Tenant CreateTenant(TenantStatus status, DateTime? currentPeriodEndUtc = null)
     {
         return new Tenant

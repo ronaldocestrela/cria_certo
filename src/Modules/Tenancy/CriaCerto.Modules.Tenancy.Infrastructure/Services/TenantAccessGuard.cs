@@ -20,7 +20,7 @@ public sealed class TenantAccessGuard : ITenantAccessGuard
         var tenantData = await _dbContext.Tenants
             .AsNoTracking()
             .Where(t => t.Id == tenantId)
-            .Select(t => new { t.Status, t.CurrentPeriodEndUtc })
+            .Select(t => new { t.Status, t.CurrentPeriodEndUtc, t.IsProtected })
             .FirstOrDefaultAsync(cancellationToken);
 
         if (tenantData is null)
@@ -28,11 +28,18 @@ public sealed class TenantAccessGuard : ITenantAccessGuard
             return Result.Failure(TenancyErrors.TenantNotFound);
         }
 
-        if (string.Equals(tenantData.Status, TenantLifecycle.ToStatusString(TenantStatus.Trial), StringComparison.OrdinalIgnoreCase)
-            && tenantData.CurrentPeriodEndUtc.HasValue
-            && tenantData.CurrentPeriodEndUtc.Value < DateTime.UtcNow)
+        if (!tenantData.IsProtected && tenantData.CurrentPeriodEndUtc.HasValue && tenantData.CurrentPeriodEndUtc.Value < DateTime.UtcNow)
         {
-            return Result.Failure(TenancyErrors.TrialExpired);
+            if (string.Equals(tenantData.Status, TenantLifecycle.ToStatusString(TenantStatus.Trial), StringComparison.OrdinalIgnoreCase))
+            {
+                return Result.Failure(TenancyErrors.TrialExpired);
+            }
+
+            if (string.Equals(tenantData.Status, TenantLifecycle.ToStatusString(TenantStatus.Active), StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(tenantData.Status, TenantLifecycle.ToStatusString(TenantStatus.PastDue), StringComparison.OrdinalIgnoreCase))
+            {
+                return Result.Failure(TenancyErrors.SubscriptionExpired);
+            }
         }
 
         if (!TenantLifecycle.CanProducerAccess(tenantData.Status))

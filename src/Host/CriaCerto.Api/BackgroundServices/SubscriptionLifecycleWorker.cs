@@ -78,10 +78,12 @@ public sealed class SubscriptionLifecycleWorker : BackgroundService
             {
                 var summary = result.Value;
                 _logger.LogInformation(
-                    "Ciclo de vida de assinaturas executado: {Total} avaliados, {Trials} trials suspensos, {PastDue} inadimplentes suspensos, {Protected} protegidos preservados.",
+                    "Ciclo de vida de assinaturas executado: {Total} avaliados, {Trials} trials suspensos, {PastDue} inadimplentes suspensos, {Active} ativos suspensos, {ToPastDue} migrados para PastDue, {Protected} protegidos preservados.",
                     summary.TotalEvaluated,
                     summary.SuspendedTrials,
                     summary.SuspendedPastDue,
+                    summary.SuspendedActive,
+                    summary.TransitionedToPastDue,
                     summary.ProtectedSkipped);
 
                 return summary;

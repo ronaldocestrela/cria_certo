@@ -6,7 +6,9 @@ public sealed record SubscriptionLifecycleExecutionResult(
     int TotalEvaluated,
     int SuspendedTrials,
     int SuspendedPastDue,
-    int ProtectedSkipped
+    int ProtectedSkipped,
+    int SuspendedActive = 0,
+    int TransitionedToPastDue = 0
 );
 
 public interface ISubscriptionLifecycleService

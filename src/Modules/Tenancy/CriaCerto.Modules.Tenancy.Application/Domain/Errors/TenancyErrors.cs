@@ -103,4 +103,8 @@ public static class TenancyErrors
     public static readonly Error TrialExpired = Error.Unauthorized(
         "Tenant.TrialExpired",
         "O período de testes (Trial) desta organização/fazenda expirou. Por favor, regularize a assinatura para continuar utilizando o Cria Certo.");
+
+    public static readonly Error SubscriptionExpired = Error.Unauthorized(
+        "Tenant.SubscriptionExpired",
+        "A assinatura desta organização/fazenda está vencida. Por favor, regularize o faturamento para continuar utilizando o Cria Certo.");
 }

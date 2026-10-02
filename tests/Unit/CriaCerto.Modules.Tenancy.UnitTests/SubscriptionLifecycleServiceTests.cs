@@ -217,6 +217,76 @@ public class SubscriptionLifecycleServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task ExecutePassAsync_Should_MarkActiveTenantAsPastDue_When_PeriodExpiredWithinGracePeriod()
+    {
+        // Arrange
+        var tenant = CreateTenant(TenantStatus.Active, currentPeriodEndUtc: DateTime.UtcNow.AddDays(-2));
+        _dbContext.Tenants.Add(tenant);
+        await _dbContext.SaveChangesAsync();
+
+        // Act
+        var result = await _service.ExecutePassAsync();
+
+        // Assert
+        result.IsSuccess.Should().BeTrue();
+        result.Value.TransitionedToPastDue.Should().Be(1);
+
+        var updatedTenant = await _dbContext.Tenants.FirstAsync(t => t.Id == tenant.Id);
+        updatedTenant.Status.Should().Be(TenantLifecycle.ToStatusString(TenantStatus.PastDue));
+        updatedTenant.StatusReason.Should().Be(SubscriptionLifecycleService.ActiveExpiredMarkPastDueJustification);
+
+        var history = await _dbContext.SubscriptionHistories.FirstOrDefaultAsync(h => h.TenantId == tenant.Id);
+        history.Should().NotBeNull();
+        history!.ActionType.Should().Be(SubscriptionActionType.PaymentFailed);
+    }
+
+    [Fact]
+    public async Task ExecutePassAsync_Should_SuspendActiveTenant_When_PeriodExpiredBeyondGracePeriod()
+    {
+        // Arrange
+        var tenant = CreateTenant(TenantStatus.Active, currentPeriodEndUtc: DateTime.UtcNow.AddDays(-10));
+        _dbContext.Tenants.Add(tenant);
+        await _dbContext.SaveChangesAsync();
+
+        // Act
+        var result = await _service.ExecutePassAsync();
+
+        // Assert
+        result.IsSuccess.Should().BeTrue();
+        result.Value.SuspendedActive.Should().Be(1);
+
+        var updatedTenant = await _dbContext.Tenants.FirstAsync(t => t.Id == tenant.Id);
+        updatedTenant.Status.Should().Be(TenantLifecycle.ToStatusString(TenantStatus.Suspended));
+        updatedTenant.StatusReason.Should().Be(SubscriptionLifecycleService.ActiveExpiredToleranceExceededJustification);
+
+        var history = await _dbContext.SubscriptionHistories.FirstOrDefaultAsync(h => h.TenantId == tenant.Id);
+        history.Should().NotBeNull();
+        history!.ActionType.Should().Be(SubscriptionActionType.Suspended);
+    }
+
+    [Fact]
+    public async Task ExecutePassAsync_Should_NotSuspendOrMarkPastDue_When_ActiveTenantIsProtected()
+    {
+        // Arrange
+        var tenant = CreateTenant(TenantStatus.Active, currentPeriodEndUtc: DateTime.UtcNow.AddDays(-15));
+        tenant.IsProtected = true;
+        _dbContext.Tenants.Add(tenant);
+        await _dbContext.SaveChangesAsync();
+
+        // Act
+        var result = await _service.ExecutePassAsync();
+
+        // Assert
+        result.IsSuccess.Should().BeTrue();
+        result.Value.ProtectedSkipped.Should().Be(1);
+        result.Value.SuspendedActive.Should().Be(0);
+        result.Value.TransitionedToPastDue.Should().Be(0);
+
+        var updatedTenant = await _dbContext.Tenants.FirstAsync(t => t.Id == tenant.Id);
+        updatedTenant.Status.Should().Be(TenantLifecycle.ToStatusString(TenantStatus.Active));
+    }
+
+    [Fact]
     public async Task ExecutePassAsync_Should_BeIdempotent()
     {
         // Arrange

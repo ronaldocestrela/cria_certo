@@ -92,6 +92,41 @@ public class BillingLifecycleIntegrationTests
     }
 
     [Fact]
+    public async Task TenantAccessMiddleware_Should_Block_OperationalRoute_When_SubscriptionExpired()
+    {
+        // Arrange
+        var nextInvoked = false;
+        RequestDelegate next = (ctx) =>
+        {
+            nextInvoked = true;
+            return Task.CompletedTask;
+        };
+
+        var middleware = new TenantAccessMiddleware(next);
+        var tenantId = Guid.NewGuid();
+        _tenantContext.TenantId.Returns(tenantId);
+
+        _tenantAccessGuard.EnsureProducerAccessAsync(tenantId, Arg.Any<CancellationToken>())
+            .Returns(Result.Failure(TenancyErrors.SubscriptionExpired));
+
+        var context = new DefaultHttpContext();
+        context.Request.Path = "/api/breeding/cows";
+        context.Response.Body = new MemoryStream();
+
+        // Act
+        await middleware.InvokeAsync(context, _tenantContext, _tenantAccessGuard);
+
+        // Assert
+        nextInvoked.Should().BeFalse("Operational routes should be blocked when subscription is expired");
+        context.Response.StatusCode.Should().Be(StatusCodes.Status403Forbidden);
+
+        context.Response.Body.Seek(0, SeekOrigin.Begin);
+        using var reader = new StreamReader(context.Response.Body);
+        var responseBody = await reader.ReadToEndAsync();
+        responseBody.Should().Contain(TenancyErrors.SubscriptionExpired.Code);
+    }
+
+    [Fact]
     public async Task TenantAccessMiddleware_Should_Allow_OperationalRoute_When_AccessIsAllowed()
     {
         // Arrange
