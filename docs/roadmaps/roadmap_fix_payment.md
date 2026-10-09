@@ -448,7 +448,7 @@ Este documento consolida o plano de ação técnico para sanar as **vulnerabilid
 | **4.1** | Bloquear acesso no `TenantAccessGuard` para trials vencidos | `TenantAccessGuard.cs` | [x] |
 | **4.2** | Criar `SubscriptionLifecycleWorker` para expiração e grace period | `SubscriptionLifecycleWorker.cs` | [x] |
 | **4.3** | Travar plano e capacidade padrão no onboarding | `CreateTenantCommand.cs` | [x] |
-| **5.1** | Implementar testes unitários para fluxo financeiro | `tests/Modules/Tenancy/` | [ ] |
+| **5.1** | Implementar testes unitários para fluxo financeiro | `tests/Modules/Tenancy/` | [x] |
 | **5.2** | Homologar com Stripe CLI e documentar rotina de testes | `docs/operations/` | [x] |
 | **5.3** | Implementar observabilidade, métricas e central de alertas | `PaymentTelemetry.cs` / `PaymentAlertEventHandler.cs` | [x] |
 

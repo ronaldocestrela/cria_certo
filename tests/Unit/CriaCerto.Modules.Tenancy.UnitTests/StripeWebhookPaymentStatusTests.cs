@@ -119,6 +119,63 @@ public class StripeWebhookPaymentStatusTests : IDisposable
         updatedTenant.StripeCustomerId.Should().Be("cus_stripe_paid_1");
         updatedTenant.StripeSubscriptionId.Should().Be("sub_stripe_paid_1");
         updatedTenant.StatusChangedAtUtc.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(10));
+        updatedTenant.CurrentPeriodEndUtc.Should().NotBeNull();
+        updatedTenant.CurrentPeriodEndUtc!.Value.Should().BeAfter(DateTime.UtcNow.AddDays(25));
+    }
+
+    [Fact]
+    public async Task ProcessWebhookAsync_WhenCheckoutCompletedAnnual_ShouldSetCurrentPeriodEndUtc_ToOneYearAhead()
+    {
+        // Arrange
+        var tenant = new Tenant
+        {
+            Id = Guid.NewGuid(),
+            Name = "Fazenda Ciclo Anual",
+            CNPJ = "12.345.678/0001-88",
+            Status = "Trial",
+            SubscribedPlan = "Starter",
+            Capacity = 500,
+            CurrentPeriodEndUtc = DateTime.UtcNow.AddDays(-1)
+        };
+        _dbContext.Tenants.Add(tenant);
+        await _dbContext.SaveChangesAsync();
+
+        var payload = $$"""
+        {
+          "id": "evt_test_annual_001",
+          "object": "event",
+          "type": "checkout.session.completed",
+          "data": {
+            "object": {
+              "id": "cs_test_annual_001",
+              "object": "checkout.session",
+              "customer": "cus_stripe_annual_1",
+              "subscription": "sub_stripe_annual_1",
+              "payment_status": "paid",
+              "metadata": {
+                "TenantId": "{{tenant.Id}}",
+                "PlanId": "Enterprise",
+                "BillingCycle": "annual"
+              }
+            }
+          }
+        }
+        """;
+
+        var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var signature = GenerateStripeSignature(payload, WebhookSecret, timestamp);
+
+        // Act
+        var result = await _service.ProcessWebhookAsync(payload, signature);
+
+        // Assert
+        result.Success.Should().BeTrue();
+        var updatedTenant = await _dbContext.Tenants.FindAsync(tenant.Id);
+        updatedTenant.Should().NotBeNull();
+        updatedTenant!.Status.Should().Be("Active");
+        updatedTenant.SubscribedPlan.Should().Be("Enterprise");
+        updatedTenant.CurrentPeriodEndUtc.Should().NotBeNull();
+        updatedTenant.CurrentPeriodEndUtc!.Value.Should().BeAfter(DateTime.UtcNow.AddDays(350));
     }
 
     [Fact]

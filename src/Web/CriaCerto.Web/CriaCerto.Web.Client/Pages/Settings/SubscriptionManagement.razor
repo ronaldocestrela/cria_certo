@@ -38,14 +38,22 @@
         </div>
     }
 
-    @if (_profile != null && string.Equals(_profile.Status, "Trial", StringComparison.OrdinalIgnoreCase) && _profile.CurrentPeriodEndUtc.HasValue && _profile.CurrentPeriodEndUtc.Value < DateTime.UtcNow)
+    @if (_profile != null && _profile.CurrentPeriodEndUtc.HasValue && _profile.CurrentPeriodEndUtc.Value < DateTime.UtcNow)
     {
         <div style="padding: 1.25rem 1.5rem; border-radius: 12px; margin-bottom: 1.5rem; background-color: #fff7ed; color: #9a3412; border: 1px solid #fed7aa; display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;">
             <div style="display: flex; align-items: center; gap: 0.75rem;">
                 <span class="material-symbols-outlined" style="font-size: 28px; color: #ea580c;">timer_off</span>
                 <div>
-                    <strong style="font-size: 14px;">Período de testes (Trial) expirado:</strong>
-                    <div style="font-size: 13px; color: #7c2d12;">Seu período gratuito de 30 dias terminou. Selecione um dos planos abaixo para regularizar via Stripe e reativar o acesso total aos módulos do Cria Certo.</div>
+                    <strong style="font-size: 14px;">
+                        @(string.Equals(_profile.Status, "Trial", StringComparison.OrdinalIgnoreCase)
+                            ? "Período de testes (Trial) expirado:"
+                            : "Vigência do plano de assinatura expirada:")
+                    </strong>
+                    <div style="font-size: 13px; color: #7c2d12;">
+                        @(string.Equals(_profile.Status, "Trial", StringComparison.OrdinalIgnoreCase)
+                            ? "Seu período gratuito terminou. Selecione um dos planos abaixo para contratar via Stripe e reativar o acesso total aos módulos do Cria Certo."
+                            : "A vigência contratada da fazenda expirou. Selecione um plano abaixo ou acesse o Portal Stripe para regularizar a assinatura e manter o acesso operacional liberado.")
+                    </div>
                 </div>
             </div>
             <span class="font-mono" style="font-size: 11px; padding: 0.25rem 0.65rem; border-radius: 99px; background: #ea580c; color: white; font-weight: 700;">REGULARIZAÇÃO PENDENTE</span>
@@ -59,7 +67,7 @@
         </div>
     }
 
-    @if (_profile != null && (!string.IsNullOrEmpty(_profile.StripeCustomerId) || _profile.CurrentPeriodEndUtc.HasValue))
+    @if (_profile != null && !string.IsNullOrWhiteSpace(_profile.StripeSubscriptionId))
     {
         <div style="background: white; border: 1px solid var(--cc-border); border-radius: 12px; padding: 1.25rem 1.5rem; margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; box-shadow: var(--cc-shadow);">
             <div style="display: flex; align-items: center; gap: 1rem;">
@@ -99,6 +107,39 @@
                         <span>Faturamento Restrito a Administradores</span>
                     </div>
                 }
+            </div>
+        </div>
+    }
+    else if (_profile != null && _profile.CurrentPeriodEndUtc.HasValue)
+    {
+        var isPeriodExpired = _profile.CurrentPeriodEndUtc.Value < DateTime.UtcNow;
+        var daysRemaining = (int)Math.Ceiling((_profile.CurrentPeriodEndUtc.Value - DateTime.UtcNow).TotalDays);
+
+        <div style="background: @(isPeriodExpired ? "#fff1f2" : "#fefce8"); border: 1px solid @(isPeriodExpired ? "#fecdd3" : "#fef08a"); border-radius: 12px; padding: 1.25rem 1.5rem; margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; box-shadow: var(--cc-shadow);">
+            <div style="display: flex; align-items: center; gap: 1rem;">
+                <div style="width: 44px; height: 44px; border-radius: 10px; background: @(isPeriodExpired ? "#e11d4815" : "#ca8a0415"); color: @(isPeriodExpired ? "#e11d48" : "#ca8a04"); display: flex; align-items: center; justify-content: center;">
+                    <span class="material-symbols-outlined" style="font-size: 26px;">@(isPeriodExpired ? "lock" : "credit_card_off")</span>
+                </div>
+                <div>
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <span style="font-weight: 700; color: var(--cc-ink); font-size: 15px;">
+                            @(isPeriodExpired ? "Vigência do Plano Vencida" : "Sem Forma de Pagamento Cadastrada")
+                        </span>
+                        <span class="font-mono" style="font-size: 11px; padding: 0.15rem 0.5rem; border-radius: 99px; background: @(isPeriodExpired ? "#ffe4e6" : "#fef9c3"); color: @(isPeriodExpired ? "#9f1239" : "#854d0e"); font-weight: 700;">
+                            @(isPeriodExpired ? "BLOQUEIO DE ACESSO" : "NENHUM CARTÃO SALVO")
+                        </span>
+                    </div>
+                    <p style="margin: 0.2rem 0 0 0; font-size: 13px; color: var(--cc-ink-muted);">
+                        @if (isPeriodExpired)
+                        {
+                            <span>A data limite de uso expirou em <strong>@_profile.CurrentPeriodEndUtc.Value.ToLocalTime().ToString("dd/MM/yyyy")</strong>. Para reativar o acesso total, selecione um plano abaixo e realize o pagamento seguro via Stripe.</span>
+                        }
+                        else
+                        {
+                            <span>Vencimento em <strong>@_profile.CurrentPeriodEndUtc.Value.ToLocalTime().ToString("dd/MM/yyyy")</strong> (@(daysRemaining > 0 ? $"{daysRemaining} dias restantes" : "último dia")). Não há cartão cadastrado para débito automático. Contrate um plano abaixo para manter seu acesso contínuo.</span>
+                        }
+                    </p>
+                </div>
             </div>
         </div>
     }

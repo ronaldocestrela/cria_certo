@@ -470,15 +470,53 @@ public sealed class StripePaymentService : IStripePaymentService
             tenant.StatusChangedAtUtc = DateTime.UtcNow;
             tenant.UpdatedAtUtc = DateTime.UtcNow;
 
+            // Sincronizar o período de vigência (CurrentPeriodEndUtc) da assinatura contratada
+            DateTime? resolvedPeriodEndUtc = null;
+            if (!string.IsNullOrWhiteSpace(session.SubscriptionId))
+            {
+                try
+                {
+                    if (!string.IsNullOrWhiteSpace(_options.ApiKey) || !string.IsNullOrWhiteSpace(StripeConfiguration.ApiKey))
+                    {
+                        var subscriptionService = new SubscriptionService();
+                        var stripeSubscription = await subscriptionService.GetAsync(session.SubscriptionId, cancellationToken: cancellationToken);
+                        var subItem = stripeSubscription?.Items?.Data?.FirstOrDefault();
+                        if (subItem?.CurrentPeriodEnd != null)
+                        {
+                            resolvedPeriodEndUtc = subItem.CurrentPeriodEnd;
+                        }
+                    }
+                }
+                catch (Exception subEx)
+                {
+                    _logger.LogWarning(subEx, "Não foi possível consultar detalhes da assinatura {SubscriptionId} na Stripe API durante o checkout. Sincronizando por metadados de ciclo.", session.SubscriptionId);
+                }
+            }
+
+            if (resolvedPeriodEndUtc.HasValue)
+            {
+                tenant.CurrentPeriodEndUtc = resolvedPeriodEndUtc.Value;
+            }
+            else
+            {
+                string? cycle = null;
+                session.Metadata?.TryGetValue("BillingCycle", out cycle);
+                bool isAnnual = string.Equals(cycle, "annual", StringComparison.OrdinalIgnoreCase) ||
+                                string.Equals(cycle, "year", StringComparison.OrdinalIgnoreCase) ||
+                                string.Equals(cycle, "anual", StringComparison.OrdinalIgnoreCase);
+
+                tenant.CurrentPeriodEndUtc = isAnnual ? DateTime.UtcNow.AddYears(1) : DateTime.UtcNow.AddMonths(1);
+            }
+
             var history = TenantSubscriptionHistory.CreateFromStripeWebhook(
                 tenantId: tenant.Id,
                 actionType: SubscriptionActionType.NewSubscription,
-                justification: $"Assinatura ativada via Stripe Checkout (Sessão: {session.Id}, Plano: {tenant.SubscribedPlan}, Status: {session.PaymentStatus}).",
+                justification: $"Assinatura ativada via Stripe Checkout (Sessão: {session.Id}, Plano: {tenant.SubscribedPlan}, Status: {session.PaymentStatus}, Período até {tenant.CurrentPeriodEndUtc:yyyy-MM-dd HH:mm:ss} UTC).",
                 snapshotHeadCount: tenant.Capacity
             );
             _dbContext.SubscriptionHistories.Add(history);
 
-            _logger.LogInformation("Tenant {TenantId} ativado após Checkout com pagamento confirmado ({PaymentStatus}) no Stripe.", tenant.Id, session.PaymentStatus);
+            _logger.LogInformation("Tenant {TenantId} ativado após Checkout com pagamento confirmado ({PaymentStatus}) no Stripe. Período estendido até {PeriodEndUtc}.", tenant.Id, session.PaymentStatus, tenant.CurrentPeriodEndUtc);
         }
         else
         {
@@ -519,6 +557,14 @@ public sealed class StripePaymentService : IStripePaymentService
         if (line?.Period?.End != null)
         {
             tenant.CurrentPeriodEndUtc = line.Period.End;
+        }
+        else if (invoice.PeriodEnd != default)
+        {
+            tenant.CurrentPeriodEndUtc = invoice.PeriodEnd;
+        }
+        else
+        {
+            tenant.CurrentPeriodEndUtc = DateTime.UtcNow.AddMonths(1);
         }
 
         tenant.UpdatedAtUtc = DateTime.UtcNow;
