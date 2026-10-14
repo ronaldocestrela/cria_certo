@@ -53,6 +53,9 @@ public class RegisterUserCommandHandlerTests : IDisposable
         var userInDb = await _dbContext.Users.FirstOrDefaultAsync(u => u.Email == "joao@fazenda.com.br");
         userInDb.Should().NotBeNull();
         userInDb!.FullName.Should().Be("João Silva");
+        userInDb.IsEmailConfirmed.Should().BeFalse();
+        userInDb.EmailConfirmationToken.Should().NotBeNullOrEmpty();
+        userInDb.EmailConfirmationTokenExpiresAt.Should().BeAfter(DateTime.UtcNow);
     }
 
     [Fact]

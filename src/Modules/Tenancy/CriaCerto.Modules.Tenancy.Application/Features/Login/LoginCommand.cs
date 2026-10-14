@@ -34,6 +34,12 @@ public sealed class LoginCommandHandler : IRequestHandler<LoginCommand, Result<A
                 Error.Unauthorized("Auth.InvalidCredentials", "E-mail ou senha inválidos."));
         }
 
+        if (!user.IsEmailConfirmed)
+        {
+            return Result.Failure<AuthResponse>(
+                Error.Unauthorized("Auth.EmailNotConfirmed", "Seu e-mail ainda não foi confirmado. Verifique sua caixa de entrada para ativar sua conta."));
+        }
+
         var accessibleTenants = user.UserTenants
             .Where(ut => ut.Tenant is not null && TenantLifecycle.CanProducerAccess(ut.Tenant.Status))
             .ToList();

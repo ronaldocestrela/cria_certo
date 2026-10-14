@@ -1,0 +1,281 @@
+@page "/confirm-email"
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@layout EmptyLayout
+@inject HttpClient Http
+@inject NavigationManager Navigation
+
+<PageTitle>Cria Certo - Confirmação de E-mail</PageTitle>
+
+<div class="min-h-screen flex flex-col items-center justify-center p-4" style="background-color: var(--cc-canvas);">
+    <main class="w-full max-w-[500px]">
+        
+        <div class="bg-white rounded-xl p-8 md:p-10 relative overflow-hidden shadow-sm" style="border: 1px solid var(--cc-border);">
+            
+            <div class="flex flex-col items-center mb-6 text-center" style="display: flex; flex-direction: column; align-items: center; text-align: center; margin-bottom: 1.5rem;">
+                <img src="imgs/CriaCerto.png" alt="Cria Certo Logo" style="height: 64px; width: auto; object-fit: contain; margin-bottom: 0.75rem; border-radius: 8px;" />
+                <h2 class="font-headline text-[22px] font-bold" style="color: var(--cc-ink); margin: 0;">Confirmação de Conta</h2>
+                <p class="font-mono text-[11px] uppercase tracking-widest text-secondary mt-1" style="color: var(--cc-ink-muted); margin: 0.25rem 0 0 0;">
+                    Ativação do Acesso à Granja & Fazenda
+                </p>
+            </div>
+
+            @if (_currentState == State.Validating)
+            {
+                <div class="p-8 text-center" style="text-align: center; padding: 2rem 1rem;">
+                    <div class="inline-block animate-spin rounded-full h-10 w-10 border-4 border-solid border-green-600 border-r-transparent mb-4" 
+                         style="display: inline-block; width: 40px; height: 40px; border: 4px solid #bbf7d0; border-top-color: var(--cc-primary); border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                    <p class="font-semibold text-base" style="font-size: 15px; color: var(--cc-ink); margin: 0;">Validando seu token de ativação...</p>
+                    <p class="text-xs text-secondary mt-1" style="font-size: 12px; color: var(--cc-ink-muted); margin-top: 0.25rem;">Aguarde um instante enquanto confirmamos sua conta.</p>
+                </div>
+            }
+            else if (_currentState == State.Success)
+            {
+                <div class="p-6 rounded-lg bg-green-50 text-green-800 text-center space-y-4" style="padding: 1.5rem; border-radius: 8px; background-color: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; text-align: center;">
+                    <span class="material-symbols-outlined text-[56px]" style="color: #16a34a; font-size: 56px;">verified</span>
+                    <h3 class="font-bold text-lg" style="margin: 0.5rem 0; font-size: 18px;">E-mail Confirmado com Sucesso!</h3>
+                    <p class="text-sm" style="font-size: 14px; margin-bottom: 1.25rem; color: #166534;">
+                        Sua conta foi ativada com sucesso. Você agora tem acesso total às operações zootécnicas e administrativas da sua fazenda.
+                    </p>
+                    
+                    <button class="w-full h-[46px] text-white font-mono text-[14px] uppercase font-bold rounded-lg transition-all" 
+                            style="width: 100%; height: 46px; background-color: var(--cc-primary); border: none; border-radius: 8px; cursor: pointer;"
+                            @onclick='() => Navigation.NavigateTo("/login")'>
+                        Fazer Login Agora &rarr;
+                    </button>
+                </div>
+            }
+            else if (_currentState == State.Error)
+            {
+                <div class="mb-6 p-4 rounded-lg bg-red-50 text-red-700 text-sm border border-red-200" style="margin-bottom: 1.5rem; padding: 1rem; border-radius: 8px; background-color: #fef2f2; color: #b91c1c; border: 1px solid #fecaca;">
+                    <div style="font-weight: 700; margin-bottom: 0.25rem;">Não foi possível confirmar o e-mail</div>
+                    <div>@_errorMessage</div>
+                </div>
+
+                <div class="border-t pt-4" style="border-top: 1px solid var(--cc-border); padding-top: 1rem;">
+                    <h4 class="font-bold text-sm mb-2" style="font-size: 14px; margin: 0 0 0.5rem 0; color: var(--cc-ink);">
+                        Deseja receber um novo link de confirmação?
+                    </h4>
+                    <p class="text-xs text-secondary mb-4" style="font-size: 13px; color: var(--cc-ink-muted); margin-bottom: 1rem;">
+                        Informe o e-mail cadastrado para reenviarmos o link de ativação válido por 24 horas.
+                    </p>
+
+                    @if (_resendSuccess)
+                    {
+                        <div class="p-4 rounded-lg bg-green-50 text-green-800 text-sm border border-green-200 mb-4" style="padding: 0.75rem 1rem; border-radius: 8px; background-color: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; margin-bottom: 1rem;">
+                            Enviamos um novo link de confirmação para o seu e-mail! Verifique sua caixa de entrada e spam.
+                        </div>
+                    }
+
+                    <div style="margin-bottom: 1rem;">
+                        <input type="email" @bind="_resendEmail" class="w-full h-[44px] px-4 rounded-lg border font-headline" 
+                               style="width: 100%; height: 44px; padding: 0 1rem; border-radius: 8px; border: 1px solid var(--cc-border); background-color: var(--cc-canvas);" 
+                               placeholder="seu-email@fazenda.com.br" />
+                    </div>
+
+                    <button class="w-full h-[44px] text-white font-mono text-[13px] uppercase font-bold rounded-lg transition-all" 
+                            style="width: 100%; height: 44px; background-color: var(--cc-primary); border: none; border-radius: 8px; cursor: pointer; margin-bottom: 0.75rem;"
+                            disabled="@_isResending"
+                            @onclick="HandleResendConfirmation">
+                        @if (_isResending)
+                        {
+                            <span>Reenviando Link...</span>
+                        }
+                        else
+                        {
+                            <span>Reenviar Link de Confirmação</span>
+                        }
+                    </button>
+
+                    <div class="text-center" style="text-align: center; margin-top: 0.75rem;">
+                        <a href="/login" class="text-xs font-semibold hover:underline" style="color: var(--cc-primary); text-decoration: none;">
+                            Voltar para o Login
+                        </a>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <!-- Entrada manual de token caso o usuário acesse /confirm-email diretamente -->
+                <p class="text-sm text-center mb-6" style="font-size: 14px; color: var(--cc-ink-muted); text-align: center; margin-bottom: 1.5rem;">
+                    Informe seu e-mail e o código de confirmação recebido por e-mail para ativar sua conta.
+                </p>
+
+                <div style="margin-bottom: 1rem;">
+                    <label class="font-mono text-[12px] font-bold block" style="display: block; margin-bottom: 0.35rem; text-transform: uppercase; color: var(--cc-ink-muted);">E-MAIL CADASTRADO *</label>
+                    <input type="email" @bind="_manualEmail" class="w-full h-[46px] px-4 rounded-lg border font-headline" style="width: 100%; height: 46px; padding: 0 1rem; border-radius: 8px; border: 1px solid var(--cc-border); background-color: var(--cc-canvas);" placeholder="usuario@fazenda.com.br" />
+                </div>
+
+                <div style="margin-bottom: 1.5rem;">
+                    <label class="font-mono text-[12px] font-bold block" style="display: block; margin-bottom: 0.35rem; text-transform: uppercase; color: var(--cc-ink-muted);">CÓDIGO DE CONFIRMAÇÃO *</label>
+                    <input type="text" @bind="_manualToken" class="w-full h-[46px] px-4 rounded-lg border font-headline" style="width: 100%; height: 46px; padding: 0 1rem; border-radius: 8px; border: 1px solid var(--cc-border); background-color: var(--cc-canvas);" placeholder="Cole o token recebido no e-mail" />
+                </div>
+
+                <button class="w-full h-[48px] text-white font-mono text-[14px] rounded-lg uppercase tracking-wider transition-all" 
+                        style="width: 100%; height: 48px; background-color: var(--cc-primary); border: none; border-radius: 8px; font-weight: bold; cursor: pointer;"
+                        disabled="@_isManualSubmitting"
+                        @onclick="HandleManualConfirm">
+                    @if (_isManualSubmitting)
+                    {
+                        <span>Confirmando...</span>
+                    }
+                    else
+                    {
+                        <span>Confirmar E-mail</span>
+                    }
+                </button>
+
+                <div class="text-center pt-3" style="text-align: center; margin-top: 1rem;">
+                    <a href="/login" class="text-sm font-semibold hover:underline" style="color: var(--cc-primary); font-size: 14px; text-decoration: none;">
+                        Já confirmou sua conta? Faça login
+                    </a>
+                </div>
+            }
+
+        </div>
+
+    </main>
+</div>
+
+<style>
+@@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+</style>
+
+@code {
+    [SupplyParameterFromQuery(Name = "token")]
+    public string? TokenQuery { get; set; }
+
+    [SupplyParameterFromQuery(Name = "email")]
+    public string? EmailQuery { get; set; }
+
+    private enum State
+    {
+        InitialManual,
+        Validating,
+        Success,
+        Error
+    }
+
+    private State _currentState = State.InitialManual;
+    private string? _errorMessage;
+    private string? _resendEmail;
+    private bool _isResending;
+    private bool _resendSuccess;
+
+    private string _manualEmail = string.Empty;
+    private string _manualToken = string.Empty;
+    private bool _isManualSubmitting;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!string.IsNullOrWhiteSpace(TokenQuery) && !string.IsNullOrWhiteSpace(EmailQuery))
+        {
+            _resendEmail = EmailQuery;
+            await ExecuteConfirmation(EmailQuery, TokenQuery);
+        }
+        else
+        {
+            _currentState = State.InitialManual;
+            if (!string.IsNullOrWhiteSpace(EmailQuery))
+            {
+                _manualEmail = EmailQuery;
+                _resendEmail = EmailQuery;
+            }
+        }
+    }
+
+    private async Task ExecuteConfirmation(string email, string token)
+    {
+        _currentState = State.Validating;
+        _errorMessage = null;
+
+        try
+        {
+            var payload = new { Email = email.Trim(), Token = token.Trim() };
+            var response = await Http.PostAsJsonAsync("/api/auth/confirm-email", payload);
+
+            if (response.IsSuccessStatusCode)
+            {
+                _currentState = State.Success;
+            }
+            else
+            {
+                try
+                {
+                    var err = await response.Content.ReadFromJsonAsync<CriaCerto.BuildingBlocks.Abstractions.Results.Error>();
+                    _errorMessage = err?.Message ?? "Erro ao confirmar e-mail. Verifique o link e tente novamente.";
+                }
+                catch
+                {
+                    _errorMessage = "Erro ao validar token de confirmação. O link pode ser inválido ou já ter expirado.";
+                }
+                _currentState = State.Error;
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Erro de conexão: {ex.Message}";
+            _currentState = State.Error;
+        }
+    }
+
+    private async Task HandleManualConfirm()
+    {
+        if (string.IsNullOrWhiteSpace(_manualEmail) || string.IsNullOrWhiteSpace(_manualToken))
+        {
+            _errorMessage = "Informe o e-mail e o código de confirmação.";
+            _currentState = State.Error;
+            return;
+        }
+
+        _isManualSubmitting = true;
+        _resendEmail = _manualEmail;
+        await ExecuteConfirmation(_manualEmail, _manualToken);
+        _isManualSubmitting = false;
+    }
+
+    private async Task HandleResendConfirmation()
+    {
+        if (string.IsNullOrWhiteSpace(_resendEmail))
+        {
+            _errorMessage = "Informe um e-mail válido para reenviar.";
+            return;
+        }
+
+        _isResending = true;
+        _resendSuccess = false;
+
+        try
+        {
+            var payload = new { Email = _resendEmail.Trim() };
+            var response = await Http.PostAsJsonAsync("/api/auth/resend-confirmation", payload);
+
+            if (response.IsSuccessStatusCode)
+            {
+                _resendSuccess = true;
+            }
+            else
+            {
+                try
+                {
+                    var err = await response.Content.ReadFromJsonAsync<CriaCerto.BuildingBlocks.Abstractions.Results.Error>();
+                    _errorMessage = err?.Message ?? "Erro ao reenviar confirmação.";
+                }
+                catch
+                {
+                    _errorMessage = "Erro ao processar solicitação de reenvio.";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Erro de conexão: {ex.Message}";
+        }
+        finally
+        {
+            _isResending = false;
+        }
+    }
+}

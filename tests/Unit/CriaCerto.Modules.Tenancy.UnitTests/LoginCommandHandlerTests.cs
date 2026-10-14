@@ -39,7 +39,8 @@ public class LoginCommandHandlerTests : IDisposable
             Id = userId,
             FullName = "Produtor",
             Email = "produtor@test.com",
-            PasswordHash = PasswordHasher.Hash("Password123!")
+            PasswordHash = PasswordHasher.Hash("Password123!"),
+            IsEmailConfirmed = true
         };
         var tenant = new Tenant
         {
@@ -73,6 +74,75 @@ public class LoginCommandHandlerTests : IDisposable
 
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("Tenant.NotAccessible");
+    }
+
+    [Fact]
+    public async Task Handle_Should_Block_Login_When_Email_Is_Not_Confirmed()
+    {
+        var userId = Guid.NewGuid();
+        var user = new User
+        {
+            Id = userId,
+            FullName = "Produtor Não Confirmado",
+            Email = "pendente@test.com",
+            PasswordHash = PasswordHasher.Hash("Password123!"),
+            IsEmailConfirmed = false
+        };
+        _dbContext.Users.Add(user);
+        await _dbContext.SaveChangesAsync();
+
+        var handler = new LoginCommandHandler(_dbContext, new FakeJwtService());
+        var result = await handler.Handle(new LoginCommand("pendente@test.com", "Password123!"), CancellationToken.None);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("Auth.EmailNotConfirmed");
+    }
+
+    [Fact]
+    public async Task Handle_Should_Allow_Login_When_Email_Is_Confirmed_And_Credentials_Valid()
+    {
+        var userId = Guid.NewGuid();
+        var tenantId = Guid.NewGuid();
+        var user = new User
+        {
+            Id = userId,
+            FullName = "Produtor Ativo",
+            Email = "ativo@test.com",
+            PasswordHash = PasswordHasher.Hash("Password123!"),
+            IsEmailConfirmed = true
+        };
+        var tenant = new Tenant
+        {
+            Id = tenantId,
+            Name = "Fazenda Ativa",
+            CNPJ = "98.765.432/0001-10",
+            CnpjNormalized = "98765432000110",
+            Status = TenantLifecycle.ToStatusString(TenantStatus.Active),
+            SubscribedPlan = "Starter",
+            Capacity = 500,
+            State = "GO",
+            City = "Rio Verde",
+            Type = "Corte",
+            CreatedAtUtc = DateTime.UtcNow,
+            UpdatedAtUtc = DateTime.UtcNow
+        };
+        _dbContext.Users.Add(user);
+        _dbContext.Tenants.Add(tenant);
+        _dbContext.UserTenants.Add(new UserTenant
+        {
+            UserId = userId,
+            TenantId = tenantId,
+            Role = UserRole.Admin,
+            JoinedAt = DateTime.UtcNow
+        });
+        await _dbContext.SaveChangesAsync();
+
+        var handler = new LoginCommandHandler(_dbContext, new FakeJwtService());
+        var result = await handler.Handle(new LoginCommand("ativo@test.com", "Password123!"), CancellationToken.None);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Should().NotBeNull();
+        result.Value.Token.Should().Be("token");
     }
 
     private sealed class FakeJwtService : IJwtService

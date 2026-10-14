@@ -40,6 +40,39 @@
                                 </button>
                             </div>
                         }
+                        else if (_hasEmailNotConfirmedError)
+                        {
+                            <div class="mb-6 p-4 rounded-lg bg-amber-50 border border-amber-200 text-amber-900" style="margin-bottom: 1.5rem; padding: 1rem; border-radius: 8px; background-color: #fffbeb; color: #78350f; border: 1px solid #fde68a;">
+                                <div style="font-weight: bold; margin-bottom: 0.35rem; display: flex; align-items: center; gap: 0.5rem;">
+                                    <span class="material-symbols-outlined" style="color: #d97706;">mark_email_unread</span>
+                                    E-mail Não Confirmado
+                                </div>
+                                <p style="font-size: 13px; margin-bottom: 1rem; color: #92400e;">
+                                    Sua conta foi criada, mas seu endereço de e-mail ainda precisa ser confirmado antes de acessar a plataforma.
+                                </p>
+                                @if (_resendConfirmationSuccess)
+                                {
+                                    <div class="p-3 rounded bg-green-100 text-green-800 text-xs mb-3 font-semibold" style="padding: 0.5rem; border-radius: 6px; background-color: #dcfce7; color: #15803d; margin-bottom: 0.75rem;">
+                                        Novo link de confirmação enviado para @_loginModel.Email!
+                                    </div>
+                                }
+                                <div style="display: flex; gap: 0.5rem; flex-direction: column;">
+                                    <button type="button" @onclick="HandleResendConfirmationFromLogin" disabled="@_isResendingConfirmation" class="w-full h-[40px] text-white font-bold font-mono text-xs uppercase rounded-lg transition-all" style="width: 100%; height: 40px; background-color: var(--cc-primary); border: none; border-radius: 8px; cursor: pointer;">
+                                        @if (_isResendingConfirmation)
+                                        {
+                                            <span>Reenviando...</span>
+                                        }
+                                        else
+                                        {
+                                            <span>Reenviar E-mail de Ativação</span>
+                                        }
+                                    </button>
+                                    <a href="/confirm-email?email=@(Uri.EscapeDataString(_loginModel.Email))" class="text-center text-xs font-semibold hover:underline" style="color: var(--cc-primary); text-decoration: none; margin-top: 0.25rem;">
+                                        Já possui o código? Ativar manualmente &rarr;
+                                    </a>
+                                </div>
+                            </div>
+                        }
                         else
                         {
                             <div class="alert-box mb-6" style="margin-bottom: 1.5rem;">
@@ -172,6 +205,9 @@
     private bool _isLoading;
     private string? _errorMessage;
     private bool _hasNoTenantError;
+    private bool _hasEmailNotConfirmedError;
+    private bool _isResendingConfirmation;
+    private bool _resendConfirmationSuccess;
     private Step _currentStep = Step.Credentials;
     private List<TenantDto> _availableTenants = new();
     private Guid _userId;
@@ -253,6 +289,7 @@
                     var err = await response.Content.ReadFromJsonAsync<CriaCerto.BuildingBlocks.Abstractions.Results.Error>();
                     _errorMessage = err?.Message ?? "Erro ao realizar login.";
                     _hasNoTenantError = err?.Code == "Auth.NoTenantAssociation" || (_errorMessage != null && _errorMessage.Contains("não está associada a nenhuma granja"));
+                    _hasEmailNotConfirmedError = err?.Code == "Auth.EmailNotConfirmed" || (_errorMessage != null && _errorMessage.Contains("não foi confirmado"));
                 }
                 catch
                 {
@@ -267,6 +304,29 @@
         finally
         {
             _isLoading = false;
+        }
+    }
+
+    private async Task HandleResendConfirmationFromLogin()
+    {
+        if (string.IsNullOrWhiteSpace(_loginModel.Email)) return;
+        _isResendingConfirmation = true;
+        _resendConfirmationSuccess = false;
+        try
+        {
+            var response = await Http.PostAsJsonAsync("/api/auth/resend-confirmation", new { Email = _loginModel.Email.Trim() });
+            if (response.IsSuccessStatusCode)
+            {
+                _resendConfirmationSuccess = true;
+            }
+        }
+        catch
+        {
+            // Falha silenciosa ou log de rede
+        }
+        finally
+        {
+            _isResendingConfirmation = false;
         }
     }
 

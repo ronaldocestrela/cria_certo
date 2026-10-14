@@ -63,7 +63,9 @@ public sealed class AcceptTeamInviteCommandHandler : IRequestHandler<AcceptTeamI
                 Id = Guid.NewGuid(),
                 Email = invite.Email,
                 FullName = request.FullName,
-                PasswordHash = PasswordHasher.Hash(request.Password)
+                PasswordHash = PasswordHasher.Hash(request.Password),
+                IsEmailConfirmed = true,
+                EmailConfirmedAtUtc = DateTime.UtcNow
             };
             _dbContext.Users.Add(user);
         }

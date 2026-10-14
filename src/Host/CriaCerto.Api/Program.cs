@@ -54,6 +54,8 @@ using CriaCerto.Modules.Tenancy.Application.Features.AcceptTeamInvite;
 using CriaCerto.Modules.Tenancy.Application.Features.RevokeTeamInvite;
 using CriaCerto.Modules.Tenancy.Application.Features.RemoveTeamMember;
 using CriaCerto.Modules.Tenancy.Application.Features.RefreshToken;
+using CriaCerto.Modules.Tenancy.Application.Features.ConfirmEmail;
+using CriaCerto.Modules.Tenancy.Application.Features.ResendConfirmationEmail;
 using CriaCerto.Modules.Tenancy.Application.Domain;
 using CriaCerto.Modules.Tenancy.Infrastructure;
 
@@ -1211,6 +1213,22 @@ app.MapPost("/api/auth/reset-password", async (ResetPasswordCommand command, ISe
     var result = await sender.Send(command);
     return result.IsSuccess
         ? Results.Ok(new { message = "Senha redefinida com sucesso." })
+        : Results.Json(result.Error, statusCode: ToStatusCode(result.Error.Type));
+}).AllowAnonymous().WithTags("Auth");
+
+app.MapPost("/api/auth/confirm-email", async (ConfirmEmailCommand command, ISender sender) =>
+{
+    var result = await sender.Send(command);
+    return result.IsSuccess
+        ? Results.Ok(new { message = "E-mail confirmado com sucesso. Sua conta está ativada." })
+        : Results.Json(result.Error, statusCode: ToStatusCode(result.Error.Type));
+}).AllowAnonymous().WithTags("Auth");
+
+app.MapPost("/api/auth/resend-confirmation", async (ResendConfirmationEmailCommand command, ISender sender) =>
+{
+    var result = await sender.Send(command);
+    return result.IsSuccess
+        ? Results.Ok(new { message = "Se a conta existir e ainda não estiver ativada, um novo link de confirmação foi enviado para o seu e-mail." })
         : Results.Json(result.Error, statusCode: ToStatusCode(result.Error.Type));
 }).AllowAnonymous().WithTags("Auth");
 
