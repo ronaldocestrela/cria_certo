@@ -19,13 +19,16 @@ public sealed class RegisterUserCommandHandler : IRequestHandler<RegisterUserCom
 {
     private readonly ITenancyDbContext _dbContext;
     private readonly CriaCerto.BuildingBlocks.Abstractions.Email.IEmailSender? _emailSender;
+    private readonly Microsoft.Extensions.Configuration.IConfiguration? _configuration;
 
     public RegisterUserCommandHandler(
         ITenancyDbContext dbContext,
-        CriaCerto.BuildingBlocks.Abstractions.Email.IEmailSender? emailSender = null)
+        CriaCerto.BuildingBlocks.Abstractions.Email.IEmailSender? emailSender = null,
+        Microsoft.Extensions.Configuration.IConfiguration? configuration = null)
     {
         _dbContext = dbContext;
         _emailSender = emailSender;
+        _configuration = configuration;
     }
 
     public async Task<Result<UserDto>> Handle(RegisterUserCommand request, CancellationToken cancellationToken)
@@ -57,6 +60,11 @@ public sealed class RegisterUserCommandHandler : IRequestHandler<RegisterUserCom
 
         if (_emailSender != null)
         {
+            var webBaseUrl = (_configuration?["App:WebBaseUrl"] 
+                ?? _configuration?["WEB_BASE_URL"] 
+                ?? "http://localhost:8081").TrimEnd('/');
+            var confirmationLink = $"{webBaseUrl}/confirm-email?token={confirmationToken}&email={Uri.EscapeDataString(user.Email)}";
+
             var html = $"""
                 <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; color: #1f2937; background-color: #ffffff; border-radius: 8px; border: 1px solid #e5e7eb;">
                     <div style="text-align: center; margin-bottom: 24px;">
@@ -65,15 +73,25 @@ public sealed class RegisterUserCommandHandler : IRequestHandler<RegisterUserCom
                     </div>
                     <p style="font-size: 16px; line-height: 1.5;">Olá, <strong>{user.FullName}</strong>,</p>
                     <p style="font-size: 15px; line-height: 1.6; color: #374151;">
-                        Sua conta foi criada com sucesso! Para começar a utilizar a plataforma e gerenciar sua fazenda, confirme o seu endereço de e-mail clicando no botão abaixo:
+                        Sua conta foi criada com sucesso! Para ativar o acesso completo à sua fazenda e iniciar as operações na plataforma, clique no botão abaixo para confirmar seu e-mail:
                     </p>
-                    <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 20px; margin: 24px 0; text-align: center;">
-                        <a href="/confirm-email?token={confirmationToken}&email={Uri.EscapeDataString(user.Email)}" 
-                           style="display: inline-block; background-color: #15803d; color: #ffffff; font-weight: 700; font-size: 15px; padding: 12px 28px; text-decoration: none; border-radius: 6px;">
-                            Confirmar Meu E-mail
-                        </a>
-                        <p style="font-size: 12px; color: #6b7280; margin-top: 14px; margin-bottom: 0;">
-                            Código de confirmação: <code style="font-family: monospace; background: #ffffff; padding: 2px 6px; border-radius: 4px; border: 1px solid #d1d5db;">{confirmationToken}</code>
+                    <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 24px; margin: 24px 0; text-align: center;">
+                        <table border="0" cellpadding="0" cellspacing="0" role="presentation" style="margin: 0 auto;">
+                            <tr>
+                                <td align="center" style="border-radius: 8px; background-color: #15803d;">
+                                    <a href="{confirmationLink}" target="_blank" 
+                                       style="display: inline-block; background-color: #15803d; color: #ffffff; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size: 16px; font-weight: 700; text-decoration: none; padding: 14px 32px; border-radius: 8px; border: 1px solid #15803d; cursor: pointer;">
+                                        Confirmar Meu E-mail e Ativar Conta &rarr;
+                                    </a>
+                                </td>
+                            </tr>
+                        </table>
+                        <p style="font-size: 13px; color: #4b5563; margin-top: 18px; margin-bottom: 0;">
+                            Se o botão acima não funcionar, clique no link abaixo ou copie-o no navegador:<br/>
+                            <a href="{confirmationLink}" target="_blank" style="color: #15803d; word-break: break-all; font-size: 12px; font-weight: 600; text-decoration: underline;">{confirmationLink}</a>
+                        </p>
+                        <p style="font-size: 12px; color: #6b7280; margin-top: 12px; margin-bottom: 0;">
+                            Código de verificação manual: <code style="font-family: monospace; background: #ffffff; padding: 2px 6px; border-radius: 4px; border: 1px solid #d1d5db; color: #111827;">{confirmationToken}</code>
                         </p>
                     </div>
                     <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin: 20px 0;">
@@ -99,7 +117,7 @@ public sealed class RegisterUserCommandHandler : IRequestHandler<RegisterUserCom
                 toEmail: user.Email,
                 subject: "Bem-vindo ao CriaCerto! Confirme seu e-mail",
                 htmlBody: html,
-                textBody: $"Olá, {user.FullName}! Sua conta foi criada no CriaCerto. Confirme seu e-mail em /confirm-email?token={confirmationToken}&email={user.Email} (código: {confirmationToken}) para começar.",
+                textBody: $"Olá, {user.FullName}! Sua conta foi criada no CriaCerto. Confirme seu e-mail clicando em {confirmationLink} (código: {confirmationToken}) para começar.",
                 toName: user.FullName);
 
             await _emailSender.SendAsync(emailMessage, cancellationToken);

@@ -22,7 +22,7 @@ Durante o onboarding e cadastro de novos produtores na plataforma CriaCerto:
    - `EmailConfirmationTokenExpiresAt (DateTime?)`: Expiração de segurança (24 horas).
 
 2. **Geração e Envio de Token no Cadastro**:
-   - No `RegisterUserCommandHandler`, o usuário é registrado com `IsEmailConfirmed = false` e recebe o e-mail de boas-vindas com botão CTA e link contendo o token de ativação (`/confirm-email?token={token}&email={email}`).
+   - No `RegisterUserCommandHandler`, o usuário é registrado com `IsEmailConfirmed = false` e recebe o e-mail transacional via Resend contendo botão de ação (*Bulletproof CTA Button*) e link absoluto (`{WEB_BASE_URL}/confirm-email?token={token}&email={email}`).
 
 3. **Gating de Acesso no Login (`LoginCommandHandler`)**:
    - O login valida se `user.IsEmailConfirmed == true`.
@@ -33,10 +33,10 @@ Durante o onboarding e cadastro de novos produtores na plataforma CriaCerto:
    - `ConfirmEmailCommand(Email, Token)`: Valida token, vigência e ativa a conta (`IsEmailConfirmed = true`), limpando o token persistido.
    - `ResendConfirmationEmailCommand(Email)`: Reemite novo token de 24h e dispara o e-mail transacional via `IEmailSender`. Retorna `Result.Success(string.Empty)` para e-mails inexistentes, evitando enumeração de usuários.
 
-5. **Interface Web em Blazor (`ConfirmEmail.razor`)**:
-   - Validação automática de query parameters (`token` e `email`).
-   - Apresentação de status: Validação com spinner, Sucesso com redirecionamento ao login, e Tratamento de token expirado com input para reenvio imediato.
-   - Suporte a digitação/inserção manual de token.
+5. **Interface Web em Blazor (`ConfirmEmail.razor`) e Redirecionamento HTTP**:
+   - Validação automática de query parameters (`token` e `email` ou `success` e `error`).
+   - Apresentação de status: Validação com spinner, Sucesso com botão e redirecionamento ao login, e Tratamento de token expirado com input para reenvio imediato.
+   - Endpoint complementar `GET /api/auth/confirm-email?token={token}&email={email}` com redirecionamento HTTP 302 direto para o frontend Blazor com feedback instantâneo de sucesso ou erro.
 
 ## Consequências
 - **Positivas**:

@@ -1224,6 +1224,18 @@ app.MapPost("/api/auth/confirm-email", async (ConfirmEmailCommand command, ISend
         : Results.Json(result.Error, statusCode: ToStatusCode(result.Error.Type));
 }).AllowAnonymous().WithTags("Auth");
 
+app.MapGet("/api/auth/confirm-email", async (string email, string token, ISender sender, IConfiguration configuration) =>
+{
+    var webBaseUrl = (configuration["App:WebBaseUrl"] ?? configuration["WEB_BASE_URL"] ?? "http://localhost:8081").TrimEnd('/');
+    var result = await sender.Send(new ConfirmEmailCommand(email, token));
+    if (result.IsSuccess)
+    {
+        return Results.Redirect($"{webBaseUrl}/confirm-email?success=true&email={Uri.EscapeDataString(email)}");
+    }
+
+    return Results.Redirect($"{webBaseUrl}/confirm-email?error={Uri.EscapeDataString(result.Error.Message)}&email={Uri.EscapeDataString(email)}");
+}).AllowAnonymous().WithTags("Auth");
+
 app.MapPost("/api/auth/resend-confirmation", async (ResendConfirmationEmailCommand command, ISender sender) =>
 {
     var result = await sender.Send(command);

@@ -150,6 +150,12 @@
     [SupplyParameterFromQuery(Name = "email")]
     public string? EmailQuery { get; set; }
 
+    [SupplyParameterFromQuery(Name = "success")]
+    public bool? SuccessQuery { get; set; }
+
+    [SupplyParameterFromQuery(Name = "error")]
+    public string? ErrorQuery { get; set; }
+
     private enum State
     {
         InitialManual,
@@ -170,6 +176,27 @@
 
     protected override async Task OnInitializedAsync()
     {
+        if (SuccessQuery == true)
+        {
+            _currentState = State.Success;
+            if (!string.IsNullOrWhiteSpace(EmailQuery))
+            {
+                _resendEmail = EmailQuery;
+            }
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(ErrorQuery))
+        {
+            _errorMessage = Uri.UnescapeDataString(ErrorQuery);
+            _currentState = State.Error;
+            if (!string.IsNullOrWhiteSpace(EmailQuery))
+            {
+                _resendEmail = EmailQuery;
+            }
+            return;
+        }
+
         if (!string.IsNullOrWhiteSpace(TokenQuery) && !string.IsNullOrWhiteSpace(EmailQuery))
         {
             _resendEmail = EmailQuery;
