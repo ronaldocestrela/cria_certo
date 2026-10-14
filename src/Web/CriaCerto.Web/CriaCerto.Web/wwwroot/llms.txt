@@ -1,0 +1,26 @@
+# CriaCerto - Bovino SaaS (Gestão Pecuária Inteligente)
+> Plataforma SaaS de alta performance para gestão zootécnica e pecuária de precisão, do pasto ao confinamento, projetada especificamente para o mercado pecuarista brasileiro.
+
+## Visão Geral
+O CriaCerto é uma solução tecnológica para pecuária de corte, cria, recria e confinamento bovino. Desenvolvido com arquitetura moderna (.NET 10, Blazor WebAssembly, PWA Offline-First), permite que pecuaristas, veterinários, zootecnistas e vaqueiros gerenciem todas as operações zootécnicas e sanitárias diretamente no curral, mesmo sem sinal de internet ou rede celular.
+
+## Módulos do Sistema
+- **Manejo de Curral & Balança Eletrônica**: Identificação individual por brinco visual, SISBOV ou chip RFID eletrônico. Captura e cálculo automático de Ganho de Peso Diário (GPD em kg/dia e arrobas @), alertas de perda de peso e apartação rápida de lotes.
+- **Reprodução & IATF**: Controle de matrizes, protocolos de Inseminação Artificial em Tempo Fixo (D0, D8, D11), acompanhamento de sêmen por touro, diagnósticos gestacionais ultrassonográficos e intervalo entre partos (IEP).
+- **Maternidade, Partos & Bezerreiro**: Registro de nascimentos, avaliação de vigor neonatal, controle de colostragem e pesagem no desmame com ganho ajustado.
+- **Nutrição & Confinamento**: Gestão de trato total misto (TMR), leitura de cocho matinal e vespertina, estoque de volumoso e concentrado em silos e cálculo de custo por arroba (@) produzida.
+- **Sanidade & Trava de Abate (Carência Medicamentosa)**: Controle rigoroso de campanhas sanitárias obrigatórias (Aftosa, Brucelose, Raiva) e bloqueio inteligente impedindo o embarque ou abate de bovinos sob período de carência de medicamentos.
+- **Analytics Zootécnico & DRE da Pecuária**: Indicadores executivos de conversão alimentar, custo por arroba engordada e rentabilidade da safra.
+
+## Diferenciais Competitivos
+- **100% Funcional Off-line (PWA)**: Opera completamente sem internet no mangueiro e sincroniza com o servidor na nuvem assim que detecta conexão.
+- **Blindagem Sanitária no Embarque**: Previne multas frigoríficas e bloqueios do MAPA através da trava automática de carência.
+- **Interface Otimizada para Campo**: Telas com alto contraste desenvolvidas para operação sob luz solar direta em smartphones e tablets industriais.
+- **Multi-fazenda e Multi-usuário**: Suporte a múltiplos retiros e controle de permissões por perfil (vaqueiro, zootecnista, administrador).
+
+## Detalhes Comerciais
+- **Modelo de Cobrança**: SaaS com planos mensais e anuais (com 20% de desconto no faturamento anual).
+- **Período de Teste**: 30 dias gratuitos sem necessidade de cartão de crédito.
+- **Website Oficial**: https://criacerto.com.br
+- **Acesso**: https://criacerto.com.br/login
+- **Cadastro**: https://criacerto.com.br/register
