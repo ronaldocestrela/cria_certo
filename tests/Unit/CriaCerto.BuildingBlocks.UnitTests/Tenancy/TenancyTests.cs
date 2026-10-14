@@ -126,7 +126,8 @@ public class TenancyTests : IDisposable
             Id = Guid.NewGuid(),
             Email = "user1@criacerto.com",
             FullName = "User One",
-            PasswordHash = PasswordHasher.Hash("Pass123!")
+            PasswordHash = PasswordHasher.Hash("Pass123!"),
+            IsEmailConfirmed = true
         };
         var tenant = new Tenant
         {
@@ -166,7 +167,8 @@ public class TenancyTests : IDisposable
             Id = Guid.NewGuid(),
             Email = "user2@criacerto.com",
             FullName = "User Two",
-            PasswordHash = PasswordHasher.Hash("Pass123!")
+            PasswordHash = PasswordHasher.Hash("Pass123!"),
+            IsEmailConfirmed = true
         };
         var tenant1 = new Tenant { Id = Guid.NewGuid(), Name = "Granja Santa Fé", CNPJ = "1", CnpjNormalized = "1", State = "RS", Type = "Matriz" };
         var tenant2 = new Tenant { Id = Guid.NewGuid(), Name = "Unidade Terminação III", CNPJ = "2", CnpjNormalized = "2", State = "SC", Type = "Engorda" };

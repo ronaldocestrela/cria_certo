@@ -1,6 +1,7 @@
 using CriaCerto.BuildingBlocks.Abstractions.Results;
 using CriaCerto.Modules.Tenancy.Application.Abstractions;
 using CriaCerto.Modules.Tenancy.Application.Domain;
+using CriaCerto.Modules.Tenancy.Application.Features.ConfirmEmail;
 using CriaCerto.Modules.Tenancy.Application.Features.CreateTenant;
 using CriaCerto.Modules.Tenancy.Application.Features.Login;
 using CriaCerto.Modules.Tenancy.Application.Features.RegisterUser;
@@ -51,8 +52,21 @@ public class OnboardingIntegrationTests : IDisposable
         registerResult.IsSuccess.Should().BeTrue();
         var userId = registerResult.Value.Id;
 
-        // Step 2: Attempt Login BEFORE onboarding (Should fail with Auth.NoTenantAssociation)
+        // Step 2: Attempt Login BEFORE email confirmation (Should fail with Auth.EmailNotConfirmed)
         var loginHandler = new LoginCommandHandler(_dbContext, _jwtService);
+        var loginPreConfirm = await loginHandler.Handle(new LoginCommand("produtor.onboarding@fazenda.com.br", "Senha@123"), CancellationToken.None);
+
+        loginPreConfirm.IsFailure.Should().BeTrue();
+        loginPreConfirm.Error.Code.Should().Be("Auth.EmailNotConfirmed");
+
+        // Step 3: Confirm Email
+        var createdUser = await _dbContext.Users.FirstAsync(u => u.Id == userId);
+        var confirmEmailHandler = new ConfirmEmailCommandHandler(_dbContext);
+        var confirmResult = await confirmEmailHandler.Handle(new ConfirmEmailCommand(createdUser.Email, createdUser.EmailConfirmationToken!), CancellationToken.None);
+
+        confirmResult.IsSuccess.Should().BeTrue();
+
+        // Step 4: Attempt Login BEFORE onboarding (Should fail with Auth.NoTenantAssociation)
         var loginPreOnboard = await loginHandler.Handle(new LoginCommand("produtor.onboarding@fazenda.com.br", "Senha@123"), CancellationToken.None);
 
         loginPreOnboard.IsFailure.Should().BeTrue();
