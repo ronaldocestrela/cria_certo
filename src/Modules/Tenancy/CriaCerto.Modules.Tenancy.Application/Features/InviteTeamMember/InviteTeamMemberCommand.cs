@@ -27,10 +27,12 @@ public sealed class InviteTeamMemberCommandValidator : AbstractValidator<InviteT
 public sealed class InviteTeamMemberCommandHandler : IRequestHandler<InviteTeamMemberCommand, Result<TeamInviteDto>>
 {
     private readonly ITenancyDbContext _dbContext;
+    private readonly CriaCerto.BuildingBlocks.Abstractions.Email.IEmailSender? _emailSender;
 
-    public InviteTeamMemberCommandHandler(ITenancyDbContext dbContext)
+    public InviteTeamMemberCommandHandler(ITenancyDbContext dbContext, CriaCerto.BuildingBlocks.Abstractions.Email.IEmailSender? emailSender = null)
     {
         _dbContext = dbContext;
+        _emailSender = emailSender;
     }
 
     public async Task<Result<TeamInviteDto>> Handle(InviteTeamMemberCommand request, CancellationToken cancellationToken)
@@ -61,6 +63,8 @@ public sealed class InviteTeamMemberCommandHandler : IRequestHandler<InviteTeamM
 
         if (activeInvite != null)
         {
+            await SendInviteEmailAsync(tenant.Name, activeInvite.Email, activeInvite.Role.ToString(), activeInvite.InviteToken, cancellationToken);
+
             return Result.Success(new TeamInviteDto(
                 activeInvite.Id,
                 activeInvite.TenantId,
@@ -87,6 +91,8 @@ public sealed class InviteTeamMemberCommandHandler : IRequestHandler<InviteTeamM
         _dbContext.TeamInvites.Add(invite);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
+        await SendInviteEmailAsync(tenant.Name, invite.Email, invite.Role.ToString(), invite.InviteToken, cancellationToken);
+
         return Result.Success(new TeamInviteDto(
             invite.Id,
             invite.TenantId,
@@ -96,5 +102,31 @@ public sealed class InviteTeamMemberCommandHandler : IRequestHandler<InviteTeamM
             invite.CreatedAt,
             invite.ExpiresAt,
             invite.IsAccepted));
+    }
+
+    private async Task SendInviteEmailAsync(string farmName, string email, string role, string token, CancellationToken cancellationToken)
+    {
+        if (_emailSender == null) return;
+
+        var html = $"""
+            <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #333;">
+                <h2 style="color: #2e7d32;">Convite para Colaboração - CriaCerto</h2>
+                <p>Olá,</p>
+                <p>Você foi convidado para integrar a equipe da fazenda <strong>{farmName}</strong> como <strong>{role}</strong> na plataforma CriaCerto.</p>
+                <p>Seu token de acesso para aceitar o convite é:</p>
+                <div style="background-color: #f1f8e9; border: 1px solid #c8e6c9; border-radius: 8px; padding: 16px; font-size: 20px; font-weight: bold; text-align: center; color: #1b5e20;">
+                    {token}
+                </div>
+                <p style="margin-top: 20px; font-size: 14px; color: #666;">Este convite é válido por 7 dias.</p>
+            </div>
+            """;
+
+        var message = CriaCerto.BuildingBlocks.Abstractions.Email.EmailMessage.Create(
+            toEmail: email,
+            subject: $"Convite para a fazenda {farmName} no CriaCerto",
+            htmlBody: html,
+            textBody: $"Você foi convidado para a equipe da fazenda {farmName} no CriaCerto como {role}. Seu token é: {token}. Expira em 7 dias.");
+
+        await _emailSender.SendAsync(message, cancellationToken);
     }
 }

@@ -145,6 +145,7 @@ var connectionString = builder.Configuration.GetConnectionString("SqlServer")
 
 // Register Building Blocks and Infrastructure
 builder.Services.AddBuildingBlocksInfrastructure(connectionString);
+builder.Services.AddEmailSender(builder.Configuration);
 builder.Services.AddTenancyInfrastructure(builder.Configuration);
 builder.Services.AddBreedingInfrastructure();
 builder.Services.AddCalvingInfrastructure();

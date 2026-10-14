@@ -76,6 +76,14 @@ services:
       Stripe__SuccessUrl: "${STRIPE_SUCCESS_URL:-http://localhost:8081/settings/subscription?success=true}"
       Stripe__CancelUrl: "${STRIPE_CANCEL_URL:-http://localhost:8081/settings/subscription?canceled=true}"
       Stripe__ReturnUrl: "${STRIPE_RETURN_URL:-http://localhost:8081/settings/subscription}"
+      RESEND_API_KEY: "${RESEND_API_KEY:-}"
+      RESEND_FROM_EMAIL: "${RESEND_FROM_EMAIL:-noreply@criacerto.com.br}"
+      RESEND_FROM_NAME: "${RESEND_FROM_NAME:-CriaCerto}"
+      RESEND_ENABLE_MOCK_DEV: "${RESEND_ENABLE_MOCK_DEV:-false}"
+      Resend__ApiKey: "${RESEND_API_KEY:-}"
+      Resend__DefaultFromEmail: "${RESEND_FROM_EMAIL:-noreply@criacerto.com.br}"
+      Resend__DefaultFromName: "${RESEND_FROM_NAME:-CriaCerto}"
+      Resend__EnableMockInDevelopment: "${RESEND_ENABLE_MOCK_DEV:-false}"
     env_file:
       - .env
     depends_on:

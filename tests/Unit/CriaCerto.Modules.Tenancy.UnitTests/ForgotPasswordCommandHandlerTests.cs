@@ -4,6 +4,7 @@ using CriaCerto.Modules.Tenancy.Infrastructure.Persistence;
 using FluentAssertions;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using NSubstitute;
 
 namespace CriaCerto.Modules.Tenancy.UnitTests;
 
@@ -73,5 +74,38 @@ public class ForgotPasswordCommandHandlerTests : IDisposable
         // Assert
         result.IsSuccess.Should().BeTrue();
         result.Value.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Handle_Should_Dispatch_Email_When_EmailSender_Is_Configured()
+    {
+        // Arrange
+        var user = new User
+        {
+            Id = Guid.NewGuid(),
+            FullName = "Carlos Fazendeiro",
+            Email = "carlos@fazenda.com.br",
+            PasswordHash = "hash"
+        };
+        _dbContext.Users.Add(user);
+        await _dbContext.SaveChangesAsync();
+
+        var emailSender = NSubstitute.Substitute.For<CriaCerto.BuildingBlocks.Abstractions.Email.IEmailSender>();
+        emailSender.SendAsync(NSubstitute.Arg.Any<CriaCerto.BuildingBlocks.Abstractions.Email.EmailMessage>(), NSubstitute.Arg.Any<CancellationToken>())
+            .Returns(CriaCerto.BuildingBlocks.Abstractions.Results.Result.Success(new CriaCerto.BuildingBlocks.Abstractions.Email.EmailSendResult("msg_123")));
+
+        var handler = new ForgotPasswordCommandHandler(_dbContext, emailSender);
+        var command = new ForgotPasswordCommand("carlos@fazenda.com.br");
+
+        // Act
+        var result = await handler.Handle(command, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.Should().BeTrue();
+        await emailSender.Received(1).SendAsync(
+            NSubstitute.Arg.Is<CriaCerto.BuildingBlocks.Abstractions.Email.EmailMessage>(m =>
+                m.To.Any(r => r.Email == "carlos@fazenda.com.br") &&
+                m.Subject.Contains("Recuperação de Senha")),
+            NSubstitute.Arg.Any<CancellationToken>());
     }
 }

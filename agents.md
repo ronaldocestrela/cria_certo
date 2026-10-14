@@ -41,6 +41,13 @@ The platform optimizes cattle farm operations across the entire lifecycle: Breed
 * **Offline Storage:** IndexedDB (via Blazored.LocalStorage or JS Interop) with IndexedDB-to-Server background synchronization workers.
 * **State Management:** Fluxor or Custom Scoped State Stores.
 
+### 3.3 Transactional Email Provider (Resend)
+* **Provider:** Resend REST API v1 (`POST https://api.resend.com/emails`).
+* **Abstractions:** `IEmailSender`, `EmailMessage`, `EmailRecipient`, `EmailSendResult` located in `CriaCerto.BuildingBlocks.Abstractions.Email`.
+* **Infrastructure:** `ResendEmailSender`, `ResendOptions`, `NullEmailSender` (mock/development fallback) in `CriaCerto.BuildingBlocks.Infrastructure.Email`.
+* **Error Handling:** 100% Result Pattern compliance (`EmailErrors`). No network or API exceptions propagated.
+* **Architecture Decision Record:** See `docs/adrs/0015-transactional-email-provider-resend.md`.
+
 ---
 
 ## 4. Mandatory Backend Standard: The Result Pattern
