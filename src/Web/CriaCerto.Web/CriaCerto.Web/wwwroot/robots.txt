@@ -1,0 +1,48 @@
+# robots.txt para CriaCerto Bovino SaaS
+# https://criacerto.com.br
+
+User-agent: *
+Allow: /
+Allow: /home
+Allow: /login
+Allow: /register
+Allow: /llms.txt
+Disallow: /api/
+Disallow: /backoffice/
+Disallow: /settings/
+Disallow: /breeding/
+Disallow: /growth/
+Disallow: /nutrition/
+Disallow: /calving/
+Disallow: /sanitary/
+Disallow: /analytics/
+
+# IA Crawlers e Search Engines Generativos (GEO)
+User-agent: GPTBot
+Allow: /
+Allow: /llms.txt
+Disallow: /api/
+Disallow: /backoffice/
+
+User-agent: ChatGPT-User
+Allow: /
+Allow: /llms.txt
+
+User-agent: PerplexityBot
+Allow: /
+Allow: /llms.txt
+Disallow: /api/
+Disallow: /backoffice/
+
+User-agent: ClaudeBot
+Allow: /
+Allow: /llms.txt
+Disallow: /api/
+Disallow: /backoffice/
+
+User-agent: Google-Extended
+Allow: /
+Allow: /llms.txt
+
+# Sitemap
+Sitemap: https://criacerto.com.br/sitemap.xml
