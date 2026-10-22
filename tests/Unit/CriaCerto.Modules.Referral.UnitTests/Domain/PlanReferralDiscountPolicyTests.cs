@@ -69,4 +69,105 @@ public class PlanReferralDiscountPolicyTests
         // Assert
         discount.Should().Be(150m);
     }
+
+    [Fact]
+    public void UpdatePolicy_ValidValues_ShouldUpdatePropertiesAndSucceed()
+    {
+        // Arrange
+        var policy = PlanReferralDiscountPolicy.Create(
+            Guid.NewGuid(),
+            "PLAN_PRO",
+            DiscountType.Percentage,
+            discountValue: 10m,
+            maxDiscountCapPercentage: 100m).Value;
+
+        // Act
+        var result = policy.UpdatePolicy(DiscountType.FixedValue, 75m, 80m);
+
+        // Assert
+        result.IsSuccess.Should().BeTrue();
+        policy.DiscountType.Should().Be(DiscountType.FixedValue);
+        policy.DiscountValue.Should().Be(75m);
+        policy.MaxDiscountCapPercentage.Should().Be(80m);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-10)]
+    public void UpdatePolicy_WithZeroOrNegativeDiscountValue_ShouldFail(decimal invalidValue)
+    {
+        // Arrange
+        var policy = PlanReferralDiscountPolicy.Create(
+            Guid.NewGuid(),
+            "PLAN_PRO",
+            DiscountType.Percentage,
+            discountValue: 10m,
+            maxDiscountCapPercentage: 100m).Value;
+
+        // Act
+        var result = policy.UpdatePolicy(DiscountType.Percentage, invalidValue, 100m);
+
+        // Assert
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be(ReferralErrors.Policy.InvalidDiscountValue.Code);
+    }
+
+    [Fact]
+    public void UpdatePolicy_WithPercentageGreaterThan100_ShouldFail()
+    {
+        // Arrange
+        var policy = PlanReferralDiscountPolicy.Create(
+            Guid.NewGuid(),
+            "PLAN_PRO",
+            DiscountType.Percentage,
+            discountValue: 10m,
+            maxDiscountCapPercentage: 100m).Value;
+
+        // Act
+        var result = policy.UpdatePolicy(DiscountType.Percentage, 105m, 100m);
+
+        // Assert
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be(ReferralErrors.Policy.InvalidPercentageDiscountValue.Code);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-5)]
+    [InlineData(101)]
+    public void UpdatePolicy_WithInvalidCap_ShouldFail(decimal invalidCap)
+    {
+        // Arrange
+        var policy = PlanReferralDiscountPolicy.Create(
+            Guid.NewGuid(),
+            "PLAN_PRO",
+            DiscountType.Percentage,
+            discountValue: 10m,
+            maxDiscountCapPercentage: 100m).Value;
+
+        // Act
+        var result = policy.UpdatePolicy(DiscountType.Percentage, 20m, invalidCap);
+
+        // Assert
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be(ReferralErrors.Policy.InvalidDiscountCap.Code);
+    }
+
+    [Fact]
+    public void DeactivateAndReactivate_ShouldToggleIsActive()
+    {
+        // Arrange
+        var policy = PlanReferralDiscountPolicy.Create(
+            Guid.NewGuid(),
+            "PLAN_PRO",
+            DiscountType.Percentage,
+            discountValue: 10m).Value;
+
+        // Act & Assert
+        policy.Deactivate();
+        policy.IsActive.Should().BeFalse();
+
+        policy.Reactivate();
+        policy.IsActive.Should().BeTrue();
+    }
 }

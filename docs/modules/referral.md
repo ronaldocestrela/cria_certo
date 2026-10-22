@@ -217,5 +217,31 @@ O painel financeiro (`/backoffice/referral/payouts`) centraliza a conciliação 
 * `POST /api/v1/backoffice/referral/payouts/batch-payout`: Registro de baixa em lote por parceiro (`multipart/form-data`).
 * `POST /api/v1/backoffice/referral/payouts/{id}/cancel`: Cancelamento de comissão com justificativa auditada.
 
+---
+
+## 7. Configuração de Descontos por Plano no Backoffice (Fase 3.3)
+
+### 7.1 Visão Geral e Fronteiras Modulares
+A tela `/backoffice/referral/discount-policies` permite a calibração dos incentivos concedidos na fatura dos produtores rurais participantes do "Indique e Ganhe":
+* **Integração sem Acoplamento Direto:** O módulo `Referral` descobre os planos ativos cadastrados no `Backoffice` por meio da abstração `IPlanCatalogLookupService` (`PlanCatalogLookupService`), sem realizar junções ou dependências diretas de banco de dados.
+* **Governança de Auditoria:** Toda parametrização de política de desconto registra evento forense com hash encadeado SHA-256 no `AuditLog` (`Category = AuditCategory.Referral`, `Action = "Referral.PlanDiscountConfigured"`).
+* **Segurança e RBAC:**
+  - `referral.discounts.read`: Permissão para visualizar a listagem e o dashboard de KPIs de descontos.
+  - `referral.discounts.manage`: Permissão exclusiva para configurar valores, percentuais, tetos máximos e alternar o status ativo/inativo das políticas.
+
+### 7.2 Endpoints da API REST (`/api/v1/backoffice/referral/discount-policies`)
+* `GET /api/v1/backoffice/referral/discount-policies`: Consulta combinada de planos disponíveis e suas respectivas políticas de desconto configuradas.
+* `PUT /api/v1/backoffice/referral/discount-policies/{planCatalogId}`: Criação ou atualização in-place da política de desconto do plano (`DiscountType`, `DiscountValue`, `MaxDiscountCapPercentage`).
+* `POST /api/v1/backoffice/referral/discount-policies/{id}/toggle-status`: Alternância de status ativo/inativo da política com auditoria.
+
+### 7.3 Interface WebAssembly (`/backoffice/referral/discount-policies`)
+* **KPIs em Tempo Real**: Total de Planos, Políticas Ativas, Descontos Percentuais (%), Descontos Fixos (R$) e Pendentes de Configuração.
+* **Tabela de Calibração**: Código do Plano, Nome, Modalidade, Desconto por Indicação Ativa, Teto Máximo (% da Assinatura) e Status.
+* **Modal Interativo**:
+  - Seleção intuitiva de modalidade (`%` vs `R$`).
+  - Inputs com validação reativa e máscaras de moeda/percentual.
+  - Slider de teto de desconto (`10% a 100%`) com indicação visual de limite.
+  - Simulador de economia dinâmico ilustrando a redução da fatura para 1, 2 ou 3 indicações ativas do cliente.
+
 
 

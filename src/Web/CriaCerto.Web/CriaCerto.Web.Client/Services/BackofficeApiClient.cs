@@ -20,6 +20,7 @@ using CriaCerto.Modules.Referral.Application.Domain.Enums;
 using CriaCerto.Modules.Referral.Application.Features.CommercialPartners.Dtos;
 using CriaCerto.Modules.Referral.Application.Features.CommercialPartners.Queries;
 using CriaCerto.Modules.Referral.Application.Features.Payouts.Dtos;
+using CriaCerto.Modules.Referral.Application.Features.PlanDiscounts.Dtos;
 using CriaCerto.Web.Client.Models;
 using Microsoft.JSInterop;
 
@@ -193,6 +194,11 @@ public interface IBackofficeApiClient
         CancellationToken cancellationToken = default);
     Task<Result> CancelCommissionLedgerEntryAsync(Guid ledgerId, string reason, CancellationToken cancellationToken = default);
     Task<ExportTenantsResult> ExportPixBatchCsvAsync(IReadOnlyList<Guid>? participantIds = null, CancellationToken cancellationToken = default);
+
+    // Referral Plan Discounts
+    Task<IReadOnlyList<PlanDiscountPolicyDto>?> GetPlanDiscountPoliciesAsync(CancellationToken cancellationToken = default);
+    Task<Result<PlanDiscountPolicyDto>> ConfigurePlanDiscountPolicyAsync(Guid planCatalogId, ConfigurePlanDiscountPolicyRequest request, CancellationToken cancellationToken = default);
+    Task<Result<PlanDiscountPolicyDto>> TogglePlanDiscountPolicyStatusAsync(Guid policyId, CancellationToken cancellationToken = default);
 }
 
 
@@ -1249,6 +1255,51 @@ public class BackofficeApiClient : IBackofficeApiClient
                        "lote_pix_criacerto.csv";
 
         return new ExportTenantsResult { Content = bytes, FileName = fileName };
+    }
+
+    public async Task<IReadOnlyList<PlanDiscountPolicyDto>?> GetPlanDiscountPoliciesAsync(CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.GetAsync("api/v1/backoffice/referral/discount-policies", cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            return null;
+        }
+
+        return await response.Content.ReadFromJsonAsync<IReadOnlyList<PlanDiscountPolicyDto>>(cancellationToken: cancellationToken);
+    }
+
+    public async Task<Result<PlanDiscountPolicyDto>> ConfigurePlanDiscountPolicyAsync(
+        Guid planCatalogId,
+        ConfigurePlanDiscountPolicyRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.PutAsJsonAsync($"api/v1/backoffice/referral/discount-policies/{planCatalogId}", request, cancellationToken);
+        if (response.IsSuccessStatusCode)
+        {
+            var dto = await response.Content.ReadFromJsonAsync<PlanDiscountPolicyDto>(cancellationToken: cancellationToken);
+            return Result.Success(dto!);
+        }
+
+        var error = await response.Content.ReadFromJsonAsync<Error>(cancellationToken: cancellationToken);
+        return Result.Failure<PlanDiscountPolicyDto>(error ?? Error.Failure("DiscountPolicy.ConfigError", "Erro ao configurar política de desconto do plano."));
+    }
+
+    public async Task<Result<PlanDiscountPolicyDto>> TogglePlanDiscountPolicyStatusAsync(
+        Guid policyId,
+        CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.PostAsync($"api/v1/backoffice/referral/discount-policies/{policyId}/toggle-status", null, cancellationToken);
+        if (response.IsSuccessStatusCode)
+        {
+            var dto = await response.Content.ReadFromJsonAsync<PlanDiscountPolicyDto>(cancellationToken: cancellationToken);
+            return Result.Success(dto!);
+        }
+
+        var error = await response.Content.ReadFromJsonAsync<Error>(cancellationToken: cancellationToken);
+        return Result.Failure<PlanDiscountPolicyDto>(error ?? Error.Failure("DiscountPolicy.ToggleError", "Erro ao alterar status da política de desconto."));
     }
 }
 

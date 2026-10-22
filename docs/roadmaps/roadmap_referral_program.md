@@ -179,9 +179,17 @@ flowchart TD
 - [x] Exportação de lista de pagamentos em formato CSV padronizado com delimitador `;`, encoding UTF-8 com BOM e campos Pix para conciliação bancária em lote.
 - [x] Trilha de auditoria forense com encadeamento de hash SHA-256 e proteção LGPD nativa com `<MaskedDataField>`.
 
-#### 3.3 Configuração de Descontos por Plano
-- Tela administrativa para calibrar os descontos concedidos aos clientes:
-  - Tabela: Código do Plano x Desconto por Indicação Ativa x Teto Máximo.
+#### 3.3 Configuração de Descontos por Plano [CONCLUÍDO]
+- [x] Tela administrativa completa no Backoffice (`/backoffice/referral/discount-policies`) para calibrar os incentivos aos clientes por indicação ativa.
+- [x] Dashboard de KPIs com contagem de planos, políticas ativas, modalidades (percentual vs valor fixo) e pendências de configuração.
+- [x] Tabela de calibração interativa: Código do Plano x Nome x Modalidade x Desconto por Indicação Ativa x Teto Máximo x Status.
+- [x] Modal interativo de parametrização com seletor de modalidade (Percentual `%` vs Fixo `R$`), inputs com validação e slider de teto máximo (`10% a 100%`).
+- [x] Simulador de economia em tempo real para pré-visualização do impacto financeiro do cliente com 1, 2 ou 3 indicações ativas.
+- [x] Ação de ativação/desativação rápida de política com feedback reativo e sem perda de histórico.
+- [x] Integração modular desacoplada via `IPlanCatalogLookupService` consultando o catálogo sem acoplamento ou joins físicos cross-module.
+- [x] Trilha de auditoria forense compulsória no `AuditLog` com encadeamento criptográfico SHA-256 para parametrização e alternância de status.
+- [x] Matriz de segurança RBAC com permissões dedicadas `referral.discounts.read` e `referral.discounts.manage` atribuídas na matriz de perfis.
+- [x] Suíte de testes unitários de domínio e casos de uso MediatR com 100% de sucesso.
 
 ---
 

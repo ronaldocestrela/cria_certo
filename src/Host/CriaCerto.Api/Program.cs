@@ -14,6 +14,9 @@ using CriaCerto.Modules.Referral.Application.Features.CommercialPartners.Queries
 using CriaCerto.Modules.Referral.Application.Features.Payouts.Commands;
 using CriaCerto.Modules.Referral.Application.Features.Payouts.Dtos;
 using CriaCerto.Modules.Referral.Application.Features.Payouts.Queries;
+using CriaCerto.Modules.Referral.Application.Features.PlanDiscounts.Commands;
+using CriaCerto.Modules.Referral.Application.Features.PlanDiscounts.Dtos;
+using CriaCerto.Modules.Referral.Application.Features.PlanDiscounts.Queries;
 using CriaCerto.BuildingBlocks.Application.Features.GetReferenceBreeds;
 using CriaCerto.Api.Seeders;
 using CriaCerto.Modules.Sanitary.Application.Features.GetVaccineCalendar;
@@ -173,6 +176,7 @@ builder.Services.AddSanitaryModule(builder.Configuration);
 builder.Services.AddBackofficeInfrastructure(builder.Configuration);
 builder.Services.AddReferralInfrastructure(builder.Configuration);
 builder.Services.AddScoped<IPartnerAccountProvisioner, PartnerAccountProvisioner>();
+builder.Services.AddScoped<IPlanCatalogLookupService, PlanCatalogLookupService>();
 
 // Background Services
 builder.Services.AddHostedService<SubscriptionLifecycleWorker>();
@@ -1543,6 +1547,80 @@ backoffice.MapPost("/referral/payouts/{id:guid}/cancel", async (
 
     return ToCommandHttpResult(result);
 }).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ReferralPayoutsManage)).WithTags("Backoffice Referral Payouts");
+
+backoffice.MapGet("/referral/discount-policies", async (ISender sender) =>
+{
+    var query = new GetPlanDiscountPoliciesQuery();
+    var result = await sender.Send(query);
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ReferralDiscountsRead)).WithTags("Backoffice Referral Discounts");
+
+backoffice.MapPut("/referral/discount-policies/{planCatalogId:guid}", async (
+    Guid planCatalogId,
+    ConfigurePlanDiscountPolicyRequest req,
+    HttpContext ctx,
+    ISender sender,
+    DbContext dbContext) =>
+{
+    var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var command = new ConfigurePlanDiscountPolicyCommand(
+        planCatalogId,
+        req.DiscountType,
+        req.DiscountValue,
+        req.MaxDiscountCapPercentage);
+
+    var result = await sender.Send(command);
+
+    if (result.IsSuccess)
+    {
+        var audit = AuditLog.Create(
+            callerId,
+            callerEmail,
+            "Referral.PlanDiscountConfigured",
+            $"PlanDiscount/{planCatalogId}",
+            ip,
+            JsonSerializer.Serialize(new
+            {
+                PlanCatalogId = planCatalogId,
+                result.Value.PlanCode,
+                result.Value.DiscountType,
+                result.Value.DiscountValue,
+                result.Value.MaxDiscountCapPercentage
+            }));
+
+        dbContext.Set<AuditLog>().Add(audit);
+        await dbContext.SaveChangesAsync();
+    }
+
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ReferralDiscountsManage)).WithTags("Backoffice Referral Discounts");
+
+backoffice.MapPost("/referral/discount-policies/{id:guid}/toggle-status", async (
+    Guid id,
+    HttpContext ctx,
+    ISender sender,
+    DbContext dbContext) =>
+{
+    var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var command = new TogglePlanDiscountPolicyStatusCommand(id);
+    var result = await sender.Send(command);
+
+    if (result.IsSuccess)
+    {
+        var audit = AuditLog.Create(
+            callerId,
+            callerEmail,
+            result.Value.IsActive ? "Referral.PlanDiscountActivated" : "Referral.PlanDiscountDeactivated",
+            $"PlanDiscount/{id}",
+            ip,
+            JsonSerializer.Serialize(new { PolicyId = id, result.Value.PlanCode, result.Value.IsActive }));
+
+        dbContext.Set<AuditLog>().Add(audit);
+        await dbContext.SaveChangesAsync();
+    }
+
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ReferralDiscountsManage)).WithTags("Backoffice Referral Discounts");
 
 // Backoffice Auth Endpoints (Anonymous / Credentials + MFA)
 app.MapPost("/api/v1/backoffice/auth/login", async (BackofficeLoginRequest req, HttpContext ctx, ISender sender) =>

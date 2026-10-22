@@ -63,9 +63,21 @@ public static class ReferralErrors
             "PlanReferralDiscountPolicy.InvalidDiscountValue",
             "O valor ou percentual de desconto deve ser maior que zero.");
 
+        public static readonly Error InvalidPercentageDiscountValue = Error.Validation(
+            "PlanReferralDiscountPolicy.InvalidPercentageDiscountValue",
+            "O percentual de desconto deve ser no máximo 100%.");
+
+        public static readonly Error InvalidDiscountCap = Error.Validation(
+            "PlanReferralDiscountPolicy.InvalidDiscountCap",
+            "O teto máximo de desconto deve estar entre 1% e 100%.");
+
         public static readonly Error PlanCatalogRequired = Error.Validation(
             "PlanReferralDiscountPolicy.PlanCatalogRequired",
             "O identificador do plano no catálogo é obrigatório.");
+
+        public static readonly Error NotFound = Error.NotFound(
+            "PlanReferralDiscountPolicy.NotFound",
+            "A política de desconto para o plano especificado não foi encontrada.");
     }
 
     public static class Attribution

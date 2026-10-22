@@ -35,6 +35,12 @@
                 <span class="nav-icon">💰</span> Comissões & Repasses
             </NavLink>
         </PermissionGuard>
+
+        <PermissionGuard Permission="@BackofficePermissions.ReferralDiscountsRead">
+            <NavLink class="nav-link" href="backoffice/referral/discount-policies">
+                <span class="nav-icon">🏷️</span> Descontos por Plano
+            </NavLink>
+        </PermissionGuard>
     </div>
 
     <div class="nav-section">

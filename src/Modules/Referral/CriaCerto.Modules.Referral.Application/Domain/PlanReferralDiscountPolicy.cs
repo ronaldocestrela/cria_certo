@@ -30,6 +30,12 @@ public sealed class PlanReferralDiscountPolicy
         if (discountValue <= 0)
             return Result.Failure<PlanReferralDiscountPolicy>(ReferralErrors.Policy.InvalidDiscountValue);
 
+        if (discountType == DiscountType.Percentage && discountValue > 100m)
+            return Result.Failure<PlanReferralDiscountPolicy>(ReferralErrors.Policy.InvalidPercentageDiscountValue);
+
+        if (maxDiscountCapPercentage <= 0m || maxDiscountCapPercentage > 100m)
+            return Result.Failure<PlanReferralDiscountPolicy>(ReferralErrors.Policy.InvalidDiscountCap);
+
         var policy = new PlanReferralDiscountPolicy
         {
             Id = Guid.NewGuid(),
@@ -37,12 +43,33 @@ public sealed class PlanReferralDiscountPolicy
             PlanCode = string.IsNullOrWhiteSpace(planCode) ? string.Empty : planCode.Trim().ToUpperInvariant(),
             DiscountType = discountType,
             DiscountValue = discountValue,
-            MaxDiscountCapPercentage = maxDiscountCapPercentage <= 0 ? 100m : maxDiscountCapPercentage,
+            MaxDiscountCapPercentage = maxDiscountCapPercentage,
             IsActive = true,
             CreatedAtUtc = DateTime.UtcNow
         };
 
         return Result.Success(policy);
+    }
+
+    public Result UpdatePolicy(
+        DiscountType discountType,
+        decimal discountValue,
+        decimal maxDiscountCapPercentage)
+    {
+        if (discountValue <= 0)
+            return Result.Failure(ReferralErrors.Policy.InvalidDiscountValue);
+
+        if (discountType == DiscountType.Percentage && discountValue > 100m)
+            return Result.Failure(ReferralErrors.Policy.InvalidPercentageDiscountValue);
+
+        if (maxDiscountCapPercentage <= 0m || maxDiscountCapPercentage > 100m)
+            return Result.Failure(ReferralErrors.Policy.InvalidDiscountCap);
+
+        DiscountType = discountType;
+        DiscountValue = discountValue;
+        MaxDiscountCapPercentage = maxDiscountCapPercentage;
+
+        return Result.Success();
     }
 
     public decimal CalculateDiscount(decimal basePrice)
