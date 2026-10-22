@@ -20,6 +20,9 @@ using CriaCerto.Modules.Referral.Application.Features.PlanDiscounts.Queries;
 using CriaCerto.Modules.Referral.Application.Features.CustomerReferral.Commands;
 using CriaCerto.Modules.Referral.Application.Features.CustomerReferral.Dtos;
 using CriaCerto.Modules.Referral.Application.Features.CustomerReferral.Queries;
+using CriaCerto.Modules.Referral.Application.Features.PartnerPortal.Commands;
+using CriaCerto.Modules.Referral.Application.Features.PartnerPortal.Dtos;
+using CriaCerto.Modules.Referral.Application.Features.PartnerPortal.Queries;
 using CriaCerto.BuildingBlocks.Application.Features.GetReferenceBreeds;
 using CriaCerto.Api.Seeders;
 using CriaCerto.Modules.Sanitary.Application.Features.GetVaccineCalendar;
@@ -181,6 +184,7 @@ builder.Services.AddReferralInfrastructure(builder.Configuration);
 builder.Services.AddScoped<IPartnerAccountProvisioner, PartnerAccountProvisioner>();
 builder.Services.AddScoped<IPlanCatalogLookupService, PlanCatalogLookupService>();
 builder.Services.AddScoped<ITenantInfoLookupService, TenantInfoLookupService>();
+builder.Services.AddScoped<CriaCerto.Modules.Tenancy.Application.Abstractions.IPartnerRoleLookupService, PartnerRoleLookupService>();
 
 // Background Services
 builder.Services.AddHostedService<SubscriptionLifecycleWorker>();
@@ -1857,6 +1861,90 @@ app.MapPost("/api/v1/referral/customer/code/customize", async (
     }
 
     var result = await sender.Send(new CustomizeReferralCodeCommand(resolvedTenantId.Value, request.NewCode));
+    return ToHttpResult(result);
+}).RequireAuthorization().WithTags("Referral");
+
+app.MapGet("/api/v1/referral/partner/dashboard", async (
+    ClaimsPrincipal userClaims,
+    ISender sender) =>
+{
+    var userIdClaim = userClaims.FindFirst(ClaimTypes.NameIdentifier)?.Value 
+        ?? userClaims.FindFirst("sub")?.Value 
+        ?? userClaims.FindFirst("UserId")?.Value;
+
+    if (!Guid.TryParse(userIdClaim, out var userId) || userId == Guid.Empty)
+    {
+        return Results.Unauthorized();
+    }
+
+    var result = await sender.Send(new GetPartnerPortalDashboardQuery(userId));
+    return ToHttpResult(result);
+}).RequireAuthorization().WithTags("Referral");
+
+app.MapGet("/api/v1/referral/partner/statement", async (
+    DateTime? startDate,
+    DateTime? endDate,
+    LedgerRewardStatus? status,
+    string? search,
+    int? page,
+    int? pageSize,
+    ClaimsPrincipal userClaims,
+    ISender sender) =>
+{
+    var userIdClaim = userClaims.FindFirst(ClaimTypes.NameIdentifier)?.Value 
+        ?? userClaims.FindFirst("sub")?.Value 
+        ?? userClaims.FindFirst("UserId")?.Value;
+
+    if (!Guid.TryParse(userIdClaim, out var userId) || userId == Guid.Empty)
+    {
+        return Results.Unauthorized();
+    }
+
+    var result = await sender.Send(new GetPartnerCommissionStatementQuery(
+        userId,
+        startDate,
+        endDate,
+        status,
+        search,
+        page ?? 1,
+        pageSize ?? 10));
+
+    return ToHttpResult(result);
+}).RequireAuthorization().WithTags("Referral");
+
+app.MapPut("/api/v1/referral/partner/pix-key", async (
+    UpdatePartnerPixKeyRequest request,
+    ClaimsPrincipal userClaims,
+    ISender sender) =>
+{
+    var userIdClaim = userClaims.FindFirst(ClaimTypes.NameIdentifier)?.Value 
+        ?? userClaims.FindFirst("sub")?.Value 
+        ?? userClaims.FindFirst("UserId")?.Value;
+
+    if (!Guid.TryParse(userIdClaim, out var userId) || userId == Guid.Empty)
+    {
+        return Results.Unauthorized();
+    }
+
+    var result = await sender.Send(new UpdatePartnerPixKeyCommand(userId, request.PixKeyType, request.PixKey));
+    return ToCommandHttpResult(result);
+}).RequireAuthorization().WithTags("Referral");
+
+app.MapPost("/api/v1/referral/partner/campaigns", async (
+    CreatePartnerCampaignCodeRequest request,
+    ClaimsPrincipal userClaims,
+    ISender sender) =>
+{
+    var userIdClaim = userClaims.FindFirst(ClaimTypes.NameIdentifier)?.Value 
+        ?? userClaims.FindFirst("sub")?.Value 
+        ?? userClaims.FindFirst("UserId")?.Value;
+
+    if (!Guid.TryParse(userIdClaim, out var userId) || userId == Guid.Empty)
+    {
+        return Results.Unauthorized();
+    }
+
+    var result = await sender.Send(new CreatePartnerCampaignCodeCommand(userId, request.CampaignTitle, request.PreferredSlug));
     return ToHttpResult(result);
 }).RequireAuthorization().WithTags("Referral");
 

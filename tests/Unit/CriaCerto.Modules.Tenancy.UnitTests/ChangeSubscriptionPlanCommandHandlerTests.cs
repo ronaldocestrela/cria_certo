@@ -192,5 +192,10 @@ public class ChangeSubscriptionPlanCommandHandlerTests : IDisposable
         {
             return "mock-new-jwt-token";
         }
+
+        public string GeneratePartnerToken(User user)
+        {
+            return "mock-partner-jwt-token";
+        }
     }
 }

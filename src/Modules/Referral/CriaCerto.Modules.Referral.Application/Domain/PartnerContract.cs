@@ -83,4 +83,15 @@ public sealed class PartnerContract
 
         return Result.Success();
     }
+
+    public Result UpdatePixKey(PixKeyType pixKeyType, string pixKey)
+    {
+        if (string.IsNullOrWhiteSpace(pixKey))
+            return Result.Failure(ReferralErrors.Contract.PixKeyRequired);
+
+        PixKeyType = pixKeyType;
+        PixKey = pixKey.Trim();
+
+        return Result.Success();
+    }
 }

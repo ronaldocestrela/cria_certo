@@ -192,5 +192,10 @@ public class RefreshTokenCommandHandlerTests : IDisposable
         {
             return $"refreshed-jwt-token-{tenant.SubscribedPlan}";
         }
+
+        public string GeneratePartnerToken(User user)
+        {
+            return "refreshed-partner-jwt-token";
+        }
     }
 }

@@ -14,11 +14,16 @@ public sealed class LoginCommandHandler : IRequestHandler<LoginCommand, Result<A
 {
     private readonly ITenancyDbContext _dbContext;
     private readonly IJwtService _jwtService;
+    private readonly IPartnerRoleLookupService? _partnerRoleLookupService;
 
-    public LoginCommandHandler(ITenancyDbContext dbContext, IJwtService jwtService)
+    public LoginCommandHandler(
+        ITenancyDbContext dbContext,
+        IJwtService jwtService,
+        IPartnerRoleLookupService? partnerRoleLookupService = null)
     {
         _dbContext = dbContext;
         _jwtService = jwtService;
+        _partnerRoleLookupService = partnerRoleLookupService;
     }
 
     public async Task<Result<AuthResponse>> Handle(LoginCommand request, CancellationToken cancellationToken)
@@ -46,6 +51,21 @@ public sealed class LoginCommandHandler : IRequestHandler<LoginCommand, Result<A
 
         if (accessibleTenants.Count == 0)
         {
+            if (_partnerRoleLookupService != null && await _partnerRoleLookupService.IsActiveCommercialPartnerAsync(user.Id, cancellationToken))
+            {
+                var partnerToken = _jwtService.GeneratePartnerToken(user);
+                return Result.Success(new AuthResponse(
+                    Token: partnerToken,
+                    RequiresTenantSelection: false,
+                    AvailableTenants: new List<TenantDto>(),
+                    UserId: user.Id,
+                    FullName: user.FullName,
+                    Email: user.Email,
+                    IsPartner: true,
+                    RedirectUrl: "/partner/portal"
+                ));
+            }
+
             var hasAnyTenant = user.UserTenants.Count > 0;
             return Result.Failure<AuthResponse>(
                 hasAnyTenant

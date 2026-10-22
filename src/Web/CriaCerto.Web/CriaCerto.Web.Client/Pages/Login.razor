@@ -240,7 +240,9 @@
         List<TenantDto> AvailableTenants,
         Guid UserId,
         string FullName,
-        string Email
+        string Email,
+        bool IsPartner = false,
+        string? RedirectUrl = null
     );
 
     protected override async Task OnInitializedAsync()
@@ -248,7 +250,14 @@
         var authState = await AuthStateProvider.GetAuthenticationStateAsync();
         if (authState.User.Identity?.IsAuthenticated == true)
         {
-            Navigation.NavigateTo("/analytics/executive-dashboard");
+            if (authState.User.IsInRole("CommercialPartner") || authState.User.HasClaim("IsPartner", "true"))
+            {
+                Navigation.NavigateTo("/partner/portal");
+            }
+            else
+            {
+                Navigation.NavigateTo("/analytics/executive-dashboard");
+            }
         }
     }
 
@@ -277,7 +286,14 @@
                     else if (!string.IsNullOrEmpty(result.Token))
                     {
                         await AuthStateProvider.MarkUserAsAuthenticated(result.Token);
-                        Navigation.NavigateTo("/analytics/executive-dashboard");
+                        if (result.IsPartner || !string.IsNullOrWhiteSpace(result.RedirectUrl))
+                        {
+                            Navigation.NavigateTo(result.RedirectUrl ?? "/partner/portal");
+                        }
+                        else
+                        {
+                            Navigation.NavigateTo("/analytics/executive-dashboard");
+                        }
                     }
                 }
             }

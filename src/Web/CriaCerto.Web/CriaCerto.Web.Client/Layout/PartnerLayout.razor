@@ -1,0 +1,183 @@
+@inherits LayoutComponentBase
+@using CriaCerto.Web.Client.Auth
+@using CriaCerto.Web.Client.Components
+@inject NavigationManager Navigation
+@inject CustomAuthStateProvider AuthStateProvider
+
+<div class="partner-shell">
+    <header class="partner-header">
+        <div class="partner-header-container">
+            <div class="partner-brand">
+                <img src="imgs/CriaCerto.png" alt="Cria Certo Logo" class="brand-img" />
+                <div class="brand-meta">
+                    <span class="brand-name">Cria Certo</span>
+                    <span class="brand-tag">PORTAL DO PARCEIRO COMERCIAL</span>
+                </div>
+            </div>
+
+            <div class="partner-user-bar">
+                <div class="partner-badge">
+                    <span class="material-symbols-outlined icon-growth">handshake</span>
+                    <span class="badge-text">Parceria Ativa</span>
+                </div>
+
+                <button class="btn-logout" @onclick="HandleLogout" title="Encerrar Sessão">
+                    <span class="material-symbols-outlined">logout</span>
+                    <span>Sair</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="partner-main">
+        <div class="partner-content-container">
+            <CustomErrorBoundary>
+                @Body
+            </CustomErrorBoundary>
+        </div>
+    </main>
+
+    <footer class="partner-footer">
+        <p>© @DateTime.UtcNow.Year Cria Certo Pecuária & Performance. Programa de Parcerias Comerciais.</p>
+    </footer>
+</div>
+
+<ToastContainer />
+
+<style>
+    .partner-shell {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        background-color: #f8fafc;
+        color: #0f172a;
+        font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    }
+
+    .partner-header {
+        background-color: #0f172a;
+        color: #ffffff;
+        border-bottom: 2px solid #16a34a;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        position: sticky;
+        top: 0;
+        z-index: 100;
+    }
+
+    .partner-header-container {
+        max-width: 1280px;
+        margin: 0 auto;
+        padding: 0.85rem 1.5rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+    }
+
+    .partner-brand {
+        display: flex;
+        align-items: center;
+        gap: 0.85rem;
+    }
+
+    .brand-img {
+        height: 38px;
+        width: auto;
+        border-radius: 6px;
+    }
+
+    .brand-meta {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .brand-name {
+        font-size: 1.15rem;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        line-height: 1.2;
+    }
+
+    .brand-tag {
+        font-size: 0.68rem;
+        font-weight: 700;
+        color: #4ade80;
+        letter-spacing: 0.08em;
+    }
+
+    .partner-user-bar {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+
+    .partner-badge {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        background: rgba(22, 163, 74, 0.18);
+        border: 1px solid rgba(74, 222, 128, 0.3);
+        padding: 0.35rem 0.8rem;
+        border-radius: 9999px;
+    }
+
+    .icon-growth {
+        font-size: 16px;
+        color: #4ade80;
+    }
+
+    .badge-text {
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: #4ade80;
+        letter-spacing: 0.04em;
+    }
+
+    .btn-logout {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        background: transparent;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        color: #e2e8f0;
+        padding: 0.4rem 0.85rem;
+        border-radius: 8px;
+        font-size: 0.82rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .btn-logout:hover {
+        background: rgba(239, 68, 68, 0.15);
+        border-color: #ef4444;
+        color: #fca5a5;
+    }
+
+    .partner-main {
+        flex: 1;
+        padding: 2rem 1.5rem;
+    }
+
+    .partner-content-container {
+        max-width: 1280px;
+        margin: 0 auto;
+    }
+
+    .partner-footer {
+        padding: 1.5rem;
+        text-align: center;
+        font-size: 0.8rem;
+        color: #64748b;
+        border-top: 1px solid #e2e8f0;
+        background: #ffffff;
+    }
+</style>
+
+@code {
+    private async Task HandleLogout()
+    {
+        await AuthStateProvider.MarkUserAsLoggedOut();
+        Navigation.NavigateTo("/login", forceLoad: true);
+    }
+}

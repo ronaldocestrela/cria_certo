@@ -112,4 +112,54 @@ public class PartnerContractTests
         contract.ValidToUtc.Should().Be(closeDate);
         contract.IsActive.Should().BeFalse();
     }
+
+    [Fact]
+    public void UpdatePixKey_WithValidKey_ShouldUpdatePixKeyAndType()
+    {
+        // Arrange
+        var contract = PartnerContract.Create(
+            Guid.NewGuid(),
+            CommissionType.PercentageRecurring,
+            commissionValue: 20m,
+            maxRecurringMonths: 12,
+            paymentTermsDays: 30,
+            pixKey: "12345678909",
+            pixKeyType: PixKeyType.Cpf,
+            legalDocumentNumber: "123.456.789-09",
+            validFromUtc: DateTime.UtcNow).Value;
+
+        // Act
+        var result = contract.UpdatePixKey(PixKeyType.Email, "parceiro@novochave.com.br");
+
+        // Assert
+        result.IsSuccess.Should().BeTrue();
+        contract.PixKey.Should().Be("parceiro@novochave.com.br");
+        contract.PixKeyType.Should().Be(PixKeyType.Email);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData(null)]
+    public void UpdatePixKey_WithInvalidKey_ShouldFail(string? invalidKey)
+    {
+        // Arrange
+        var contract = PartnerContract.Create(
+            Guid.NewGuid(),
+            CommissionType.PercentageRecurring,
+            commissionValue: 20m,
+            maxRecurringMonths: 12,
+            paymentTermsDays: 30,
+            pixKey: "12345678909",
+            pixKeyType: PixKeyType.Cpf,
+            legalDocumentNumber: "123.456.789-09",
+            validFromUtc: DateTime.UtcNow).Value;
+
+        // Act
+        var result = contract.UpdatePixKey(PixKeyType.Email, invalidKey!);
+
+        // Assert
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be(ReferralErrors.Contract.PixKeyRequired.Code);
+    }
 }

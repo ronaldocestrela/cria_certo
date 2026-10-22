@@ -63,6 +63,10 @@ public static class ReferralErrors
         public static readonly Error InvalidCloseDate = Error.Validation(
             "PartnerContract.InvalidCloseDate",
             "A data de encerramento do contrato não pode ser anterior à data de início de vigência.");
+
+        public static readonly Error NotFound = Error.NotFound(
+            "PartnerContract.NotFound",
+            "Contrato ativo do parceiro comercial não encontrado.");
     }
 
     public static class Policy

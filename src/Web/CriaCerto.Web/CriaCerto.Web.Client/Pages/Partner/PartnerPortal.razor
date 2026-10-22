@@ -1,0 +1,1282 @@
+@page "/partner/portal"
+@page "/partner"
+@layout Layout.PartnerLayout
+@attribute [Authorize]
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+
+@using CriaCerto.Web.Client.Models
+@using CriaCerto.Web.Client.Services
+@using CriaCerto.BuildingBlocks.Abstractions.Results
+@inject IPartnerApiClient PartnerApiClient
+@inject IToastService ToastService
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+
+<PageTitle>Cria Certo - Portal do Parceiro Comercial</PageTitle>
+
+@if (_isLoading)
+{
+    <div class="loading-state">
+        <div class="spinner"></div>
+        <p>Carregando painel do parceiro comercial...</p>
+    </div>
+}
+else if (_dashboard == null)
+{
+    <div class="error-state">
+        <span class="material-symbols-outlined error-icon">error</span>
+        <h2>Acesso não autorizado ou perfil não localizado</h2>
+        <p>Não localizamos um contrato de parceiro comercial ativo associado à sua conta.</p>
+        <button class="btn btn-primary" @onclick="LoadDashboardAsync">Tentar Novamente</button>
+    </div>
+}
+else
+{
+    <div class="portal-container">
+        <!-- Top Bar: Welcome & Active Contract Card -->
+        <div class="welcome-section">
+            <div class="partner-info">
+                <span class="badge-category">@GetCategoryName(_dashboard.Category)</span>
+                <h1 class="partner-title">@_dashboard.FullName</h1>
+                @if (!string.IsNullOrWhiteSpace(_dashboard.TradeName))
+                {
+                    <p class="partner-subtitle">@_dashboard.TradeName • Documento: @_dashboard.LegalDocumentNumber</p>
+                }
+            </div>
+
+            <div class="contract-card">
+                <div class="contract-item">
+                    <span class="contract-label">Regra de Comissão</span>
+                    <span class="contract-value">@GetCommissionDescription()</span>
+                </div>
+                <div class="contract-item">
+                    <span class="contract-label">Carência de Liquidação</span>
+                    <span class="contract-value">D+@_dashboard.PaymentTermsDays dias</span>
+                </div>
+                <div class="contract-item">
+                    <div class="pix-header">
+                        <span class="contract-label">Chave Pix Cadastrada</span>
+                        <button class="btn-link-edit" @onclick="OpenPixModal">Editar</button>
+                    </div>
+                    <span class="contract-value text-emerald">
+                        <span class="material-symbols-outlined pix-icon">pix</span>
+                        @GetPixKeyTypeLabel(_dashboard.PixKeyType): @_dashboard.PixKey
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 6 KPIs Grid -->
+        <div class="kpis-grid">
+            <div class="kpi-card">
+                <div class="kpi-icon-wrap bg-blue">
+                    <span class="material-symbols-outlined text-blue">ads_click</span>
+                </div>
+                <div class="kpi-body">
+                    <span class="kpi-label">Cliques Totais</span>
+                    <span class="kpi-value">@_dashboard.TotalClicks.ToString("N0")</span>
+                    <span class="kpi-hint text-blue">Taxa Conversão: @_dashboard.ConversionRatePercentage.ToString("F1")%</span>
+                </div>
+            </div>
+
+            <div class="kpi-card">
+                <div class="kpi-icon-wrap bg-amber">
+                    <span class="material-symbols-outlined text-amber">hourglass_top</span>
+                </div>
+                <div class="kpi-body">
+                    <span class="kpi-label">Cadastros em Trial</span>
+                    <span class="kpi-value">@_dashboard.TrialSignupsCount.ToString("N0")</span>
+                    <span class="kpi-hint">Em avaliação gratuita de 14 dias</span>
+                </div>
+            </div>
+
+            <div class="kpi-card">
+                <div class="kpi-icon-wrap bg-emerald">
+                    <span class="material-symbols-outlined text-emerald">verified</span>
+                </div>
+                <div class="kpi-body">
+                    <span class="kpi-label">Assinaturas Ativas</span>
+                    <span class="kpi-value">@_dashboard.PaidSubscriptionsCount.ToString("N0")</span>
+                    <span class="kpi-hint text-emerald">Faturas pagas confirmadas</span>
+                </div>
+            </div>
+
+            <div class="kpi-card">
+                <div class="kpi-icon-wrap bg-orange">
+                    <span class="material-symbols-outlined text-orange">schedule</span>
+                </div>
+                <div class="kpi-body">
+                    <span class="kpi-label">Pendente de Carência</span>
+                    <span class="kpi-value text-orange">R$ @_dashboard.PendingMaturityAmount.ToString("N2")</span>
+                    <span class="kpi-hint">Retenção de segurança D+30</span>
+                </div>
+            </div>
+
+            <div class="kpi-card highlighted">
+                <div class="kpi-icon-wrap bg-green">
+                    <span class="material-symbols-outlined text-green">account_balance_wallet</span>
+                </div>
+                <div class="kpi-body">
+                    <span class="kpi-label">Liberado para Saque</span>
+                    <span class="kpi-value text-green">R$ @_dashboard.AvailablePayoutAmount.ToString("N2")</span>
+                    <span class="kpi-hint text-green">Pronto para repasse bancário</span>
+                </div>
+            </div>
+
+            <div class="kpi-card">
+                <div class="kpi-icon-wrap bg-slate">
+                    <span class="material-symbols-outlined text-slate">payments</span>
+                </div>
+                <div class="kpi-body">
+                    <span class="kpi-label">Total Repassado</span>
+                    <span class="kpi-value">R$ @_dashboard.TotalPaidAmount.ToString("N2")</span>
+                    <span class="kpi-hint">Histórico liquidado via Pix</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Links de Divulgação & Campanhas -->
+        <div class="section-card">
+            <div class="section-header">
+                <div>
+                    <h2 class="section-title">Links de Indicação & Campanhas</h2>
+                    <p class="section-subtitle">Divulgue seus links rastreados para pecuaristas e consultores. As conversões são atribuídas automaticamente ao seu contrato.</p>
+                </div>
+                <button class="btn btn-secondary" @onclick="OpenCampaignModal">
+                    <span class="material-symbols-outlined">add_link</span>
+                    <span>Nova Campanha</span>
+                </button>
+            </div>
+
+            <!-- Card de Link Principal -->
+            <div class="main-link-box">
+                <div class="link-details">
+                    <span class="link-tag">LINK OFICIAL PRINCIPAL</span>
+                    <div class="link-url-display">
+                        <span class="material-symbols-outlined link-icon">link</span>
+                        <code class="link-text">@GetReferralUrl(_dashboard.MainReferralCode)</code>
+                    </div>
+                </div>
+                <div class="link-actions">
+                    <button class="btn btn-outline" @onclick="() => CopyToClipboard(GetReferralUrl(_dashboard.MainReferralCode))">
+                        <span class="material-symbols-outlined">content_copy</span>
+                        <span>Copiar Link</span>
+                    </button>
+                    <button class="btn btn-whatsapp" @onclick="() => ShareWhatsApp(GetReferralUrl(_dashboard.MainReferralCode))">
+                        <span class="material-symbols-outlined">chat</span>
+                        <span>WhatsApp</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Tabela de Campanhas Secundárias -->
+            @if (_dashboard.Campaigns.Count > 1)
+            {
+                <div class="campaigns-table-wrap">
+                    <table class="table-custom">
+                        <thead>
+                            <tr>
+                                <th>Campanha</th>
+                                <th>Código / Slug</th>
+                                <th>Cliques</th>
+                                <th>Criado Em</th>
+                                <th>Status</th>
+                                <th style="text-align: right;">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var c in _dashboard.Campaigns)
+                            {
+                                <tr>
+                                    <td>
+                                        <strong>@(string.IsNullOrWhiteSpace(c.CampaignTitle) ? "Campanha Principal" : c.CampaignTitle)</strong>
+                                    </td>
+                                    <td><span class="code-badge">@c.Code</span></td>
+                                    <td><strong>@c.ClicksCount.ToString("N0")</strong></td>
+                                    <td>@c.CreatedAtUtc.ToLocalTime().ToString("dd/MM/yyyy")</td>
+                                    <td>
+                                        <span class="status-pill @(c.IsActive ? "pill-active" : "pill-inactive")">
+                                            @(c.IsActive ? "Ativo" : "Inativo")
+                                        </span>
+                                    </td>
+                                    <td style="text-align: right;">
+                                        <button class="btn-icon" title="Copiar Link" @onclick="() => CopyToClipboard(GetReferralUrl(c.Code))">
+                                            <span class="material-symbols-outlined">content_copy</span>
+                                        </button>
+                                        <button class="btn-icon text-whatsapp" title="Compartilhar no WhatsApp" @onclick="() => ShareWhatsApp(GetReferralUrl(c.Code))">
+                                            <span class="material-symbols-outlined">chat</span>
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+
+        <!-- Extrato Completo de Comissões -->
+        <div class="section-card">
+            <div class="section-header">
+                <div>
+                    <h2 class="section-title">Extrato de Comissões & Repasses</h2>
+                    <p class="section-subtitle">Transparência total dos valores gerados pelas assinaturas da sua carteira comercial com datas de liquidação.</p>
+                </div>
+            </div>
+
+            <!-- Filtros de Busca -->
+            <div class="statement-filters">
+                <div class="filter-item">
+                    <label>Buscar Fazenda ou Transação</label>
+                    <input type="text" class="input-text" placeholder="Nome da fazenda..." @bind="_searchFilter" @bind:event="oninput" />
+                </div>
+                <div class="filter-item">
+                    <label>Status</label>
+                    <select class="input-select" @bind="_statusFilter">
+                        <option value="">Todos os status</option>
+                        <option value="0">Pendente de Carência</option>
+                        <option value="1">Liberado para Saque</option>
+                        <option value="3">Pago / Liquidado</option>
+                        <option value="4">Cancelado</option>
+                    </select>
+                </div>
+                <div class="filter-actions">
+                    <button class="btn btn-secondary" @onclick="LoadStatementAsync" disabled="@_isStatementLoading">
+                        <span class="material-symbols-outlined">filter_list</span>
+                        <span>Filtrar</span>
+                    </button>
+                    <button class="btn btn-outline" @onclick="ClearFiltersAsync" disabled="@_isStatementLoading">
+                        <span>Limpar</span>
+                    </button>
+                </div>
+            </div>
+
+            @if (_isStatementLoading)
+            {
+                <div class="table-loading">
+                    <div class="spinner-small"></div>
+                    <span>Atualizando extrato de comissões...</span>
+                </div>
+            }
+            else if (_statement == null || _statement.Items.Count == 0)
+            {
+                <div class="empty-statement">
+                    <span class="material-symbols-outlined empty-icon">receipt_long</span>
+                    <h3>Nenhum lançamento localizado</h3>
+                    <p>Assim que seus clientes realizarem o primeiro pagamento das assinaturas, os lançamentos de comissão aparecerão aqui.</p>
+                </div>
+            }
+            else
+            {
+                <div class="statement-table-wrap">
+                    <table class="table-custom">
+                        <thead>
+                            <tr>
+                                <th>Data da Fatura</th>
+                                <th>Fazenda Indicada</th>
+                                <th>Valor do Plano</th>
+                                <th>Comissão</th>
+                                <th>Valor Líquido</th>
+                                <th>Vencimento Carência</th>
+                                <th>Status</th>
+                                <th>Comprovante / NSU</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in _statement.Items)
+                            {
+                                <tr>
+                                    <td>@item.CreatedAtUtc.ToLocalTime().ToString("dd/MM/yyyy")</td>
+                                    <td>
+                                        <strong>@item.ReferredTenantName</strong>
+                                    </td>
+                                    <td>R$ @item.InvoiceGrossAmount.ToString("N2")</td>
+                                    <td><span class="badge-rate">@item.CommissionRateDescription</span></td>
+                                    <td>
+                                        <strong class="text-emerald">R$ @item.NetCommissionAmount.ToString("N2")</strong>
+                                    </td>
+                                    <td>
+                                        @(item.MaturityDateUtc.HasValue ? item.MaturityDateUtc.Value.ToLocalTime().ToString("dd/MM/yyyy") : "-")
+                                    </td>
+                                    <td>
+                                        @switch (item.Status)
+                                        {
+                                            case 0: // PendingMaturity
+                                                <span class="status-pill pill-amber">Pendente D+30</span>
+                                                break;
+                                            case 1: // AvailableForPayout
+                                                <span class="status-pill pill-green">Liberado</span>
+                                                break;
+                                            case 3: // PaidOut
+                                                <span class="status-pill pill-blue">Liquidado Pix</span>
+                                                break;
+                                            case 4: // Cancelled
+                                                <span class="status-pill pill-red">Cancelado</span>
+                                                break;
+                                            default:
+                                                <span class="status-pill">Processando</span>
+                                                break;
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (!string.IsNullOrWhiteSpace(item.PayoutTransactionReference))
+                                        {
+                                            <span class="code-ref" title="Referência Pix">@item.PayoutTransactionReference</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">-</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Paginação -->
+                @if (_statement.TotalCount > _statementPageSize)
+                {
+                    <div class="pagination-bar">
+                        <span>Exibindo @((_statementPage - 1) * _statementPageSize + 1) a @(Math.Min(_statementPage * _statementPageSize, _statement.TotalCount)) de @_statement.TotalCount lançamentos</span>
+                        <div class="pagination-buttons">
+                            <button class="btn btn-outline btn-sm" disabled="@(_statementPage <= 1)" @onclick="() => ChangePageAsync(_statementPage - 1)">Anterior</button>
+                            <span class="page-indicator">Página @_statementPage</span>
+                            <button class="btn btn-outline btn-sm" disabled="@(_statementPage * _statementPageSize >= _statement.TotalCount)" @onclick="() => ChangePageAsync(_statementPage + 1)">Próxima</button>
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+    </div>
+
+    <!-- Modal de Chave Pix -->
+    @if (_isPixModalOpen)
+    {
+        <div class="modal-backdrop">
+            <div class="modal-card">
+                <div class="modal-header">
+                    <div class="modal-title-wrap">
+                        <span class="material-symbols-outlined text-emerald">pix</span>
+                        <h3 class="modal-title">Atualizar Chave Pix para Recebimento</h3>
+                    </div>
+                    <button class="btn-close" @onclick="ClosePixModal">✕</button>
+                </div>
+
+                <div class="modal-body">
+                    <p class="modal-desc">As comissões liberadas serão repassadas automaticamente para esta chave bancária cadastrada.</p>
+
+                    <div class="form-group">
+                        <label>Tipo de Chave Pix</label>
+                        <select class="input-select" @bind="_selectedPixKeyType">
+                            <option value="0">CPF</option>
+                            <option value="1">CNPJ</option>
+                            <option value="2">E-mail</option>
+                            <option value="3">Telefone / WhatsApp</option>
+                            <option value="4">Chave Aleatória (EVP)</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Chave Pix</label>
+                        <input type="text" class="input-text" placeholder="@GetPixPlaceholder()" @bind="_newPixKey" />
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(_pixErrorMessage))
+                    {
+                        <div class="alert alert-danger">@_pixErrorMessage</div>
+                    }
+                </div>
+
+                <div class="modal-footer">
+                    <button class="btn btn-outline" @onclick="ClosePixModal" disabled="@_isSavingPix">Cancelar</button>
+                    <button class="btn btn-primary" @onclick="SavePixKeyAsync" disabled="@_isSavingPix">
+                        @if (_isSavingPix)
+                        {
+                            <span>Salvando...</span>
+                        }
+                        else
+                        {
+                            <span>Salvar Chave Pix</span>
+                        }
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Modal de Nova Campanha -->
+    @if (_isCampaignModalOpen)
+    {
+        <div class="modal-backdrop">
+            <div class="modal-card">
+                <div class="modal-header">
+                    <div class="modal-title-wrap">
+                        <span class="material-symbols-outlined text-blue">add_link</span>
+                        <h3 class="modal-title">Criar Nova Campanha de Indicação</h3>
+                    </div>
+                    <button class="btn-close" @onclick="CloseCampaignModal">✕</button>
+                </div>
+
+                <div class="modal-body">
+                    <p class="modal-desc">Crie um link exclusivo com rastreamento separado para palestras, WhatsApp, redes sociais ou parcerias específicas.</p>
+
+                    <div class="form-group">
+                        <label>Título da Campanha</label>
+                        <input type="text" class="input-text" placeholder="Ex: Palestra Agronomia Goiânia 2026" @bind="_newCampaignTitle" />
+                    </div>
+
+                    <div class="form-group">
+                        <label>Código Personalizado (Slug Opcional)</label>
+                        <input type="text" class="input-text uppercase" placeholder="Ex: PALESTRA-GOIAS" @bind="_newCampaignSlug" />
+                        <span class="form-hint">Se deixar em branco, geraremos automaticamente com base no título.</span>
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(_campaignErrorMessage))
+                    {
+                        <div class="alert alert-danger">@_campaignErrorMessage</div>
+                    }
+                </div>
+
+                <div class="modal-footer">
+                    <button class="btn btn-outline" @onclick="CloseCampaignModal" disabled="@_isSavingCampaign">Cancelar</button>
+                    <button class="btn btn-primary" @onclick="SaveCampaignAsync" disabled="@_isSavingCampaign">
+                        @if (_isSavingCampaign)
+                        {
+                            <span>Criando...</span>
+                        }
+                        else
+                        {
+                            <span>Criar Link</span>
+                        }
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+}
+
+<style>
+    .portal-container {
+        display: flex;
+        flex-direction: column;
+        gap: 2rem;
+    }
+
+    .welcome-section {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        align-items: center;
+        background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+        border: 1px solid #334155;
+        border-radius: 16px;
+        padding: 2rem;
+        color: #ffffff;
+        gap: 1.5rem;
+    }
+
+    .badge-category {
+        font-size: 0.72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        background: rgba(37, 99, 235, 0.2);
+        color: #60a5fa;
+        border: 1px solid rgba(96, 165, 250, 0.4);
+        padding: 0.3rem 0.75rem;
+        border-radius: 9999px;
+        letter-spacing: 0.05em;
+        display: inline-block;
+        margin-bottom: 0.5rem;
+    }
+
+    .partner-title {
+        font-size: 2rem;
+        font-weight: 800;
+        margin: 0;
+        letter-spacing: -0.02em;
+    }
+
+    .partner-subtitle {
+        color: #94a3b8;
+        margin: 0.4rem 0 0 0;
+        font-size: 0.95rem;
+    }
+
+    .contract-card {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1.5rem;
+        background: rgba(15, 23, 42, 0.6);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
+        padding: 1.25rem 1.75rem;
+    }
+
+    .contract-item {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+
+    .contract-label {
+        font-size: 0.75rem;
+        color: #94a3b8;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .contract-value {
+        font-size: 1rem;
+        font-weight: 700;
+        color: #f8fafc;
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+    }
+
+    .pix-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .btn-link-edit {
+        background: none;
+        border: none;
+        color: #4ade80;
+        font-size: 0.75rem;
+        font-weight: 700;
+        cursor: pointer;
+        text-decoration: underline;
+    }
+
+    .pix-icon {
+        font-size: 18px;
+    }
+
+    /* KPIs Grid */
+    .kpis-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1.25rem;
+    }
+
+    .kpi-card {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 14px;
+        padding: 1.5rem;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .kpi-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    }
+
+    .kpi-card.highlighted {
+        border-color: #86efac;
+        background: #f0fdf4;
+    }
+
+    .kpi-icon-wrap {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .kpi-body {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .kpi-label {
+        font-size: 0.78rem;
+        color: #64748b;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+
+    .kpi-value {
+        font-size: 1.5rem;
+        font-weight: 800;
+        color: #0f172a;
+        line-height: 1.2;
+        margin: 0.2rem 0;
+    }
+
+    .kpi-hint {
+        font-size: 0.75rem;
+        color: #64748b;
+    }
+
+    .bg-blue { background: #dbeafe; }
+    .text-blue { color: #2563eb; }
+    .bg-amber { background: #fef3c7; }
+    .text-amber { color: #d97706; }
+    .bg-emerald { background: #d1fae5; }
+    .text-emerald { color: #059669; }
+    .bg-green { background: #dcfce7; }
+    .text-green { color: #16a34a; }
+    .bg-orange { background: #ffedd5; }
+    .text-orange { color: #ea580c; }
+    .bg-slate { background: #f1f5f9; }
+    .text-slate { color: #475569; }
+
+    /* Section Cards */
+    .section-card {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 16px;
+        padding: 2rem;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+    }
+
+    .section-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        flex-wrap: wrap;
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .section-title {
+        font-size: 1.35rem;
+        font-weight: 800;
+        color: #0f172a;
+        margin: 0;
+        letter-spacing: -0.01em;
+    }
+
+    .section-subtitle {
+        color: #64748b;
+        font-size: 0.92rem;
+        margin: 0.25rem 0 0 0;
+    }
+
+    /* Main Link Box */
+    .main-link-box {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        background: #f8fafc;
+        border: 1px solid #cbd5e1;
+        border-radius: 12px;
+        padding: 1.25rem 1.5rem;
+        gap: 1.25rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .link-tag {
+        font-size: 0.7rem;
+        font-weight: 700;
+        color: #059669;
+        letter-spacing: 0.05em;
+    }
+
+    .link-url-display {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-top: 0.35rem;
+    }
+
+    .link-icon {
+        color: #2563eb;
+        font-size: 20px;
+    }
+
+    .link-text {
+        font-family: monospace;
+        font-size: 1.05rem;
+        font-weight: 700;
+        color: #1e293b;
+    }
+
+    .link-actions {
+        display: flex;
+        gap: 0.75rem;
+    }
+
+    /* Buttons */
+    .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.65rem 1.2rem;
+        border-radius: 8px;
+        font-size: 0.88rem;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        border: none;
+    }
+
+    .btn-primary {
+        background-color: #16a34a;
+        color: #ffffff;
+    }
+    .btn-primary:hover { background-color: #15803d; }
+
+    .btn-secondary {
+        background-color: #0f172a;
+        color: #ffffff;
+    }
+    .btn-secondary:hover { background-color: #1e293b; }
+
+    .btn-outline {
+        background: transparent;
+        border: 1px solid #cbd5e1;
+        color: #334155;
+    }
+    .btn-outline:hover { background: #f1f5f9; }
+
+    .btn-whatsapp {
+        background-color: #25d366;
+        color: #ffffff;
+    }
+    .btn-whatsapp:hover { background-color: #20ba5a; }
+
+    .btn-sm { padding: 0.4rem 0.8rem; font-size: 0.8rem; }
+
+    .btn-icon {
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 0.35rem;
+        border-radius: 6px;
+        color: #64748b;
+    }
+    .btn-icon:hover { background: #f1f5f9; color: #0f172a; }
+    .text-whatsapp { color: #25d366; }
+
+    /* Tables */
+    .table-custom {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.88rem;
+    }
+
+    .table-custom th {
+        text-align: left;
+        padding: 0.85rem 1rem;
+        background: #f8fafc;
+        color: #475569;
+        font-weight: 700;
+        border-bottom: 2px solid #e2e8f0;
+    }
+
+    .table-custom td {
+        padding: 0.95rem 1rem;
+        border-bottom: 1px solid #e2e8f0;
+        color: #1e293b;
+    }
+
+    .code-badge {
+        font-family: monospace;
+        font-weight: 700;
+        background: #f1f5f9;
+        padding: 0.25rem 0.5rem;
+        border-radius: 6px;
+        color: #2563eb;
+    }
+
+    .code-ref {
+        font-family: monospace;
+        font-size: 0.78rem;
+        background: #ecfdf5;
+        color: #065f46;
+        padding: 0.2rem 0.5rem;
+        border-radius: 4px;
+    }
+
+    .badge-rate {
+        font-size: 0.78rem;
+        font-weight: 700;
+        background: #f3f4f6;
+        color: #374151;
+        padding: 0.2rem 0.5rem;
+        border-radius: 4px;
+    }
+
+    .status-pill {
+        display: inline-block;
+        padding: 0.25rem 0.65rem;
+        border-radius: 9999px;
+        font-size: 0.75rem;
+        font-weight: 700;
+    }
+
+    .pill-active, .pill-green { background: #dcfce7; color: #166534; }
+    .pill-inactive, .pill-slate { background: #f1f5f9; color: #475569; }
+    .pill-amber { background: #fef3c7; color: #92400e; }
+    .pill-blue { background: #dbeafe; color: #1e40af; }
+    .pill-red { background: #fee2e2; color: #991b1b; }
+
+    /* Filters */
+    .statement-filters {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        align-items: flex-end;
+        background: #f8fafc;
+        padding: 1.25rem;
+        border-radius: 12px;
+        margin-bottom: 1.5rem;
+    }
+
+    .filter-item {
+        display: flex;
+        flex-direction: column;
+        gap: 0.35rem;
+        flex: 1;
+        min-width: 200px;
+    }
+
+    .filter-item label {
+        font-size: 0.78rem;
+        font-weight: 700;
+        color: #475569;
+        text-transform: uppercase;
+    }
+
+    .input-text, .input-select {
+        padding: 0.65rem 0.85rem;
+        border: 1px solid #cbd5e1;
+        border-radius: 8px;
+        font-size: 0.88rem;
+        background: #ffffff;
+        color: #0f172a;
+    }
+
+    .uppercase { text-transform: uppercase; }
+
+    .filter-actions {
+        display: flex;
+        gap: 0.5rem;
+    }
+
+    /* Modal */
+    .modal-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.7);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+        backdrop-filter: blur(4px);
+    }
+
+    .modal-card {
+        background: #ffffff;
+        border-radius: 16px;
+        width: 100%;
+        max-width: 500px;
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2);
+        overflow: hidden;
+    }
+
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1.25rem 1.5rem;
+        border-bottom: 1px solid #e2e8f0;
+    }
+
+    .modal-title-wrap {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .modal-title {
+        font-size: 1.15rem;
+        font-weight: 800;
+        color: #0f172a;
+        margin: 0;
+    }
+
+    .btn-close {
+        background: none;
+        border: none;
+        font-size: 1.1rem;
+        color: #64748b;
+        cursor: pointer;
+    }
+
+    .modal-body {
+        padding: 1.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1.2rem;
+    }
+
+    .modal-desc {
+        font-size: 0.88rem;
+        color: #64748b;
+        margin: 0;
+    }
+
+    .form-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.35rem;
+    }
+
+    .form-group label {
+        font-size: 0.8rem;
+        font-weight: 700;
+        color: #334155;
+    }
+
+    .form-hint {
+        font-size: 0.75rem;
+        color: #64748b;
+    }
+
+    .modal-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.75rem;
+        padding: 1rem 1.5rem;
+        border-top: 1px solid #e2e8f0;
+        background: #f8fafc;
+    }
+
+    .alert-danger {
+        padding: 0.75rem 1rem;
+        background: #fee2e2;
+        border: 1px solid #fca5a5;
+        border-radius: 8px;
+        color: #991b1b;
+        font-size: 0.85rem;
+    }
+
+    .pagination-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 1.5rem;
+        font-size: 0.85rem;
+        color: #64748b;
+    }
+
+    .pagination-buttons {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .page-indicator {
+        font-weight: 700;
+        color: #0f172a;
+    }
+
+    .loading-state, .error-state, .empty-statement, .table-loading {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 3rem 1.5rem;
+        text-align: center;
+        color: #64748b;
+    }
+
+    .spinner {
+        width: 48px;
+        height: 48px;
+        border: 4px solid #e2e8f0;
+        border-top-color: #16a34a;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        margin-bottom: 1rem;
+    }
+
+    .spinner-small {
+        width: 24px;
+        height: 24px;
+        border: 3px solid #e2e8f0;
+        border-top-color: #16a34a;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        margin-bottom: 0.5rem;
+    }
+
+    @@keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+</style>
+
+@code {
+    private bool _isLoading = true;
+    private bool _isStatementLoading = false;
+    private PartnerPortalDashboardModel? _dashboard;
+    private PartnerCommissionStatementModel? _statement;
+
+    // Filtros de Extrato
+    private string? _searchFilter;
+    private string? _statusFilter;
+    private int _statementPage = 1;
+    private const int _statementPageSize = 10;
+
+    // Modal Pix
+    private bool _isPixModalOpen;
+    private bool _isSavingPix;
+    private int _selectedPixKeyType = 2; // Email default
+    private string _newPixKey = string.Empty;
+    private string? _pixErrorMessage;
+
+    // Modal Campanha
+    private bool _isCampaignModalOpen;
+    private bool _isSavingCampaign;
+    private string _newCampaignTitle = string.Empty;
+    private string _newCampaignSlug = string.Empty;
+    private string? _campaignErrorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDashboardAsync();
+        await LoadStatementAsync();
+    }
+
+    private async Task LoadDashboardAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            var result = await PartnerApiClient.GetDashboardAsync();
+            if (result.IsSuccess)
+            {
+                _dashboard = result.Value;
+                _selectedPixKeyType = _dashboard.PixKeyType;
+                _newPixKey = _dashboard.PixKey;
+            }
+            else
+            {
+                ToastService.ShowError("Erro ao carregar dados do parceiro: " + result.Error.Message);
+            }
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task LoadStatementAsync()
+    {
+        _isStatementLoading = true;
+        try
+        {
+            int? status = null;
+            if (int.TryParse(_statusFilter, out var s)) status = s;
+
+            var result = await PartnerApiClient.GetStatementAsync(
+                search: _searchFilter,
+                status: status,
+                page: _statementPage,
+                pageSize: _statementPageSize);
+
+            if (result.IsSuccess)
+            {
+                _statement = result.Value;
+            }
+            else
+            {
+                ToastService.ShowError("Erro ao carregar extrato: " + result.Error.Message);
+            }
+        }
+        finally
+        {
+            _isStatementLoading = false;
+        }
+    }
+
+    private async Task ChangePageAsync(int newPage)
+    {
+        _statementPage = newPage;
+        await LoadStatementAsync();
+    }
+
+    private async Task ClearFiltersAsync()
+    {
+        _searchFilter = null;
+        _statusFilter = null;
+        _statementPage = 1;
+        await LoadStatementAsync();
+    }
+
+    private string GetReferralUrl(string code)
+    {
+        var baseUri = Navigation.BaseUri.TrimEnd('/');
+        return $"{baseUri}/r/{code}";
+    }
+
+    private async Task CopyToClipboard(string text)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", text);
+            ToastService.ShowSuccess("Link copiado para a área de transferência!");
+        }
+        catch
+        {
+            ToastService.ShowInfo($"Copie o link: {text}");
+        }
+    }
+
+    private void ShareWhatsApp(string url)
+    {
+        var message = $"Olá! Sou parceiro do Cria Certo, a principal plataforma de pecuária inteligente. Conheça e teste gratuitamente através do meu link oficial: {url}";
+        var encoded = Uri.EscapeDataString(message);
+        Navigation.NavigateTo($"https://wa.me/?text={encoded}", forceLoad: true);
+    }
+
+    private void OpenPixModal()
+    {
+        _pixErrorMessage = null;
+        if (_dashboard != null)
+        {
+            _selectedPixKeyType = _dashboard.PixKeyType;
+            _newPixKey = _dashboard.PixKey;
+        }
+        _isPixModalOpen = true;
+    }
+
+    private void ClosePixModal()
+    {
+        _isPixModalOpen = false;
+        _pixErrorMessage = null;
+    }
+
+    private async Task SavePixKeyAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newPixKey))
+        {
+            _pixErrorMessage = "A chave Pix é obrigatória.";
+            return;
+        }
+
+        _isSavingPix = true;
+        _pixErrorMessage = null;
+
+        try
+        {
+            var result = await PartnerApiClient.UpdatePixKeyAsync(_selectedPixKeyType, _newPixKey);
+            if (result.IsSuccess)
+            {
+                ToastService.ShowSuccess("Chave Pix atualizada com sucesso!");
+                ClosePixModal();
+                await LoadDashboardAsync();
+            }
+            else
+            {
+                _pixErrorMessage = result.Error.Message;
+            }
+        }
+        finally
+        {
+            _isSavingPix = false;
+        }
+    }
+
+    private void OpenCampaignModal()
+    {
+        _campaignErrorMessage = null;
+        _newCampaignTitle = string.Empty;
+        _newCampaignSlug = string.Empty;
+        _isCampaignModalOpen = true;
+    }
+
+    private void CloseCampaignModal()
+    {
+        _isCampaignModalOpen = false;
+        _campaignErrorMessage = null;
+    }
+
+    private async Task SaveCampaignAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newCampaignTitle))
+        {
+            _campaignErrorMessage = "O título da campanha é obrigatório.";
+            return;
+        }
+
+        _isSavingCampaign = true;
+        _campaignErrorMessage = null;
+
+        try
+        {
+            var result = await PartnerApiClient.CreateCampaignAsync(_newCampaignTitle, _newCampaignSlug);
+            if (result.IsSuccess)
+            {
+                ToastService.ShowSuccess($"Campanha criada! Link: /r/{result.Value.Code}");
+                CloseCampaignModal();
+                await LoadDashboardAsync();
+            }
+            else
+            {
+                _campaignErrorMessage = result.Error.Message;
+            }
+        }
+        finally
+        {
+            _isSavingCampaign = false;
+        }
+    }
+
+    private string GetCategoryName(int category) => category switch
+    {
+        0 => "Consultor Agronômico",
+        1 => "Médico Veterinário",
+        2 => "Revenda Agropecuária",
+        3 => "Associação de Produtores",
+        _ => "Parceiro Comercial"
+    };
+
+    private string GetPixKeyTypeLabel(int type) => type switch
+    {
+        0 => "CPF",
+        1 => "CNPJ",
+        2 => "E-mail",
+        3 => "Telefone",
+        4 => "Chave Aleatória",
+        _ => "Pix"
+    };
+
+    private string GetPixPlaceholder() => _selectedPixKeyType switch
+    {
+        0 => "000.000.000-00",
+        1 => "00.000.000/0000-00",
+        2 => "seu.email@dominio.com.br",
+        3 => "+55 (11) 99999-9999",
+        4 => "00000000-0000-0000-0000-000000000000",
+        _ => "Chave Pix..."
+    };
+
+    private string GetCommissionDescription()
+    {
+        if (_dashboard == null) return "-";
+        return _dashboard.CommissionType switch
+        {
+            0 => $"{_dashboard.CommissionValue:N0}% Recorrente" + (_dashboard.MaxRecurringMonths.HasValue ? $" ({_dashboard.MaxRecurringMonths} meses)" : ""),
+            1 => $"{_dashboard.CommissionValue:N0}% 1º Mês",
+            2 => $"R$ {_dashboard.CommissionValue:N2} Fixo por Conversão",
+            _ => $"{_dashboard.CommissionValue:N0}%"
+        };
+    }
+}

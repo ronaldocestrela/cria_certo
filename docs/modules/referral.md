@@ -271,6 +271,34 @@ A tela `/settings/referrals` (com alias `/referral`) no Portal do Produtor permi
   - Status do Benefício com badges reativos (`Ativa — Desconto Aplicado` vs `Avaliação Gratuita (Trial) — Desconto liberado após o 1º pagamento da assinatura` vs `Assinatura Inativa / Cancelada`).
   - Impacto Estimado na Mensalidade (`+ R$ 50,00/mês` ou `Aguardando 1º Pagamento`).
 
+---
+
+## 9. Portal Exclusivo do Parceiro Comercial (Fase 4.2)
+
+### 9.1 Visão Geral e Experiência do Parceiro
+O portal `/partner/portal` (com rota alternativa `/partner`) oferece um ambiente independente e focado para parceiros de negócios (médicos veterinários, engenheiros agrônomos, consultores de nutrição, revendas agropecuárias e associações):
+* **Layout Dedicado (`PartnerLayout.razor`):** Header escuro institucional, identificação da categoria de parceiro, atalho para a chave Pix e botão de encerramento de sessão, sem poluição com menus de pecuária de campo.
+* **Autenticação Unificada Sem Fazenda:** Parceiros cadastrados via Backoffice possuem conta de usuário no `Modules.Tenancy` sem granjas vinculadas. O `LoginCommandHandler` identifica o participante via `IPartnerRoleLookupService`, emite o JWT com a role `CommercialPartner` e realiza redirecionamento automático para o portal do parceiro.
+* **Visão Comercial Completa:** No extrato, o parceiro visualiza o nome integral da fazenda indicada e o valor base do faturamento gerado para conciliação transparente da sua carteira comercial.
+
+### 9.2 Endpoints da API REST (`/api/v1/referral/partner`)
+* `GET /api/v1/referral/partner/dashboard`: Retorna métricas consolidadas do parceiro, cliques, conversões, saldos do ledger e lista de campanhas.
+* `GET /api/v1/referral/partner/statement`: Extrato detalhado de comissões paginado com filtros por período, status de liquidação e busca por nome da fazenda.
+* `PUT /api/v1/referral/partner/pix-key`: Atualização da chave Pix no contrato ativo vigente com validação por tipo.
+* `POST /api/v1/referral/partner/campaigns`: Criação de novo link de indicação rastreado com título de campanha e slug personalizado.
+
+### 9.3 Componentes da Interface Blazor WebAssembly
+* **Grid de 6 KPIs Comerciais & Financeiros:**
+  1. *Cliques Totais*: Soma de todos os acessos com badge de taxa de conversão (`ConversionRatePercentage`).
+  2. *Cadastros em Trial*: Atribuições com status `Pending` em avaliação de 14 dias.
+  3. *Assinaturas Pagas Ativas*: Atribuições com primeiro pagamento confirmado (`Converted`).
+  4. *Saldo Pendente de Carência*: Comissões retidas no período de segurança D+30.
+  5. *Saldo Liberado para Saque*: Comissões com carência expirada (`AvailableForPayout`), prontas para repasse.
+  6. *Total Repassado Acumulado*: Comissões quitadas via Pix (`PaidOut`).
+* **Gerenciador de Links & Campanhas:** Card do link oficial com botões "Copiar Link" e "Compartilhar no WhatsApp", acompanhado de tabela com campanhas secundárias e modal de criação rápida.
+* **Modal de Edição de Chave Pix:** Seletor de tipo (CPF, CNPJ, E-mail, Telefone, Chave Aleatória) e validação em tempo real.
+* **Tabela de Extrato de Comissões:** Filtros por período, status e busca de fazendas, com colunas para valor do plano, taxa contratual, comissão líquida, data de vencimento da carência e código de transação Pix.
+
 
 
 

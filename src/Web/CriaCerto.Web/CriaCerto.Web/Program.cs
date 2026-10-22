@@ -72,6 +72,7 @@ builder.Services.AddScoped<IToastService, ToastService>();
 builder.Services.AddScoped<IFeatureFlagClientService, FeatureFlagClientService>();
 builder.Services.AddScoped<IReferralTrackingService, ReferralTrackingService>();
 builder.Services.AddScoped<IReferralApiClient, ReferralApiClient>();
+builder.Services.AddScoped<IPartnerApiClient, PartnerApiClient>();
 
 var app = builder.Build();
 

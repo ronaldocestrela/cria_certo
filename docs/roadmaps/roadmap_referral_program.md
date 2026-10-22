@@ -208,13 +208,24 @@ flowchart TD
 - [x] Desacoplamento modular estrito via `ITenantInfoLookupService` no Host, sem joins cross-module entre os schemas `referral` e `tenancy`.
 - [x] Cobertura de testes unitários de domínio, handlers MediatR e API Client com 100% de sucesso.
 
-#### 4.2 Portal Exclusivo do Parceiro Comercial
-- Visão focada em conversão e resultados comerciais:
-  - Total de cliques no link.
-  - Quantidade de cadastros trial vs assinaturas pagas.
-  - Saldo acumulado (Pendente de Carência vs Liberado para Saque vs Total Pago).
-- Histórico completo de extrato com filtros por data e por cliente indicado.
-- Cadastro e edição de chave Pix para recebimento das comissões.
+#### 4.2 Portal Exclusivo do Parceiro Comercial [CONCLUÍDO]
+- [x] Portal dedicado e independente em `/partner/portal` e `/partner` com layout exclusivo (`PartnerLayout.razor`) focado em conversão e resultados comerciais.
+- [x] Autenticação unificada com suporte a parceiros sem fazenda (`IPartnerRoleLookupService`), emitindo JWT com role `CommercialPartner` e redirecionando automaticamente para o portal.
+- [x] Grid de 6 KPIs comerciais e financeiros:
+  - *Total de Cliques* com cálculo dinâmico da taxa de conversão (`ConversionRatePercentage`).
+  - *Cadastros em Avaliação Gratuita (Trial)* (`Pending`).
+  - *Assinaturas Pagas Ativas* (`Converted`).
+  - *Saldo Pendente de Carência D+30* (`PendingMaturity`).
+  - *Saldo Liberado para Saque* (`AvailableForPayout`).
+  - *Total Repassado Acumulado* (`PaidOut`).
+- [x] Gestão de links de divulgação e suporte a múltiplas campanhas (`ReferralCode` com `CampaignTitle`):
+  - Card oficial com botão de copiar link e compartilhamento no WhatsApp pré-formatado.
+  - Tabela de campanhas secundárias com contagem individual de cliques.
+  - Modal interativo para criação de nova campanha com slug customizado e validação de unicidade.
+- [x] Modal de cadastro e edição de chave Pix para recebimento das comissões com validação por tipo (CPF, CNPJ, E-mail, Telefone, Chave Aleatória) atualizando o contrato ativo (`UpdatePartnerPixKeyCommand`).
+- [x] Histórico e extrato completo de comissões com filtros dinâmicos por período, status de liquidação e busca textual por fazenda indicada.
+- [x] Desacoplamento modular via `ITenantInfoLookupService` no Host, exibindo a visão completa do cliente indicado sem joins físicos cross-module.
+- [x] Cobertura de testes unitários para domínio, queries, commands, autenticação e cliente HTTP com 100% de sucesso.
 
 ---
 
