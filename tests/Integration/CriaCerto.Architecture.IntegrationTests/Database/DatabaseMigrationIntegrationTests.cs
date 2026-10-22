@@ -292,12 +292,12 @@ public sealed class DatabaseMigrationIntegrationTests : IAsyncLifetime
             SELECT COUNT(1)
             FROM sys.tables t
             INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-            WHERE s.name = 'referral' AND t.name IN ('Participants', 'ReferralCodes', 'Attributions', 'RewardLedger')
+            WHERE s.name = 'referral' AND t.name IN ('Participants', 'ReferralCodes', 'Attributions', 'RewardLedger', 'PartnerProfiles')
             """;
         var tableCount = (int)(await command.ExecuteScalarAsync() ?? 0);
-        tableCount.Should().Be(4);
+        tableCount.Should().Be(5);
 
         (await MigrationTestSupport.CountHistoryRowsAsync(_masterConnectionString, "referral"))
-            .Should().Be(1);
+            .Should().Be(2);
     }
 }
