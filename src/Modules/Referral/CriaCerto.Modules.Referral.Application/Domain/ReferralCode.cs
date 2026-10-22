@@ -59,4 +59,13 @@ public sealed class ReferralCode
         IsActive = true;
         return Result.Success();
     }
+
+    public Result UpdateCode(string newCode)
+    {
+        if (string.IsNullOrWhiteSpace(newCode) || newCode.Trim().Length < 3)
+            return Result.Failure(ReferralErrors.Code.InvalidFormat);
+
+        Code = newCode.Trim().ToUpperInvariant();
+        return Result.Success();
+    }
 }

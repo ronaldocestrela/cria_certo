@@ -17,6 +17,10 @@ public static class ReferralErrors
         public static readonly Error SuspensionReasonRequired = Error.Validation(
             "ReferralParticipant.SuspensionReasonRequired",
             "A justificativa/motivo para suspensão do participante é obrigatória.");
+
+        public static readonly Error NotFound = Error.NotFound(
+            "ReferralParticipant.NotFound",
+            "Participante do programa de indicação não encontrado.");
     }
 
     public static class Code
@@ -32,6 +36,10 @@ public static class ReferralErrors
         public static readonly Error Inactive = Error.Validation(
             "ReferralCode.Inactive",
             "O código de indicação está inativo e não pode receber cliques ou ser utilizado.");
+
+        public static readonly Error AlreadyExists = Error.Conflict(
+            "ReferralCode.AlreadyExists",
+            "O código de indicação informado já está em uso por outra fazenda ou parceiro.");
     }
 
     public static class Contract

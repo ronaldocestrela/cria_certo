@@ -243,5 +243,34 @@ A tela `/backoffice/referral/discount-policies` permite a calibração dos incen
   - Slider de teto de desconto (`10% a 100%`) com indicação visual de limite.
   - Simulador de economia dinâmico ilustrando a redução da fatura para 1, 2 ou 3 indicações ativas do cliente.
 
+---
+
+## 8. Portal do Produtor / Cliente: Área "Indique e Ganhe" (Fase 4.1)
+
+### 8.1 Visão Geral e Fronteiras Modulares
+A tela `/settings/referrals` (com alias `/referral`) no Portal do Produtor permite que as fazendas parceiras divulguem o Cria Certo e acompanhem seus abatimentos mensais:
+* **Geração Sob Demanda & Anti-Colisão:** O participante e seu código inicial são gerados automaticamente na primeira visita com base no nome da fazenda (`FAZENDA-NOME`). Em caso de colisão, aplica-se sufixo numérico incremental (`FAZENDA-NOME-2`, `FAZENDA-NOME-3`).
+* **Personalização pelo Produtor:** O produtor administrador pode editar seu próprio código (`CustomizeReferralCodeCommand`), com verificação de unicidade global e normalização em maiúsculas sem caracteres especiais.
+* **Isolamento Modular com Tenancy:** Consultas de metadados da fazenda e status de planos são mediadas pela abstração `ITenantInfoLookupService` (`TenantInfoLookupService`) implementada no Host API.
+* **Proteção LGPD Nativa:** O serviço determinístico `LgpdFarmNameMasker` protege o nome das fazendas indicadas na tabela de transparência utilizando a regra de preservar a primeira e última letra de palavras com 3+ caracteres (`F*****a S***a M***a`).
+
+### 8.2 Endpoints da API REST (`/api/v1/referral/customer`)
+* `GET /api/v1/referral/customer/dashboard`: Retorna o resumo do participante, link formatado, cálculo de desconto da próxima fatura com base na política do plano, contagem de ativos e em trial, texto de compartilhamento e listagem mascarada de indicações.
+* `POST /api/v1/referral/customer/code/customize`: Altera o código de indicação do tenant autenticado (`{ "newCode": "FAZENDA-MODELO" }`).
+
+### 8.3 Interface Blazor WebAssembly (`/settings/referrals`)
+* **Card de Link Exclusivo:** URL destacada com botões para "Copiar Link" (clipboard com toast notification) e "Compartilhar no WhatsApp" (com mensagem amigável pré-formatada).
+* **Modal de Personalização:** Permite ao administrador editar a slug com pré-visualização em tempo real do link resultante.
+* **Cards de KPIs de Economia:**
+  - *Desconto Estimado na Próxima Fatura*: Exibido em moeda (`R$ 150,00`) ou percentual com descrição da política do plano.
+  - *Amigos com Assinatura Ativa*: Fazendas com pagamento confirmado gerando desconto.
+  - *Em Avaliação Gratuita (Trial)*: Fazendas com cadastro pendente de primeiro faturamento.
+* **Tabela de Transparência de Indicações:**
+  - Nome da Fazenda Indicada (mascarado LGPD).
+  - Data de Cadastro.
+  - Status do Benefício com badges reativos (`Ativa — Desconto Aplicado` vs `Avaliação Gratuita (Trial) — Desconto liberado após o 1º pagamento da assinatura` vs `Assinatura Inativa / Cancelada`).
+  - Impacto Estimado na Mensalidade (`+ R$ 50,00/mês` ou `Aguardando 1º Pagamento`).
+
+
 
 

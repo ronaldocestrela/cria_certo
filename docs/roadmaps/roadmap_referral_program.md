@@ -195,13 +195,18 @@ flowchart TD
 
 ### Fase 4: Experiência do Cliente & Painel do Parceiro (Blazor UI)
 
-#### 4.1 Área "Indique e Ganhe" (Portal do Produtor / Cliente)
-- Menu de fácil acesso na barra lateral: **Indicações**.
-- Card com o link individual: `criacerto.com/r/FAZENDA-MODELO` com botão "Copiar Link" e "Compartilhar no WhatsApp".
-- Resumo de Economia:
-  - *Desconto acumulado na próxima fatura*: `R$ 150,00`.
-  - *Amigos indicados com assinatura ativa*: `3 fazendas`.
-- Tabela de transparência com as fazendas indicadas (nome resumido/mascarado e status do benefício).
+#### 4.1 Área "Indique e Ganhe" (Portal do Produtor / Cliente) [CONCLUÍDO]
+- [x] Menu de fácil acesso na barra lateral em Configurações: **Indique e Ganhe** (`/settings/referrals` e `/referral`), com proteção RBAC para administradores/produtores autorizados.
+- [x] Geração sob demanda de código e link exclusivo com base no nome da fazenda (com resolução de colisão numérica sequencial, ex: `FAZENDA-MODELO-2`).
+- [x] Card de link individual com botão "Copiar Link" (clipboard com toast notification) e "Compartilhar no WhatsApp" (com texto pré-formatado e link parametrizado).
+- [x] Modal interativo para o produtor personalizar o próprio código de indicação, com normalização de slug e validação de unicidade global.
+- [x] Resumo de Economia com 3 KPIs em tempo real:
+  - *Desconto acumulado na próxima fatura* calculado com base na política do plano ativo (`PlanReferralDiscountPolicy`), formatado em moeda brasileira `R$ 150,00` ou percentual.
+  - *Amigos indicados com assinatura ativa* (fazendas com 1º pagamento quitado).
+  - *Amigos em avaliação gratuita (Trial)* com indicação de benefício futuro.
+- [x] Tabela de transparência com as fazendas indicadas com mascaramento LGPD determinístico (Regra Exemplo 3: primeira e última letra mantidas, intermediárias com asteriscos, ex: `F*****a S***a M***a`), data de cadastro, status do benefício e impacto na mensalidade.
+- [x] Desacoplamento modular estrito via `ITenantInfoLookupService` no Host, sem joins cross-module entre os schemas `referral` e `tenancy`.
+- [x] Cobertura de testes unitários de domínio, handlers MediatR e API Client com 100% de sucesso.
 
 #### 4.2 Portal Exclusivo do Parceiro Comercial
 - Visão focada em conversão e resultados comerciais:

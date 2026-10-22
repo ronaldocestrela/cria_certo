@@ -104,6 +104,13 @@ public static class NavigationCatalog
             Href: "settings/subscription",
             Category: "Configurações",
             Icon: "credit_card"
+        ),
+        new(
+            Title: "Indique e Ganhe",
+            ShortTitle: "Indicações",
+            Href: "settings/referrals",
+            Category: "Configurações",
+            Icon: "card_giftcard"
         )
     };
 

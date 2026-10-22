@@ -1,0 +1,481 @@
+@page "/settings/referrals"
+@page "/referral"
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@attribute [Authorize]
+@using CriaCerto.Web.Client.Auth
+@using CriaCerto.Web.Client.Models
+@using CriaCerto.Web.Client.Services
+@using System.Security.Claims
+@inject CustomAuthStateProvider AuthStateProvider
+@inject IReferralApiClient ReferralApiClient
+@inject IToastService ToastService
+@inject IJSRuntime JSRuntime
+@inject NavigationManager Navigation
+
+<PageTitle>Cria Certo - Indique e Ganhe</PageTitle>
+
+<div class="referrals-container font-headline" style="max-width: 1200px; margin: 0 auto; padding: 1.5rem 1rem 3rem 1rem;">
+
+    <!-- Breadcrumb e Cabeçalho -->
+    <div style="margin-bottom: 2rem;">
+        <nav style="display: flex; align-items: center; gap: 0.5rem; color: var(--cc-secondary); font-size: 12px; margin-bottom: 0.5rem;" class="font-mono">
+            <span style="text-transform: uppercase; letter-spacing: 0.05em; cursor: pointer;" @onclick="GoToSettings">CONFIGURAÇÕES</span>
+            <span class="material-symbols-outlined" style="font-size: 14px;">chevron_right</span>
+            <span style="color: var(--cc-primary); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700;">INDIQUE E GANHE</span>
+        </nav>
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
+            <div>
+                <h1 style="color: var(--cc-ink); margin: 0; font-size: 32px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.2;">
+                    Indique e Ganhe
+                </h1>
+                <p style="color: var(--cc-ink-muted); margin: 0.35rem 0 0 0; font-size: 16px;">
+                    Compartilhe o Cria Certo com produtores parceiros e acumule descontos automáticos na sua mensalidade.
+                </p>
+            </div>
+            <div style="display: flex; align-items: center; gap: 0.5rem; background: #ecfdf5; border: 1px solid #a7f3d0; padding: 0.5rem 1rem; border-radius: 9999px;">
+                <span class="material-symbols-outlined" style="color: #059669; font-size: 20px;">savings</span>
+                <span class="font-mono" style="color: #047857; font-size: 12px; font-weight: 700;">DESCONTO EM FATURA</span>
+            </div>
+        </div>
+    </div>
+
+    @if (!_isAdmin)
+    {
+        <div style="padding: 1rem 1.25rem; border-radius: 10px; margin-bottom: 1.5rem; background-color: #f8fafc; color: var(--cc-ink); border: 1px solid #e2e8f0; display: flex; align-items: center; gap: 0.75rem;">
+            <span class="material-symbols-outlined" style="font-size: 22px; color: var(--cc-primary);">admin_panel_settings</span>
+            <div style="font-size: 13px;">
+                <strong>Modo Informativo (Colaborador):</strong> Você pode copiar e divulgar o link oficial de indicação da fazenda. A personalização do código é exclusiva para os administradores da conta.
+            </div>
+        </div>
+    }
+
+    @if (_isLoading)
+    {
+        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 320px; gap: 1rem;">
+            <div style="width: 48px; height: 48px; border: 4px solid #e2e8f0; border-top-color: var(--cc-primary); border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
+            <p style="color: var(--cc-ink-muted); font-size: 14px;">Carregando dados do programa de indicação...</p>
+        </div>
+    }
+    else if (_errorMessage != null)
+    {
+        <div style="background: #fff; border: 1px solid #fecaca; border-radius: 12px; padding: 2rem; text-align: center; box-shadow: var(--cc-shadow); margin-bottom: 2rem;">
+            <span class="material-symbols-outlined" style="font-size: 48px; color: #dc2626; margin-bottom: 0.5rem;">error</span>
+            <h3 style="margin: 0; color: #991b1b; font-size: 18px;">Não foi possível carregar as informações</h3>
+            <p style="color: #7f1d1d; font-size: 14px; margin: 0.5rem 0 1.5rem 0;">@_errorMessage</p>
+            <button class="cc-btn font-mono" @onclick="LoadDashboardAsync" style="background: var(--cc-primary); color: white; border: none; padding: 0.6rem 1.5rem; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                Tentar Novamente
+            </button>
+        </div>
+    }
+    else if (_dashboard != null)
+    {
+        <!-- Card de Compartilhamento do Link -->
+        <div style="background: white; border: 1px solid var(--cc-border); border-radius: 16px; padding: 1.75rem; margin-bottom: 2rem; box-shadow: var(--cc-shadow); position: relative; overflow: hidden;">
+            <div style="position: absolute; top: 0; left: 0; right: 0; height: 4px; background: linear-gradient(90deg, #00652c 0%, #15803d 50%, #22c55e 100%);"></div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.25rem;">
+                <div>
+                    <span style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--cc-primary);" class="font-mono">
+                        SEU LINK EXCLUSIVO DE INDICAÇÃO
+                    </span>
+                    <h3 style="margin: 0.25rem 0 0 0; color: var(--cc-ink); font-size: 20px; font-weight: 700;">
+                        Indique outros pecuaristas e produtores
+                    </h3>
+                </div>
+
+                @if (_isAdmin)
+                {
+                    <button @onclick="OpenCustomizeModal" style="display: flex; align-items: center; gap: 0.4rem; background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; padding: 0.5rem 0.9rem; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;"
+                            onmouseover="this.style.background='#dcfce7'" onmouseout="this.style.background='#f0fdf4'">
+                        <span class="material-symbols-outlined" style="font-size: 18px;">edit</span>
+                        <span>Personalizar Código</span>
+                    </button>
+                }
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                <div style="flex: 1; min-width: 280px; display: flex; align-items: center; background: #f8fafc; border: 1.5px dashed #cbd5e1; border-radius: 10px; padding: 0.75rem 1rem;">
+                    <span class="material-symbols-outlined" style="color: var(--cc-secondary); margin-right: 0.5rem; font-size: 20px;">link</span>
+                    <span class="font-mono" style="font-size: 15px; font-weight: 700; color: var(--cc-ink); word-break: break-all;">
+                        @_dashboard.ReferralUrl
+                    </span>
+                </div>
+
+                <button @onclick="CopyReferralLinkAsync" style="display: flex; align-items: center; gap: 0.5rem; background: var(--cc-primary); color: white; border: none; padding: 0.75rem 1.25rem; border-radius: 10px; font-weight: 700; font-size: 14px; cursor: pointer; transition: opacity 0.2s; box-shadow: 0 2px 8px rgba(0, 101, 44, 0.25);"
+                        onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">
+                    <span class="material-symbols-outlined" style="font-size: 18px;">content_copy</span>
+                    <span>Copiar Link</span>
+                </button>
+
+                <button @onclick="ShareOnWhatsApp" style="display: flex; align-items: center; gap: 0.5rem; background: #25D366; color: white; border: none; padding: 0.75rem 1.25rem; border-radius: 10px; font-weight: 700; font-size: 14px; cursor: pointer; transition: opacity 0.2s; box-shadow: 0 2px 8px rgba(37, 211, 102, 0.3);"
+                        onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">
+                    <span class="material-symbols-outlined" style="font-size: 18px;">chat</span>
+                    <span>Compartilhar no WhatsApp</span>
+                </button>
+            </div>
+
+            <div style="margin-top: 1rem; font-size: 13px; color: var(--cc-ink-muted); display: flex; align-items: center; gap: 0.5rem;">
+                <span class="material-symbols-outlined" style="font-size: 16px; color: var(--cc-primary);">info</span>
+                <span>@_dashboard.DiscountPerReferralDescription</span>
+            </div>
+        </div>
+
+        <!-- Resumo de Economia (3 KPIs) -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.25rem; margin-bottom: 2rem;">
+
+            <!-- KPI 1: Desconto Próxima Fatura -->
+            <div style="background: white; border: 1px solid var(--cc-border); border-radius: 14px; padding: 1.5rem; box-shadow: var(--cc-shadow); display: flex; flex-direction: column; justify-content: space-between;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem;">
+                    <span style="font-size: 12px; font-weight: 700; color: var(--cc-secondary); text-transform: uppercase; letter-spacing: 0.05em;" class="font-mono">
+                        DESCONTO ESTIMADO NA PRÓXIMA FATURA
+                    </span>
+                    <div style="width: 36px; height: 36px; border-radius: 8px; background: #ecfdf5; color: #059669; display: flex; align-items: center; justify-content: center;">
+                        <span class="material-symbols-outlined" style="font-size: 20px;">price_check</span>
+                    </div>
+                </div>
+                <div>
+                    <div class="font-mono" style="font-size: 32px; font-weight: 800; color: #047857; line-height: 1.1;">
+                        @_dashboard.FormattedAccumulatedDiscount
+                    </div>
+                    <p style="margin: 0.5rem 0 0 0; font-size: 12px; color: var(--cc-ink-muted);">
+                        Abatimento automático garantido na sua próxima mensalidade.
+                    </p>
+                </div>
+            </div>
+
+            <!-- KPI 2: Amigos Ativos -->
+            <div style="background: white; border: 1px solid var(--cc-border); border-radius: 14px; padding: 1.5rem; box-shadow: var(--cc-shadow); display: flex; flex-direction: column; justify-content: space-between;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem;">
+                    <span style="font-size: 12px; font-weight: 700; color: var(--cc-secondary); text-transform: uppercase; letter-spacing: 0.05em;" class="font-mono">
+                        AMIGOS COM ASSINATURA ATIVA
+                    </span>
+                    <div style="width: 36px; height: 36px; border-radius: 8px; background: #eff6ff; color: #2563eb; display: flex; align-items: center; justify-content: center;">
+                        <span class="material-symbols-outlined" style="font-size: 20px;">verified</span>
+                    </div>
+                </div>
+                <div>
+                    <div class="font-mono" style="font-size: 32px; font-weight: 800; color: #1e40af; line-height: 1.1;">
+                        @_dashboard.ActiveReferralsCount <span style="font-size: 16px; font-weight: 600; color: var(--cc-secondary);">fazendas</span>
+                    </div>
+                    <p style="margin: 0.5rem 0 0 0; font-size: 12px; color: var(--cc-ink-muted);">
+                        Fazendas indicadas que quitaram a 1ª assinatura do Cria Certo.
+                    </p>
+                </div>
+            </div>
+
+            <!-- KPI 3: Amigos em Trial -->
+            <div style="background: white; border: 1px solid var(--cc-border); border-radius: 14px; padding: 1.5rem; box-shadow: var(--cc-shadow); display: flex; flex-direction: column; justify-content: space-between;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem;">
+                    <span style="font-size: 12px; font-weight: 700; color: var(--cc-secondary); text-transform: uppercase; letter-spacing: 0.05em;" class="font-mono">
+                        EM AVALIAÇÃO GRATUITA (TRIAL)
+                    </span>
+                    <div style="width: 36px; height: 36px; border-radius: 8px; background: #fffbeb; color: #d97706; display: flex; align-items: center; justify-content: center;">
+                        <span class="material-symbols-outlined" style="font-size: 20px;">hourglass_top</span>
+                    </div>
+                </div>
+                <div>
+                    <div class="font-mono" style="font-size: 32px; font-weight: 800; color: #b45309; line-height: 1.1;">
+                        @_dashboard.PendingTrialReferralsCount <span style="font-size: 16px; font-weight: 600; color: var(--cc-secondary);">fazendas</span>
+                    </div>
+                    <p style="margin: 0.5rem 0 0 0; font-size: 12px; color: var(--cc-ink-muted);">
+                        Liberam desconto imediatamente após o primeiro pagamento.
+                    </p>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Tabela de Transparência -->
+        <div style="background: white; border: 1px solid var(--cc-border); border-radius: 16px; padding: 1.75rem; box-shadow: var(--cc-shadow);">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1.25rem;">
+                <div>
+                    <h3 style="margin: 0; color: var(--cc-ink); font-size: 18px; font-weight: 700;">
+                        Fazendas Indicadas & Transparência
+                    </h3>
+                    <p style="margin: 0.25rem 0 0 0; font-size: 13px; color: var(--cc-ink-muted);">
+                        Acompanhe em tempo real o status de ativação das fazendas cadastradas com seu código (nomes protegidos pela LGPD).
+                    </p>
+                </div>
+                <div class="font-mono" style="font-size: 12px; font-weight: 700; color: var(--cc-secondary); background: #f1f5f9; padding: 0.35rem 0.75rem; border-radius: 9999px;">
+                    @_dashboard.ReferredFarms.Count @(_dashboard.ReferredFarms.Count == 1 ? "indicação" : "indicações")
+                </div>
+            </div>
+
+            @if (_dashboard.ReferredFarms.Count == 0)
+            {
+                <div style="text-align: center; padding: 3rem 1rem; border: 1px dashed #cbd5e1; border-radius: 12px; background: #f8fafc;">
+                    <div style="width: 56px; height: 56px; border-radius: 50%; background: #e0f2fe; color: #0284c7; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem auto;">
+                        <span class="material-symbols-outlined" style="font-size: 28px;">diversity_3</span>
+                    </div>
+                    <h4 style="margin: 0; color: var(--cc-ink); font-size: 16px; font-weight: 700;">Você ainda não possui indicações cadastradas</h4>
+                    <p style="margin: 0.5rem auto 1.25rem auto; color: var(--cc-ink-muted); font-size: 14px; max-width: 460px;">
+                        Comece a compartilhar seu link exclusivo com produtores vizinhos, veterinários ou parceiros para acumular abatimentos na sua assinatura!
+                    </p>
+                    <button @onclick="ShareOnWhatsApp" style="display: inline-flex; align-items: center; gap: 0.5rem; background: #25D366; color: white; border: none; padding: 0.65rem 1.25rem; border-radius: 8px; font-weight: 700; font-size: 13px; cursor: pointer;">
+                        <span class="material-symbols-outlined" style="font-size: 18px;">chat</span>
+                        <span>Enviar no WhatsApp</span>
+                    </button>
+                </div>
+            }
+            else
+            {
+                <div style="overflow-x: auto;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 13px; text-align: left;">
+                        <thead>
+                            <tr style="border-bottom: 2px solid #f1f5f9; color: var(--cc-secondary);" class="font-mono">
+                                <th style="padding: 0.75rem 1rem; font-weight: 700; letter-spacing: 0.05em;">FAZENDA INDICADA (LGPD)</th>
+                                <th style="padding: 0.75rem 1rem; font-weight: 700; letter-spacing: 0.05em;">DATA CADASTRO</th>
+                                <th style="padding: 0.75rem 1rem; font-weight: 700; letter-spacing: 0.05em;">STATUS DO BENEFÍCIO</th>
+                                <th style="padding: 0.75rem 1rem; font-weight: 700; letter-spacing: 0.05em; text-align: right;">IMPACTO ESTIMADO</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var farm in _dashboard.ReferredFarms)
+                            {
+                                <tr style="border-bottom: 1px solid #f1f5f9; transition: background 0.15s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='white'">
+                                    <td style="padding: 1rem; font-weight: 600; color: var(--cc-ink);">
+                                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                            <span class="material-symbols-outlined" style="font-size: 18px; color: var(--cc-secondary);">agriculture</span>
+                                            <span class="font-mono">@farm.MaskedFarmName</span>
+                                        </div>
+                                    </td>
+                                    <td style="padding: 1rem; color: var(--cc-ink-muted);" class="font-mono">
+                                        @farm.AttributionDateUtc.ToLocalTime().ToString("dd/MM/yyyy")
+                                    </td>
+                                    <td style="padding: 1rem;">
+                                        @if (farm.Status == "ActiveGeneratingDiscount")
+                                        {
+                                            <span style="display: inline-flex; align-items: center; gap: 0.35rem; background: #dcfce7; color: #166534; padding: 0.25rem 0.65rem; border-radius: 9999px; font-size: 12px; font-weight: 700;">
+                                                <span class="material-symbols-outlined" style="font-size: 14px;">check_circle</span>
+                                                <span>Ativa — Desconto Aplicado</span>
+                                            </span>
+                                        }
+                                        else if (farm.Status == "InTrialPendingPayment")
+                                        {
+                                            <span style="display: inline-flex; align-items: center; gap: 0.35rem; background: #fef3c7; color: #92400e; padding: 0.25rem 0.65rem; border-radius: 9999px; font-size: 12px; font-weight: 600;" title="O desconto será gerado assim que o primeiro pagamento da fazenda for confirmado.">
+                                                <span class="material-symbols-outlined" style="font-size: 14px;">hourglass_top</span>
+                                                <span>Avaliação Gratuita (Trial) — Desconto liberado após o 1º pagamento da assinatura</span>
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span style="display: inline-flex; align-items: center; gap: 0.35rem; background: #f1f5f9; color: #475569; padding: 0.25rem 0.65rem; border-radius: 9999px; font-size: 12px; font-weight: 500;">
+                                                <span class="material-symbols-outlined" style="font-size: 14px;">cancel</span>
+                                                <span>@farm.StatusDescription</span>
+                                            </span>
+                                        }
+                                    </td>
+                                    <td style="padding: 1rem; text-align: right; font-weight: 700;" class="font-mono">
+                                        @if (farm.Status == "ActiveGeneratingDiscount")
+                                        {
+                                            <span style="color: #047857;">@farm.EstimatedBenefitDescription</span>
+                                        }
+                                        else
+                                        {
+                                            <span style="color: var(--cc-secondary);">@farm.EstimatedBenefitDescription</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    }
+
+    <!-- Modal de Personalização do Código -->
+    @if (_isCustomizeModalOpen)
+    {
+        <div style="position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5); display: flex; align-items: center; justify-content: center; z-index: 9999; padding: 1rem;">
+            <div style="background: white; border-radius: 16px; max-width: 480px; width: 100%; padding: 1.75rem; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1); border: 1px solid #e2e8f0;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <h3 style="margin: 0; color: var(--cc-ink); font-size: 18px; font-weight: 700;">
+                        Personalizar Código de Indicação
+                    </h3>
+                    <button @onclick="CloseCustomizeModal" style="background: none; border: none; cursor: pointer; color: var(--cc-secondary);">
+                        <span class="material-symbols-outlined">close</span>
+                    </button>
+                </div>
+
+                <p style="color: var(--cc-ink-muted); font-size: 13px; margin: 0 0 1.25rem 0;">
+                    Defina um código amigável para sua fazenda. Este código será inserido no link compartilhado com outros produtores.
+                </p>
+
+                <div style="margin-bottom: 1rem;">
+                    <label style="display: block; font-size: 12px; font-weight: 700; color: var(--cc-secondary); margin-bottom: 0.35rem;" class="font-mono">
+                        NOVO CÓDIGO DA FAZENDA
+                    </label>
+                    <input type="text" @bind="_customCodeInput" @bind:event="oninput" placeholder="ex: FAZENDA-SANTA-FE"
+                           style="width: 100%; box-sizing: border-box; padding: 0.65rem 0.85rem; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 15px; font-weight: 700; text-transform: uppercase;"
+                           class="font-mono input-focus-ring" />
+                    <span style="font-size: 11px; color: var(--cc-secondary); margin-top: 0.25rem; display: block;">
+                        Mínimo de 3 caracteres alfanuméricos. Espaços são automaticamente convertidos em hifens.
+                    </span>
+                </div>
+
+                @if (!string.IsNullOrWhiteSpace(_customCodeInput))
+                {
+                    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.65rem 0.85rem; margin-bottom: 1.25rem;">
+                        <span style="font-size: 11px; color: var(--cc-secondary); display: block;" class="font-mono">PRÉ-VISUALIZAÇÃO DO LINK:</span>
+                        <span class="font-mono" style="font-size: 13px; font-weight: 700; color: var(--cc-primary);">
+                            https://criacerto.com.br/r/@_customCodeInput.Trim().ToUpperInvariant().Replace(" ", "-")
+                        </span>
+                    </div>
+                }
+
+                @if (!string.IsNullOrEmpty(_modalErrorMessage))
+                {
+                    <div style="background: #fee2e2; border: 1px solid #fca5a5; color: #991b1b; padding: 0.65rem 0.85rem; border-radius: 8px; font-size: 12px; font-weight: 600; margin-bottom: 1.25rem;">
+                        @_modalErrorMessage
+                    </div>
+                }
+
+                <div style="display: flex; justify-content: flex-end; gap: 0.75rem;">
+                    <button @onclick="CloseCustomizeModal" disabled="@_isSavingCustomCode"
+                            style="background: #f1f5f9; color: var(--cc-ink); border: none; padding: 0.6rem 1.25rem; border-radius: 8px; font-weight: 600; font-size: 13px; cursor: pointer;">
+                        Cancelar
+                    </button>
+                    <button @onclick="SaveCustomCodeAsync" disabled="@_isSavingCustomCode"
+                            style="display: flex; align-items: center; gap: 0.4rem; background: var(--cc-primary); color: white; border: none; padding: 0.6rem 1.25rem; border-radius: 8px; font-weight: 700; font-size: 13px; cursor: pointer; box-shadow: 0 2px 6px rgba(0, 101, 44, 0.25);">
+                        @if (_isSavingCustomCode)
+                        {
+                            <span class="material-symbols-outlined" style="font-size: 16px; animation: spin 0.8s linear infinite;">sync</span>
+                            <span>Salvando...</span>
+                        }
+                        else
+                        {
+                            <span class="material-symbols-outlined" style="font-size: 16px;">save</span>
+                            <span>Salvar Código</span>
+                        }
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+
+</div>
+
+<style>
+    @@keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+</style>
+
+@code {
+    private CustomerReferralDashboardModel? _dashboard;
+    private bool _isLoading = true;
+    private string? _errorMessage;
+    private bool _isAdmin;
+
+    // Modal state
+    private bool _isCustomizeModalOpen;
+    private string _customCodeInput = string.Empty;
+    private string? _modalErrorMessage;
+    private bool _isSavingCustomCode;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        _isAdmin = user.IsInRole("Admin") || user.HasClaim("role", "Admin") || user.HasClaim("role", "Owner");
+
+        await LoadDashboardAsync();
+    }
+
+    private async Task LoadDashboardAsync()
+    {
+        _isLoading = true;
+        _errorMessage = null;
+
+        var result = await ReferralApiClient.GetCustomerReferralDashboardAsync();
+        if (result.IsSuccess)
+        {
+            _dashboard = result.Value;
+        }
+        else
+        {
+            _errorMessage = result.Error.Message;
+        }
+
+        _isLoading = false;
+    }
+
+    private async Task CopyReferralLinkAsync()
+    {
+        if (_dashboard == null) return;
+
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", _dashboard.ReferralUrl);
+            ToastService.ShowSuccess("Link de indicação copiado com sucesso!");
+        }
+        catch
+        {
+            ToastService.ShowWarning("Copie manualmente o link da barra acima.");
+        }
+    }
+
+    private async Task ShareOnWhatsApp()
+    {
+        if (_dashboard == null) return;
+
+        var encodedText = Uri.EscapeDataString(_dashboard.WhatsAppShareText);
+        var url = $"https://wa.me/?text={encodedText}";
+
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("open", url, "_blank");
+        }
+        catch
+        {
+            Navigation.NavigateTo(url, forceLoad: true);
+        }
+    }
+
+    private void OpenCustomizeModal()
+    {
+        if (!_isAdmin) return;
+        _customCodeInput = _dashboard?.ReferralCode ?? string.Empty;
+        _modalErrorMessage = null;
+        _isCustomizeModalOpen = true;
+    }
+
+    private void CloseCustomizeModal()
+    {
+        _isCustomizeModalOpen = false;
+        _modalErrorMessage = null;
+    }
+
+    private async Task SaveCustomCodeAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_customCodeInput) || _customCodeInput.Trim().Length < 3)
+        {
+            _modalErrorMessage = "O código deve conter ao menos 3 caracteres.";
+            return;
+        }
+
+        _isSavingCustomCode = true;
+        _modalErrorMessage = null;
+
+        var result = await ReferralApiClient.CustomizeReferralCodeAsync(_customCodeInput.Trim());
+        if (result.IsSuccess)
+        {
+            ToastService.ShowSuccess($"Código atualizado com sucesso para '{result.Value.Code}'!");
+            CloseCustomizeModal();
+            await LoadDashboardAsync();
+        }
+        else
+        {
+            _modalErrorMessage = result.Error.Message;
+        }
+
+        _isSavingCustomCode = false;
+    }
+
+    private void GoToSettings()
+    {
+        Navigation.NavigateTo("settings/organization");
+    }
+}

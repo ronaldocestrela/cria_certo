@@ -83,4 +83,36 @@ public class ReferralCodeTests
         code.Reactivate().IsSuccess.Should().BeTrue();
         code.IsActive.Should().BeTrue();
     }
+
+    [Fact]
+    public void UpdateCode_WithValidCode_ShouldNormalizeAndSucceed()
+    {
+        // Arrange
+        var code = ReferralCode.Create(Guid.NewGuid(), "FAZENDA-OLD").Value;
+
+        // Act
+        var result = code.UpdateCode("fazenda-nova-2026");
+
+        // Assert
+        result.IsSuccess.Should().BeTrue();
+        code.Code.Should().Be("FAZENDA-NOVA-2026");
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("AB")]
+    public void UpdateCode_WithInvalidCode_ShouldFail(string invalidCode)
+    {
+        // Arrange
+        var code = ReferralCode.Create(Guid.NewGuid(), "FAZENDA-OLD").Value;
+
+        // Act
+        var result = code.UpdateCode(invalidCode);
+
+        // Assert
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("ReferralCode.InvalidFormat");
+        code.Code.Should().Be("FAZENDA-OLD");
+    }
 }

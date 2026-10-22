@@ -24,6 +24,7 @@ builder.Services.AddScoped<IOfflineSyncService, OfflineSyncService>();
 builder.Services.AddScoped<IToastService, ToastService>();
 builder.Services.AddScoped<IFeatureFlagClientService, FeatureFlagClientService>();
 builder.Services.AddScoped<IReferralTrackingService, ReferralTrackingService>();
+builder.Services.AddScoped<IReferralApiClient, ReferralApiClient>();
 
 builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) });
 

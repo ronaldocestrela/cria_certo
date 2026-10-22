@@ -17,6 +17,9 @@ using CriaCerto.Modules.Referral.Application.Features.Payouts.Queries;
 using CriaCerto.Modules.Referral.Application.Features.PlanDiscounts.Commands;
 using CriaCerto.Modules.Referral.Application.Features.PlanDiscounts.Dtos;
 using CriaCerto.Modules.Referral.Application.Features.PlanDiscounts.Queries;
+using CriaCerto.Modules.Referral.Application.Features.CustomerReferral.Commands;
+using CriaCerto.Modules.Referral.Application.Features.CustomerReferral.Dtos;
+using CriaCerto.Modules.Referral.Application.Features.CustomerReferral.Queries;
 using CriaCerto.BuildingBlocks.Application.Features.GetReferenceBreeds;
 using CriaCerto.Api.Seeders;
 using CriaCerto.Modules.Sanitary.Application.Features.GetVaccineCalendar;
@@ -177,6 +180,7 @@ builder.Services.AddBackofficeInfrastructure(builder.Configuration);
 builder.Services.AddReferralInfrastructure(builder.Configuration);
 builder.Services.AddScoped<IPartnerAccountProvisioner, PartnerAccountProvisioner>();
 builder.Services.AddScoped<IPlanCatalogLookupService, PlanCatalogLookupService>();
+builder.Services.AddScoped<ITenantInfoLookupService, TenantInfoLookupService>();
 
 // Background Services
 builder.Services.AddHostedService<SubscriptionLifecycleWorker>();
@@ -1802,6 +1806,59 @@ app.MapGet("/api/v1/referral/codes/validate/{code}", async (string code, ISender
     var result = await sender.Send(new ValidateReferralCodeQuery(code));
     return ToHttpResult(result);
 }).AllowAnonymous().WithTags("Referral");
+
+app.MapGet("/api/v1/referral/customer/dashboard", async (
+    Guid? tenantId,
+    ClaimsPrincipal userClaims,
+    CriaCerto.BuildingBlocks.Abstractions.Tenancy.ITenantContext tenantContext,
+    ISender sender) =>
+{
+    var resolvedTenantId = tenantContext.TenantId;
+    if (!resolvedTenantId.HasValue && userClaims != null)
+    {
+        var tenantClaim = userClaims.FindFirst("TenantId")?.Value;
+        if (Guid.TryParse(tenantClaim, out var tid)) resolvedTenantId = tid;
+    }
+    if (!resolvedTenantId.HasValue && tenantId.HasValue)
+    {
+        resolvedTenantId = tenantId.Value;
+    }
+
+    if (!resolvedTenantId.HasValue || resolvedTenantId.Value == Guid.Empty)
+    {
+        return Results.Unauthorized();
+    }
+
+    var result = await sender.Send(new GetCustomerReferralDashboardQuery(resolvedTenantId.Value));
+    return ToHttpResult(result);
+}).RequireAuthorization().WithTags("Referral");
+
+app.MapPost("/api/v1/referral/customer/code/customize", async (
+    CustomizeReferralCodeRequest request,
+    Guid? tenantId,
+    ClaimsPrincipal userClaims,
+    CriaCerto.BuildingBlocks.Abstractions.Tenancy.ITenantContext tenantContext,
+    ISender sender) =>
+{
+    var resolvedTenantId = tenantContext.TenantId;
+    if (!resolvedTenantId.HasValue && userClaims != null)
+    {
+        var tenantClaim = userClaims.FindFirst("TenantId")?.Value;
+        if (Guid.TryParse(tenantClaim, out var tid)) resolvedTenantId = tid;
+    }
+    if (!resolvedTenantId.HasValue && tenantId.HasValue)
+    {
+        resolvedTenantId = tenantId.Value;
+    }
+
+    if (!resolvedTenantId.HasValue || resolvedTenantId.Value == Guid.Empty)
+    {
+        return Results.Unauthorized();
+    }
+
+    var result = await sender.Send(new CustomizeReferralCodeCommand(resolvedTenantId.Value, request.NewCode));
+    return ToHttpResult(result);
+}).RequireAuthorization().WithTags("Referral");
 
 app.MapGet("/api/v1/tenancy/profile", async (Guid tenantId, ISender sender) =>
 {
