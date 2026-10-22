@@ -46,6 +46,10 @@ public static class BackofficePermissions
     public const string RolloutManage = "rollout.manage";
     public const string RolloutKillSwitch = "rollout.killswitch";
 
+    // Referral Partners Management
+    public const string ReferralPartnersRead = "referral.partners.read";
+    public const string ReferralPartnersManage = "referral.partners.manage";
+
     // Scopes
     public const string ScopeGlobal = "Global";
     public const string ScopeTenant = "Tenant";
@@ -62,7 +66,8 @@ public static class BackofficePermissions
         AuditRead, UsersAdminManage,
         ObservabilityRead, ObservabilityManage,
         ComplianceRead, ComplianceExport, ComplianceUnmask,
-        RolloutRead, RolloutManage, RolloutKillSwitch
+        RolloutRead, RolloutManage, RolloutKillSwitch,
+        ReferralPartnersRead, ReferralPartnersManage
     };
 
     public static bool IsValidScope(string scope) =>

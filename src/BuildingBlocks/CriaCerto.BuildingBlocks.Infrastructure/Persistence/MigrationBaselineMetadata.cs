@@ -53,7 +53,7 @@ public static class MigrationBaselineMetadata
     public static readonly MigrationBaselineModule Referral = new(
         "referral",
         "20261022010840_Initial_ReferralModule",
-        ["Participants", "ReferralCodes", "PartnerContracts", "PlanDiscountPolicies", "Attributions", "RewardLedger"]);
+        ["Participants", "ReferralCodes", "PartnerProfiles", "PartnerContracts", "PlanDiscountPolicies", "Attributions", "RewardLedger"]);
 
     public static IReadOnlyList<MigrationBaselineModule> MasterModules { get; } =
     [

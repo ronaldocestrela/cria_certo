@@ -7,6 +7,7 @@ public interface IReferralDbContext
 {
     DbSet<ReferralProgramParticipant> Participants { get; }
     DbSet<ReferralCode> ReferralCodes { get; }
+    DbSet<CommercialPartnerProfile> PartnerProfiles { get; }
     DbSet<PartnerContract> PartnerContracts { get; }
     DbSet<PlanReferralDiscountPolicy> PlanDiscountPolicies { get; }
     DbSet<ReferralAttribution> Attributions { get; }

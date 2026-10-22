@@ -159,12 +159,17 @@ flowchart TD
 
 ### Fase 3: Módulo Backoffice para Gestão de Parceiros e Contratos
 
-#### 3.1 Gestão de Parceiros Comerciais
-- Interface para cadastro de novos parceiros com dados cadastrais, CNPJ/CPF e chave Pix.
-- Definição individualizada de comissão:
-  - Exemplo Parceiro A: 20% recorrente por 12 meses.
-  - Exemplo Parceiro B: R$ 350 fixo na primeira mensalidade confirmada.
-  - Exemplo Parceiro C: 10% vitalício enquanto o indicado mantiver assinatura ativa.
+#### 3.1 Gestão de Parceiros Comerciais [CONCLUÍDO]
+- [x] Interface completa no Backoffice (`/backoffice/partners`) com dashboard de KPIs, busca textual, filtros por status e comissão.
+- [x] Cadastro de novos parceiros com dados cadastrais, CNPJ/CPF formatado e validado, e chave Pix.
+- [x] Provisionamento automático de conta de usuário (`UserId`) via `IPartnerAccountProvisioner` e envio de convite por e-mail com senha temporária (`IEmailSender`).
+- [x] Geração e sugestão inteligente de código/slug de indicação amigável com normalização (`ReferralCodeNormalizer`).
+- [x] Definição individualizada de comissão:
+  - Recorrente percentual com meses limitados (ex: 20% recorrente por 12 meses).
+  - Fixo por conversão na primeira mensalidade confirmada (ex: R$ 350).
+  - Vitalício percentual (ex: 10% vitalício sem limite de meses).
+- [x] Governança Dual-Control (4-Eyes): propostas de reajuste de comissão submetidas como `AdminApprovalRequest` exigindo aprovação de outro administrador antes de atualizar vigência contratual.
+- [x] Mascaramento de dados sensíveis (LGPD) no frontend com o componente `<MaskedDataField>` e trilha de auditoria forense com hash encadeado SHA-256.
 
 #### 3.2 Painel Financeiro de Comissões e Repasses
 - Grid de comissões pendentes de maturação (período de carência D+30).

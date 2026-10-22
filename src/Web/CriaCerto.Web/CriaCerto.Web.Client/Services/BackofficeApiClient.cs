@@ -16,6 +16,9 @@ using CriaCerto.Modules.Backoffice.Application.Features.Approvals.Dtos;
 using CriaCerto.Modules.Backoffice.Application.Features.Audit.Dtos;
 using CriaCerto.Modules.Backoffice.Application.Features.Observability.Dtos;
 using CriaCerto.Modules.Backoffice.Application.Features.Compliance.Dtos;
+using CriaCerto.Modules.Referral.Application.Domain.Enums;
+using CriaCerto.Modules.Referral.Application.Features.CommercialPartners.Dtos;
+using CriaCerto.Modules.Referral.Application.Features.CommercialPartners.Queries;
 using CriaCerto.Web.Client.Models;
 using Microsoft.JSInterop;
 
@@ -40,7 +43,7 @@ public interface IBackofficeApiClient
     Task<bool> AcknowledgeAlertAsync(Guid id, CancellationToken cancellationToken = default);
     Task<bool> ResolveAlertAsync(Guid id, string resolutionNotes, CancellationToken cancellationToken = default);
     Task<BackofficeAlertDto?> SimulateAlertAsync(SimulateAlertRequest request, CancellationToken cancellationToken = default);
-    Task<PagedResult<AdminUserSummaryDto>?> GetAdminUsersAsync(string? searchTerm = null, bool? isActive = null, string? roleName = null, int page = 1, int pageSize = 20, CancellationToken cancellationToken = default);
+    Task<CriaCerto.Modules.Backoffice.Application.Features.AdminUsers.Queries.PagedResult<AdminUserSummaryDto>?> GetAdminUsersAsync(string? searchTerm = null, bool? isActive = null, string? roleName = null, int page = 1, int pageSize = 20, CancellationToken cancellationToken = default);
     Task<AdminUserDetailDto?> GetAdminUserByIdAsync(Guid id, CancellationToken cancellationToken = default);
     Task<bool> CreateAdminUserAsync(string name, string email, string password, List<Guid> roleIds, CancellationToken cancellationToken = default);
     Task<bool> UpdateAdminUserAsync(Guid id, string name, string email, List<Guid> roleIds, CancellationToken cancellationToken = default);
@@ -156,7 +159,25 @@ public interface IBackofficeApiClient
         CancellationToken cancellationToken = default);
     Task<RevealedDataResultDto?> RevealSensitiveDataAsync(RevealSensitiveDataRequest request, CancellationToken cancellationToken = default);
     Task<ComplianceDossierExportDto?> ExportAccessTrailAsync(ExportAccessTrailRequest request, CancellationToken cancellationToken = default);
+
+    // Commercial Partners Management Methods
+    Task<CriaCerto.Modules.Referral.Application.Features.CommercialPartners.Queries.PagedResult<CommercialPartnerListItemDto>?> GetCommercialPartnersAsync(
+        string? searchTerm = null,
+        ParticipantStatus? status = null,
+        CommissionType? commissionType = null,
+        int page = 1,
+        int pageSize = 20,
+        CancellationToken cancellationToken = default);
+
+    Task<CommercialPartnerDto?> GetCommercialPartnerByIdAsync(Guid id, CancellationToken cancellationToken = default);
+    Task<SuggestReferralCodeDto?> SuggestReferralCodeAsync(string name, CancellationToken cancellationToken = default);
+    Task<Result<CommercialPartnerDto>> RegisterCommercialPartnerAsync(RegisterPartnerRequest request, CancellationToken cancellationToken = default);
+    Task<bool> UpdateCommercialPartnerProfileAsync(Guid id, UpdatePartnerProfileRequest request, CancellationToken cancellationToken = default);
+    Task<bool> ProposePartnerContractChangeAsync(Guid id, ProposeContractChangeRequest request, CancellationToken cancellationToken = default);
+    Task<bool> SuspendCommercialPartnerAsync(Guid id, string reason, CancellationToken cancellationToken = default);
+    Task<bool> ReactivateCommercialPartnerAsync(Guid id, CancellationToken cancellationToken = default);
 }
+
 
 public sealed class ApprovalActionResult
 {
@@ -273,7 +294,7 @@ public class BackofficeApiClient : IBackofficeApiClient
             "api/v1/backoffice/dashboard/kpis", cancellationToken);
     }
 
-    public async Task<PagedResult<AdminUserSummaryDto>?> GetAdminUsersAsync(string? searchTerm = null, bool? isActive = null, string? roleName = null, int page = 1, int pageSize = 20, CancellationToken cancellationToken = default)
+    public async Task<CriaCerto.Modules.Backoffice.Application.Features.AdminUsers.Queries.PagedResult<AdminUserSummaryDto>?> GetAdminUsersAsync(string? searchTerm = null, bool? isActive = null, string? roleName = null, int page = 1, int pageSize = 20, CancellationToken cancellationToken = default)
     {
         await AttachTokenAsync();
         var url = $"api/v1/backoffice/users?page={page}&pageSize={pageSize}";
@@ -281,7 +302,7 @@ public class BackofficeApiClient : IBackofficeApiClient
         if (isActive.HasValue) url += $"&isActive={isActive.Value}";
         if (!string.IsNullOrWhiteSpace(roleName)) url += $"&roleName={Uri.EscapeDataString(roleName)}";
 
-        return await _httpClient.GetFromJsonAsync<PagedResult<AdminUserSummaryDto>>(url, cancellationToken);
+        return await _httpClient.GetFromJsonAsync<CriaCerto.Modules.Backoffice.Application.Features.AdminUsers.Queries.PagedResult<AdminUserSummaryDto>>(url, cancellationToken);
     }
 
     public async Task<AdminUserDetailDto?> GetAdminUserByIdAsync(Guid id, CancellationToken cancellationToken = default)
@@ -1027,5 +1048,87 @@ public class BackofficeApiClient : IBackofficeApiClient
 
         return new ComplianceDossierExportDto(fileName, contentType, content, string.Empty, DateTime.UtcNow);
     }
+
+    public async Task<CriaCerto.Modules.Referral.Application.Features.CommercialPartners.Queries.PagedResult<CommercialPartnerListItemDto>?> GetCommercialPartnersAsync(
+        string? searchTerm = null,
+        ParticipantStatus? status = null,
+        CommissionType? commissionType = null,
+        int page = 1,
+        int pageSize = 20,
+        CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var qb = new List<string> { $"page={page}", $"pageSize={pageSize}" };
+        if (!string.IsNullOrWhiteSpace(searchTerm)) qb.Add($"searchTerm={Uri.EscapeDataString(searchTerm)}");
+        if (status.HasValue) qb.Add($"status={status.Value}");
+        if (commissionType.HasValue) qb.Add($"commissionType={commissionType.Value}");
+
+        var query = string.Join("&", qb);
+        var response = await _httpClient.GetAsync($"api/v1/backoffice/partners?{query}", cancellationToken);
+        if (!response.IsSuccessStatusCode) return null;
+
+        return await response.Content.ReadFromJsonAsync<CriaCerto.Modules.Referral.Application.Features.CommercialPartners.Queries.PagedResult<CommercialPartnerListItemDto>>(cancellationToken: cancellationToken);
+    }
+
+    public async Task<CommercialPartnerDto?> GetCommercialPartnerByIdAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.GetAsync($"api/v1/backoffice/partners/{id}", cancellationToken);
+        if (!response.IsSuccessStatusCode) return null;
+
+        return await response.Content.ReadFromJsonAsync<CommercialPartnerDto>(cancellationToken: cancellationToken);
+    }
+
+    public async Task<SuggestReferralCodeDto?> SuggestReferralCodeAsync(string name, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.GetAsync($"api/v1/backoffice/partners/suggest-code?name={Uri.EscapeDataString(name)}", cancellationToken);
+        if (!response.IsSuccessStatusCode) return null;
+
+        return await response.Content.ReadFromJsonAsync<SuggestReferralCodeDto>(cancellationToken: cancellationToken);
+    }
+
+    public async Task<Result<CommercialPartnerDto>> RegisterCommercialPartnerAsync(RegisterPartnerRequest request, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.PostAsJsonAsync("api/v1/backoffice/partners", request, cancellationToken);
+        if (response.IsSuccessStatusCode)
+        {
+            var data = await response.Content.ReadFromJsonAsync<CommercialPartnerDto>(cancellationToken: cancellationToken);
+            return Result.Success(data!);
+        }
+
+        var error = await response.Content.ReadFromJsonAsync<Error>(cancellationToken: cancellationToken);
+        return Result.Failure<CommercialPartnerDto>(error ?? Error.Failure("Partner.CreateError", "Erro ao cadastrar parceiro comercial."));
+    }
+
+    public async Task<bool> UpdateCommercialPartnerProfileAsync(Guid id, UpdatePartnerProfileRequest request, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.PutAsJsonAsync($"api/v1/backoffice/partners/{id}/profile", request, cancellationToken);
+        return response.IsSuccessStatusCode;
+    }
+
+    public async Task<bool> ProposePartnerContractChangeAsync(Guid id, ProposeContractChangeRequest request, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.PostAsJsonAsync($"api/v1/backoffice/partners/{id}/contracts/propose-update", request, cancellationToken);
+        return response.IsSuccessStatusCode;
+    }
+
+    public async Task<bool> SuspendCommercialPartnerAsync(Guid id, string reason, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.PostAsJsonAsync($"api/v1/backoffice/partners/{id}/suspend", new SuspendPartnerRequest(reason), cancellationToken);
+        return response.IsSuccessStatusCode;
+    }
+
+    public async Task<bool> ReactivateCommercialPartnerAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.PostAsync($"api/v1/backoffice/partners/{id}/reactivate", null, cancellationToken);
+        return response.IsSuccessStatusCode;
+    }
 }
+
 

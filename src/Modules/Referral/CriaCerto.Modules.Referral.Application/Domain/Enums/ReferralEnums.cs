@@ -56,3 +56,13 @@ public enum LedgerRewardStatus
     PaidOut = 4,
     Cancelled = 5
 }
+
+public enum PartnerCategory
+{
+    ZootechnicianConsultant = 1,
+    Veterinarian = 2,
+    AgriculturalDealer = 3,
+    BreedAssociation = 4,
+    InfluencerOther = 5
+}
+

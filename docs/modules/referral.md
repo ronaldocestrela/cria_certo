@@ -146,3 +146,44 @@ Livro-razão contábil e imutável para controle de créditos em fatura e comiss
   - Garante idempotência para evitar duplicidade de atribuição para o mesmo `TenantId`.
   - Cria o registro em `[referral].[Attributions]` com status inicial `AttributionStatus.Pending`.
 
+---
+
+## 5. Gestão de Parceiros Comerciais no Backoffice (Fase 3.1)
+
+### 5.1 Entidade `CommercialPartnerProfile` (`[referral].[PartnerProfiles]`)
+Armazena os metadados cadastrais, categoria e notas de compliance do parceiro comercial (consultorias agronômicas, veterinários de campo, revendas agropecuárias, associações de raça).
+* **Relação**: 1:1 com `ReferralProgramParticipant` (`ParticipantType.CommercialPartner`).
+* **Camadas de Segurança e LGPD**:
+  - `LegalDocumentNumber` (CPF ou CNPJ formatado e validado por algoritmo oficial de dígitos verificadores).
+  - Mascaramento nativo no frontend via componente `<MaskedDataField>` (`ReferralPartnersRead`).
+  - Categoria (`PartnerCategory`: `Consultant`, `Veterinarian`, `Dealer`, `BreedAssociation`, `Other`).
+
+### 5.2 Provisionamento Automático de Conta e Convite
+Ao cadastrar um parceiro comercial via `RegisterCommercialPartnerCommand`:
+1. Valida unicidade de código/slug de indicação e unicidade de documento fiscal.
+2. Cria o participante `ReferralProgramParticipant` e seu `ReferralCode` com link base `?ref=slug`.
+3. Registra o contrato inicial em `PartnerContract`.
+4. Provisiona usuário (`UserId`) no módulo Identity via `IPartnerAccountProvisioner`, gerando senha temporária e disparando e-mail de ativação transacional via Resend (`IEmailSender`).
+
+### 5.3 Governança Dual-Control (4-Eyes Approval)
+* Alterações cadastrais e suspensões possuem efeito imediato acompanhadas de auditoria forense com hash SHA-256 (`BackofficePermissions.ReferralPartnersManage`).
+* Reajustes ou alterações nas taxas de comissionamento (`CommissionType`, `CommissionValue`, `MaxRecurringMonths`) exigem aprovação de um segundo administrador via fluxo 4-Olhos (`AdminApprovalRequest` do tipo `UpdatePartnerContractCommission`).
+* Uma vez aprovado por outro operador, o comando `UpdatePartnerContractCommissionCommand` fecha a vigência do contrato anterior (`ValidToUtc = Now`, `IsActive = false`) e cria a nova versão do contrato com vigência imediata global.
+
+### 5.4 Endpoints Administrativos (`/api/v1/backoffice/partners`)
+* `GET /api/v1/backoffice/partners`: Listagem paginada com busca textual, filtro por status e tipo de comissão.
+* `GET /api/v1/backoffice/partners/{id}`: Detalhes completos do parceiro, perfil, contratos vigentes/anteriores e KPIs de conversão.
+* `GET /api/v1/backoffice/partners/suggest-code?name={name}&tradeName={tradeName}`: Sugestor de slug amigável e normalizado para link de indicação.
+* `POST /api/v1/backoffice/partners`: Cadastro de novo parceiro comercial com contrato inicial e convite por e-mail.
+* `PUT /api/v1/backoffice/partners/{id}`: Atualização cadastral do perfil do parceiro.
+* `POST /api/v1/backoffice/partners/{id}/propose-contract-change`: Submissão de proposta de ajuste de comissão para aprovação 4-Olhos.
+* `POST /api/v1/backoffice/partners/{id}/suspend`: Suspensão de parceiro com justificativa auditada.
+* `POST /api/v1/backoffice/partners/{id}/reactivate`: Reativação de parceiro suspenso.
+
+### 5.5 Interface WebAssembly (`/backoffice/partners`)
+* **KPIs em Destaque**: Total de Parceiros Ativos, Comissões Geradas no Mês, Faturamento Atribuído e Taxa Média de Conversão.
+* **Tabela com Busca e Filtros**: Nome, Razão Social, Categoria, Código de Indicação, Comissão Atual, Status e Ações Rápidas.
+* **Componentes LGPD**: CPF/CNPJ, e-mail de contato e chave Pix ofuscados por padrão.
+* **Modais Interativos**: Cadastro de parceiro com auto-sugestão de código e validação inline; submissão de alteração de comissão com advertência 4-Olhos; suspensão fundamentada e modal de detalhes com histórico completo de versões contratuais.
+
+

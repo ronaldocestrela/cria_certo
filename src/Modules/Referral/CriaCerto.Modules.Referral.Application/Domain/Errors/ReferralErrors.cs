@@ -101,4 +101,40 @@ public static class ReferralErrors
             "ReferralRewardLedger.InvalidStateTransition",
             "A transição de status solicitada é inválida para o estado atual do lançamento.");
     }
+
+    public static class PartnerProfile
+    {
+        public static readonly Error ParticipantRequired = Error.Validation(
+            "CommercialPartnerProfile.ParticipantRequired",
+            "O identificador do participante é obrigatório.");
+
+        public static readonly Error FullNameRequired = Error.Validation(
+            "CommercialPartnerProfile.FullNameRequired",
+            "O nome completo ou razão social do parceiro comercial é obrigatório.");
+
+        public static readonly Error EmailRequired = Error.Validation(
+            "CommercialPartnerProfile.EmailRequired",
+            "O e-mail de contato do parceiro comercial é obrigatório.");
+
+        public static readonly Error PhoneRequired = Error.Validation(
+            "CommercialPartnerProfile.PhoneRequired",
+            "O telefone ou WhatsApp do parceiro comercial é obrigatório.");
+
+        public static readonly Error EmailAlreadyInUse = Error.Conflict(
+            "CommercialPartnerProfile.EmailAlreadyInUse",
+            "Já existe um parceiro comercial cadastrado com este endereço de e-mail.");
+
+        public static readonly Error DocumentAlreadyInUse = Error.Conflict(
+            "CommercialPartnerProfile.DocumentAlreadyInUse",
+            "Já existe um parceiro comercial cadastrado com este CPF/CNPJ.");
+
+        public static readonly Error CodeAlreadyInUse = Error.Conflict(
+            "ReferralCode.CodeAlreadyInUse",
+            "O código de indicação informado já está em uso por outro parceiro ou campanha.");
+
+        public static readonly Error NotFound = Error.NotFound(
+            "CommercialPartnerProfile.NotFound",
+            "O perfil do parceiro comercial não foi encontrado.");
+    }
 }
+

@@ -23,6 +23,12 @@
                 <span class="nav-icon">💳</span> Catálogo de Planos
             </NavLink>
         </PermissionGuard>
+
+        <PermissionGuard Permission="@BackofficePermissions.ReferralPartnersRead">
+            <NavLink class="nav-link" href="backoffice/partners">
+                <span class="nav-icon">🤝</span> Parceiros Comerciais
+            </NavLink>
+        </PermissionGuard>
     </div>
 
     <div class="nav-section">

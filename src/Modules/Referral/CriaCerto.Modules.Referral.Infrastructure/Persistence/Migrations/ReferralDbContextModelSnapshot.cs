@@ -23,6 +23,69 @@ namespace CriaCerto.Modules.Referral.Infrastructure.Persistence.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.Entity("CriaCerto.Modules.Referral.Application.Domain.CommercialPartnerProfile", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("City")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("FullName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<Guid>("ParticipantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("PhoneNumber")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("State")
+                        .HasMaxLength(2)
+                        .HasColumnType("nvarchar(2)");
+
+                    b.Property<string>("TradeName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Category");
+
+                    b.HasIndex("Email");
+
+                    b.HasIndex("ParticipantId")
+                        .IsUnique();
+
+                    b.ToTable("PartnerProfiles", "referral");
+                });
+
             modelBuilder.Entity("CriaCerto.Modules.Referral.Application.Domain.PartnerContract", b =>
                 {
                     b.Property<Guid>("Id")
@@ -360,6 +423,15 @@ namespace CriaCerto.Modules.Referral.Infrastructure.Persistence.Migrations
                     b.HasIndex("Status", "MaturityDateUtc");
 
                     b.ToTable("RewardLedger", "referral");
+                });
+
+            modelBuilder.Entity("CriaCerto.Modules.Referral.Application.Domain.CommercialPartnerProfile", b =>
+                {
+                    b.HasOne("CriaCerto.Modules.Referral.Application.Domain.ReferralProgramParticipant", null)
+                        .WithOne()
+                        .HasForeignKey("CriaCerto.Modules.Referral.Application.Domain.CommercialPartnerProfile", "ParticipantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("CriaCerto.Modules.Referral.Application.Domain.PartnerContract", b =>

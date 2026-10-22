@@ -1,9 +1,16 @@
 using System.Security.Claims;
 using System.Text;
+using System.Text.Json;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.RateLimiting;
 using CriaCerto.Api.Middleware;
 using CriaCerto.Api.BackgroundServices;
+using CriaCerto.Api.Services;
+using CriaCerto.Modules.Referral.Application.Abstractions;
+using CriaCerto.Modules.Referral.Application.Domain.Enums;
+using CriaCerto.Modules.Referral.Application.Features.CommercialPartners.Commands;
+using CriaCerto.Modules.Referral.Application.Features.CommercialPartners.Dtos;
+using CriaCerto.Modules.Referral.Application.Features.CommercialPartners.Queries;
 using CriaCerto.BuildingBlocks.Application.Features.GetReferenceBreeds;
 using CriaCerto.Api.Seeders;
 using CriaCerto.Modules.Sanitary.Application.Features.GetVaccineCalendar;
@@ -162,6 +169,7 @@ builder.Services.AddNutritionInfrastructure();
 builder.Services.AddSanitaryModule(builder.Configuration);
 builder.Services.AddBackofficeInfrastructure(builder.Configuration);
 builder.Services.AddReferralInfrastructure(builder.Configuration);
+builder.Services.AddScoped<IPartnerAccountProvisioner, PartnerAccountProvisioner>();
 
 // Background Services
 builder.Services.AddHostedService<SubscriptionLifecycleWorker>();
@@ -1170,6 +1178,195 @@ backoffice.MapPost("/feature-flags/{key}/restore", async (string key, RestoreKil
     var result = await sender.Send(command);
     return ToHttpResult(result);
 }).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.RolloutManage)).WithTags("Backoffice Rollout");
+
+// --- BACKOFFICE COMMERCIAL PARTNERS MANAGEMENT ENDPOINTS ---
+backoffice.MapGet("/partners", async (
+    string? searchTerm,
+    ParticipantStatus? status,
+    CommissionType? commissionType,
+    int? page,
+    int? pageSize,
+    ISender sender) =>
+{
+    var query = new GetCommercialPartnersQuery(searchTerm, status, commissionType, page ?? 1, pageSize ?? 20);
+    var result = await sender.Send(query);
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ReferralPartnersRead)).WithTags("Backoffice Referral Partners");
+
+backoffice.MapGet("/partners/suggest-code", async (string name, ISender sender) =>
+{
+    var query = new SuggestReferralCodeQuery(name);
+    var result = await sender.Send(query);
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ReferralPartnersRead)).WithTags("Backoffice Referral Partners");
+
+backoffice.MapGet("/partners/{id:guid}", async (Guid id, ISender sender) =>
+{
+    var query = new GetCommercialPartnerByIdQuery(id);
+    var result = await sender.Send(query);
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ReferralPartnersRead)).WithTags("Backoffice Referral Partners");
+
+backoffice.MapPost("/partners", async (RegisterPartnerRequest req, HttpContext ctx, ISender sender, DbContext dbContext) =>
+{
+    var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var command = new RegisterCommercialPartnerCommand(
+        req.FullName,
+        req.TradeName,
+        req.Email,
+        req.PhoneNumber,
+        req.Category,
+        req.City,
+        req.State,
+        req.Notes,
+        req.LegalDocumentNumber,
+        req.PixKeyType,
+        req.PixKey,
+        req.CommissionType,
+        req.CommissionValue,
+        req.MaxRecurringMonths,
+        req.PaymentTermsDays ?? 30,
+        req.PreferredReferralCode,
+        callerId,
+        callerEmail,
+        ip);
+
+    var result = await sender.Send(command);
+
+    if (result.IsSuccess)
+    {
+        var audit = AuditLog.Create(
+            callerId,
+            callerEmail,
+            "Referral.PartnerRegistered",
+            $"Partner/{result.Value.ParticipantId}",
+            ip,
+            JsonSerializer.Serialize(new
+            {
+                result.Value.ParticipantId,
+                result.Value.FullName,
+                result.Value.Email,
+                result.Value.ReferralCode,
+                result.Value.CommissionType,
+                result.Value.CommissionValue
+            }));
+
+        dbContext.Set<AuditLog>().Add(audit);
+        await dbContext.SaveChangesAsync();
+    }
+
+    return ToHttpResult(result, StatusCodes.Status201Created);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ReferralPartnersManage)).WithTags("Backoffice Referral Partners");
+
+backoffice.MapPut("/partners/{id:guid}/profile", async (Guid id, UpdatePartnerProfileRequest req, HttpContext ctx, ISender sender, DbContext dbContext) =>
+{
+    var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var command = new UpdateCommercialPartnerProfileCommand(
+        id,
+        req.FullName,
+        req.TradeName,
+        req.Email,
+        req.PhoneNumber,
+        req.Category,
+        req.City,
+        req.State,
+        req.Notes,
+        req.PixKey,
+        req.PixKeyType);
+
+    var result = await sender.Send(command);
+
+    if (result.IsSuccess)
+    {
+        var audit = AuditLog.Create(
+            callerId,
+            callerEmail,
+            "Referral.PartnerProfileUpdated",
+            $"Partner/{id}",
+            ip,
+            JsonSerializer.Serialize(new { ParticipantId = id, req.FullName, req.Email }));
+
+        dbContext.Set<AuditLog>().Add(audit);
+        await dbContext.SaveChangesAsync();
+    }
+
+    return ToCommandHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ReferralPartnersManage)).WithTags("Backoffice Referral Partners");
+
+backoffice.MapPost("/partners/{id:guid}/contracts/propose-update", async (Guid id, ProposeContractChangeRequest req, HttpContext ctx, ISender sender) =>
+{
+    var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var payloadJson = JsonSerializer.Serialize(new
+    {
+        ParticipantId = id,
+        CommissionType = req.CommissionType.ToString(),
+        CommissionValue = req.CommissionValue,
+        MaxRecurringMonths = req.MaxRecurringMonths,
+        PaymentTermsDays = req.PaymentTermsDays ?? 30,
+        PixKey = req.PixKey,
+        PixKeyType = req.PixKeyType?.ToString()
+    });
+
+    var command = new CreateApprovalRequestCommand(
+        ApprovalRequestType.UpdatePartnerContractCommission,
+        $"Ajuste de Comissão do Parceiro {id}",
+        req.Justification,
+        $"Partner/{id}",
+        $"Alteração para {req.CommissionType} - {req.CommissionValue:N2}",
+        payloadJson,
+        callerId,
+        callerEmail,
+        ip);
+
+    var result = await sender.Send(command);
+    return ToHttpResult(result, StatusCodes.Status202Accepted);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ApprovalsRequest)).WithTags("Backoffice Referral Partners");
+
+backoffice.MapPost("/partners/{id:guid}/suspend", async (Guid id, SuspendPartnerRequest req, HttpContext ctx, ISender sender, DbContext dbContext) =>
+{
+    var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var command = new SuspendCommercialPartnerCommand(id, req.Reason, callerId);
+    var result = await sender.Send(command);
+
+    if (result.IsSuccess)
+    {
+        var audit = AuditLog.Create(
+            callerId,
+            callerEmail,
+            "Referral.PartnerSuspended",
+            $"Partner/{id}",
+            ip,
+            JsonSerializer.Serialize(new { ParticipantId = id, req.Reason }));
+
+        dbContext.Set<AuditLog>().Add(audit);
+        await dbContext.SaveChangesAsync();
+    }
+
+    return ToCommandHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ReferralPartnersManage)).WithTags("Backoffice Referral Partners");
+
+backoffice.MapPost("/partners/{id:guid}/reactivate", async (Guid id, HttpContext ctx, ISender sender, DbContext dbContext) =>
+{
+    var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var command = new ReactivateCommercialPartnerCommand(id, callerId);
+    var result = await sender.Send(command);
+
+    if (result.IsSuccess)
+    {
+        var audit = AuditLog.Create(
+            callerId,
+            callerEmail,
+            "Referral.PartnerReactivated",
+            $"Partner/{id}",
+            ip,
+            JsonSerializer.Serialize(new { ParticipantId = id }));
+
+        dbContext.Set<AuditLog>().Add(audit);
+        await dbContext.SaveChangesAsync();
+    }
+
+    return ToCommandHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ReferralPartnersManage)).WithTags("Backoffice Referral Partners");
 
 // Backoffice Auth Endpoints (Anonymous / Credentials + MFA)
 app.MapPost("/api/v1/backoffice/auth/login", async (BackofficeLoginRequest req, HttpContext ctx, ISender sender) =>

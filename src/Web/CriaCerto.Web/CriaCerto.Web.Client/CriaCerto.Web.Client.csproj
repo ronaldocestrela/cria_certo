@@ -26,6 +26,7 @@
     <ProjectReference Include="..\..\..\Modules\Nutrition\CriaCerto.Modules.Nutrition.Application\CriaCerto.Modules.Nutrition.Application.csproj" />
     <ProjectReference Include="..\..\..\Modules\Sanitary\CriaCerto.Modules.Sanitary.Application\CriaCerto.Modules.Sanitary.Application.csproj" />
     <ProjectReference Include="..\..\..\Modules\Backoffice\CriaCerto.Modules.Backoffice.Application\CriaCerto.Modules.Backoffice.Application.csproj" />
+    <ProjectReference Include="..\..\..\Modules\Referral\CriaCerto.Modules.Referral.Application\CriaCerto.Modules.Referral.Application.csproj" />
     <ProjectReference Include="..\..\..\Modules\Analytics\CriaCerto.Modules.Analytics.Application\CriaCerto.Modules.Analytics.Application.csproj" />
   </ItemGroup>
 

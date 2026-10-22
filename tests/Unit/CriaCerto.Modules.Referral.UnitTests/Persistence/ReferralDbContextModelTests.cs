@@ -50,6 +50,10 @@ public sealed class ReferralDbContextModelTests : IDisposable
         codeEntity.Should().NotBeNull();
         codeEntity!.GetTableName().Should().Be("ReferralCodes");
 
+        var profileEntity = model.FindEntityType(typeof(CommercialPartnerProfile));
+        profileEntity.Should().NotBeNull();
+        profileEntity!.GetTableName().Should().Be("PartnerProfiles");
+
         var contractEntity = model.FindEntityType(typeof(PartnerContract));
         contractEntity.Should().NotBeNull();
         contractEntity!.GetTableName().Should().Be("PartnerContracts");

@@ -3,6 +3,8 @@ using CriaCerto.BuildingBlocks.Abstractions.Results;
 using CriaCerto.Modules.Backoffice.Application.Domain.Entities;
 using CriaCerto.Modules.Backoffice.Application.Domain.Errors;
 using CriaCerto.Modules.Backoffice.Application.Features.Approvals.Dtos;
+using CriaCerto.Modules.Referral.Application.Domain.Enums;
+using CriaCerto.Modules.Referral.Application.Features.CommercialPartners.Commands;
 using CriaCerto.Modules.Tenancy.Application.Features.BackofficeTenants;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -182,6 +184,48 @@ public sealed class ApproveApprovalRequestCommandHandler : IRequestHandler<Appro
                     }
 
                     return Result.Success(JsonSerializer.Serialize(new { AdminUserId = targetUserId, GrantedRolesCount = adminUser.Roles.Count }));
+                }
+
+                case ApprovalRequestType.UpdatePartnerContractCommission:
+                {
+                    using var doc = JsonDocument.Parse(approval.PayloadJson);
+                    if (!doc.RootElement.TryGetProperty("ParticipantId", out var partProp) ||
+                        !Guid.TryParse(partProp.GetString(), out var participantId) ||
+                        !doc.RootElement.TryGetProperty("CommissionType", out var commTypeProp) ||
+                        !doc.RootElement.TryGetProperty("CommissionValue", out var commValProp))
+                    {
+                        return Result.Failure<string>(ApprovalErrors.ExecutionFailed);
+                    }
+
+                    var commType = Enum.Parse<CommissionType>(commTypeProp.GetString()!);
+                    var commVal = commValProp.GetDecimal();
+                    int? maxMonths = doc.RootElement.TryGetProperty("MaxRecurringMonths", out var mmProp) && mmProp.ValueKind == JsonValueKind.Number
+                        ? mmProp.GetInt32()
+                        : null;
+                    var terms = doc.RootElement.TryGetProperty("PaymentTermsDays", out var ptProp) ? ptProp.GetInt32() : 30;
+                    var pixKey = doc.RootElement.TryGetProperty("PixKey", out var pkProp) ? pkProp.GetString() : null;
+                    PixKeyType? pixType = doc.RootElement.TryGetProperty("PixKeyType", out var pktProp) && Enum.TryParse<PixKeyType>(pktProp.GetString(), out var pt)
+                        ? pt
+                        : null;
+
+                    var updateCmd = new UpdatePartnerContractCommissionCommand(
+                        participantId,
+                        commType,
+                        commVal,
+                        maxMonths,
+                        terms,
+                        pixKey,
+                        pixType,
+                        approval.ReviewedByAdminUserId!.Value,
+                        approval.Justification);
+
+                    var cmdResult = await _sender.Send(updateCmd, cancellationToken);
+                    if (cmdResult.IsFailure)
+                    {
+                        return Result.Failure<string>(cmdResult.Error);
+                    }
+
+                    return Result.Success(JsonSerializer.Serialize(new { ParticipantId = participantId, Status = "ContractUpdated" }));
                 }
 
                 default:

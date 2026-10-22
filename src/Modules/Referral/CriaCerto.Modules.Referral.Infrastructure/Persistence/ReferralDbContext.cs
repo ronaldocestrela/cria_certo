@@ -8,6 +8,7 @@ public class ReferralDbContext : DbContext, IReferralDbContext
 {
     public DbSet<ReferralProgramParticipant> Participants => Set<ReferralProgramParticipant>();
     public DbSet<ReferralCode> ReferralCodes => Set<ReferralCode>();
+    public DbSet<CommercialPartnerProfile> PartnerProfiles => Set<CommercialPartnerProfile>();
     public DbSet<PartnerContract> PartnerContracts => Set<PartnerContract>();
     public DbSet<PlanReferralDiscountPolicy> PlanDiscountPolicies => Set<PlanReferralDiscountPolicy>();
     public DbSet<ReferralAttribution> Attributions => Set<ReferralAttribution>();
@@ -86,6 +87,55 @@ public class ReferralDbContext : DbContext, IReferralDbContext
             builder.HasOne<ReferralProgramParticipant>()
                 .WithMany()
                 .HasForeignKey(c => c.ParticipantId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<CommercialPartnerProfile>(builder =>
+        {
+            builder.ToTable("PartnerProfiles");
+            builder.HasKey(p => p.Id);
+
+            builder.Property(p => p.ParticipantId).IsRequired();
+
+            builder.Property(p => p.FullName)
+                .HasMaxLength(200)
+                .IsRequired();
+
+            builder.Property(p => p.TradeName)
+                .HasMaxLength(200);
+
+            builder.Property(p => p.Email)
+                .HasMaxLength(256)
+                .IsRequired();
+
+            builder.Property(p => p.PhoneNumber)
+                .HasMaxLength(30)
+                .IsRequired();
+
+            builder.Property(p => p.Category)
+                .HasConversion<string>()
+                .HasMaxLength(40)
+                .IsRequired();
+
+            builder.Property(p => p.City)
+                .HasMaxLength(100);
+
+            builder.Property(p => p.State)
+                .HasMaxLength(2);
+
+            builder.Property(p => p.Notes)
+                .HasMaxLength(1000);
+
+            builder.Property(p => p.CreatedAtUtc).IsRequired();
+            builder.Property(p => p.UpdatedAtUtc);
+
+            builder.HasIndex(p => p.ParticipantId).IsUnique();
+            builder.HasIndex(p => p.Email);
+            builder.HasIndex(p => p.Category);
+
+            builder.HasOne<ReferralProgramParticipant>()
+                .WithOne()
+                .HasForeignKey<CommercialPartnerProfile>(p => p.ParticipantId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
 
