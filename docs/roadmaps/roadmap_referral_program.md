@@ -135,10 +135,12 @@ flowchart TD
 
 ### Fase 2: Atribuição no Onboarding e Integração com Stripe
 
-#### 2.1 Rastreamento e Captura
-- Middleware ou componente Blazor para interceptar parâmetro `?ref={code}` e salvar em cookie seguro HTTP-only / storage.
-- Inclusão do campo opcional no formulário de registro de novos tenants: "Código de Indicação / Consultor".
-- Associação do `TenantId` criado ao código do indicador no momento do provisionamento inicial.
+#### 2.1 Rastreamento e Captura [CONCLUÍDO]
+- [x] Middleware/endpoint Web e serviço cliente Blazor (`IReferralTrackingService`) para interceptar parâmetro `?ref={code}` e rota `/r/{code}`, salvando em cookie seguro `SameSite=Lax` e `localStorage`.
+- [x] Registro assíncrono de contagem de cliques via `RecordReferralClickCommand` (`POST /api/v1/referral/clicks/{code}`) e consulta inline de validação via `ValidateReferralCodeQuery` (`GET /api/v1/referral/codes/validate/{code}`).
+- [x] Inclusão do campo opcional no assistente de onboarding de novos tenants (`OnboardingWizard.razor`) e formulário de cadastro (`Register.razor`): "Código de Indicação / Consultor", com pré-preenchimento automático e feedback visual.
+- [x] Associação do `TenantId` criado ao código do indicador no momento do provisionamento inicial via evento de integração in-process `TenantRegisteredIntegrationEvent` consumido por `TenantRegisteredReferralHandler`, com validação anti-auto-indicação, idempotência e atribuição em status `Pending`.
+- [x] Suíte de testes unitários com 100% de sucesso cobrindo validação de código, registro de clique, bloqueio de auto-indicação e despacho de evento de integração.
 
 #### 2.2 Eventos e Webhooks do Stripe
 - Injeção da lógica de recompensa no fluxo de webhook do Stripe (`invoice.payment_succeeded`):

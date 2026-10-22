@@ -111,6 +111,8 @@ using CriaCerto.Modules.Backoffice.Application.Security;
 using CriaCerto.Modules.Backoffice.Infrastructure;
 using CriaCerto.Modules.Backoffice.Infrastructure.Persistence;
 using CriaCerto.Modules.Referral.Application;
+using CriaCerto.Modules.Referral.Application.Features.RecordReferralClick;
+using CriaCerto.Modules.Referral.Application.Features.ValidateReferralCode;
 using CriaCerto.Modules.Referral.Infrastructure;
 using CriaCerto.Modules.Referral.Infrastructure.Persistence;
 using CriaCerto.Api.Configuration;
@@ -1323,13 +1325,32 @@ app.MapGet("/api/v1/tenancy/plans", async (ISender sender) =>
         : Results.Json(result.Error, statusCode: 400);
 }).AllowAnonymous().WithTags("Tenancy");
 
-app.MapPost("/api/v1/tenancy/farms", async (CreateTenantCommand command, ISender sender) =>
+app.MapPost("/api/v1/tenancy/farms", async (CreateTenantCommand command, HttpContext httpContext, ISender sender) =>
 {
-    var result = await sender.Send(command);
+    var ipAddress = httpContext.Connection.RemoteIpAddress?.ToString();
+    var userAgent = httpContext.Request.Headers.UserAgent.ToString();
+    var enrichedCommand = command with
+    {
+        OriginIpAddress = command.OriginIpAddress ?? ipAddress,
+        UserAgent = command.UserAgent ?? userAgent
+    };
+    var result = await sender.Send(enrichedCommand);
     return result.IsSuccess
         ? Results.Json(result.Value, statusCode: StatusCodes.Status201Created)
         : Results.Json(result.Error, statusCode: ToStatusCode(result.Error.Type));
 }).AllowAnonymous().WithTags("Tenancy");
+
+app.MapPost("/api/v1/referral/clicks/{code}", async (string code, ISender sender) =>
+{
+    var result = await sender.Send(new RecordReferralClickCommand(code));
+    return ToCommandHttpResult(result);
+}).AllowAnonymous().WithTags("Referral");
+
+app.MapGet("/api/v1/referral/codes/validate/{code}", async (string code, ISender sender) =>
+{
+    var result = await sender.Send(new ValidateReferralCodeQuery(code));
+    return ToHttpResult(result);
+}).AllowAnonymous().WithTags("Referral");
 
 app.MapGet("/api/v1/tenancy/profile", async (Guid tenantId, ISender sender) =>
 {

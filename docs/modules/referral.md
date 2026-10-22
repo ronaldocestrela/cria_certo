@@ -125,3 +125,24 @@ Livro-razão contábil e imutável para controle de créditos em fatura e comiss
 - **Implementação:** `ReferralDbContext` localizada em `CriaCerto.Modules.Referral.Infrastructure.Persistence`.
 - **Fábrica de Design-Time:** `ReferralDbContextFactory` localizada em `.../Persistence/DesignTimeDbContextFactory.cs`.
 - **Baseline Metadata:** Registrado em `MigrationBaselineMetadata.Referral` para auditoria e controle de integridade da base.
+
+---
+
+## 4. Rastreamento, Captura e Atribuição no Onboarding (Fase 2.1)
+
+### 4.1 Rastreamento do Link de Indicação
+* **Links Amigáveis:** Acesso via `/r/{code}` grava o cookie `cc_referral_code` (expiração de 30 dias, `SameSite=Lax`) e redireciona o lead para `/register?ref={code}`.
+* **Contador de Cliques:** Endpoint `POST /api/v1/referral/clicks/{code}` incrementa o contador `ClicksCount` da entidade `ReferralCode` de forma assíncrona.
+* **Validação Prévia do Código:** Endpoint `GET /api/v1/referral/codes/validate/{code}` permite checagem inline no frontend sobre a validade do código sem expor dados sensíveis do titular (LGPD).
+* **Camada de Cliente (Blazor WASM):** O serviço `IReferralTrackingService` (`ReferralTrackingService`) centraliza a leitura/gravação em `localStorage` e cookies do navegador, com limpeza pós-conclusão da fazenda.
+
+### 4.2 Captura no Onboarding & Evento de Integração Cross-Module
+* **`CreateTenantCommand`:** Campo opcional `ReferralCode`, enriquecido automaticamente com `OriginIpAddress` e `UserAgent` na camada HTTP.
+* **Desacoplamento por Eventos:** Ao concluir o provisionamento do novo tenant no banco, `CreateTenantCommandHandler` publica o evento `TenantRegisteredIntegrationEvent`.
+* **`TenantRegisteredReferralHandler` (`Modules.Referral`):**
+  - Consome o evento via MediatR (`INotificationHandler`).
+  - Localiza o código ativo correspondente.
+  - Bloqueia auto-indicação (caso a fazenda indicada pertença ao mesmo participante cliente, registra atribuição com status `Fraudulent` e motivo de auditoria).
+  - Garante idempotência para evitar duplicidade de atribuição para o mesmo `TenantId`.
+  - Cria o registro em `[referral].[Attributions]` com status inicial `AttributionStatus.Pending`.
+

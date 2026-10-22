@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\BuildingBlocks\CriaCerto.BuildingBlocks.Application\CriaCerto.BuildingBlocks.Application.csproj" />
+    <ProjectReference Include="..\..\Tenancy\CriaCerto.Modules.Tenancy.Application\CriaCerto.Modules.Tenancy.Application.csproj" />
   </ItemGroup>
 
   <ItemGroup>

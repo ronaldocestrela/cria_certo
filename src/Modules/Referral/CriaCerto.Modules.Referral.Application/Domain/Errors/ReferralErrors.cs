@@ -21,6 +21,10 @@ public static class ReferralErrors
 
     public static class Code
     {
+        public static readonly Error NotFound = Error.NotFound(
+            "ReferralCode.NotFound",
+            "O código de indicação especificado não foi encontrado.");
+
         public static readonly Error InvalidFormat = Error.Validation(
             "ReferralCode.InvalidFormat",
             "O código de indicação deve possuir ao menos 3 caracteres alfanuméricos válidos.");

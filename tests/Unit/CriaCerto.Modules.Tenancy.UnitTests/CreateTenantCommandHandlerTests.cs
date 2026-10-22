@@ -6,6 +6,7 @@ using CriaCerto.Modules.Tenancy.Infrastructure.Persistence;
 using FluentAssertions;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using NSubstitute;
 
 namespace CriaCerto.Modules.Tenancy.UnitTests;
 
@@ -240,6 +241,55 @@ public class CreateTenantCommandHandlerTests : IDisposable
         result.IsFailure.Should().BeTrue();
         result.Error.Type.Should().Be(ErrorType.NotFound);
         result.Error.Code.Should().Be("User.NotFound");
+    }
+
+    [Fact]
+    public async Task Handle_Should_Publish_TenantRegisteredIntegrationEvent_When_Tenant_Is_Created()
+    {
+        // Arrange
+        var user = new User
+        {
+            Id = Guid.NewGuid(),
+            FullName = "Produtor Indicado",
+            Email = "indicado@fazenda.com.br",
+            PasswordHash = "hash"
+        };
+        _dbContext.Users.Add(user);
+        await _dbContext.SaveChangesAsync();
+
+        var publisher = NSubstitute.Substitute.For<MediatR.IPublisher>();
+        var handler = new CreateTenantCommandHandler(_dbContext, _jwtService, new NoOpTenantDatabaseProvisioner(), publisher);
+
+        var command = new CreateTenantCommand(
+            user.Id,
+            "Fazenda Nova Era",
+            "12.345.678/0001-90",
+            "MS",
+            "Bonito",
+            "12345678",
+            200,
+            "Starter",
+            500,
+            ReferralCode: "AMIGO2026",
+            OriginIpAddress: "200.150.100.50",
+            UserAgent: "Mozilla/5.0 Chrome"
+        );
+
+        // Act
+        var result = await handler.Handle(command, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.Should().BeTrue();
+
+        await publisher.Received(1).Publish(
+            NSubstitute.Arg.Is<CriaCerto.Modules.Tenancy.Application.Events.TenantRegisteredIntegrationEvent>(e =>
+                e.ReferralCode == "AMIGO2026" &&
+                e.UserEmail == "indicado@fazenda.com.br" &&
+                e.OriginIpAddress == "200.150.100.50" &&
+                e.UserAgent == "Mozilla/5.0 Chrome" &&
+                e.TenantId != Guid.Empty),
+            NSubstitute.Arg.Any<CancellationToken>()
+        );
     }
 
     private sealed class TestJwtService : IJwtService
