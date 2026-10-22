@@ -100,6 +100,18 @@ public static class ReferralErrors
         public static readonly Error InvalidStateTransition = Error.Conflict(
             "ReferralRewardLedger.InvalidStateTransition",
             "A transição de status solicitada é inválida para o estado atual do lançamento.");
+
+        public static readonly Error TransactionReferenceRequired = Error.Validation(
+            "ReferralRewardLedger.TransactionReferenceRequired",
+            "O código ou identificador de transação bancária / Pix é obrigatório para registrar a baixa.");
+
+        public static readonly Error ReceiptRequired = Error.Validation(
+            "ReferralRewardLedger.ReceiptRequired",
+            "O arquivo de comprovante de pagamento é obrigatório para registrar a baixa.");
+
+        public static readonly Error NotFound = Error.NotFound(
+            "ReferralRewardLedger.NotFound",
+            "O lançamento de comissão especificado não foi encontrado no livro-razão.");
     }
 
     public static class PartnerProfile
@@ -135,6 +147,44 @@ public static class ReferralErrors
         public static readonly Error NotFound = Error.NotFound(
             "CommercialPartnerProfile.NotFound",
             "O perfil do parceiro comercial não foi encontrado.");
+    }
+
+    public static class Receipt
+    {
+        public static readonly Error EmptyFile = Error.Validation(
+            "PayoutReceipt.EmptyFile",
+            "O arquivo de comprovante não possui conteúdo.");
+
+        public static readonly Error FileTooLarge = Error.Validation(
+            "PayoutReceipt.FileTooLarge",
+            "O arquivo de comprovante não pode exceder 5 MB.");
+
+        public static readonly Error InvalidExtension = Error.Validation(
+            "PayoutReceipt.InvalidExtension",
+            "Apenas arquivos PDF, PNG ou JPG/JPEG são permitidos como comprovante.");
+
+        public static readonly Error FileNotFound = Error.NotFound(
+            "PayoutReceipt.NotFound",
+            "O arquivo do comprovante não foi encontrado no armazenamento.");
+
+        public static readonly Error InvalidPath = Error.Validation(
+            "PayoutReceipt.InvalidPath",
+            "Caminho de arquivo inválido ou tentativa de acesso não autorizada.");
+    }
+
+    public static class PayoutBatch
+    {
+        public static readonly Error NoCommissionsSelected = Error.Validation(
+            "PayoutBatch.NoCommissionsSelected",
+            "Ao menos uma comissão liberada deve ser selecionada para efetuar a baixa.");
+
+        public static readonly Error PartnerNotFound = Error.NotFound(
+            "PayoutBatch.PartnerNotFound",
+            "O parceiro comercial informado não foi encontrado.");
+
+        public static readonly Error InvalidCommissionEntry = Error.Conflict(
+            "PayoutBatch.InvalidCommissionEntry",
+            "Uma ou mais comissões informadas não pertencem ao parceiro ou não estão disponíveis para pagamento.");
     }
 }
 

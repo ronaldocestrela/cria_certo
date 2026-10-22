@@ -171,11 +171,13 @@ flowchart TD
 - [x] Governança Dual-Control (4-Eyes): propostas de reajuste de comissão submetidas como `AdminApprovalRequest` exigindo aprovação de outro administrador antes de atualizar vigência contratual.
 - [x] Mascaramento de dados sensíveis (LGPD) no frontend com o componente `<MaskedDataField>` e trilha de auditoria forense com hash encadeado SHA-256.
 
-#### 3.2 Painel Financeiro de Comissões e Repasses
-- Grid de comissões pendentes de maturação (período de carência D+30).
-- Grid de comissões liberadas para pagamento.
-- Botão de ação "Efetuar Baixa / Registrar Repasse" com upload de comprovante ou inserção de código de transação bancária.
-- Exportação de lista de pagamentos em formato CSV/Excel/CNAB para lote Pix.
+#### 3.2 Painel Financeiro de Comissões e Repasses [CONCLUÍDO]
+- [x] Dashboard financeiro no Backoffice (`/backoffice/referral/payouts`) com KPIs em tempo real (retido em carência, liberado para repasse e total pago no mês).
+- [x] Grid de comissões pendentes de maturação com contagem regressiva visual do período de carência D+30 e ação de cancelamento com justificativa auditada.
+- [x] Grid consolidado por Parceiro Comercial com drill-down (accordion) das comissões liberadas para pagamento.
+- [x] Modal e fluxo de "Efetuar Baixa / Registrar Repasse" com upload obrigatório de comprovante em armazenamento local protegido e inserção de código/NSU/Pix End-to-End.
+- [x] Exportação de lista de pagamentos em formato CSV padronizado com delimitador `;`, encoding UTF-8 com BOM e campos Pix para conciliação bancária em lote.
+- [x] Trilha de auditoria forense com encadeamento de hash SHA-256 e proteção LGPD nativa com `<MaskedDataField>`.
 
 #### 3.3 Configuração de Descontos por Plano
 - Tela administrativa para calibrar os descontos concedidos aos clientes:

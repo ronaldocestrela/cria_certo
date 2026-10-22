@@ -19,6 +19,7 @@ using CriaCerto.Modules.Backoffice.Application.Features.Compliance.Dtos;
 using CriaCerto.Modules.Referral.Application.Domain.Enums;
 using CriaCerto.Modules.Referral.Application.Features.CommercialPartners.Dtos;
 using CriaCerto.Modules.Referral.Application.Features.CommercialPartners.Queries;
+using CriaCerto.Modules.Referral.Application.Features.Payouts.Dtos;
 using CriaCerto.Web.Client.Models;
 using Microsoft.JSInterop;
 
@@ -176,6 +177,22 @@ public interface IBackofficeApiClient
     Task<bool> ProposePartnerContractChangeAsync(Guid id, ProposeContractChangeRequest request, CancellationToken cancellationToken = default);
     Task<bool> SuspendCommercialPartnerAsync(Guid id, string reason, CancellationToken cancellationToken = default);
     Task<bool> ReactivateCommercialPartnerAsync(Guid id, CancellationToken cancellationToken = default);
+
+    // Referral Payouts & Commissions
+    Task<PayoutDashboardKpiDto?> GetPayoutDashboardKpisAsync(CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<PendingMaturityCommissionDto>?> GetPendingMaturityCommissionsAsync(string? search = null, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<AvailablePartnerPayoutDto>?> GetAvailablePartnerPayoutsAsync(string? search = null, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<PayoutHistoryDto>?> GetPayoutHistoryAsync(string? search = null, int page = 1, int pageSize = 50, CancellationToken cancellationToken = default);
+    Task<Result<int>> RegisterPartnerPayoutBatchAsync(
+        Guid partnerParticipantId,
+        IReadOnlyList<Guid> ledgerIds,
+        string transactionReference,
+        Stream receiptStream,
+        string fileName,
+        string contentType,
+        CancellationToken cancellationToken = default);
+    Task<Result> CancelCommissionLedgerEntryAsync(Guid ledgerId, string reason, CancellationToken cancellationToken = default);
+    Task<ExportTenantsResult> ExportPixBatchCsvAsync(IReadOnlyList<Guid>? participantIds = null, CancellationToken cancellationToken = default);
 }
 
 
@@ -1128,6 +1145,110 @@ public class BackofficeApiClient : IBackofficeApiClient
         await AttachTokenAsync();
         var response = await _httpClient.PostAsync($"api/v1/backoffice/partners/{id}/reactivate", null, cancellationToken);
         return response.IsSuccessStatusCode;
+    }
+
+    public async Task<PayoutDashboardKpiDto?> GetPayoutDashboardKpisAsync(CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.GetAsync("api/v1/backoffice/referral/payouts/kpis", cancellationToken);
+        if (!response.IsSuccessStatusCode) return null;
+        return await response.Content.ReadFromJsonAsync<PayoutDashboardKpiDto>(cancellationToken: cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<PendingMaturityCommissionDto>?> GetPendingMaturityCommissionsAsync(string? search = null, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var url = "api/v1/backoffice/referral/payouts/pending";
+        if (!string.IsNullOrWhiteSpace(search)) url += $"?search={Uri.EscapeDataString(search)}";
+        var response = await _httpClient.GetAsync(url, cancellationToken);
+        if (!response.IsSuccessStatusCode) return null;
+        return await response.Content.ReadFromJsonAsync<List<PendingMaturityCommissionDto>>(cancellationToken: cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<AvailablePartnerPayoutDto>?> GetAvailablePartnerPayoutsAsync(string? search = null, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var url = "api/v1/backoffice/referral/payouts/available";
+        if (!string.IsNullOrWhiteSpace(search)) url += $"?search={Uri.EscapeDataString(search)}";
+        var response = await _httpClient.GetAsync(url, cancellationToken);
+        if (!response.IsSuccessStatusCode) return null;
+        return await response.Content.ReadFromJsonAsync<List<AvailablePartnerPayoutDto>>(cancellationToken: cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<PayoutHistoryDto>?> GetPayoutHistoryAsync(string? search = null, int page = 1, int pageSize = 50, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var url = $"api/v1/backoffice/referral/payouts/history?page={page}&pageSize={pageSize}";
+        if (!string.IsNullOrWhiteSpace(search)) url += $"&search={Uri.EscapeDataString(search)}";
+        var response = await _httpClient.GetAsync(url, cancellationToken);
+        if (!response.IsSuccessStatusCode) return null;
+        return await response.Content.ReadFromJsonAsync<List<PayoutHistoryDto>>(cancellationToken: cancellationToken);
+    }
+
+    public async Task<Result<int>> RegisterPartnerPayoutBatchAsync(
+        Guid partnerParticipantId,
+        IReadOnlyList<Guid> ledgerIds,
+        string transactionReference,
+        Stream receiptStream,
+        string fileName,
+        string contentType,
+        CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        using var content = new MultipartFormDataContent();
+        content.Add(new StringContent(partnerParticipantId.ToString()), "partnerParticipantId");
+        content.Add(new StringContent(System.Text.Json.JsonSerializer.Serialize(ledgerIds)), "ledgerIds");
+        content.Add(new StringContent(transactionReference), "transactionReference");
+
+        var streamContent = new StreamContent(receiptStream);
+        streamContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
+        content.Add(streamContent, "receiptFile", fileName);
+
+        var response = await _httpClient.PostAsync("api/v1/backoffice/referral/payouts/batch-payout", content, cancellationToken);
+        if (response.IsSuccessStatusCode)
+        {
+            var count = await response.Content.ReadFromJsonAsync<int>(cancellationToken: cancellationToken);
+            return Result.Success(count);
+        }
+
+        var error = await response.Content.ReadFromJsonAsync<Error>(cancellationToken: cancellationToken);
+        return Result.Failure<int>(error ?? Error.Failure("Payout.RegisterError", "Erro ao registrar repasse financeiro."));
+    }
+
+    public async Task<Result> CancelCommissionLedgerEntryAsync(Guid ledgerId, string reason, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.PostAsJsonAsync($"api/v1/backoffice/referral/payouts/{ledgerId}/cancel", new { Reason = reason }, cancellationToken);
+        if (response.IsSuccessStatusCode)
+        {
+            return Result.Success();
+        }
+
+        var error = await response.Content.ReadFromJsonAsync<Error>(cancellationToken: cancellationToken);
+        return Result.Failure(error ?? Error.Failure("Payout.CancelError", "Erro ao cancelar comissão."));
+    }
+
+    public async Task<ExportTenantsResult> ExportPixBatchCsvAsync(IReadOnlyList<Guid>? participantIds = null, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var url = "api/v1/backoffice/referral/payouts/export-csv";
+        if (participantIds != null && participantIds.Count > 0)
+        {
+            url += $"?participantIds={string.Join(",", participantIds)}";
+        }
+
+        var response = await _httpClient.GetAsync(url, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            return new ExportTenantsResult { ErrorMessage = $"Erro ao exportar remessa Pix: {response.StatusCode}" };
+        }
+
+        var bytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
+        var fileName = response.Content.Headers.ContentDisposition?.FileNameStar ??
+                       response.Content.Headers.ContentDisposition?.FileName?.Trim('"') ??
+                       "lote_pix_criacerto.csv";
+
+        return new ExportTenantsResult { Content = bytes, FileName = fileName };
     }
 }
 

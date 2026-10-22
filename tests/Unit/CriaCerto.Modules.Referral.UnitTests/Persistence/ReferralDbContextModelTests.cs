@@ -157,4 +157,47 @@ public sealed class ReferralDbContextModelTests : IDisposable
             savedLedger.GrossAmount.Should().Be(150m);
         }
     }
+
+    [Fact]
+    public async Task CanPersistAndQuery_PayoutFields_InRewardLedger()
+    {
+        using (var context = new ReferralDbContext(_options))
+        {
+            await context.Database.EnsureCreatedAsync();
+
+            var participant = ReferralProgramParticipant.CreateCommercialPartner(Guid.NewGuid()).Value;
+            var code = ReferralCode.Create(participant.Id, "CONSULTOR-AGRO").Value;
+            var attribution = ReferralAttribution.Create(code.Id, participant.Id, Guid.NewGuid()).Value;
+
+            context.Participants.Add(participant);
+            context.ReferralCodes.Add(code);
+            context.Attributions.Add(attribution);
+            await context.SaveChangesAsync();
+
+            var ledger = ReferralRewardLedger.CreateCashCommission(
+                attribution.Id,
+                participant.Id,
+                500m,
+                500m,
+                "BRL",
+                DateTime.UtcNow.AddDays(-1)).Value;
+
+            ledger.ReleaseForPayout();
+            var adminId = Guid.NewGuid();
+            ledger.MarkPaidOut("PIX_E2E_123456789", "storage/receipts/rec_1.pdf", adminId);
+
+            context.RewardLedger.Add(ledger);
+            await context.SaveChangesAsync();
+        }
+
+        using (var context = new ReferralDbContext(_options))
+        {
+            var saved = await context.RewardLedger.SingleAsync();
+            saved.Status.Should().Be(LedgerRewardStatus.PaidOut);
+            saved.PayoutTransactionReference.Should().Be("PIX_E2E_123456789");
+            saved.PayoutReceiptFilePath.Should().Be("storage/receipts/rec_1.pdf");
+            saved.PayoutRegisteredByAdminId.Should().NotBeNull();
+            saved.PayoutRegisteredAtUtc.Should().NotBeNull();
+        }
+    }
 }

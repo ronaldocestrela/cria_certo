@@ -25,6 +25,10 @@ public static class DependencyInjection
 
         services.AddScoped<IReferralDbContext>(sp => sp.GetRequiredService<ReferralDbContext>());
 
+        var receiptsDir = configuration["Storage:PayoutReceiptsDirectory"];
+        services.AddSingleton<IPayoutReceiptStorageService>(new Storage.LocalPayoutReceiptStorageService(receiptsDir));
+        services.AddSingleton<Application.Features.Payouts.Services.IPixBatchCsvGenerator, Application.Features.Payouts.Services.PixBatchCsvGenerator>();
+
         return services;
     }
 }

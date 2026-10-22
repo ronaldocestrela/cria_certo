@@ -104,6 +104,7 @@ public class ReferralRewardLedgerTests
     public void MarkPaidOut_WhenAvailableForPayout_ShouldSucceed()
     {
         // Arrange
+        var adminId = Guid.NewGuid();
         var ledger = ReferralRewardLedger.CreateCashCommission(
             Guid.NewGuid(),
             Guid.NewGuid(),
@@ -115,11 +116,37 @@ public class ReferralRewardLedgerTests
         ledger.ReleaseForPayout();
 
         // Act
-        var result = ledger.MarkPaidOut("PIX_E2E_998877665544");
+        var result = ledger.MarkPaidOut("PIX_E2E_998877665544", "receipts/comprovante_123.pdf", adminId);
 
         // Assert
         result.IsSuccess.Should().BeTrue();
         ledger.Status.Should().Be(LedgerRewardStatus.PaidOut);
+        ledger.PayoutTransactionReference.Should().Be("PIX_E2E_998877665544");
+        ledger.PayoutReceiptFilePath.Should().Be("receipts/comprovante_123.pdf");
+        ledger.PayoutRegisteredByAdminId.Should().Be(adminId);
+        ledger.PayoutRegisteredAtUtc.Should().NotBeNull();
+    }
+
+    [Fact]
+    public void MarkPaidOut_WhenTransactionReferenceMissing_ShouldFail()
+    {
+        // Arrange
+        var ledger = ReferralRewardLedger.CreateCashCommission(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            100m,
+            100m,
+            "BRL",
+            DateTime.UtcNow.AddDays(-1)).Value;
+
+        ledger.ReleaseForPayout();
+
+        // Act
+        var result = ledger.MarkPaidOut(string.Empty);
+
+        // Assert
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be(ReferralErrors.Ledger.TransactionReferenceRequired.Code);
     }
 
     [Fact]

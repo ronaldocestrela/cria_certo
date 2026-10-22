@@ -186,4 +186,36 @@ Ao cadastrar um parceiro comercial via `RegisterCommercialPartnerCommand`:
 * **Componentes LGPD**: CPF/CNPJ, e-mail de contato e chave Pix ofuscados por padrão.
 * **Modais Interativos**: Cadastro de parceiro com auto-sugestão de código e validação inline; submissão de alteração de comissão com advertência 4-Olhos; suspensão fundamentada e modal de detalhes com histórico completo de versões contratuais.
 
+---
+
+## 6. Painel Financeiro de Comissões e Repasses no Backoffice (Fase 3.2)
+
+### 6.1 Visão Geral e Governança
+O painel financeiro (`/backoffice/referral/payouts`) centraliza a conciliação bancária, liberação de comissões acumuladas por parceiros e liquidação financeira.
+* **Carência Estrita (D+30)**: As comissões de parceiros comerciais permanecem no status `PendingMaturity` durante os 30 dias de garantia contra estorno ou cancelamento do plano, não sendo permitida antecipação manual.
+* **Governança de Baixa**: Operadores com permissão `referral.payouts.manage` podem efetuar a baixa imediata mediante preenchimento do código de transação bancária / End-to-End Pix e upload compulsório do comprovante. Todas as ações geram log de auditoria forense com hash encadeado SHA-256 (`Category = Financial`, `Severity = High`).
+* **Cancelamento Administrativo**: Permite o estorno de lançamentos em carência com justificativa auditada obrigatória (mínimo 10 caracteres) em casos de chargeback ou suspeita de fraude.
+
+### 6.2 Armazenamento Seguro de Comprovantes
+* **Serviço**: `IPayoutReceiptStorageService` (`LocalPayoutReceiptStorageService`).
+* **Configuração**: Diretório local configurado em `Storage:PayoutReceiptsDirectory` (default `storage/receipts`).
+* **Restrições**: Arquivos limitados a 5 MB com extensões permitidas `.pdf`, `.png`, `.jpg`, `.jpeg`. Nomes sanitizados com GUID único e proteção contra *path traversal*.
+* **Acesso**: Streaming autenticado com RBAC via endpoint `GET /api/v1/backoffice/referral/payouts/receipts/{fileName}`.
+
+### 6.3 Exportação de Lote Pix
+* **Gerador**: `IPixBatchCsvGenerator` (`PixBatchCsvGenerator`).
+* **Formato**: CSV delimitado por ponto e vírgula (`;`), encoding UTF-8 com BOM para compatibilidade com Excel.
+* **Colunas**: `ID_PARTICIPANTE`, `NOME_FAVORECIDO`, `NOME_FANTASIA`, `DOCUMENTO_CPF_CNPJ`, `TIPO_CHAVE_PIX`, `CHAVE_PIX`, `VALOR_LIQUIDO`, `QUANTIDADE_LANCAMENTOS`, `IDENTIFICADOR_REMESSA`.
+
+### 6.4 Endpoints da API REST (`/api/v1/backoffice/referral/payouts`)
+* `GET /api/v1/backoffice/referral/payouts/kpis`: Métricas agregadas (Retido em Carência, Liberado para Repasse e Total Pago no Mês).
+* `GET /api/v1/backoffice/referral/payouts/pending`: Listagem de comissões em carência D+30 com contagem regressiva de dias.
+* `GET /api/v1/backoffice/referral/payouts/available`: Listagem consolidada por parceiro comercial com drill-down das comissões liberadas.
+* `GET /api/v1/backoffice/referral/payouts/history`: Histórico de repasses com link para download do comprovante.
+* `GET /api/v1/backoffice/referral/payouts/export-csv`: Download da planilha de remessa Pix em lote.
+* `GET /api/v1/backoffice/referral/payouts/receipts/{fileName}`: Download/visualização segura do arquivo de comprovante.
+* `POST /api/v1/backoffice/referral/payouts/batch-payout`: Registro de baixa em lote por parceiro (`multipart/form-data`).
+* `POST /api/v1/backoffice/referral/payouts/{id}/cancel`: Cancelamento de comissão com justificativa auditada.
+
+
 

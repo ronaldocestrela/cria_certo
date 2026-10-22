@@ -11,6 +11,9 @@ using CriaCerto.Modules.Referral.Application.Domain.Enums;
 using CriaCerto.Modules.Referral.Application.Features.CommercialPartners.Commands;
 using CriaCerto.Modules.Referral.Application.Features.CommercialPartners.Dtos;
 using CriaCerto.Modules.Referral.Application.Features.CommercialPartners.Queries;
+using CriaCerto.Modules.Referral.Application.Features.Payouts.Commands;
+using CriaCerto.Modules.Referral.Application.Features.Payouts.Dtos;
+using CriaCerto.Modules.Referral.Application.Features.Payouts.Queries;
 using CriaCerto.BuildingBlocks.Application.Features.GetReferenceBreeds;
 using CriaCerto.Api.Seeders;
 using CriaCerto.Modules.Sanitary.Application.Features.GetVaccineCalendar;
@@ -1367,6 +1370,179 @@ backoffice.MapPost("/partners/{id:guid}/reactivate", async (Guid id, HttpContext
 
     return ToCommandHttpResult(result);
 }).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ReferralPartnersManage)).WithTags("Backoffice Referral Partners");
+
+// --- Backoffice Referral Payouts & Commissions ---
+backoffice.MapGet("/referral/payouts/kpis", async (ISender sender) =>
+{
+    var query = new GetPayoutDashboardKpisQuery();
+    var result = await sender.Send(query);
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ReferralPayoutsRead)).WithTags("Backoffice Referral Payouts");
+
+backoffice.MapGet("/referral/payouts/pending", async (string? search, ISender sender) =>
+{
+    var query = new GetPendingMaturityCommissionsQuery(search);
+    var result = await sender.Send(query);
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ReferralPayoutsRead)).WithTags("Backoffice Referral Payouts");
+
+backoffice.MapGet("/referral/payouts/available", async (string? search, ISender sender) =>
+{
+    var query = new GetAvailablePartnerPayoutsQuery(search);
+    var result = await sender.Send(query);
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ReferralPayoutsRead)).WithTags("Backoffice Referral Payouts");
+
+backoffice.MapGet("/referral/payouts/history", async (string? search, int? page, int? pageSize, ISender sender) =>
+{
+    var query = new GetPayoutHistoryQuery(search, page ?? 1, pageSize ?? 50);
+    var result = await sender.Send(query);
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ReferralPayoutsRead)).WithTags("Backoffice Referral Payouts");
+
+backoffice.MapGet("/referral/payouts/export-csv", async (string? participantIds, ISender sender) =>
+{
+    IReadOnlyList<Guid>? parsedIds = null;
+    if (!string.IsNullOrWhiteSpace(participantIds))
+    {
+        parsedIds = participantIds.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(id => Guid.TryParse(id, out var g) ? g : Guid.Empty)
+            .Where(g => g != Guid.Empty)
+            .ToList();
+    }
+
+    var query = new ExportPixBatchCsvQuery(parsedIds);
+    var result = await sender.Send(query);
+
+    if (result.IsFailure)
+    {
+        return ToHttpResult(result);
+    }
+
+    return Results.File(result.Value.FileBytes, result.Value.ContentType, result.Value.FileName);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ReferralPayoutsExport)).WithTags("Backoffice Referral Payouts");
+
+backoffice.MapGet("/referral/payouts/receipts/{fileName}", async (string fileName, ISender sender) =>
+{
+    var query = new GetPayoutReceiptFileQuery(fileName);
+    var result = await sender.Send(query);
+
+    if (result.IsFailure)
+    {
+        return ToHttpResult(result);
+    }
+
+    return Results.File(result.Value.Stream, result.Value.ContentType, result.Value.DownloadFileName);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ReferralPayoutsRead)).WithTags("Backoffice Referral Payouts");
+
+backoffice.MapPost("/referral/payouts/batch-payout", async (
+    HttpRequest request,
+    HttpContext ctx,
+    ISender sender,
+    DbContext dbContext) =>
+{
+    var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+
+    if (!request.HasFormContentType)
+    {
+        return Results.BadRequest(new { code = "PayoutBatch.InvalidContentType", message = "Requisição multipart/form-data esperada." });
+    }
+
+    var form = await request.ReadFormAsync();
+    var receiptFile = form.Files.GetFile("receiptFile");
+    if (receiptFile is null || receiptFile.Length == 0)
+    {
+        return Results.BadRequest(new { code = "PayoutReceipt.EmptyFile", message = "O arquivo de comprovante não possui conteúdo." });
+    }
+
+    var partnerIdStr = form["partnerParticipantId"].ToString();
+    if (!Guid.TryParse(partnerIdStr, out var partnerParticipantId))
+    {
+        return Results.BadRequest(new { code = "PayoutBatch.PartnerRequired", message = "ID do parceiro comercial inválido." });
+    }
+
+    var transactionReference = form["transactionReference"].ToString();
+    var ledgerIdsStr = form["ledgerIds"].ToString();
+
+    IReadOnlyList<Guid> parsedLedgerIds;
+    try
+    {
+        parsedLedgerIds = JsonSerializer.Deserialize<List<Guid>>(ledgerIdsStr) ?? new List<Guid>();
+    }
+    catch
+    {
+        parsedLedgerIds = ledgerIdsStr.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(id => Guid.TryParse(id, out var g) ? g : Guid.Empty)
+            .Where(g => g != Guid.Empty)
+            .ToList();
+    }
+
+    await using var stream = receiptFile.OpenReadStream();
+
+    var command = new RegisterPartnerPayoutBatchCommand(
+        partnerParticipantId,
+        parsedLedgerIds,
+        transactionReference,
+        stream,
+        receiptFile.FileName,
+        receiptFile.ContentType,
+        callerId
+    );
+
+    var result = await sender.Send(command);
+
+    if (result.IsSuccess)
+    {
+        var audit = AuditLog.Create(
+            callerId,
+            callerEmail,
+            "Referral.PayoutBatchRegistered",
+            $"Partner/{partnerParticipantId}",
+            ip,
+            JsonSerializer.Serialize(new
+            {
+                PartnerParticipantId = partnerParticipantId,
+                CommissionsCount = result.Value,
+                TransactionReference = transactionReference,
+                ReceiptFileName = receiptFile.FileName
+            }));
+
+        dbContext.Set<AuditLog>().Add(audit);
+        await dbContext.SaveChangesAsync();
+    }
+
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ReferralPayoutsManage))
+  .DisableAntiforgery()
+  .WithTags("Backoffice Referral Payouts");
+
+backoffice.MapPost("/referral/payouts/{id:guid}/cancel", async (
+    Guid id,
+    CancelCommissionLedgerEntryRequest req,
+    HttpContext ctx,
+    ISender sender,
+    DbContext dbContext) =>
+{
+    var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var command = new CancelCommissionLedgerEntryCommand(id, req.Reason, callerId);
+    var result = await sender.Send(command);
+
+    if (result.IsSuccess)
+    {
+        var audit = AuditLog.Create(
+            callerId,
+            callerEmail,
+            "Referral.CommissionCancelled",
+            $"Ledger/{id}",
+            ip,
+            JsonSerializer.Serialize(new { LedgerId = id, Reason = req.Reason }));
+
+        dbContext.Set<AuditLog>().Add(audit);
+        await dbContext.SaveChangesAsync();
+    }
+
+    return ToCommandHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ReferralPayoutsManage)).WithTags("Backoffice Referral Payouts");
 
 // Backoffice Auth Endpoints (Anonymous / Credentials + MFA)
 app.MapPost("/api/v1/backoffice/auth/login", async (BackofficeLoginRequest req, HttpContext ctx, ISender sender) =>

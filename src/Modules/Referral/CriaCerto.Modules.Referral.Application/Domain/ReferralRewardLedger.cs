@@ -18,6 +18,9 @@ public sealed class ReferralRewardLedger
     public string? StripeInvoiceId { get; private set; }
     public string? StripeCreditBalanceTransactionId { get; private set; }
     public string? PayoutTransactionReference { get; private set; }
+    public string? PayoutReceiptFilePath { get; private set; }
+    public DateTime? PayoutRegisteredAtUtc { get; private set; }
+    public Guid? PayoutRegisteredByAdminId { get; private set; }
     public string? CancellationReason { get; private set; }
     public DateTime CreatedAtUtc { get; private set; }
     public DateTime? UpdatedAtUtc { get; private set; }
@@ -117,13 +120,23 @@ public sealed class ReferralRewardLedger
         return Result.Success();
     }
 
-    public Result MarkPaidOut(string transactionReference)
+    public Result MarkPaidOut(
+        string transactionReference,
+        string? receiptFilePath = null,
+        Guid? registeredByAdminId = null,
+        DateTime? registeredAtUtc = null)
     {
         if (Status != LedgerRewardStatus.AvailableForPayout)
             return Result.Failure(ReferralErrors.Ledger.InvalidStateTransition);
 
+        if (string.IsNullOrWhiteSpace(transactionReference))
+            return Result.Failure(ReferralErrors.Ledger.TransactionReferenceRequired);
+
         Status = LedgerRewardStatus.PaidOut;
-        PayoutTransactionReference = transactionReference;
+        PayoutTransactionReference = transactionReference.Trim();
+        PayoutReceiptFilePath = receiptFilePath?.Trim();
+        PayoutRegisteredByAdminId = registeredByAdminId;
+        PayoutRegisteredAtUtc = registeredAtUtc ?? DateTime.UtcNow;
         UpdatedAtUtc = DateTime.UtcNow;
 
         return Result.Success();

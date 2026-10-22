@@ -46,6 +46,12 @@ public class BackofficeRolePermissionMatrixTests
     [InlineData(BackofficeRoles.ReadOnlyAuditor, BackofficePermissions.TenantsRead, true)]
     [InlineData(BackofficeRoles.ReadOnlyAuditor, BackofficePermissions.SupportRemediate, false)]
     [InlineData(BackofficeRoles.ReadOnlyAuditor, BackofficePermissions.TenantsWrite, false)]
+    [InlineData(BackofficeRoles.FinanceOps, BackofficePermissions.ReferralPayoutsRead, true)]
+    [InlineData(BackofficeRoles.FinanceOps, BackofficePermissions.ReferralPayoutsManage, true)]
+    [InlineData(BackofficeRoles.FinanceOps, BackofficePermissions.ReferralPayoutsExport, true)]
+    [InlineData(BackofficeRoles.ReadOnlyAuditor, BackofficePermissions.ReferralPayoutsRead, true)]
+    [InlineData(BackofficeRoles.ReadOnlyAuditor, BackofficePermissions.ReferralPayoutsManage, false)]
+    [InlineData(BackofficeRoles.SupportN1, BackofficePermissions.ReferralPayoutsManage, false)]
     public void HasPermission_RolePermissionMatrix_ShouldEvaluateCorrectly(string role, string permission, bool expectedResult)
     {
         // Arrange

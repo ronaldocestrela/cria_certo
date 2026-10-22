@@ -380,6 +380,16 @@ namespace CriaCerto.Modules.Referral.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("ParticipantId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("PayoutReceiptFilePath")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime?>("PayoutRegisteredAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("PayoutRegisteredByAdminId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<string>("PayoutTransactionReference")
                         .HasMaxLength(150)
                         .HasColumnType("nvarchar(150)");

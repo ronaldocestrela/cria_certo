@@ -309,6 +309,13 @@ public class ReferralDbContext : DbContext, IReferralDbContext
             builder.Property(l => l.PayoutTransactionReference)
                 .HasMaxLength(150);
 
+            builder.Property(l => l.PayoutReceiptFilePath)
+                .HasMaxLength(500);
+
+            builder.Property(l => l.PayoutRegisteredAtUtc);
+
+            builder.Property(l => l.PayoutRegisteredByAdminId);
+
             builder.Property(l => l.CancellationReason)
                 .HasMaxLength(500);
 
