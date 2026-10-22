@@ -50,6 +50,11 @@ public static class MigrationBaselineMetadata
         "20260813173548_InitialCreate",
         ["treatment_records", "vaccination_campaigns", "vaccine_references"]);
 
+    public static readonly MigrationBaselineModule Referral = new(
+        "referral",
+        "20261022010840_Initial_ReferralModule",
+        ["Participants", "ReferralCodes", "PartnerContracts", "PlanDiscountPolicies", "Attributions", "RewardLedger"]);
+
     public static IReadOnlyList<MigrationBaselineModule> MasterModules { get; } =
     [
         Foundation,
@@ -59,7 +64,8 @@ public static class MigrationBaselineMetadata
         Calving,
         Growth,
         Nutrition,
-        Sanitary
+        Sanitary,
+        Referral
     ];
 
     public static IReadOnlyList<MigrationBaselineModule> TenantModules { get; } =

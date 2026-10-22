@@ -31,6 +31,7 @@
     <ProjectReference Include="..\..\Modules\Backoffice\CriaCerto.Modules.Backoffice.Application\CriaCerto.Modules.Backoffice.Application.csproj" />
     <ProjectReference Include="..\..\Modules\Backoffice\CriaCerto.Modules.Backoffice.Infrastructure\CriaCerto.Modules.Backoffice.Infrastructure.csproj" />
     <ProjectReference Include="..\..\Modules\Referral\CriaCerto.Modules.Referral.Application\CriaCerto.Modules.Referral.Application.csproj" />
+    <ProjectReference Include="..\..\Modules\Referral\CriaCerto.Modules.Referral.Infrastructure\CriaCerto.Modules.Referral.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

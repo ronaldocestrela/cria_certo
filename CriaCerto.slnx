@@ -43,6 +43,7 @@
   </Folder>
   <Folder Name="/src/Modules/Referral/">
     <Project Path="src/Modules/Referral/CriaCerto.Modules.Referral.Application/CriaCerto.Modules.Referral.Application.csproj" />
+    <Project Path="src/Modules/Referral/CriaCerto.Modules.Referral.Infrastructure/CriaCerto.Modules.Referral.Infrastructure.csproj" />
   </Folder>
   <Folder Name="/src/Web/" />
   <Folder Name="/src/Web/CriaCerto.Web/">

@@ -110,6 +110,9 @@ using CriaCerto.Modules.Backoffice.Application.Features.Rollout.Dtos;
 using CriaCerto.Modules.Backoffice.Application.Security;
 using CriaCerto.Modules.Backoffice.Infrastructure;
 using CriaCerto.Modules.Backoffice.Infrastructure.Persistence;
+using CriaCerto.Modules.Referral.Application;
+using CriaCerto.Modules.Referral.Infrastructure;
+using CriaCerto.Modules.Referral.Infrastructure.Persistence;
 using CriaCerto.Api.Configuration;
 
 DotEnvLoader.Load();
@@ -139,7 +142,8 @@ builder.Services.AddBuildingBlocksApplication(
     typeof(VaccinationCampaignDto).Assembly,
     typeof(ExecutiveScorecardDto).Assembly,
     typeof(TenancyAssemblyMarker).Assembly,
-    typeof(BackofficeAssemblyMarker).Assembly);
+    typeof(BackofficeAssemblyMarker).Assembly,
+    typeof(ReferralAssemblyMarker).Assembly);
 
 var connectionString = builder.Configuration.GetConnectionString("SqlServer")
     ?? builder.Configuration.GetConnectionString("DefaultConnection")
@@ -155,6 +159,7 @@ builder.Services.AddGrowthInfrastructure();
 builder.Services.AddNutritionInfrastructure();
 builder.Services.AddSanitaryModule(builder.Configuration);
 builder.Services.AddBackofficeInfrastructure(builder.Configuration);
+builder.Services.AddReferralInfrastructure(builder.Configuration);
 
 // Background Services
 builder.Services.AddHostedService<SubscriptionLifecycleWorker>();
@@ -1845,7 +1850,8 @@ static void ApplyMigrations(WebApplication app)
         scope.ServiceProvider.GetRequiredService<GrowthDbContext>(),
         scope.ServiceProvider.GetRequiredService<NutritionDbContext>(),
         scope.ServiceProvider.GetRequiredService<SanitaryDbContext>(),
-        scope.ServiceProvider.GetRequiredService<BackofficeDbContext>()
+        scope.ServiceProvider.GetRequiredService<BackofficeDbContext>(),
+        scope.ServiceProvider.GetRequiredService<ReferralDbContext>()
     };
 
     foreach (var dbContext in dbContexts)

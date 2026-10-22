@@ -121,8 +121,15 @@ flowchart TD
 - **`ReferralRewardLedger`**:
   - `Id`, `ReferralAttributionId`, `ParticipantId`, `RewardType` (`InvoiceDiscountCredit`, `CashCommission`), `GrossAmount`, `NetAmount`, `Currency` (BRL), `Status` (`PendingMaturity`, `AvailableForPayout`, `AppliedToInvoice`, `PaidOut`, `Cancelled`), `MaturityDateUtc`, `StripeInvoiceId`, `StripeCreditBalanceTransactionId`, `CancellationReason` (string?, para cancelamentos de cobrança/estorno), `CreatedAtUtc`.
 
-#### 1.2 Migrações e Contexto EF Core
-- Criação das tabelas no contexto de dados com chaves estrangeiras, índices de busca rápida (`Code`, `ReferredTenantId`) e soft delete se aplicável.
+#### 1.2 Migrações e Contexto EF Core [CONCLUÍDO]
+- [x] Criação de `IReferralDbContext` na camada de aplicação (`CriaCerto.Modules.Referral.Application.Abstractions`).
+- [x] Criação do projeto de infraestrutura `CriaCerto.Modules.Referral.Infrastructure` integrado à solução e ao host API.
+- [x] Criação de `ReferralDbContext` com schema isolado `referral`, chaves primárias, chaves estrangeiras internas, mapeamentos fluentes e índices de busca rápida (`Code` [Unique], `ReferredTenantId`, `ReferralCodeId`, `ParticipantId`, `Status`, `MaturityDateUtc`).
+- [x] Configuração de fábrica de tempo de design `ReferralDbContextFactory` e metadados de baseline em `MigrationBaselineMetadata.Referral`.
+- [x] Geração e validação da migração inicial do EF Core `20261022010840_Initial_ReferralModule` no schema `referral`.
+- [x] Testes unitários de mapeamento e ciclo de vida de persistência via SQLite em memória (`ReferralDbContextModelTests`) com 100% de sucesso.
+- [x] Registro da migração do contexto na inicialização do host API (`ApplyMigrations`).
+- [x] Criação da documentação arquitetural do módulo em `docs/modules/referral.md`.
 
 ---
 

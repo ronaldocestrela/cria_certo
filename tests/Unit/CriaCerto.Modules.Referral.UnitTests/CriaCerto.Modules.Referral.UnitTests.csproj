@@ -22,6 +22,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\src\Modules\Referral\CriaCerto.Modules.Referral.Application\CriaCerto.Modules.Referral.Application.csproj" />
+    <ProjectReference Include="..\..\..\src\Modules\Referral\CriaCerto.Modules.Referral.Infrastructure\CriaCerto.Modules.Referral.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>
