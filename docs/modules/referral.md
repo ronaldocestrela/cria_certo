@@ -174,7 +174,9 @@ Ao cadastrar um parceiro comercial via `RegisterCommercialPartnerCommand`:
 * `GET /api/v1/backoffice/partners`: Listagem paginada com busca textual, filtro por status e tipo de comissão.
 * `GET /api/v1/backoffice/partners/{id}`: Detalhes completos do parceiro, perfil, contratos vigentes/anteriores e KPIs de conversão.
 * `GET /api/v1/backoffice/partners/suggest-code?name={name}&tradeName={tradeName}`: Sugestor de slug amigável e normalizado para link de indicação.
-* `POST /api/v1/backoffice/partners`: Cadastro de novo parceiro comercial com contrato inicial e convite por e-mail.
+* `POST /api/v1/backoffice/partners`: Cadastro de novo parceiro comercial com contrato inicial e provisionamento de acesso seguro:
+  * **Novo usuário**: Criação da conta com senha temporária legível (`CriaCerto#XXXXXX`), tokens de ativação e de definição de senha (7 dias de TTL) e disparo de e-mail transacional via Resend (`IEmailSender`) contendo o link de indicação (`/r/{code}`), credenciais provisórias, botão de ativação rápida (`/confirm-email`) e atalho direto para criar senha própria (`/forgot-password?email=...&token=...`).
+  * **Usuário pré-existente**: Vinculação associativa com preservação de hash de senha original e envio de e-mail de boas-vindas com orientações de acesso ao Portal do Parceiro com as credenciais habituais.
 * `PUT /api/v1/backoffice/partners/{id}`: Atualização cadastral do perfil do parceiro.
 * `POST /api/v1/backoffice/partners/{id}/propose-contract-change`: Submissão de proposta de ajuste de comissão para aprovação 4-Olhos.
 * `POST /api/v1/backoffice/partners/{id}/suspend`: Suspensão de parceiro com justificativa auditada.
