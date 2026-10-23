@@ -113,6 +113,8 @@ public sealed class TenantRegisteredReferralHandler : INotificationHandler<Tenan
                         detailsJson: auditDetails,
                         cancellationToken: cancellationToken);
                 }
+
+                Referral.Application.Telemetry.ReferralTelemetry.RecordAttribution(participant.ParticipantType.ToString(), "Fraudulent");
             }
             return;
         }
@@ -127,6 +129,7 @@ public sealed class TenantRegisteredReferralHandler : INotificationHandler<Tenan
         if (attributionResult.IsSuccess)
         {
             _dbContext.Attributions.Add(attributionResult.Value);
+            Referral.Application.Telemetry.ReferralTelemetry.RecordAttribution(participant.ParticipantType.ToString(), "Pending");
             await _dbContext.SaveChangesAsync(cancellationToken);
 
             _logger?.LogInformation("Atribuição de indicação criada com sucesso para Tenant {TenantId} (Status: Pending, Código: '{ReferralCode}').",

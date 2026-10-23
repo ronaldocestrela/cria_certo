@@ -261,5 +261,17 @@ public sealed class PartnerPortalTests : IDisposable
 
             return Task.FromResult<IReadOnlyDictionary<Guid, TenantSummaryDto>>(dict);
         }
+
+        public Task<int> GetActiveTenantsCountAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(_tenants.Count);
+        }
+
+        public Task<TenantsRetentionMetricsDto> GetTenantsRetentionMetricsAsync(
+            IEnumerable<Guid> referredTenantIds,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new TenantsRetentionMetricsDto(100, 80, 90.0m, 82.0m));
+        }
     }
 }

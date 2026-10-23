@@ -40,6 +40,12 @@ public sealed class RecordReferralClickCommandHandler : IRequestHandler<RecordRe
             return clickResult;
         }
 
+        var participant = await _dbContext.Participants
+            .FirstOrDefaultAsync(p => p.Id == referralCode.ParticipantId, cancellationToken);
+        var channel = participant?.ParticipantType.ToString() ?? "Unknown";
+
+        Referral.Application.Telemetry.ReferralTelemetry.RecordClick(channel, referralCode.Code);
+
         await _dbContext.SaveChangesAsync(cancellationToken);
         return Result.Success();
     }

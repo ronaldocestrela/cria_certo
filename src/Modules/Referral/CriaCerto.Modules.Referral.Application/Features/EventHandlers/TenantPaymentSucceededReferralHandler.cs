@@ -115,6 +115,7 @@ public sealed class TenantPaymentSucceededReferralHandler : INotificationHandler
                             cancellationToken: cancellationToken);
                     }
 
+                    Referral.Application.Telemetry.ReferralTelemetry.RecordAttribution(participant.ParticipantType.ToString(), "Fraudulent");
                     return;
                 }
             }
@@ -128,6 +129,8 @@ public sealed class TenantPaymentSucceededReferralHandler : INotificationHandler
                 attribution.Id, conversionResult.Error.Message);
             return;
         }
+
+        Referral.Application.Telemetry.ReferralTelemetry.RecordAttribution(participant.ParticipantType.ToString(), "Converted");
 
         // 3. Emissão da Recompensa correspondente
         if (participant.ParticipantType == ParticipantType.CommercialPartner)
@@ -162,6 +165,7 @@ public sealed class TenantPaymentSucceededReferralHandler : INotificationHandler
                     if (ledgerResult.IsSuccess)
                     {
                         _dbContext.RewardLedger.Add(ledgerResult.Value);
+                        Referral.Application.Telemetry.ReferralTelemetry.RecordReward("CashCommission", (double)commissionAmount, notification.Currency);
                         _logger?.LogInformation("Comissão de R$ {Amount} gerada em PendingMaturity para Parceiro {ParticipantId} (Atribuição {AttributionId}).",
                             commissionAmount, participant.Id, attribution.Id);
                     }
@@ -196,6 +200,7 @@ public sealed class TenantPaymentSucceededReferralHandler : INotificationHandler
                         if (creditResult.IsSuccess)
                         {
                             _dbContext.RewardLedger.Add(creditResult.Value);
+                            Referral.Application.Telemetry.ReferralTelemetry.RecordReward("InvoiceDiscountCredit", (double)creditResult.Value.GrossAmount, notification.Currency);
                             _logger?.LogInformation("Crédito de desconto de R$ {Amount} gerado para Produtor {ParticipantId} (Atribuição {AttributionId}).",
                                 discountAmount, participant.Id, attribution.Id);
                         }

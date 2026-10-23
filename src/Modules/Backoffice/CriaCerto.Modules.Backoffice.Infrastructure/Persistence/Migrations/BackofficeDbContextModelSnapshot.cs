@@ -690,6 +690,49 @@ namespace CriaCerto.Modules.Backoffice.Infrastructure.Persistence.Migrations
                     b.ToTable("ImpersonationSessions", "backoffice");
                 });
 
+            modelBuilder.Entity("CriaCerto.Modules.Backoffice.Application.Domain.Entities.PaidMediaSpend", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("AcquisitionsCount")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("Channel")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("CreatedByAdminId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime>("PeriodEndDateUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("PeriodStartDateUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Channel");
+
+                    b.HasIndex("PeriodStartDateUtc", "PeriodEndDateUtc");
+
+                    b.ToTable("PaidMediaSpends", "backoffice");
+                });
+
             modelBuilder.Entity("CriaCerto.Modules.Backoffice.Application.Domain.Entities.Permission", b =>
                 {
                     b.Property<Guid>("Id")

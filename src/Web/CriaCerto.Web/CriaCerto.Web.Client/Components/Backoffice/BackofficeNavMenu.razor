@@ -41,6 +41,12 @@
                 <span class="nav-icon">🏷️</span> Descontos por Plano
             </NavLink>
         </PermissionGuard>
+
+        <PermissionGuard Permission="@BackofficePermissions.ReferralAnalyticsRead">
+            <NavLink class="nav-link" href="backoffice/referral/analytics">
+                <span class="nav-icon">📊</span> Analytics & CAC/LTV
+            </NavLink>
+        </PermissionGuard>
     </div>
 
     <div class="nav-section">

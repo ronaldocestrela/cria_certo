@@ -24,6 +24,11 @@ using CriaCerto.Modules.Referral.Application.Features.PartnerPortal.Commands;
 using CriaCerto.Modules.Referral.Application.Features.PartnerPortal.Dtos;
 using CriaCerto.Modules.Referral.Application.Features.PartnerPortal.Queries;
 using CriaCerto.Modules.Referral.Application.Features.Enforcement.Commands;
+using CriaCerto.Modules.Referral.Application.Features.Analytics.Queries;
+using CriaCerto.Modules.Referral.Application.Features.Analytics.Dtos;
+using CriaCerto.Modules.Backoffice.Application.Features.PaidMedia.Commands;
+using CriaCerto.Modules.Backoffice.Application.Features.PaidMedia.Queries;
+using CriaCerto.Modules.Backoffice.Application.Features.PaidMedia.Dtos;
 using CriaCerto.Modules.Referral.Application.Options;
 using CriaCerto.BuildingBlocks.Application.Features.GetReferenceBreeds;
 using CriaCerto.Api.Seeders;
@@ -189,6 +194,7 @@ builder.Services.AddScoped<ITenantInfoLookupService, TenantInfoLookupService>();
 builder.Services.AddScoped<CriaCerto.Modules.Tenancy.Application.Abstractions.IPartnerRoleLookupService, PartnerRoleLookupService>();
 builder.Services.AddScoped<IReferralPaymentVerificationService, StripePaymentVerificationService>();
 builder.Services.AddScoped<IReferralAuditSink, ReferralBackofficeAuditSink>();
+builder.Services.AddScoped<IPaidMediaSpendLookupService, PaidMediaSpendLookupService>();
 builder.Services.Configure<ReferralEnforcementOptions>(builder.Configuration.GetSection(ReferralEnforcementOptions.SectionName));
 
 // Background Services
@@ -1642,6 +1648,46 @@ backoffice.MapPost("/referral/discount-policies/{id:guid}/toggle-status", async 
 
     return ToHttpResult(result);
 }).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ReferralDiscountsManage)).WithTags("Backoffice Referral Discounts");
+
+backoffice.MapGet("/referral/kpis", async (
+    [Microsoft.AspNetCore.Mvc.FromQuery] DateTime? startDate,
+    [Microsoft.AspNetCore.Mvc.FromQuery] DateTime? endDate,
+    ISender sender) =>
+{
+    var query = new GetReferralProgramKpisQuery(startDate, endDate);
+    var result = await sender.Send(query);
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ReferralAnalyticsRead)).WithTags("Backoffice Referral Analytics");
+
+backoffice.MapGet("/marketing/paid-media", async (
+    [Microsoft.AspNetCore.Mvc.FromQuery] DateTime? startDate,
+    [Microsoft.AspNetCore.Mvc.FromQuery] DateTime? endDate,
+    ISender sender) =>
+{
+    var query = new GetPaidMediaSpendsQuery(startDate, endDate);
+    var result = await sender.Send(query);
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ReferralAnalyticsRead)).WithTags("Backoffice Marketing Paid Media");
+
+backoffice.MapPost("/marketing/paid-media", async (
+    CreatePaidMediaSpendRequest req,
+    HttpContext ctx,
+    ISender sender) =>
+{
+    var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var command = new CreatePaidMediaSpendCommand(
+        req.Channel,
+        req.PeriodStartDateUtc,
+        req.PeriodEndDateUtc,
+        req.Amount,
+        req.AcquisitionsCount,
+        req.Notes,
+        callerId,
+        callerEmail,
+        ip);
+    var result = await sender.Send(command);
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ReferralAnalyticsManage)).WithTags("Backoffice Marketing Paid Media");
 
 // Backoffice Auth Endpoints (Anonymous / Credentials + MFA)
 app.MapPost("/api/v1/backoffice/auth/login", async (BackofficeLoginRequest req, HttpContext ctx, ISender sender) =>

@@ -56,6 +56,18 @@ public sealed class ReferralMaturityEnforcementTests : IDisposable
 
             return Task.FromResult<IReadOnlyDictionary<Guid, TenantSummaryDto>>(result);
         }
+
+        public Task<int> GetActiveTenantsCountAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(_tenants.Count);
+        }
+
+        public Task<TenantsRetentionMetricsDto> GetTenantsRetentionMetricsAsync(
+            IEnumerable<Guid> referredTenantIds,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new TenantsRetentionMetricsDto(110, 85, 88.0m, 80.0m));
+        }
     }
 
     private sealed class FakePaymentVerificationService : IReferralPaymentVerificationService

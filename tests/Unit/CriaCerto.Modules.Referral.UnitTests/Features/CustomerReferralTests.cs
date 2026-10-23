@@ -238,4 +238,16 @@ public sealed class FakeTenantInfoLookupService : ITenantInfoLookupService
 
         return Task.FromResult(dict);
     }
+
+    public Task<int> GetActiveTenantsCountAsync(CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(_tenants.Count);
+    }
+
+    public Task<TenantsRetentionMetricsDto> GetTenantsRetentionMetricsAsync(
+        IEnumerable<Guid> referredTenantIds,
+        CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(new TenantsRetentionMetricsDto(120, 90, 85.5m, 80.0m));
+    }
 }

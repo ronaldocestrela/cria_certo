@@ -19,6 +19,7 @@ public class BackofficeDbContext : DbContext
     public DbSet<AdminApprovalRequest> AdminApprovalRequests => Set<AdminApprovalRequest>();
     public DbSet<BackofficeAlert> Alerts => Set<BackofficeAlert>();
     public DbSet<FeatureFlag> FeatureFlags => Set<FeatureFlag>();
+    public DbSet<PaidMediaSpend> PaidMediaSpends => Set<PaidMediaSpend>();
 
     public BackofficeDbContext(DbContextOptions<BackofficeDbContext> options)
         : base(options)
@@ -249,6 +250,22 @@ public class BackofficeDbContext : DbContext
             builder.HasIndex(f => f.Category);
             builder.HasIndex(f => f.IsEnabled);
             builder.HasIndex(f => f.KillSwitchActive);
+        });
+
+        modelBuilder.Entity<PaidMediaSpend>(builder =>
+        {
+            builder.ToTable("PaidMediaSpends");
+            builder.HasKey(s => s.Id);
+            builder.Property(s => s.Channel).HasConversion<string>().IsRequired().HasMaxLength(50);
+            builder.Property(s => s.PeriodStartDateUtc).IsRequired();
+            builder.Property(s => s.PeriodEndDateUtc).IsRequired();
+            builder.Property(s => s.Amount).HasPrecision(18, 2).IsRequired();
+            builder.Property(s => s.AcquisitionsCount).IsRequired();
+            builder.Property(s => s.Notes).HasMaxLength(1000);
+            builder.Property(s => s.CreatedByAdminId).IsRequired();
+            builder.Property(s => s.CreatedAtUtc).IsRequired();
+            builder.HasIndex(s => new { s.PeriodStartDateUtc, s.PeriodEndDateUtc });
+            builder.HasIndex(s => s.Channel);
         });
     }
 }

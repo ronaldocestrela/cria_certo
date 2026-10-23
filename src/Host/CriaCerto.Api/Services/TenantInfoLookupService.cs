@@ -90,4 +90,68 @@ public sealed class TenantInfoLookupService : ITenantInfoLookupService
 
         return result;
     }
+
+    public async Task<int> GetActiveTenantsCountAsync(CancellationToken cancellationToken = default)
+    {
+        return await _tenancyDbContext.Tenants
+            .AsNoTracking()
+            .CountAsync(t => t.Status == "Active", cancellationToken);
+    }
+
+    public async Task<TenantsRetentionMetricsDto> GetTenantsRetentionMetricsAsync(
+        IEnumerable<Guid> referredTenantIds,
+        CancellationToken cancellationToken = default)
+    {
+        var now = DateTime.UtcNow;
+        var allTenants = await _tenancyDbContext.Tenants
+            .AsNoTracking()
+            .Select(t => new
+            {
+                t.Id,
+                t.Status,
+                t.CreatedAtUtc,
+                t.StatusChangedAtUtc
+            })
+            .ToListAsync(cancellationToken);
+
+        if (allTenants.Count == 0)
+        {
+            return new TenantsRetentionMetricsDto(0, 0, 0m, 0m);
+        }
+
+        var referredSet = referredTenantIds.ToHashSet();
+        var referredTenants = allTenants.Where(t => referredSet.Contains(t.Id)).ToList();
+
+        // Cálculo Global
+        double globalLifespanSum = allTenants.Sum(t =>
+        {
+            var end = (t.Status == "Active" ? now : (t.StatusChangedAtUtc ?? now));
+            return Math.Max(0, (end - t.CreatedAtUtc).TotalDays);
+        });
+        double globalAvgLifespan = Math.Round(globalLifespanSum / allTenants.Count, 1);
+        int globalActiveCount = allTenants.Count(t => t.Status == "Active");
+        decimal globalRetentionRate = Math.Round((decimal)globalActiveCount / allTenants.Count * 100m, 1);
+
+        // Cálculo dos Indicados
+        double referredAvgLifespan = 0;
+        decimal referredRetentionRate = 0m;
+
+        if (referredTenants.Count > 0)
+        {
+            double referredLifespanSum = referredTenants.Sum(t =>
+            {
+                var end = (t.Status == "Active" ? now : (t.StatusChangedAtUtc ?? now));
+                return Math.Max(0, (end - t.CreatedAtUtc).TotalDays);
+            });
+            referredAvgLifespan = Math.Round(referredLifespanSum / referredTenants.Count, 1);
+            int referredActiveCount = referredTenants.Count(t => t.Status == "Active");
+            referredRetentionRate = Math.Round((decimal)referredActiveCount / referredTenants.Count * 100m, 1);
+        }
+
+        return new TenantsRetentionMetricsDto(
+            ReferredAverageLifespanDays: referredAvgLifespan,
+            GlobalAverageLifespanDays: globalAvgLifespan,
+            ReferredRetentionRatePercentage: referredRetentionRate,
+            GlobalRetentionRatePercentage: globalRetentionRate);
+    }
 }

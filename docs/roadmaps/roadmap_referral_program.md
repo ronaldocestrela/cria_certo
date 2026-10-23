@@ -267,11 +267,24 @@ flowchart TD
 
 ### Fase 6: Observabilidade, Métricas de CAC/LTV e Go-to-Market
 
-#### 6.1 Telemetria e Indicadores de Sucesso (KPIs)
-- **CAC por Canal**: Custo de aquisição via indicação de clientes vs parceiros vs mídia paga.
-- **Taxa de Conversão**: Percentual de cliques no link de indicação que resultaram em cadastro e faturas pagas.
-- **LTV de Indicados**: Comparativo de retenção e tempo médio de permanência de clientes vindos de indicação.
-- **Índice de Viralidade (K-Factor)**: Média de novos clientes gerados por cada cliente ativo.
+#### 6.1 Telemetria e Indicadores de Sucesso (KPIs) [CONCLUÍDO]
+- [x] **CAC por Canal**:
+  - Consolidação analítica do CAC para **Clientes** (descontos concedidos em `ReferralRewardLedger`), **Parceiros Comerciais** (comissões líquidas) e **Mídia Paga** (lançamentos de investimentos em Google/Meta Ads na entidade `PaidMediaSpend` no Backoffice).
+  - Cálculo de CAC individual por canal e Blended CAC (custo total / aquisições totais) com proteção contra divisão por zero.
+- [x] **Taxa de Conversão do Funil**:
+  - Acompanhamento granular: Cliques (`ReferralCode.ClicksCount`) ➔ Cadastros Trial (`ReferralAttribution` / `Pending`) ➔ Faturas Pagas (`Converted`).
+  - Taxas de conversão desdobradas (Clique para Lead, Lead para Pagante e Conversão Global).
+- [x] **LTV e Retenção de Indicados**:
+  - Comparativo de tempo médio de permanência em dias (clientes indicados vs média geral da plataforma) e taxas relativas de retenção e churn obtidas via serviço desacoplado (`ITenantInfoLookupService.GetTenantsRetentionMetricsAsync`).
+- [x] **Índice de Viralidade (K-Factor)**:
+  - Cálculo clássico: novos clientes adquiridos via indicação de produtores dividido pelo total de clientes ativos na plataforma (`ITenantInfoLookupService.GetActiveTenantsCountAsync`).
+  - Classificação dinâmica entre *Subcrítico* ($K < 1.0$) e *Viral Expansivo* ($K \ge 1.0$).
+- [x] **Telemetria Nativa .NET 10 (`ReferralTelemetry`)**:
+  - `Meter("CriaCerto.Modules.Referral", "1.0.0")` e `ActivitySource` com contadores para `referral.clicks.total`, `referral.attributions.total`, `referral.rewards.total`, `referral.rewards.amount` e histograma de latência `referral.operation_latency.duration_ms`.
+- [x] **Dashboard Analítico no Backoffice Blazor & API**:
+  - Rota `/backoffice/referral/analytics` com seletores de período rápido (30d, mês atual, 90d, todo o período, personalizado), cards de KPIs, gráficos de funil, comparativo de CAC e modal de lançamento de despesas de mídia paga.
+  - Endpoints REST `/api/v1/backoffice/referral/kpis`, `/api/v1/backoffice/marketing/paid-media` (GET e POST) sob as claims `referral.analytics.read` e `referral.analytics.manage`.
+- [x] Cobertura abrangente de testes unitários (`PaidMediaSpendTests`, `ReferralTelemetryTests`, `GetReferralProgramKpisQueryTests`) e integração com 100% de sucesso.
 
 #### 6.2 Testes Automatizados e Homologação
 - **Testes Unitários**:

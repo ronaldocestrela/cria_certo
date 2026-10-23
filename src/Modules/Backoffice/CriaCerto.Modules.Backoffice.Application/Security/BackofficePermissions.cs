@@ -59,6 +59,10 @@ public static class BackofficePermissions
     public const string ReferralDiscountsRead = "referral.discounts.read";
     public const string ReferralDiscountsManage = "referral.discounts.manage";
 
+    // Referral Analytics & Paid Media
+    public const string ReferralAnalyticsRead = "referral.analytics.read";
+    public const string ReferralAnalyticsManage = "referral.analytics.manage";
+
     // Scopes
     public const string ScopeGlobal = "Global";
     public const string ScopeTenant = "Tenant";
@@ -78,7 +82,8 @@ public static class BackofficePermissions
         RolloutRead, RolloutManage, RolloutKillSwitch,
         ReferralPartnersRead, ReferralPartnersManage,
         ReferralPayoutsRead, ReferralPayoutsManage, ReferralPayoutsExport,
-        ReferralDiscountsRead, ReferralDiscountsManage
+        ReferralDiscountsRead, ReferralDiscountsManage,
+        ReferralAnalyticsRead, ReferralAnalyticsManage
     };
 
     public static bool IsValidScope(string scope) =>

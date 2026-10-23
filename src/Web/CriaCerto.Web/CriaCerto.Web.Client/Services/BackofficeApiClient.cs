@@ -21,6 +21,8 @@ using CriaCerto.Modules.Referral.Application.Features.CommercialPartners.Dtos;
 using CriaCerto.Modules.Referral.Application.Features.CommercialPartners.Queries;
 using CriaCerto.Modules.Referral.Application.Features.Payouts.Dtos;
 using CriaCerto.Modules.Referral.Application.Features.PlanDiscounts.Dtos;
+using CriaCerto.Modules.Referral.Application.Features.Analytics.Dtos;
+using CriaCerto.Modules.Backoffice.Application.Features.PaidMedia.Dtos;
 using CriaCerto.Web.Client.Models;
 using Microsoft.JSInterop;
 
@@ -199,6 +201,11 @@ public interface IBackofficeApiClient
     Task<IReadOnlyList<PlanDiscountPolicyDto>?> GetPlanDiscountPoliciesAsync(CancellationToken cancellationToken = default);
     Task<Result<PlanDiscountPolicyDto>> ConfigurePlanDiscountPolicyAsync(Guid planCatalogId, ConfigurePlanDiscountPolicyRequest request, CancellationToken cancellationToken = default);
     Task<Result<PlanDiscountPolicyDto>> TogglePlanDiscountPolicyStatusAsync(Guid policyId, CancellationToken cancellationToken = default);
+
+    // Referral Analytics & Paid Media
+    Task<ReferralProgramKpisDto?> GetReferralProgramKpisAsync(DateTime? startDate = null, DateTime? endDate = null, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<PaidMediaSpendDto>?> GetPaidMediaSpendsAsync(DateTime? startDate = null, DateTime? endDate = null, CancellationToken cancellationToken = default);
+    Task<Result<PaidMediaSpendDto>> CreatePaidMediaSpendAsync(CreatePaidMediaSpendRequest request, CancellationToken cancellationToken = default);
 }
 
 
@@ -1300,6 +1307,58 @@ public class BackofficeApiClient : IBackofficeApiClient
 
         var error = await response.Content.ReadFromJsonAsync<Error>(cancellationToken: cancellationToken);
         return Result.Failure<PlanDiscountPolicyDto>(error ?? Error.Failure("DiscountPolicy.ToggleError", "Erro ao alterar status da política de desconto."));
+    }
+
+    public async Task<ReferralProgramKpisDto?> GetReferralProgramKpisAsync(
+        DateTime? startDate = null,
+        DateTime? endDate = null,
+        CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var url = "api/v1/backoffice/referral/kpis";
+        var queryParams = new List<string>();
+        if (startDate.HasValue) queryParams.Add($"startDate={Uri.EscapeDataString(startDate.Value.ToString("O"))}");
+        if (endDate.HasValue) queryParams.Add($"endDate={Uri.EscapeDataString(endDate.Value.ToString("O"))}");
+        if (queryParams.Count > 0) url += "?" + string.Join("&", queryParams);
+
+        var response = await _httpClient.GetAsync(url, cancellationToken);
+        if (!response.IsSuccessStatusCode) return null;
+
+        return await response.Content.ReadFromJsonAsync<ReferralProgramKpisDto>(cancellationToken: cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<PaidMediaSpendDto>?> GetPaidMediaSpendsAsync(
+        DateTime? startDate = null,
+        DateTime? endDate = null,
+        CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var url = "api/v1/backoffice/marketing/paid-media";
+        var queryParams = new List<string>();
+        if (startDate.HasValue) queryParams.Add($"startDate={Uri.EscapeDataString(startDate.Value.ToString("O"))}");
+        if (endDate.HasValue) queryParams.Add($"endDate={Uri.EscapeDataString(endDate.Value.ToString("O"))}");
+        if (queryParams.Count > 0) url += "?" + string.Join("&", queryParams);
+
+        var response = await _httpClient.GetAsync(url, cancellationToken);
+        if (!response.IsSuccessStatusCode) return null;
+
+        return await response.Content.ReadFromJsonAsync<IReadOnlyList<PaidMediaSpendDto>>(cancellationToken: cancellationToken);
+    }
+
+    public async Task<Result<PaidMediaSpendDto>> CreatePaidMediaSpendAsync(
+        CreatePaidMediaSpendRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.PostAsJsonAsync("api/v1/backoffice/marketing/paid-media", request, cancellationToken);
+        if (response.IsSuccessStatusCode)
+        {
+            var dto = await response.Content.ReadFromJsonAsync<PaidMediaSpendDto>(cancellationToken: cancellationToken);
+            return Result.Success(dto!);
+        }
+
+        var error = await response.Content.ReadFromJsonAsync<Error>(cancellationToken: cancellationToken);
+        return Result.Failure<PaidMediaSpendDto>(error ?? Error.Failure("PaidMedia.CreateError", "Erro ao registrar gasto de mídia paga."));
     }
 }
 
