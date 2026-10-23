@@ -967,6 +967,12 @@ public sealed class StripePaymentService : IStripePaymentService
         CancellationToken cancellationToken)
     {
         string? invoiceId = null;
+        if (charge.RawJsonElement.HasValue &&
+            charge.RawJsonElement.Value.TryGetProperty("invoice", out var invoiceProp) &&
+            invoiceProp.ValueKind == System.Text.Json.JsonValueKind.String)
+        {
+            invoiceId = invoiceProp.GetString();
+        }
         _logger.LogInformation(
             "Processando estorno/reembolso Stripe: Charge {ChargeId}, Invoice {InvoiceId}, AmountRefunded {Amount}",
             charge.Id, invoiceId, charge.AmountRefunded);

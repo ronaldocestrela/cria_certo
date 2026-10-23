@@ -74,7 +74,7 @@ public sealed class PlanReferralDiscountPolicy
 
     public decimal CalculateDiscount(decimal basePrice, int activeReferralsCount = 1)
     {
-        if (basePrice <= 0 || activeReferralsCount <= 0)
+        if (!IsActive || basePrice <= 0 || activeReferralsCount <= 0)
             return 0m;
 
         decimal calculatedDiscount;

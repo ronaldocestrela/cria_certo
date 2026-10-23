@@ -286,13 +286,25 @@ flowchart TD
   - Endpoints REST `/api/v1/backoffice/referral/kpis`, `/api/v1/backoffice/marketing/paid-media` (GET e POST) sob as claims `referral.analytics.read` e `referral.analytics.manage`.
 - [x] Cobertura abrangente de testes unitários (`PaidMediaSpendTests`, `ReferralTelemetryTests`, `GetReferralProgramKpisQueryTests`) e integração com 100% de sucesso.
 
-#### 6.2 Testes Automatizados e Homologação
-- **Testes Unitários**:
-  - Testes do motor de cálculo de desconto por plano de cliente.
-  - Testes do motor de cálculo de comissão com diferentes regras contratuais de parceiro.
-- **Testes de Integração**:
-  - Simulação de ciclo de vida completo via webhooks do Stripe Mock/Sandbox.
-  - Teste de fluxo de carência D+30 e concorrência de pagamentos.
+#### 6.2 Testes Automatizados e Homologação [CONCLUÍDO]
+- [x] **Testes Unitários**:
+  - **Motor de cálculo de desconto por plano de cliente (`PlanDiscountEngineTests`, `PlanReferralDiscountPolicyTests`)**:
+    - Políticas percentuais e de valor fixo com múltiplos amigos indicados.
+    - Limite customizado (`MaxDiscountCapPercentage`) e teto estrito de 100% da assinatura base (clamping, sem saldo negativo nem dinheiro de volta).
+    - Inativação de política (`IsActive = false`), preços-base nulos/negativos e contagem zero/negativa de amigos retornando desconto zero de forma defensiva.
+  - **Motor de cálculo de comissão de parceiro comercial (`PartnerCommissionEngineTests`, `PartnerContractTests`)**:
+    - Regra de percentual no primeiro mês (`CommissionType.PercentageFirstMonth`), com cálculo exato no ciclo 1 e retorno zero nos ciclos subsequentes.
+    - Regra de percentual recorrente (`CommissionType.PercentageRecurring`), cobrindo tanto contratos com teto de meses (`MaxRecurringMonths`) quanto contratos contínuos/vitalícios (`MaxRecurringMonths = null`).
+    - Regra de valor fixo por conversão (`CommissionType.FixedPerConversion`), com liberação no ciclo 1 e zero nas renovações periódicas.
+    - Contratos cancelados/fechados (`ValidToUtc`), valores inválidos de fatura e validação de ciclo.
+- [x] **Testes de Integração**:
+  - **Simulação de ciclo de vida completo via webhooks Stripe Mock/Sandbox (`ReferralStripeWebhookLifecycleIntegrationTests`)**:
+    - Recebimento de webhook `checkout.session.completed` assinado com HMAC-SHA256: ativação do Tenant, publicação de `TenantPaymentSucceededIntegrationEvent`, transição da atribuição para `Converted` e criação de recompensa em `RewardLedger` com status `PendingMaturity` (carência D+30).
+    - Recebimento de webhook `charge.refunded` assinado com HMAC-SHA256: publicação de `StripeChargeRefundedIntegrationEvent`, cancelamento compulsório da comissão pendente (`Status = Cancelled`) e geração de registro forense imutável via `IReferralAuditSink`.
+  - **Fluxo de carência D+30 e concorrência de pagamentos (`ReferralMaturityAndPaymentConcurrencyIntegrationTests`)**:
+    - Carência estrita D+30: simulação de execução do worker no Dia 15 (retém comissões em `PendingMaturity`) e no Dia 31 (libera compulsoriamente para `AvailableForPayout`).
+    - Concorrência e idempotência: disparo paralelo de 5 eventos simultâneos para a mesma fatura Stripe garantindo que apenas 1 lançamento seja gerado no ledger sem race conditions.
+    - Ciclos mensais sucessivos de parceiro comercial: concessão mês a mês e bloqueio após o teto contratual de meses.
 
 ---
 

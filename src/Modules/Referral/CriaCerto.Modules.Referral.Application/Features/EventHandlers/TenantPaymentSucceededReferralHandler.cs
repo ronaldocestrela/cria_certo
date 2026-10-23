@@ -41,11 +41,24 @@ public sealed class TenantPaymentSucceededReferralHandler : INotificationHandler
             return;
         }
 
-        if (attribution.Status != AttributionStatus.Pending)
+        if (attribution.Status != AttributionStatus.Pending && attribution.Status != AttributionStatus.Converted)
         {
             _logger?.LogInformation("Atribuição {AttributionId} para Tenant {TenantId} já se encontra em status '{Status}'. Ignorando conversão.",
                 attribution.Id, notification.TenantId, attribution.Status);
             return;
+        }
+
+        // Idempotência: evitar concessão duplicada para a mesma fatura Stripe
+        if (!string.IsNullOrWhiteSpace(notification.StripeInvoiceId))
+        {
+            var alreadyRewarded = await _dbContext.RewardLedger
+                .AnyAsync(r => r.ReferralAttributionId == attribution.Id && r.StripeInvoiceId == notification.StripeInvoiceId, cancellationToken);
+            if (alreadyRewarded)
+            {
+                _logger?.LogInformation("Fatura {StripeInvoiceId} já processada para atribuição {AttributionId}. Ignorando.",
+                    notification.StripeInvoiceId, attribution.Id);
+                return;
+            }
         }
 
         var participant = await _dbContext.Participants
@@ -65,72 +78,75 @@ public sealed class TenantPaymentSucceededReferralHandler : INotificationHandler
             return;
         }
 
-        // 1. Verificação de Colisão de Cartão de Crédito (Anti-Fraude Stripe)
-        if (_paymentVerificationService != null && participant.ParticipantType == ParticipantType.Customer && participant.TenantId.HasValue)
+        // 1. Verificação de Colisão de Cartão de Crédito (Anti-Fraude Stripe) no primeiro pagamento
+        if (attribution.Status == AttributionStatus.Pending)
         {
-            var referrerTenant = _tenantLookupService != null
-                ? await _tenantLookupService.GetTenantSummaryAsync(participant.TenantId.Value, cancellationToken)
-                : null;
-
-            if (referrerTenant != null && !string.IsNullOrWhiteSpace(referrerTenant.StripeCustomerId))
+            if (_paymentVerificationService != null && participant.ParticipantType == ParticipantType.Customer && participant.TenantId.HasValue)
             {
-                var cardCheckResult = await _paymentVerificationService.HasCardFingerprintCollisionAsync(
-                    notification.StripeCustomerId,
-                    referrerTenant.StripeCustomerId,
-                    notification.StripeCardFingerprint,
-                    cancellationToken);
+                var referrerTenant = _tenantLookupService != null
+                    ? await _tenantLookupService.GetTenantSummaryAsync(participant.TenantId.Value, cancellationToken)
+                    : null;
 
-                if (cardCheckResult.IsSuccess && cardCheckResult.Value)
+                if (referrerTenant != null && !string.IsNullOrWhiteSpace(referrerTenant.StripeCustomerId))
                 {
-                    _logger?.LogWarning("Fraude de cartão de crédito detectada: Pagante {PayingCustomer} e Indicador {ReferrerCustomer} utilizam o mesmo cartão.",
-                        notification.StripeCustomerId, referrerTenant.StripeCustomerId);
+                    var cardCheckResult = await _paymentVerificationService.HasCardFingerprintCollisionAsync(
+                        notification.StripeCustomerId,
+                        referrerTenant.StripeCustomerId,
+                        notification.StripeCardFingerprint,
+                        cancellationToken);
 
-                    attribution.FlagAsFraud("Auto-indicação detectada: mesmo cartão de crédito registrado no Stripe entre pagante e indicador.");
-
-                    var suspendReason = "Suspensão preventiva automática: tentativa de auto-indicação com mesmo cartão de crédito Stripe.";
-                    participant.Suspend(suspendReason);
-
-                    await _dbContext.SaveChangesAsync(cancellationToken);
-
-                    if (_auditSink != null)
+                    if (cardCheckResult.IsSuccess && cardCheckResult.Value)
                     {
-                        var auditDetails = JsonSerializer.Serialize(new
+                        _logger?.LogWarning("Fraude de cartão de crédito detectada: Pagante {PayingCustomer} e Indicador {ReferrerCustomer} utilizam o mesmo cartão.",
+                            notification.StripeCustomerId, referrerTenant.StripeCustomerId);
+
+                        attribution.FlagAsFraud("Auto-indicação detectada: mesmo cartão de crédito registrado no Stripe entre pagante e indicador.");
+
+                        var suspendReason = "Suspensão preventiva automática: tentativa de auto-indicação com mesmo cartão de crédito Stripe.";
+                        participant.Suspend(suspendReason);
+
+                        await _dbContext.SaveChangesAsync(cancellationToken);
+
+                        if (_auditSink != null)
                         {
-                            Action = "CardFingerprintCollisionDetected",
-                            ReferredTenantId = notification.TenantId,
-                            ReferrerParticipantId = participant.Id,
-                            ReferrerTenantId = participant.TenantId,
-                            PayingStripeCustomerId = notification.StripeCustomerId,
-                            ReferrerStripeCustomerId = referrerTenant.StripeCustomerId,
-                            StripeInvoiceId = notification.StripeInvoiceId,
-                            ParticipantStatus = "Suspended",
-                            AttributionStatus = "Fraudulent"
-                        });
+                            var auditDetails = JsonSerializer.Serialize(new
+                            {
+                                Action = "CardFingerprintCollisionDetected",
+                                ReferredTenantId = notification.TenantId,
+                                ReferrerParticipantId = participant.Id,
+                                ReferrerTenantId = participant.TenantId,
+                                PayingStripeCustomerId = notification.StripeCustomerId,
+                                ReferrerStripeCustomerId = referrerTenant.StripeCustomerId,
+                                StripeInvoiceId = notification.StripeInvoiceId,
+                                ParticipantStatus = "Suspended",
+                                AttributionStatus = "Fraudulent"
+                            });
 
-                        await _auditSink.RecordSystemAuditAsync(
-                            action: "Referral.AntiFraud.CardFingerprintCollision",
-                            resource: $"ReferralAttribution/{attribution.Id}",
-                            targetTenantId: notification.TenantId,
-                            detailsJson: auditDetails,
-                            cancellationToken: cancellationToken);
+                            await _auditSink.RecordSystemAuditAsync(
+                                action: "Referral.AntiFraud.CardFingerprintCollision",
+                                resource: $"ReferralAttribution/{attribution.Id}",
+                                targetTenantId: notification.TenantId,
+                                detailsJson: auditDetails,
+                                cancellationToken: cancellationToken);
+                        }
+
+                        Referral.Application.Telemetry.ReferralTelemetry.RecordAttribution(participant.ParticipantType.ToString(), "Fraudulent");
+                        return;
                     }
-
-                    Referral.Application.Telemetry.ReferralTelemetry.RecordAttribution(participant.ParticipantType.ToString(), "Fraudulent");
-                    return;
                 }
             }
-        }
 
-        // 2. Transição para Convertido
-        var conversionResult = attribution.MarkConverted(notification.PaymentDateUtc);
-        if (conversionResult.IsFailure)
-        {
-            _logger?.LogError("Erro ao converter atribuição {AttributionId}: {Error}",
-                attribution.Id, conversionResult.Error.Message);
-            return;
-        }
+            // 2. Transição para Convertido
+            var conversionResult = attribution.MarkConverted(notification.PaymentDateUtc);
+            if (conversionResult.IsFailure)
+            {
+                _logger?.LogError("Erro ao converter atribuição {AttributionId}: {Error}",
+                    attribution.Id, conversionResult.Error.Message);
+                return;
+            }
 
-        Referral.Application.Telemetry.ReferralTelemetry.RecordAttribution(participant.ParticipantType.ToString(), "Converted");
+            Referral.Application.Telemetry.ReferralTelemetry.RecordAttribution(participant.ParticipantType.ToString(), "Converted");
+        }
 
         // 3. Emissão da Recompensa correspondente
         if (participant.ParticipantType == ParticipantType.CommercialPartner)
@@ -142,13 +158,11 @@ public sealed class TenantPaymentSucceededReferralHandler : INotificationHandler
 
             if (contract != null)
             {
-                decimal commissionAmount = contract.CommissionType switch
-                {
-                    CommissionType.FixedPerConversion => contract.CommissionValue,
-                    CommissionType.PercentageFirstMonth or CommissionType.PercentageRecurring =>
-                        notification.AmountPaid * (contract.CommissionValue / 100m),
-                    _ => 0m
-                };
+                var previousRewardsCount = await _dbContext.RewardLedger
+                    .CountAsync(r => r.ReferralAttributionId == attribution.Id, cancellationToken);
+                int paymentCycleNumber = previousRewardsCount + 1;
+
+                decimal commissionAmount = contract.CalculateCommission(notification.AmountPaid, paymentCycleNumber);
 
                 if (commissionAmount > 0)
                 {
@@ -166,43 +180,49 @@ public sealed class TenantPaymentSucceededReferralHandler : INotificationHandler
                     {
                         _dbContext.RewardLedger.Add(ledgerResult.Value);
                         Referral.Application.Telemetry.ReferralTelemetry.RecordReward("CashCommission", (double)commissionAmount, notification.Currency);
-                        _logger?.LogInformation("Comissão de R$ {Amount} gerada em PendingMaturity para Parceiro {ParticipantId} (Atribuição {AttributionId}).",
-                            commissionAmount, participant.Id, attribution.Id);
+                        _logger?.LogInformation("Comissão ciclo #{Cycle} de R$ {Amount} gerada em PendingMaturity para Parceiro {ParticipantId} (Atribuição {AttributionId}).",
+                            paymentCycleNumber, commissionAmount, participant.Id, attribution.Id);
                     }
                 }
             }
         }
         else if (participant.ParticipantType == ParticipantType.Customer && participant.TenantId.HasValue)
         {
-            var referrerTenant = _tenantLookupService != null
-                ? await _tenantLookupService.GetTenantSummaryAsync(participant.TenantId.Value, cancellationToken)
-                : null;
+            var hasPreviousDiscount = await _dbContext.RewardLedger
+                .AnyAsync(r => r.ReferralAttributionId == attribution.Id, cancellationToken);
 
-            if (referrerTenant != null && !string.IsNullOrWhiteSpace(referrerTenant.PlanCode))
+            if (!hasPreviousDiscount)
             {
-                var policy = await _dbContext.PlanDiscountPolicies
-                    .FirstOrDefaultAsync(p => p.PlanCode.ToUpper() == referrerTenant.PlanCode.ToUpper() && p.IsActive, cancellationToken);
+                var referrerTenant = _tenantLookupService != null
+                    ? await _tenantLookupService.GetTenantSummaryAsync(participant.TenantId.Value, cancellationToken)
+                    : null;
 
-                if (policy != null)
+                if (referrerTenant != null && !string.IsNullOrWhiteSpace(referrerTenant.PlanCode))
                 {
-                    var basePrice = referrerTenant.PlanBasePrice ?? notification.AmountPaid;
-                    var discountAmount = policy.CalculateDiscount(basePrice);
+                    var policy = await _dbContext.PlanDiscountPolicies
+                        .FirstOrDefaultAsync(p => p.PlanCode.ToUpper() == referrerTenant.PlanCode.ToUpper() && p.IsActive, cancellationToken);
 
-                    if (discountAmount > 0)
+                    if (policy != null)
                     {
-                        var creditResult = ReferralRewardLedger.CreateInvoiceDiscountCredit(
-                            referralAttributionId: attribution.Id,
-                            participantId: participant.Id,
-                            discountAmount: discountAmount,
-                            currency: notification.Currency,
-                            stripeInvoiceId: notification.StripeInvoiceId);
+                        var basePrice = referrerTenant.PlanBasePrice ?? notification.AmountPaid;
+                        var discountAmount = policy.CalculateDiscount(basePrice);
 
-                        if (creditResult.IsSuccess)
+                        if (discountAmount > 0)
                         {
-                            _dbContext.RewardLedger.Add(creditResult.Value);
-                            Referral.Application.Telemetry.ReferralTelemetry.RecordReward("InvoiceDiscountCredit", (double)creditResult.Value.GrossAmount, notification.Currency);
-                            _logger?.LogInformation("Crédito de desconto de R$ {Amount} gerado para Produtor {ParticipantId} (Atribuição {AttributionId}).",
-                                discountAmount, participant.Id, attribution.Id);
+                            var creditResult = ReferralRewardLedger.CreateInvoiceDiscountCredit(
+                                referralAttributionId: attribution.Id,
+                                participantId: participant.Id,
+                                discountAmount: discountAmount,
+                                currency: notification.Currency,
+                                stripeInvoiceId: notification.StripeInvoiceId);
+
+                            if (creditResult.IsSuccess)
+                            {
+                                _dbContext.RewardLedger.Add(creditResult.Value);
+                                Referral.Application.Telemetry.ReferralTelemetry.RecordReward("InvoiceDiscountCredit", (double)creditResult.Value.GrossAmount, notification.Currency);
+                                _logger?.LogInformation("Crédito de desconto de R$ {Amount} gerado para Produtor {ParticipantId} (Atribuição {AttributionId}).",
+                                    discountAmount, participant.Id, attribution.Id);
+                            }
                         }
                     }
                 }

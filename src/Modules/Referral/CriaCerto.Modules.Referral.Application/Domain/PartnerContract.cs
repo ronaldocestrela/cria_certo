@@ -94,4 +94,25 @@ public sealed class PartnerContract
 
         return Result.Success();
     }
+
+    public decimal CalculateCommission(decimal invoiceAmount, int paymentCycleNumber = 1)
+    {
+        if (!IsActive || invoiceAmount <= 0 || paymentCycleNumber <= 0)
+            return 0m;
+
+        if (ValidToUtc.HasValue && ValidToUtc.Value < DateTime.UtcNow)
+            return 0m;
+
+        return CommissionType switch
+        {
+            CommissionType.FixedPerConversion => paymentCycleNumber == 1 ? CommissionValue : 0m,
+            CommissionType.PercentageFirstMonth => paymentCycleNumber == 1
+                ? Math.Round(invoiceAmount * (CommissionValue / 100m), 2)
+                : 0m,
+            CommissionType.PercentageRecurring => (MaxRecurringMonths.HasValue && paymentCycleNumber > MaxRecurringMonths.Value)
+                ? 0m
+                : Math.Round(invoiceAmount * (CommissionValue / 100m), 2),
+            _ => 0m
+        };
+    }
 }
