@@ -4,6 +4,8 @@ using CriaCerto.Modules.Backoffice.Application.Domain.Errors;
 using CriaCerto.Modules.Backoffice.Application.Features.Approvals.Commands;
 using CriaCerto.Modules.Backoffice.Application.Features.Approvals.Queries;
 using CriaCerto.Modules.Backoffice.Infrastructure.Persistence;
+using CriaCerto.Modules.Referral.Application.Domain.Enums;
+using CriaCerto.Modules.Referral.Application.Features.CommercialPartners.Dtos;
 using FluentAssertions;
 using MediatR;
 using Microsoft.Data.Sqlite;
@@ -273,5 +275,77 @@ public class ApprovalFeaturesTests : IDisposable
         countResult.Value.TotalPending.Should().Be(2);
         countResult.Value.MyPendingRequests.Should().Be(1);
         countResult.Value.PendingReviewForMe.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task Approve_UpdatePartnerContractCommission_Enforces_4Eyes_And_Executes_Via_Sender()
+    {
+        // Arrange: Criar solicitação de alteração de comissão de parceiro
+        var participantId = Guid.NewGuid();
+        var payload = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            ParticipantId = participantId,
+            CommissionType = "PercentageRecurring",
+            CommissionValue = 25.0m,
+            MaxRecurringMonths = 24,
+            PaymentTermsDays = 30,
+            PixKey = "parceiro@agro.com",
+            PixKeyType = "Email"
+        });
+
+        var request = AdminApprovalRequest.Create(
+            ApprovalRequestType.UpdatePartnerContractCommission,
+            "Reajuste de comissão parceiro AgroConsultoria",
+            "Justificativa formal para aumento de comissão de 20% para 25%.",
+            $"PartnerParticipant/{participantId}",
+            "Impacta repasses futuros de comissão",
+            payload,
+            _requesterId,
+            RequesterEmail).Value;
+
+        _dbContext.AdminApprovalRequests.Add(request);
+        await _dbContext.SaveChangesAsync();
+
+        var handler = new ApproveApprovalRequestCommandHandler(_dbContext, _sender);
+
+        // Act 1: Tentativa de auto-aprovação pelo solicitante (violação de 4-Eyes)
+        var selfApprovalCommand = new ApproveApprovalRequestCommand(
+            request.Id,
+            _requesterId, // Mesmo ID do solicitante
+            RequesterEmail,
+            "127.0.0.1",
+            "Tentando auto-aprovar");
+
+        var selfResult = await handler.Handle(selfApprovalCommand, CancellationToken.None);
+
+        // Assert 1: Deve falhar compulsoriamente por violação do princípio 4-Eyes
+        selfResult.IsFailure.Should().BeTrue();
+        selfResult.Error.Code.Should().Be(ApprovalErrors.CannotSelfApprove.Code);
+
+        // Act 2: Aprovação por segundo administrador
+        _sender.Send(Arg.Any<IRequest<Result<CommercialPartnerDto>>>(), Arg.Any<CancellationToken>())
+            .Returns(Result.Success(new CommercialPartnerDto(
+                Guid.NewGuid(), participantId, null, "Agro Consultoria", null, "parceiro@agro.com",
+                "+5562999998888", PartnerCategory.ZootechnicianConsultant, "Goiânia", "GO", null, ParticipantStatus.Active, null,
+                "00.000.000/0001-00", PixKeyType.Email, "parceiro@agro.com",
+                CommissionType.PercentageRecurring, 25m, 24, 30, "AGRO25", 0,
+                DateTime.UtcNow, null, new List<PartnerContractHistoryDto>())));
+
+        var validApprovalCommand = new ApproveApprovalRequestCommand(
+            request.Id,
+            _reviewerId, // Segundo administrador
+            ReviewerEmail,
+            "127.0.0.1",
+            "Aprovado conforme política comercial da diretoria");
+
+        var validResult = await handler.Handle(validApprovalCommand, CancellationToken.None);
+
+        // Assert 2: Sucesso na aprovação de quatro olhos e execução confirmada
+        validResult.IsSuccess.Should().BeTrue();
+        validResult.Value.Status.Should().Be(ApprovalRequestStatus.Executed);
+
+        var audit = await _dbContext.AuditLogs.FirstOrDefaultAsync(a => a.Action == "Approval.ApprovedAndExecuted");
+        audit.Should().NotBeNull();
+        audit!.AdminUserId.Should().Be(_reviewerId);
     }
 }

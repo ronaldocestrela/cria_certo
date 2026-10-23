@@ -108,18 +108,37 @@ public sealed class GetCustomerReferralDashboardQueryHandler : IRequestHandler<G
 
         if (policy != null)
         {
+            var basePrice = currentTenantInfo?.PlanBasePrice;
+
             if (policy.DiscountType == DiscountType.FixedValue)
             {
-                accumulatedDiscount = activeReferralsCount * policy.DiscountValue;
-                formattedDiscount = $"R$ {accumulatedDiscount.ToString("N2", PtBrCulture)}";
-                discountDescription = $"R$ {policy.DiscountValue.ToString("N2", PtBrCulture)} de desconto na fatura por fazenda ativa indicada";
+                if (basePrice.HasValue && basePrice.Value > 0)
+                {
+                    accumulatedDiscount = policy.CalculateDiscount(basePrice.Value, activeReferralsCount);
+                    formattedDiscount = $"R$ {accumulatedDiscount.ToString("N2", PtBrCulture)}";
+
+                    if (accumulatedDiscount >= basePrice.Value)
+                    {
+                        discountDescription = $"100% de abatimento atingido na fatura (limite máximo de R$ {basePrice.Value.ToString("N2", PtBrCulture)} com {activeReferralsCount} amigos ativos)";
+                    }
+                    else
+                    {
+                        discountDescription = $"R$ {policy.DiscountValue.ToString("N2", PtBrCulture)} de desconto por amigo ativo (teto de 100% da assinatura: R$ {basePrice.Value.ToString("N2", PtBrCulture)})";
+                    }
+                }
+                else
+                {
+                    accumulatedDiscount = activeReferralsCount * policy.DiscountValue;
+                    formattedDiscount = $"R$ {accumulatedDiscount.ToString("N2", PtBrCulture)}";
+                    discountDescription = $"R$ {policy.DiscountValue.ToString("N2", PtBrCulture)} de desconto na fatura por fazenda ativa indicada";
+                }
             }
             else // Percentage
             {
-                var percentage = Math.Min(activeReferralsCount * policy.DiscountValue, policy.MaxDiscountCapPercentage);
+                var percentage = Math.Min(activeReferralsCount * policy.DiscountValue, Math.Min(policy.MaxDiscountCapPercentage, 100m));
                 accumulatedDiscount = percentage;
                 formattedDiscount = $"{percentage.ToString("N0", PtBrCulture)}%";
-                discountDescription = $"{policy.DiscountValue.ToString("N0", PtBrCulture)}% de desconto na fatura por fazenda ativa (máximo de {policy.MaxDiscountCapPercentage.ToString("N0", PtBrCulture)}%)";
+                discountDescription = $"{policy.DiscountValue.ToString("N0", PtBrCulture)}% de desconto na fatura por fazenda ativa (máximo de {Math.Min(policy.MaxDiscountCapPercentage, 100m).ToString("N0", PtBrCulture)}%)";
             }
         }
 

@@ -6,7 +6,12 @@ public record TenantSummaryDto(
     string? TradeName,
     string Status,
     string? PlanCode,
-    string? PlanName);
+    string? PlanName,
+    string? CnpjNormalized = null,
+    string? TechnicalOwnerEmail = null,
+    string? CommercialOwnerEmail = null,
+    string? StripeCustomerId = null,
+    decimal? PlanBasePrice = null);
 
 public interface ITenantInfoLookupService
 {

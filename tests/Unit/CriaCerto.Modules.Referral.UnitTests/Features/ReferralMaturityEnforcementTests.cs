@@ -66,6 +66,15 @@ public sealed class ReferralMaturityEnforcementTests : IDisposable
         {
             return Task.FromResult(Result.Success(RefundedInvoices.Contains(stripeInvoiceId)));
         }
+
+        public Task<Result<bool>> HasCardFingerprintCollisionAsync(
+            string payingStripeCustomerId,
+            string referrerStripeCustomerId,
+            string? directPayingFingerprint = null,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(Result.Success(false));
+        }
     }
 
     private sealed class FakeReferralAuditSink : IReferralAuditSink

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using CriaCerto.BuildingBlocks.Abstractions.Results;
 using CriaCerto.Modules.Referral.Application.Abstractions;
 using CriaCerto.Modules.Referral.Application.Domain;
@@ -58,10 +59,14 @@ public sealed class UpdatePartnerContractCommissionCommandHandler
     : IRequestHandler<UpdatePartnerContractCommissionCommand, Result<CommercialPartnerDto>>
 {
     private readonly IReferralDbContext _dbContext;
+    private readonly IReferralAuditSink? _auditSink;
 
-    public UpdatePartnerContractCommissionCommandHandler(IReferralDbContext dbContext)
+    public UpdatePartnerContractCommissionCommandHandler(
+        IReferralDbContext dbContext,
+        IReferralAuditSink? auditSink = null)
     {
         _dbContext = dbContext;
+        _auditSink = auditSink;
     }
 
     public async Task<Result<CommercialPartnerDto>> Handle(
@@ -125,6 +130,49 @@ public sealed class UpdatePartnerContractCommissionCommandHandler
         _dbContext.PartnerContracts.Add(newContract);
 
         await _dbContext.SaveChangesAsync(cancellationToken);
+
+        // Registro de Auditoria Forense com encadeamento de hash SHA-256 no Backoffice
+        if (_auditSink is not null)
+        {
+            var oldValues = currentContract is not null ? new
+            {
+                ContractId = currentContract.Id,
+                CommissionType = currentContract.CommissionType.ToString(),
+                currentContract.CommissionValue,
+                currentContract.MaxRecurringMonths,
+                currentContract.PaymentTermsDays,
+                currentContract.ValidFromUtc,
+                ValidToUtc = closeDate
+            } : null;
+
+            var newValues = new
+            {
+                ContractId = newContract.Id,
+                CommissionType = newContract.CommissionType.ToString(),
+                newContract.CommissionValue,
+                newContract.MaxRecurringMonths,
+                newContract.PaymentTermsDays,
+                newContract.ValidFromUtc,
+                AdminUserId = request.AdminUserId,
+                Justification = request.Justification
+            };
+
+            var detailsJson = JsonSerializer.Serialize(new
+            {
+                Action = "PartnerContractCommissionUpdated",
+                ParticipantId = participant.Id,
+                PartnerFullName = profile.FullName,
+                OldContract = oldValues,
+                NewContract = newValues
+            });
+
+            await _auditSink.RecordSystemAuditAsync(
+                action: "Referral.PartnerContract.CommissionUpdated",
+                resource: $"PartnerContract/{newContract.Id}",
+                targetTenantId: null,
+                detailsJson: detailsJson,
+                cancellationToken: cancellationToken);
+        }
 
         var referralCode = await _dbContext.ReferralCodes
             .Where(c => c.ParticipantId == request.ParticipantId && c.IsActive)

@@ -6,6 +6,7 @@ using CriaCerto.Modules.Tenancy.Application.Events;
 using FluentAssertions;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using NSubstitute;
 
 namespace CriaCerto.Modules.Referral.UnitTests.Features;
 
@@ -182,5 +183,166 @@ public sealed class TenantRegisteredReferralHandlerTests : IDisposable
         // Assert
         var attributions = await _dbContext.Attributions.Where(a => a.ReferredTenantId == referredTenantId).ToListAsync();
         attributions.Should().HaveCount(1);
+    }
+
+    [Fact]
+    public async Task Handle_Should_Flag_As_Fraud_When_Different_TenantId_Has_Same_Cnpj()
+    {
+        // Arrange
+        var referrerTenantId = Guid.NewGuid();
+        var newTenantId = Guid.NewGuid();
+
+        var referrerParticipant = ReferralProgramParticipant.CreateCustomer(referrerTenantId).Value;
+        var referralCode = ReferralCode.Create(referrerParticipant.Id, "MESMO-CNPJ").Value;
+
+        _dbContext.Participants.Add(referrerParticipant);
+        _dbContext.ReferralCodes.Add(referralCode);
+        await _dbContext.SaveChangesAsync();
+
+        var tenantLookupMock = NSubstitute.Substitute.For<CriaCerto.Modules.Referral.Application.Abstractions.ITenantInfoLookupService>();
+        var auditSinkMock = NSubstitute.Substitute.For<CriaCerto.Modules.Referral.Application.Abstractions.IReferralAuditSink>();
+
+        tenantLookupMock.GetTenantSummaryAsync(referrerTenantId, Arg.Any<CancellationToken>())
+            .Returns(new CriaCerto.Modules.Referral.Application.Abstractions.TenantSummaryDto(
+                referrerTenantId, "Fazenda Origem", null, "Active", "Starter", "Starter", CnpjNormalized: "12345678000190"));
+
+        tenantLookupMock.GetTenantSummaryAsync(newTenantId, Arg.Any<CancellationToken>())
+            .Returns(new CriaCerto.Modules.Referral.Application.Abstractions.TenantSummaryDto(
+                newTenantId, "Fazenda Filial", null, "Trial", "Starter", "Starter", CnpjNormalized: "12345678000190"));
+
+        var handler = new TenantRegisteredReferralHandler(_dbContext, tenantLookupMock, auditSinkMock);
+
+        var notification = new TenantRegisteredIntegrationEvent(
+            TenantId: newTenantId,
+            UserId: Guid.NewGuid(),
+            UserEmail: "financeiro@filial.com.br",
+            ReferralCode: "MESMO-CNPJ",
+            OriginIpAddress: "10.0.0.1",
+            UserAgent: "Mozilla/5.0",
+            RegisteredAtUtc: DateTime.UtcNow
+        );
+
+        // Act
+        await handler.Handle(notification, CancellationToken.None);
+
+        // Assert
+        var attribution = await _dbContext.Attributions.SingleOrDefaultAsync(a => a.ReferredTenantId == newTenantId);
+        attribution.Should().NotBeNull();
+        attribution!.Status.Should().Be(AttributionStatus.Fraudulent);
+        attribution.FraudReason.Should().Contain("mesmo CPF/CNPJ");
+
+        await auditSinkMock.Received(1).RecordSystemAuditAsync(
+            "Referral.AntiFraud.SelfReferralBlocked",
+            Arg.Is<string>(s => s.Contains("ReferralAttribution")),
+            newTenantId,
+            Arg.Any<string>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Handle_Should_Flag_As_Fraud_When_Different_TenantId_Has_Same_Owner_Email()
+    {
+        // Arrange
+        var referrerTenantId = Guid.NewGuid();
+        var newTenantId = Guid.NewGuid();
+        var ownerEmail = "produtor@fazendareunidas.com.br";
+
+        var referrerParticipant = ReferralProgramParticipant.CreateCustomer(referrerTenantId).Value;
+        var referralCode = ReferralCode.Create(referrerParticipant.Id, "MESMO-EMAIL").Value;
+
+        _dbContext.Participants.Add(referrerParticipant);
+        _dbContext.ReferralCodes.Add(referralCode);
+        await _dbContext.SaveChangesAsync();
+
+        var tenantLookupMock = NSubstitute.Substitute.For<CriaCerto.Modules.Referral.Application.Abstractions.ITenantInfoLookupService>();
+        var auditSinkMock = NSubstitute.Substitute.For<CriaCerto.Modules.Referral.Application.Abstractions.IReferralAuditSink>();
+
+        tenantLookupMock.GetTenantSummaryAsync(referrerTenantId, Arg.Any<CancellationToken>())
+            .Returns(new CriaCerto.Modules.Referral.Application.Abstractions.TenantSummaryDto(
+                referrerTenantId, "Fazenda Sede", null, "Active", "Starter", "Starter",
+                CnpjNormalized: "11111111000111", TechnicalOwnerEmail: ownerEmail));
+
+        tenantLookupMock.GetTenantSummaryAsync(newTenantId, Arg.Any<CancellationToken>())
+            .Returns(new CriaCerto.Modules.Referral.Application.Abstractions.TenantSummaryDto(
+                newTenantId, "Fazenda Nova", null, "Trial", "Starter", "Starter",
+                CnpjNormalized: "22222222000122", CommercialOwnerEmail: ownerEmail));
+
+        var handler = new TenantRegisteredReferralHandler(_dbContext, tenantLookupMock, auditSinkMock);
+
+        var notification = new TenantRegisteredIntegrationEvent(
+            TenantId: newTenantId,
+            UserId: Guid.NewGuid(),
+            UserEmail: "gerente@nova.com.br",
+            ReferralCode: "MESMO-EMAIL",
+            OriginIpAddress: "10.0.0.1",
+            UserAgent: "Mozilla/5.0",
+            RegisteredAtUtc: DateTime.UtcNow
+        );
+
+        // Act
+        await handler.Handle(notification, CancellationToken.None);
+
+        // Assert
+        var attribution = await _dbContext.Attributions.SingleOrDefaultAsync(a => a.ReferredTenantId == newTenantId);
+        attribution.Should().NotBeNull();
+        attribution!.Status.Should().Be(AttributionStatus.Fraudulent);
+        attribution.FraudReason.Should().Contain("mesmo titular/e-mail");
+    }
+
+    [Fact]
+    public async Task Handle_Should_Flag_As_Fraud_When_CommercialPartner_Self_Refers_With_Same_Document()
+    {
+        // Arrange
+        var adminId = Guid.NewGuid();
+        var partnerParticipant = ReferralProgramParticipant.CreateCommercialPartner(adminId).Value;
+        var partnerDoc = "99.888.777/0001-66";
+
+        var contract = PartnerContract.Create(
+            partnerParticipant.Id,
+            CommissionType.PercentageRecurring,
+            20m,
+            12,
+            30,
+            "pix@parceiro.com",
+            PixKeyType.Email,
+            partnerDoc,
+            DateTime.UtcNow).Value;
+
+        var referralCode = ReferralCode.Create(partnerParticipant.Id, "PARCEIRO-DOC").Value;
+
+        _dbContext.Participants.Add(partnerParticipant);
+        _dbContext.PartnerContracts.Add(contract);
+        _dbContext.ReferralCodes.Add(referralCode);
+        await _dbContext.SaveChangesAsync();
+
+        var tenantLookupMock = NSubstitute.Substitute.For<CriaCerto.Modules.Referral.Application.Abstractions.ITenantInfoLookupService>();
+        var auditSinkMock = NSubstitute.Substitute.For<CriaCerto.Modules.Referral.Application.Abstractions.IReferralAuditSink>();
+
+        var newTenantId = Guid.NewGuid();
+        tenantLookupMock.GetTenantSummaryAsync(newTenantId, Arg.Any<CancellationToken>())
+            .Returns(new CriaCerto.Modules.Referral.Application.Abstractions.TenantSummaryDto(
+                newTenantId, "Minha Propria Fazenda", null, "Trial", "Starter", "Starter",
+                CnpjNormalized: "99888777000166"));
+
+        var handler = new TenantRegisteredReferralHandler(_dbContext, tenantLookupMock, auditSinkMock);
+
+        var notification = new TenantRegisteredIntegrationEvent(
+            TenantId: newTenantId,
+            UserId: Guid.NewGuid(),
+            UserEmail: "socio@fazenda.com.br",
+            ReferralCode: "PARCEIRO-DOC",
+            OriginIpAddress: "10.0.0.1",
+            UserAgent: "Mozilla/5.0",
+            RegisteredAtUtc: DateTime.UtcNow
+        );
+
+        // Act
+        await handler.Handle(notification, CancellationToken.None);
+
+        // Assert
+        var attribution = await _dbContext.Attributions.SingleOrDefaultAsync(a => a.ReferredTenantId == newTenantId);
+        attribution.Should().NotBeNull();
+        attribution!.Status.Should().Be(AttributionStatus.Fraudulent);
+        attribution.FraudReason.Should().Contain("CPF/CNPJ do contrato do parceiro");
     }
 }

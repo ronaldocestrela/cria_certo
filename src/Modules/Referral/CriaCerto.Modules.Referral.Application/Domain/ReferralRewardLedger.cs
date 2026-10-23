@@ -68,7 +68,8 @@ public sealed class ReferralRewardLedger
         Guid participantId,
         decimal discountAmount,
         string currency = "BRL",
-        string? stripeInvoiceId = null)
+        string? stripeInvoiceId = null,
+        decimal? maxInvoiceAmount = null)
     {
         if (referralAttributionId == Guid.Empty)
             return Result.Failure<ReferralRewardLedger>(Error.Validation("ReferralRewardLedger.AttributionRequired", "A atribuição de indicação é obrigatória."));
@@ -79,14 +80,18 @@ public sealed class ReferralRewardLedger
         if (discountAmount <= 0)
             return Result.Failure<ReferralRewardLedger>(ReferralErrors.Ledger.InvalidAmount);
 
+        var effectiveDiscount = maxInvoiceAmount.HasValue && maxInvoiceAmount.Value > 0
+            ? Math.Min(discountAmount, maxInvoiceAmount.Value)
+            : discountAmount;
+
         var ledger = new ReferralRewardLedger
         {
             Id = Guid.NewGuid(),
             ReferralAttributionId = referralAttributionId,
             ParticipantId = participantId,
             RewardType = RewardType.InvoiceDiscountCredit,
-            GrossAmount = discountAmount,
-            NetAmount = discountAmount,
+            GrossAmount = effectiveDiscount,
+            NetAmount = effectiveDiscount,
             Currency = string.IsNullOrWhiteSpace(currency) ? "BRL" : currency.Trim().ToUpperInvariant(),
             Status = LedgerRewardStatus.PendingMaturity,
             MaturityDateUtc = null,

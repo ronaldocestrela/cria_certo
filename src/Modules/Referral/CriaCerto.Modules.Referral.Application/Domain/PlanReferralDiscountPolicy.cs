@@ -72,22 +72,27 @@ public sealed class PlanReferralDiscountPolicy
         return Result.Success();
     }
 
-    public decimal CalculateDiscount(decimal basePrice)
+    public decimal CalculateDiscount(decimal basePrice, int activeReferralsCount = 1)
     {
-        if (basePrice <= 0)
+        if (basePrice <= 0 || activeReferralsCount <= 0)
             return 0m;
 
         decimal calculatedDiscount;
         if (DiscountType == DiscountType.Percentage)
         {
-            calculatedDiscount = basePrice * (DiscountValue / 100m);
+            var rawPercentage = activeReferralsCount * DiscountValue;
+            var cappedPercentage = Math.Min(rawPercentage, Math.Min(MaxDiscountCapPercentage, 100m));
+            calculatedDiscount = basePrice * (cappedPercentage / 100m);
         }
         else
         {
-            calculatedDiscount = DiscountValue;
+            calculatedDiscount = activeReferralsCount * DiscountValue;
         }
 
-        var maxAllowedDiscount = basePrice * (MaxDiscountCapPercentage / 100m);
+        // Teto inegociável: máximo de 100% da assinatura do período (nunca saldo negativo ou dinheiro de volta)
+        var maxAllowedCapPercentage = Math.Min(MaxDiscountCapPercentage, 100m);
+        var maxAllowedDiscount = basePrice * (maxAllowedCapPercentage / 100m);
+
         return Math.Min(calculatedDiscount, maxAllowedDiscount);
     }
 

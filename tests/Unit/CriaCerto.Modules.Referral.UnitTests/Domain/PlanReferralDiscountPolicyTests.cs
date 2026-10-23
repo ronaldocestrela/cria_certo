@@ -170,4 +170,46 @@ public class PlanReferralDiscountPolicyTests
         policy.Reactivate();
         policy.IsActive.Should().BeTrue();
     }
+
+    [Fact]
+    public void CalculateDiscount_WhenFixedValueExceedsBasePrice_ShouldClampTo100PercentOfBasePrice()
+    {
+        // Arrange: Plano custa R$ 150, mas desconto fixo é R$ 50 e cliente tem 5 amigos ativos (R$ 250)
+        var policy = PlanReferralDiscountPolicy.Create(
+            Guid.NewGuid(), "STARTER", DiscountType.FixedValue, 50m, maxDiscountCapPercentage: 100m).Value;
+
+        // Act
+        var discount = policy.CalculateDiscount(basePrice: 150m, activeReferralsCount: 5);
+
+        // Assert: Não pode passar de R$ 150 (teto de 100% da assinatura, sem saldo negativo)
+        discount.Should().Be(150m);
+    }
+
+    [Fact]
+    public void CalculateDiscount_WhenPercentageExceedsCap_ShouldClampStrictlyTo100PercentOrConfiguredCap()
+    {
+        // Arrange: 10% por amigo, mas com 12 amigos (120%) e cap configurado de 100%
+        var policy = PlanReferralDiscountPolicy.Create(
+            Guid.NewGuid(), "STARTER", DiscountType.Percentage, 10m, maxDiscountCapPercentage: 100m).Value;
+
+        // Act
+        var discount = policy.CalculateDiscount(basePrice: 200m, activeReferralsCount: 12);
+
+        // Assert: 100% de R$ 200 = R$ 200
+        discount.Should().Be(200m);
+    }
+
+    [Fact]
+    public void CalculateDiscount_WhenConfiguredCapIsLowerThan100_ShouldRespectLowerCap()
+    {
+        // Arrange: 15% por amigo, cap de 50%, 4 amigos (60%)
+        var policy = PlanReferralDiscountPolicy.Create(
+            Guid.NewGuid(), "STARTER", DiscountType.Percentage, 15m, maxDiscountCapPercentage: 50m).Value;
+
+        // Act
+        var discount = policy.CalculateDiscount(basePrice: 300m, activeReferralsCount: 4);
+
+        // Assert: Cap de 50% de R$ 300 = R$ 150
+        discount.Should().Be(150m);
+    }
 }

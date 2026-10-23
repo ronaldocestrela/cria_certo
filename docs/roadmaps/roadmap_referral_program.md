@@ -245,13 +245,23 @@ flowchart TD
 - [x] Endpoint administrativo no Backoffice (`POST /api/v1/backoffice/referral/payouts/run-enforcement`) para disparo sob demanda do ciclo pelo operador financeiro com claim `referral.payouts.manage`.
 - [x] Cobertura abrangente de testes unitários (`ReferralMaturityEnforcementTests`, `StripeChargeRefundedReferralHandlerTests`) e integração arquitetural de ponta a ponta (`ReferralMaturityWorkerIntegrationTests`) com 100% de sucesso.
 
-#### 5.2 Regras de Prevenção a Abusos e Fraudes
-- **Bloqueio de Auto-Indicação**:
-  - Validação cruzada impedindo indicação entre contas com mesmo CPF/CNPJ, mesmo titular ou mesmo cartão de crédito registrado no Stripe.
-- **Validação de Limite de Desconto**:
-  - O desconto do cliente nunca poderá gerar saldo negativo a pagar ou transferência de dinheiro de volta ao cliente; o abatimento é limitado a 100% da assinatura do período.
-- **Auditoria de Alteração de Contrato**:
-  - Toda modificação na taxa de comissão de um parceiro comercial gera log imutável de auditoria no Backoffice.
+#### 5.2 Regras de Prevenção a Abusos e Fraudes [CONCLUÍDO]
+- [x] **Bloqueio de Auto-Indicação no Cadastro e Validação Cruzada**:
+  - Detecção imediata em `TenantRegisteredReferralHandler`: impede indicação entre contas com mesmo CPF/CNPJ (inclusive parceiros comerciais via `PartnerContract.LegalDocumentNumber`), mesmo titular/e-mail (`TechnicalOwnerEmail`, `CommercialOwnerEmail` ou e-mail de registro) ou mesmo `TenantId`.
+  - Em caso de colisão, transiciona compulsoriamente para `AttributionStatus.Fraudulent` com `FraudReason` descritivo e grava evento imutável no `AuditLog` do Backoffice via `IReferralAuditSink` (`Referral.AntiFraud.SelfReferralBlocked`).
+- [x] **Bloqueio de Fraude por Cartão de Crédito Coincidente (Stripe) & Suspensão Preventiva**:
+  - Interceptação em tempo real via evento de domínio `TenantPaymentSucceededIntegrationEvent` em `TenantPaymentSucceededReferralHandler`:
+  - Validação remota no Stripe (`HasCardFingerprintCollisionAsync`) comparando o `fingerprint` dos cartões do pagante com os do cliente indicador.
+  - Se colidir, cancela a conversão para `Fraudulent`, bloqueia a recompensa no ledger, suspende o participante indicador preventivamente (`ParticipantStatus.Suspended`) e gera log forense de severidade crítica no Backoffice.
+- [x] **Validação e Governança de Limite de Desconto (Teto de 100%)**:
+  - Blindagem invariante no motor de cálculo em `PlanReferralDiscountPolicy.CalculateDiscount`: o abatimento acumulado (fixo ou percentual) é estritamente limitado ao teto de 100% da assinatura base do período atual.
+  - O desconto do cliente nunca poderá gerar saldo negativo a pagar ou transferência de dinheiro de volta ao cliente.
+  - Projeção no Dashboard do cliente (`GetCustomerReferralDashboardQuery`) atualizada com o valor base do plano e indicação visual de limite atingido.
+  - Validação defensiva no ledger em `ReferralRewardLedger.CreateInvoiceDiscountCredit` com `maxInvoiceAmount`.
+- [x] **Governança 4-Eyes e Auditoria Forense em Alteração de Contrato**:
+  - Toda modificação contratual de comissão de parceiro comercial em `UpdatePartnerContractCommissionCommandHandler` emite compulsoriamente registro de auditoria forense no `AuditLog` do Backoffice com hash SHA-256 encadeado (`Referral.PartnerContract.CommissionUpdated`) com diff completo (`OldContract` vs `NewContract`).
+  - Governança de aprovação dupla (princípio 4-Eyes) implementada e validada via `AdminApprovalRequest` com `ApprovalRequestType.UpdatePartnerContractCommission`, rejeitando auto-aprovação (`ApprovalErrors.CannotSelfApprove`) e auditando a execução autorizada por um segundo operador.
+- [x] Cobertura abrangente de testes unitários para anti-fraude de cadastro, colisão de cartão de crédito Stripe, limitação de 100% de desconto e aprovação 4-Eyes com 100% de sucesso.
 
 ---
 

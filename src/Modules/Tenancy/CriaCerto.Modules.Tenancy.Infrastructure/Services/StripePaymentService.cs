@@ -526,6 +526,22 @@ public sealed class StripePaymentService : IStripePaymentService
             _dbContext.SubscriptionHistories.Add(history);
 
             _logger.LogInformation("Tenant {TenantId} ativado após Checkout com pagamento confirmado ({PaymentStatus}) no Stripe. Período estendido até {PeriodEndUtc}.", tenant.Id, session.PaymentStatus, tenant.CurrentPeriodEndUtc);
+
+            if (_publisher != null && !string.IsNullOrWhiteSpace(tenant.StripeCustomerId))
+            {
+                var amountTotal = (session.AmountTotal ?? 0) / 100m;
+                var currency = string.IsNullOrWhiteSpace(session.Currency) ? "BRL" : session.Currency.ToUpperInvariant();
+                await _publisher.Publish(new TenantPaymentSucceededIntegrationEvent(
+                    TenantId: tenant.Id,
+                    StripeCustomerId: tenant.StripeCustomerId,
+                    StripeInvoiceId: session.InvoiceId,
+                    StripePaymentMethodId: null,
+                    StripeCardFingerprint: null,
+                    AmountPaid: amountTotal,
+                    Currency: currency,
+                    PaymentDateUtc: DateTime.UtcNow
+                ), cancellationToken);
+            }
         }
         else
         {
@@ -589,6 +605,22 @@ public sealed class StripePaymentService : IStripePaymentService
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         _logger.LogInformation("Fatura quitada para o Tenant {TenantId}. Renovação garantida até {PeriodEnd}", tenant.Id, tenant.CurrentPeriodEndUtc);
+
+        if (_publisher != null && !string.IsNullOrWhiteSpace(tenant.StripeCustomerId))
+        {
+            var amountPaid = invoice.AmountPaid > 0 ? (invoice.AmountPaid / 100m) : (invoice.Total / 100m);
+            var currency = string.IsNullOrWhiteSpace(invoice.Currency) ? "BRL" : invoice.Currency.ToUpperInvariant();
+            await _publisher.Publish(new TenantPaymentSucceededIntegrationEvent(
+                TenantId: tenant.Id,
+                StripeCustomerId: tenant.StripeCustomerId,
+                StripeInvoiceId: invoice.Id,
+                StripePaymentMethodId: invoice.DefaultPaymentMethodId,
+                StripeCardFingerprint: null,
+                AmountPaid: amountPaid,
+                Currency: currency,
+                PaymentDateUtc: DateTime.UtcNow
+            ), cancellationToken);
+        }
     }
 
     private async Task HandleInvoicePaymentFailedAsync(

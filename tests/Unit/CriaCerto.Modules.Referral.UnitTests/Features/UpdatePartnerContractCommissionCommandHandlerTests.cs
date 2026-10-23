@@ -1,4 +1,5 @@
 using CriaCerto.BuildingBlocks.Abstractions.Results;
+using CriaCerto.Modules.Referral.Application.Abstractions;
 using CriaCerto.Modules.Referral.Application.Domain;
 using CriaCerto.Modules.Referral.Application.Domain.Enums;
 using CriaCerto.Modules.Referral.Application.Features.CommercialPartners.Commands;
@@ -6,6 +7,7 @@ using CriaCerto.Modules.Referral.Infrastructure.Persistence;
 using FluentAssertions;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using NSubstitute;
 using Xunit;
 
 namespace CriaCerto.Modules.Referral.UnitTests.Features;
@@ -106,5 +108,65 @@ public sealed class UpdatePartnerContractCommissionCommandHandlerTests : IDispos
         activeContracts.Should().HaveCount(1);
         activeContracts[0].CommissionValue.Should().Be(15m);
         activeContracts[0].MaxRecurringMonths.Should().Be(24);
+    }
+
+    [Fact]
+    public async Task Handle_Should_Call_AuditSink_With_Chained_Forensic_Data_When_Commission_Updated()
+    {
+        // Arrange
+        var adminId = Guid.NewGuid();
+        var participant = ReferralProgramParticipant.CreateCommercialPartner(adminId).Value;
+        var profile = CommercialPartnerProfile.Create(
+            participant.Id,
+            "Veterinária Campo Limpo",
+            "VET Campo",
+            "vet@campolimpo.com",
+            "+5567999112233",
+            PartnerCategory.Veterinarian,
+            "Dourados",
+            "MS").Value;
+
+        var contractV1 = PartnerContract.Create(
+            participant.Id,
+            CommissionType.FixedPerConversion,
+            100m,
+            null,
+            30,
+            "vet@campolimpo.com",
+            PixKeyType.Email,
+            "12.345.678/0001-99",
+            DateTime.UtcNow.AddMonths(-1)).Value;
+
+        _dbContext.Participants.Add(participant);
+        _dbContext.PartnerProfiles.Add(profile);
+        _dbContext.PartnerContracts.Add(contractV1);
+        await _dbContext.SaveChangesAsync();
+
+        var auditSinkMock = NSubstitute.Substitute.For<IReferralAuditSink>();
+        var handler = new UpdatePartnerContractCommissionCommandHandler(_dbContext, auditSinkMock);
+
+        var command = new UpdatePartnerContractCommissionCommand(
+            ParticipantId: participant.Id,
+            CommissionType: CommissionType.PercentageRecurring,
+            CommissionValue: 25m,
+            MaxRecurringMonths: 12,
+            PaymentTermsDays: 30,
+            PixKey: "vet@campolimpo.com",
+            PixKeyType: PixKeyType.Email,
+            AdminUserId: adminId,
+            Justification: "Ajuste de comissão aprovado por 4-Eyes pelo Diretor Comercial");
+
+        // Act
+        var result = await handler.Handle(command, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.Should().BeTrue();
+
+        await auditSinkMock.Received(1).RecordSystemAuditAsync(
+            "Referral.PartnerContract.CommissionUpdated",
+            NSubstitute.Arg.Is<string>(s => s.StartsWith("PartnerContract/")),
+            null,
+            NSubstitute.Arg.Is<string>(s => s.Contains("PartnerContractCommissionUpdated") && s.Contains("25") && s.Contains("4-Eyes")),
+            NSubstitute.Arg.Any<CancellationToken>());
     }
 }

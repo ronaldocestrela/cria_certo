@@ -29,3 +29,14 @@ public sealed record StripeChargeRefundedIntegrationEvent(
     DateTime OccurredOnUtc
 ) : INotification;
 
+public sealed record TenantPaymentSucceededIntegrationEvent(
+    Guid TenantId,
+    string StripeCustomerId,
+    string? StripeInvoiceId,
+    string? StripePaymentMethodId,
+    string? StripeCardFingerprint,
+    decimal AmountPaid,
+    string Currency,
+    DateTime PaymentDateUtc
+) : INotification;
+
