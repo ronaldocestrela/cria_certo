@@ -368,6 +368,15 @@ public sealed class StripePaymentService : IStripePaymentService
                     break;
                 }
 
+                case "charge.refunded":
+                {
+                    if (stripeEvent.Data.Object is Stripe.Charge charge)
+                    {
+                        await HandleChargeRefundedAsync(charge, cancellationToken);
+                    }
+                    break;
+                }
+
                 default:
                     _logger.LogDebug("Evento Stripe não tratado explicitamente: {EventType}", stripeEvent.Type);
                     break;
@@ -920,4 +929,29 @@ public sealed class StripePaymentService : IStripePaymentService
             return Result.Failure(Error.Failure("Stripe.UnexpectedError", $"Erro inesperado ao sincronizar com Stripe: {ex.Message}"));
         }
     }
+
+    private async Task HandleChargeRefundedAsync(
+        Stripe.Charge charge,
+        CancellationToken cancellationToken)
+    {
+        string? invoiceId = null;
+        _logger.LogInformation(
+            "Processando estorno/reembolso Stripe: Charge {ChargeId}, Invoice {InvoiceId}, AmountRefunded {Amount}",
+            charge.Id, invoiceId, charge.AmountRefunded);
+
+        if (_publisher != null)
+        {
+            var amountRefunded = charge.AmountRefunded > 0 ? charge.AmountRefunded / 100m : 0m;
+            var integrationEvent = new StripeChargeRefundedIntegrationEvent(
+                StripeChargeId: charge.Id,
+                StripeInvoiceId: invoiceId,
+                StripeCustomerId: charge.CustomerId,
+                AmountRefunded: amountRefunded,
+                Currency: charge.Currency?.ToUpperInvariant() ?? "BRL",
+                OccurredOnUtc: DateTime.UtcNow);
+
+            await _publisher.Publish(integrationEvent, cancellationToken);
+        }
+    }
 }
+

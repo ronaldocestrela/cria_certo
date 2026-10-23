@@ -23,6 +23,8 @@ using CriaCerto.Modules.Referral.Application.Features.CustomerReferral.Queries;
 using CriaCerto.Modules.Referral.Application.Features.PartnerPortal.Commands;
 using CriaCerto.Modules.Referral.Application.Features.PartnerPortal.Dtos;
 using CriaCerto.Modules.Referral.Application.Features.PartnerPortal.Queries;
+using CriaCerto.Modules.Referral.Application.Features.Enforcement.Commands;
+using CriaCerto.Modules.Referral.Application.Options;
 using CriaCerto.BuildingBlocks.Application.Features.GetReferenceBreeds;
 using CriaCerto.Api.Seeders;
 using CriaCerto.Modules.Sanitary.Application.Features.GetVaccineCalendar;
@@ -185,9 +187,13 @@ builder.Services.AddScoped<IPartnerAccountProvisioner, PartnerAccountProvisioner
 builder.Services.AddScoped<IPlanCatalogLookupService, PlanCatalogLookupService>();
 builder.Services.AddScoped<ITenantInfoLookupService, TenantInfoLookupService>();
 builder.Services.AddScoped<CriaCerto.Modules.Tenancy.Application.Abstractions.IPartnerRoleLookupService, PartnerRoleLookupService>();
+builder.Services.AddScoped<IReferralPaymentVerificationService, StripePaymentVerificationService>();
+builder.Services.AddScoped<IReferralAuditSink, ReferralBackofficeAuditSink>();
+builder.Services.Configure<ReferralEnforcementOptions>(builder.Configuration.GetSection(ReferralEnforcementOptions.SectionName));
 
 // Background Services
 builder.Services.AddHostedService<SubscriptionLifecycleWorker>();
+builder.Services.AddHostedService<ReferralMaturityAndEnforcementWorker>();
 
 // Configure CORS Policy
 var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() 
@@ -1554,6 +1560,13 @@ backoffice.MapPost("/referral/payouts/{id:guid}/cancel", async (
     }
 
     return ToCommandHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ReferralPayoutsManage)).WithTags("Backoffice Referral Payouts");
+
+backoffice.MapPost("/referral/payouts/run-enforcement", async (ISender sender) =>
+{
+    var command = new ProcessReferralMaturityAndEnforcementCommand();
+    var result = await sender.Send(command);
+    return ToHttpResult(result);
 }).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ReferralPayoutsManage)).WithTags("Backoffice Referral Payouts");
 
 backoffice.MapGet("/referral/discount-policies", async (ISender sender) =>

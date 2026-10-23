@@ -28,6 +28,7 @@ public static class DependencyInjection
         var receiptsDir = configuration["Storage:PayoutReceiptsDirectory"];
         services.AddSingleton<IPayoutReceiptStorageService>(new Storage.LocalPayoutReceiptStorageService(receiptsDir));
         services.AddSingleton<Application.Features.Payouts.Services.IPixBatchCsvGenerator, Application.Features.Payouts.Services.PixBatchCsvGenerator>();
+        services.AddScoped<IReferralMaturityEnforcementService, Application.Features.Enforcement.Services.ReferralMaturityEnforcementService>();
 
         return services;
     }

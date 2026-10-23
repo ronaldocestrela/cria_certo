@@ -297,8 +297,32 @@ O portal `/partner/portal` (com rota alternativa `/partner`) oferece um ambiente
   6. *Total Repassado Acumulado*: Comissões quitadas via Pix (`PaidOut`).
 * **Gerenciador de Links & Campanhas:** Card do link oficial com botões "Copiar Link" e "Compartilhar no WhatsApp", acompanhado de tabela com campanhas secundárias e modal de criação rápida.
 * **Modal de Edição de Chave Pix:** Seletor de tipo (CPF, CNPJ, E-mail, Telefone, Chave Aleatória) e validação em tempo real.
-* **Tabela de Extrato de Comissões:** Filtros por período, status e busca de fazendas, com colunas para valor do plano, taxa contratual, comissão líquida, data de vencimento da carência e código de transação Pix.
+---
 
+## 10. Background Job de Maturação e Liquidação de Comissões (Fase 5.1)
 
+### 10.1 Arquitetura do Worker e Ciclo Diário
+* **Hospedagem & Agendamento:** `ReferralMaturityAndEnforcementWorker` (implementado como `BackgroundService` com `PeriodicTimer`), parametrizável via `IOptionsMonitor<ReferralEnforcementOptions>` no `appsettings.json` (`Referral:Enforcement:IntervalHours = 24`, `InitialDelaySeconds = 20`).
+* **Regra de Maturação D+30:**
+  - Varre o livro-razão (`RewardLedger`) identificando comissões de parceiros comerciais (`RewardType.CashCommission`) em status `PendingMaturity` com `MaturityDateUtc <= Now`.
+  - Transiciona compulsoriamente os lançamentos elegíveis para `AvailableForPayout` via método de domínio `ledger.ReleaseForPayout()`.
 
+### 10.2 Tratamento de Estornos e Reembolsos Stripe (Estratégia Híbrida - Opção C)
+1. **Camada Reativa (Tempo Real):**
+   - O webhook Stripe `charge.refunded` é processado pelo `StripePaymentService`, que dispara o evento de integração `StripeChargeRefundedIntegrationEvent`.
+   - O handler `StripeChargeRefundedReferralHandler` consome o evento e cancela imediatamente qualquer lançamento pendente associado à fatura (`ledger.Cancel(...)`).
+2. **Checagem Preventiva no Job (Polling Seguro):**
+   - Antes de liberar lançamentos maduros para saque, o serviço consulta ativamente a API do Stripe via `IReferralPaymentVerificationService` (`StripePaymentVerificationService`).
+   - Faturas canceladas (`void`, `uncollectible`) ou com emissão de notas de crédito pós-pagamento (`PostPaymentCreditNotesAmount > 0`) cancelam a comissão compulsoriamente com justificativa auditada.
 
+### 10.3 Tratamento de Inadimplência e Cancelamento da Fazenda Indicada
+* **Consulta Desacoplada:** Realizada em lote via `ITenantInfoLookupService.GetTenantSummariesAsync(tenantIds)` no Host API, sem cruzamentos ou joins físicos cross-module.
+* **Ações Compulsórias:**
+  - Caso a fazenda indicada esteja em status `PastDue`, `Cancelled` ou `Suspended`:
+    1. Cancela o lançamento pendente: `ledger.Cancel(...)`.
+    2. Migra a indicação para `Churned`: `attribution.MarkChurned()`.
+    3. Registra auditoria forense no Backoffice via `IReferralAuditSink`.
+
+### 10.4 Auditoria Forense e Disparo Manual
+* **Sink de Auditoria Forense:** Implementado em `ReferralBackofficeAuditSink`, inserindo registros com hash criptográfico SHA-256 encadeado no `AuditLog` do Backoffice (`Category = Billing`, `Severity = High`).
+* **Endpoint Administrativo:** Operadores financeiros com permissão `referral.payouts.manage` podem forçar a execução imediata do ciclo por meio do endpoint `POST /api/v1/backoffice/referral/payouts/run-enforcement`.

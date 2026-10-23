@@ -231,11 +231,19 @@ flowchart TD
 
 ### Fase 5: Jobs de Liquidação, Repasses e Proteção Anti-Fraude
 
-#### 5.1 Background Job (`ReferralMaturityAndEnforcementJob`)
-- Execução diária agendada via Quartz / Worker:
-  - Identifica lançamentos no ledger com `MaturityDateUtc <= Now` e migra de `PendingMaturity` para `AvailableForPayout`.
-  - Verifica se houve estorno/reembolso no Stripe (`charge.refunded` ou cancelamento imediato); se sim, cancela os créditos pendentes.
-  - Trata suspensão ou inadimplência do indicado: interrompe repasses recorrentes caso a fazenda indicada fique em status `PastDue` ou `Cancelled`.
+#### 5.1 Background Job (`ReferralMaturityAndEnforcementJob`) [CONCLUÍDO]
+- [x] Worker em segundo plano agendado via `BackgroundService` e `PeriodicTimer` (`ReferralMaturityAndEnforcementWorker`), configurado com intervalo diário e atraso inicial (`ReferralEnforcementOptions`).
+- [x] Liberação de maturação D+30: identifica comissões de parceiros comerciais (`RewardType.CashCommission`) em `PendingMaturity` com `MaturityDateUtc <= Now` e transiciona compulsoriamente para `AvailableForPayout`.
+- [x] Estratégia Híbrida de Estorno Stripe (Opção C):
+  - Camada Reativa em tempo real: recebimento de webhook `charge.refunded` no `StripePaymentService`, despachando evento in-process `StripeChargeRefundedIntegrationEvent` tratado por `StripeChargeRefundedReferralHandler` para cancelamento imediato de comissões pendentes.
+  - Checagem Ativa preventiva no Job: verificação remota via `IReferralPaymentVerificationService` (`StripePaymentVerificationService`) no Host API para faturas canceladas (`void`, `uncollectible`) ou com notas de crédito pós-pagamento (`PostPaymentCreditNotesAmount > 0`).
+- [x] Tratamento de inadimplência e cancelamento da fazenda indicada:
+  - Consulta desacoplada via `ITenantInfoLookupService.GetTenantSummariesAsync(...)`.
+  - Caso a fazenda indicada esteja em status `PastDue`, `Cancelled` ou `Suspended`, cancela compulsoriamente os lançamentos pendentes (`Status = Cancelled`) e migra o status da indicação (`ReferralAttribution`) para `Churned`.
+- [x] Auditoria forense imutável com hash SHA-256 encadeado:
+  - Abstração `IReferralAuditSink` implementada no Host (`ReferralBackofficeAuditSink`) registrando eventos `Referral.CommissionCancelled.TenantInsolvent`, `Referral.CommissionCancelled.StripeRefund` e `Referral.CommissionCancelled.WebhookRefund` no `AuditLog` do Backoffice.
+- [x] Endpoint administrativo no Backoffice (`POST /api/v1/backoffice/referral/payouts/run-enforcement`) para disparo sob demanda do ciclo pelo operador financeiro com claim `referral.payouts.manage`.
+- [x] Cobertura abrangente de testes unitários (`ReferralMaturityEnforcementTests`, `StripeChargeRefundedReferralHandlerTests`) e integração arquitetural de ponta a ponta (`ReferralMaturityWorkerIntegrationTests`) com 100% de sucesso.
 
 #### 5.2 Regras de Prevenção a Abusos e Fraudes
 - **Bloqueio de Auto-Indicação**:
