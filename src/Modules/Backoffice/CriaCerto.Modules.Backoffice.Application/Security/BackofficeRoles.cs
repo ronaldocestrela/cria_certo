@@ -56,7 +56,14 @@ public static class BackofficeRoles
                 BackofficePermissions.SubscriptionsManage,
                 BackofficePermissions.ApprovalsRequest,
                 BackofficePermissions.ObservabilityRead,
-                BackofficePermissions.RolloutRead
+                BackofficePermissions.RolloutRead,
+                BackofficePermissions.ReferralPartnersRead,
+                BackofficePermissions.ReferralPartnersManage,
+                BackofficePermissions.ReferralPayoutsRead,
+                BackofficePermissions.ReferralPayoutsManage,
+                BackofficePermissions.ReferralPayoutsExport,
+                BackofficePermissions.ReferralDiscountsRead,
+                BackofficePermissions.ReferralDiscountsManage
             },
 
             ReadOnlyAuditor => new[]
@@ -68,7 +75,10 @@ public static class BackofficeRoles
                 BackofficePermissions.ObservabilityRead,
                 BackofficePermissions.ComplianceRead,
                 BackofficePermissions.ComplianceExport,
-                BackofficePermissions.RolloutRead
+                BackofficePermissions.RolloutRead,
+                BackofficePermissions.ReferralPartnersRead,
+                BackofficePermissions.ReferralPayoutsRead,
+                BackofficePermissions.ReferralDiscountsRead
             },
 
             _ => Array.Empty<string>()

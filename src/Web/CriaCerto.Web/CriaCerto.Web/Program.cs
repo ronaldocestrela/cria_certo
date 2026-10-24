@@ -70,6 +70,9 @@ builder.Services.AddScoped<IImpersonationStateService, ImpersonationStateService
 builder.Services.AddScoped<IOfflineSyncService, OfflineSyncService>();
 builder.Services.AddScoped<IToastService, ToastService>();
 builder.Services.AddScoped<IFeatureFlagClientService, FeatureFlagClientService>();
+builder.Services.AddScoped<IReferralTrackingService, ReferralTrackingService>();
+builder.Services.AddScoped<IReferralApiClient, ReferralApiClient>();
+builder.Services.AddScoped<IPartnerApiClient, PartnerApiClient>();
 
 var app = builder.Build();
 
@@ -124,5 +127,23 @@ app.MapRazorComponents<App>()
     .AddInteractiveWebAssemblyRenderMode()
     .AddAdditionalAssemblies(typeof(CriaCerto.Web.Client._Imports).Assembly)
     .AllowAnonymous();
+
+app.MapGet("/r/{code}", (string code, HttpContext context) =>
+{
+    if (!string.IsNullOrWhiteSpace(code))
+    {
+        var normalized = code.Trim().ToUpperInvariant();
+        context.Response.Cookies.Append("cc_referral_code", normalized, new CookieOptions
+        {
+            Path = "/",
+            MaxAge = TimeSpan.FromDays(30),
+            SameSite = SameSiteMode.Lax,
+            Secure = context.Request.IsHttps,
+            HttpOnly = false
+        });
+        return Results.Redirect($"/register?ref={Uri.EscapeDataString(normalized)}");
+    }
+    return Results.Redirect("/register");
+}).AllowAnonymous();
 
 app.Run();

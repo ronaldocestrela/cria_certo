@@ -44,6 +44,14 @@ public sealed class ResetPasswordCommandHandler : IRequestHandler<ResetPasswordC
         user.PasswordResetToken = null;
         user.PasswordResetTokenExpiresAt = null;
 
+        if (!user.IsEmailConfirmed)
+        {
+            user.IsEmailConfirmed = true;
+            user.EmailConfirmedAtUtc = DateTime.UtcNow;
+            user.EmailConfirmationToken = null;
+            user.EmailConfirmationTokenExpiresAt = null;
+        }
+
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         return Result.Success();

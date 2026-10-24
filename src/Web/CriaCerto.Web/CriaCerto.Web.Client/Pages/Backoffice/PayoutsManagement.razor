@@ -1,0 +1,1350 @@
+@page "/backoffice/referral/payouts"
+@layout Layout.BackofficeLayout
+@using CriaCerto.BuildingBlocks.Abstractions.Results
+@using CriaCerto.Modules.Backoffice.Application.Security
+@using CriaCerto.Modules.Referral.Application.Domain.Enums
+@using CriaCerto.Modules.Referral.Application.Features.Payouts.Dtos
+@using CriaCerto.Web.Client.Components.Backoffice
+@using CriaCerto.Web.Client.Services
+@inject IBackofficeApiClient ApiClient
+@inject IJSRuntime JS
+@inject IToastService Toast
+
+<PageTitle>CriaCerto Backoffice - Painel Financeiro de Comissões e Repasses</PageTitle>
+
+<PermissionGuard Permission="@BackofficePermissions.ReferralPayoutsRead">
+    <Authorized>
+        <div class="payouts-page">
+            <header class="page-header">
+                <div>
+                    <span class="badge-finance">Programa de Parcerias & Finanças</span>
+                    <h1 class="page-title">Painel Financeiro de Comissões e Repasses</h1>
+                    <p class="page-subtitle">Controle de maturação D+30, liquidação de comissões liberadas com upload de comprovante e exportação de remessa Pix.</p>
+                </div>
+                <div class="header-actions">
+                    <button class="btn btn-secondary" @onclick="LoadAllDataAsync" disabled="@_isLoading">
+                        <span>🔄</span> Atualizar
+                    </button>
+                    <PermissionGuard Permission="@BackofficePermissions.ReferralPayoutsExport">
+                        <Authorized>
+                            <button class="btn btn-outline-success" @onclick="ExportPixBatchAsync" disabled="@(_isLoading || _isExporting || _availablePayouts.Count == 0)">
+                                <span>📥</span> @(_isExporting ? "Gerando..." : "Exportar Lote Pix (.CSV)")
+                            </button>
+                        </Authorized>
+                    </PermissionGuard>
+                </div>
+            </header>
+
+            <!-- KPIs Grid -->
+            <div class="kpis-grid">
+                <div class="kpi-card">
+                    <span class="kpi-label">Retido em Carência (D+30)</span>
+                    <span class="kpi-value text-warning">R$ @(_kpis?.TotalPendingMaturityAmount.ToString("N2") ?? "0,00")</span>
+                    <span class="kpi-sub">@(_kpis?.TotalPendingMaturityCount ?? 0) lançamentos em carência</span>
+                </div>
+                <div class="kpi-card highlight-green">
+                    <span class="kpi-label">Liberado para Repasse</span>
+                    <span class="kpi-value text-success">R$ @(_kpis?.TotalAvailableForPayoutAmount.ToString("N2") ?? "0,00")</span>
+                    <span class="kpi-sub">@(_kpis?.TotalAvailablePartnersCount ?? 0) parceiros aptos para saque</span>
+                </div>
+                <div class="kpi-card">
+                    <span class="kpi-label">Repasses Pagos no Mês</span>
+                    <span class="kpi-value text-info">R$ @(_kpis?.TotalPaidOutThisMonthAmount.ToString("N2") ?? "0,00")</span>
+                    <span class="kpi-sub">@(_kpis?.TotalPaidOutThisMonthCount ?? 0) liquidações concluídas</span>
+                </div>
+            </div>
+
+            <!-- Abas de Navegação -->
+            <div class="tabs-bar">
+                <button class="tab-button @(_currentTab == TabAvailable ? "active" : "")" @onclick="() => SetTab(TabAvailable)">
+                    <span>💰</span> Liberados para Repasse (@_availablePayouts.Count)
+                </button>
+                <button class="tab-button @(_currentTab == TabPending ? "active" : "")" @onclick="() => SetTab(TabPending)">
+                    <span>⏳</span> Em Carência D+30 (@_pendingCommissions.Count)
+                </button>
+                <button class="tab-button @(_currentTab == TabHistory ? "active" : "")" @onclick="() => SetTab(TabHistory)">
+                    <span>📋</span> Histórico de Repasses (@_payoutHistory.Count)
+                </button>
+            </div>
+
+            <!-- Filtros e Busca -->
+            <div class="filters-bar">
+                <div class="search-box">
+                    <span class="search-icon">🔍</span>
+                    <input type="text" placeholder="Buscar por parceiro, documento, chave Pix ou código de transação..."
+                           @bind="_searchTerm" @bind:event="oninput" @onkeyup="HandleSearchKeyUp" />
+                </div>
+                <button class="btn btn-secondary" @onclick="LoadCurrentTabDataAsync">Filtrar</button>
+            </div>
+
+            <!-- TAB 1: LIBERADOS PARA REPASSE (Visão Agrupada por Parceiro com Accordion) -->
+            @if (_currentTab == TabAvailable)
+            {
+                <div class="table-container">
+                    @if (_isLoading)
+                    {
+                        <div class="loading-state">
+                            <div class="spinner"></div>
+                            <p>Carregando comissões liberadas para repasse...</p>
+                        </div>
+                    }
+                    else if (_availablePayouts.Count == 0)
+                    {
+                        <div class="empty-state">
+                            <span class="empty-icon">✅</span>
+                            <h3>Nenhum repasse pendente de liquidação</h3>
+                            <p>Todas as comissões liberadas já foram pagas ou ainda estão cumprindo o período de carência D+30.</p>
+                        </div>
+                    }
+                    else
+                    {
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 40px;"></th>
+                                    <th>Parceiro Comercial</th>
+                                    <th>Documento Fiscal</th>
+                                    <th>Chave Pix / Favorecido</th>
+                                    <th class="text-end">Comissões</th>
+                                    <th class="text-end">Valor Liberado (R$)</th>
+                                    <th class="text-center" style="width: 190px;">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var partner in _availablePayouts)
+                                {
+                                    var isExpanded = _expandedPartnerIds.Contains(partner.ParticipantId);
+                                    <tr class="partner-row @(isExpanded ? "expanded" : "")">
+                                        <td class="text-center">
+                                            <button class="btn-accordion" @onclick="() => ToggleAccordion(partner.ParticipantId)">
+                                                @(isExpanded ? "▼" : "▶")
+                                            </button>
+                                        </td>
+                                        <td>
+                                            <div class="partner-info">
+                                                <span class="partner-name">@partner.PartnerName</span>
+                                                @if (!string.IsNullOrWhiteSpace(partner.TradeName))
+                                                {
+                                                    <span class="partner-trade">(@partner.TradeName)</span>
+                                                }
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <MaskedDataField Value="@partner.LegalDocumentNumber" FieldType="cpf-cnpj" />
+                                        </td>
+                                        <td>
+                                            <div class="pix-info">
+                                                <span class="pix-badge">@partner.PixKeyType</span>
+                                                <MaskedDataField Value="@partner.PixKey" FieldType="generic" />
+                                            </div>
+                                        </td>
+                                        <td class="text-end font-mono">
+                                            <span class="badge-count">@partner.CommissionsCount fatura(s)</span>
+                                        </td>
+                                        <td class="text-end font-mono text-success font-bold">
+                                            R$ @partner.TotalAvailableAmount.ToString("N2")
+                                        </td>
+                                        <td class="text-center">
+                                            <PermissionGuard Permission="@BackofficePermissions.ReferralPayoutsManage">
+                                                <Authorized>
+                                                    <button class="btn btn-sm btn-success" @onclick="() => OpenPayoutModal(partner)">
+                                                        <span>💸</span> Efetuar Baixa
+                                                    </button>
+                                                </Authorized>
+                                                <NotAuthorized>
+                                                    <span class="text-muted text-sm">Somente leitura</span>
+                                                </NotAuthorized>
+                                            </PermissionGuard>
+                                        </td>
+                                    </tr>
+
+                                    @if (isExpanded)
+                                    {
+                                        <tr class="accordion-details-row">
+                                            <td colspan="7">
+                                                <div class="accordion-content">
+                                                    <div class="accordion-header">
+                                                        <span>Detalhamento das comissões vinculadas a este parceiro:</span>
+                                                    </div>
+                                                    <table class="sub-table">
+                                                        <thead>
+                                                            <tr>
+                                                                <th>ID Lançamento</th>
+                                                                <th>Fatura Stripe</th>
+                                                                <th>Data Criação</th>
+                                                                <th>Data Maturação</th>
+                                                                <th class="text-end">Valor Líquido</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            @foreach (var com in partner.Commissions)
+                                                            {
+                                                                <tr>
+                                                                    <td class="font-mono text-muted text-xs">@com.LedgerId.ToString().Substring(0, 8)...</td>
+                                                                    <td>@(string.IsNullOrWhiteSpace(com.StripeInvoiceId) ? "—" : com.StripeInvoiceId)</td>
+                                                                    <td>@com.CreatedAtUtc.ToString("dd/MM/yyyy HH:mm")</td>
+                                                                    <td>@(com.MaturityDateUtc.HasValue ? com.MaturityDateUtc.Value.ToString("dd/MM/yyyy") : "—")</td>
+                                                                    <td class="text-end font-mono text-success">R$ @com.NetAmount.ToString("N2")</td>
+                                                                </tr>
+                                                            }
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    }
+                </div>
+            }
+
+            <!-- TAB 2: EM CARÊNCIA D+30 -->
+            @if (_currentTab == TabPending)
+            {
+                <div class="table-container">
+                    @if (_isLoading)
+                    {
+                        <div class="loading-state">
+                            <div class="spinner"></div>
+                            <p>Carregando comissões em carência...</p>
+                        </div>
+                    }
+                    else if (_pendingCommissions.Count == 0)
+                    {
+                        <div class="empty-state">
+                            <span class="empty-icon">⏳</span>
+                            <h3>Nenhuma comissão aguardando carência D+30</h3>
+                            <p>Não há lançamentos de comissão pendentes de maturação no momento.</p>
+                        </div>
+                    }
+                    else
+                    {
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Parceiro Comercial</th>
+                                    <th>Código Ref</th>
+                                    <th>Fatura Stripe</th>
+                                    <th>Data Lançamento</th>
+                                    <th>Maturação Prevista</th>
+                                    <th>Status de Carência</th>
+                                    <th class="text-end">Valor Retido (R$)</th>
+                                    <th class="text-center" style="width: 140px;">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var item in _pendingCommissions)
+                                {
+                                    <tr>
+                                        <td>
+                                            <div class="partner-info">
+                                                <span class="partner-name">@item.PartnerName</span>
+                                                <MaskedDataField Value="@item.LegalDocumentNumber" FieldType="cpf-cnpj" />
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <span class="badge-code">@(string.IsNullOrWhiteSpace(item.ReferralCode) ? "—" : item.ReferralCode)</span>
+                                        </td>
+                                        <td class="font-mono text-xs">
+                                            @(string.IsNullOrWhiteSpace(item.StripeInvoiceId) ? "—" : item.StripeInvoiceId)
+                                        </td>
+                                        <td>@item.CreatedAtUtc.ToString("dd/MM/yyyy")</td>
+                                        <td>@(item.MaturityDateUtc.HasValue ? item.MaturityDateUtc.Value.ToString("dd/MM/yyyy") : "—")</td>
+                                        <td>
+                                            @if (item.RemainingDays > 0)
+                                            {
+                                                <div class="maturity-countdown">
+                                                    <span class="badge-warning">Faltam @item.RemainingDays dia(s)</span>
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge-success">Apto p/ Liberação</span>
+                                            }
+                                        </td>
+                                        <td class="text-end font-mono text-warning font-bold">
+                                            R$ @item.NetAmount.ToString("N2")
+                                        </td>
+                                        <td class="text-center">
+                                            <PermissionGuard Permission="@BackofficePermissions.ReferralPayoutsManage">
+                                                <Authorized>
+                                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => OpenCancelModal(item)">
+                                                        <span>🚫</span> Cancelar
+                                                    </button>
+                                                </Authorized>
+                                                <NotAuthorized>
+                                                    <span class="text-muted text-sm">Bloqueado</span>
+                                                </NotAuthorized>
+                                            </PermissionGuard>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                </div>
+            }
+
+            <!-- TAB 3: HISTÓRICO DE REPASSES -->
+            @if (_currentTab == TabHistory)
+            {
+                <div class="table-container">
+                    @if (_isLoading)
+                    {
+                        <div class="loading-state">
+                            <div class="spinner"></div>
+                            <p>Carregando histórico de repasses...</p>
+                        </div>
+                    }
+                    else if (_payoutHistory.Count == 0)
+                    {
+                        <div class="empty-state">
+                            <span class="empty-icon">📁</span>
+                            <h3>Nenhum repasse efetuado até o momento</h3>
+                            <p>O histórico de pagamentos liquidados será exibido aqui.</p>
+                        </div>
+                    }
+                    else
+                    {
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Data / Hora do Repasse</th>
+                                    <th>Parceiro Favorecido</th>
+                                    <th>Fatura Stripe</th>
+                                    <th>Código / NSU Pix</th>
+                                    <th class="text-end">Valor Liquidado (R$)</th>
+                                    <th class="text-center" style="width: 150px;">Comprovante</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var hist in _payoutHistory)
+                                {
+                                    <tr>
+                                        <td>
+                                            <span class="font-mono">@(hist.PayoutRegisteredAtUtc.HasValue ? hist.PayoutRegisteredAtUtc.Value.ToString("dd/MM/yyyy HH:mm") : "—")</span>
+                                        </td>
+                                        <td>
+                                            <div class="partner-info">
+                                                <span class="partner-name">@hist.PartnerName</span>
+                                                <MaskedDataField Value="@hist.LegalDocumentNumber" FieldType="cpf-cnpj" />
+                                            </div>
+                                        </td>
+                                        <td class="font-mono text-xs">
+                                            @(string.IsNullOrWhiteSpace(hist.StripeInvoiceId) ? "—" : hist.StripeInvoiceId)
+                                        </td>
+                                        <td>
+                                            <span class="badge-code font-mono">@(string.IsNullOrWhiteSpace(hist.PayoutTransactionReference) ? "—" : hist.PayoutTransactionReference)</span>
+                                        </td>
+                                        <td class="text-end font-mono text-info font-bold">
+                                            R$ @hist.NetAmount.ToString("N2")
+                                        </td>
+                                        <td class="text-center">
+                                            @if (!string.IsNullOrWhiteSpace(hist.PayoutReceiptFilePath))
+                                            {
+                                                <a href="/api/v1/backoffice/referral/payouts/receipts/@hist.PayoutReceiptFilePath" target="_blank" class="btn btn-sm btn-outline-info">
+                                                    <span>📎</span> Ver Recibo
+                                                </a>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted text-xs">Não anexado</span>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                </div>
+            }
+        </div>
+
+        <!-- MODAL: EFETUAR BAIXA / REGISTRAR REPASSE -->
+        @if (_isPayoutModalOpen && _selectedPartnerForPayout is not null)
+        {
+            <div class="modal-backdrop">
+                <div class="modal-card">
+                    <header class="modal-header">
+                        <div>
+                            <span class="badge-finance">Liquidação de Comissão</span>
+                            <h2>Registrar Baixa / Repasse Financeiro</h2>
+                        </div>
+                        <button class="modal-close" @onclick="ClosePayoutModal" disabled="@_isSubmitting">✕</button>
+                    </header>
+
+                    <div class="modal-body">
+                        <div class="summary-box">
+                            <div class="summary-item">
+                                <span class="summary-label">Favorecido:</span>
+                                <span class="summary-value font-bold">@_selectedPartnerForPayout.PartnerName</span>
+                            </div>
+                            <div class="summary-item">
+                                <span class="summary-label">Chave Pix (@_selectedPartnerForPayout.PixKeyType):</span>
+                                <span class="summary-value font-mono">@_selectedPartnerForPayout.PixKey</span>
+                            </div>
+                            <div class="summary-item">
+                                <span class="summary-label">Comissões Inclusas:</span>
+                                <span class="summary-value">@_selectedPartnerForPayout.CommissionsCount fatura(s)</span>
+                            </div>
+                            <div class="summary-item total">
+                                <span class="summary-label">Valor Total do Pix:</span>
+                                <span class="summary-value text-success font-bold font-mono">R$ @_selectedPartnerForPayout.TotalAvailableAmount.ToString("N2")</span>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label required">Código de Transação Bancária / ID End-to-End Pix</label>
+                            <input type="text" class="form-input" placeholder="Ex: E12345678202610220900ABCDEF12345 ou NSU bancário"
+                                   @bind="_payoutTransactionReference" />
+                            <span class="form-hint">Informe o identificador único fornecido pelo banco no ato da transferência.</span>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label required">Comprovante de Transferência Bancária (PDF, PNG ou JPG)</label>
+                            <InputFile OnChange="HandleFileSelected" class="form-input file-input" accept=".pdf,.png,.jpg,.jpeg" />
+                            @if (_selectedFile is not null)
+                            {
+                                <div class="file-preview">
+                                    <span>📄 @_selectedFile.Name (@((_selectedFile.Size / 1024.0).ToString("N1")) KB)</span>
+                                </div>
+                            }
+                            <span class="form-hint">Tamanho máximo: 5 MB. O arquivo será armazenado com integridade no servidor.</span>
+                        </div>
+                    </div>
+
+                    <footer class="modal-footer">
+                        <button class="btn btn-secondary" @onclick="ClosePayoutModal" disabled="@_isSubmitting">Cancelar</button>
+                        <button class="btn btn-success" @onclick="SubmitPayoutAsync" disabled="@(_isSubmitting || string.IsNullOrWhiteSpace(_payoutTransactionReference) || _selectedFile is null)">
+                            @if (_isSubmitting)
+                            {
+                                <span class="spinner-sm"></span>
+                                <span>Processando Baixa...</span>
+                            }
+                            else
+                            {
+                                <span>💸 Confirmar Baixa Financeira</span>
+                            }
+                        </button>
+                    </footer>
+                </div>
+            </div>
+        }
+
+        <!-- MODAL: CANCELAR COMISSÃO PENDENTE -->
+        @if (_isCancelModalOpen && _selectedCommissionForCancel is not null)
+        {
+            <div class="modal-backdrop">
+                <div class="modal-card modal-sm">
+                    <header class="modal-header">
+                        <div>
+                            <span class="badge-danger">Ação Administrativa</span>
+                            <h2>Cancelar Comissão</h2>
+                        </div>
+                        <button class="modal-close" @onclick="CloseCancelModal" disabled="@_isSubmitting">✕</button>
+                    </header>
+
+                    <div class="modal-body">
+                        <p class="modal-description">
+                            Você está prestes a cancelar a comissão de <strong>R$ @_selectedCommissionForCancel.NetAmount.ToString("N2")</strong>
+                            do parceiro <strong>@_selectedCommissionForCancel.PartnerName</strong>.
+                        </p>
+
+                        <div class="form-group">
+                            <label class="form-label required">Justificativa / Motivo do Cancelamento</label>
+                            <textarea class="form-textarea" rows="3" placeholder="Informe o motivo detalhado (mínimo 10 caracteres, ex: estorno Stripe ou fraude confirmada)..."
+                                      @bind="_cancelReason"></textarea>
+                            <span class="form-hint">Esta ação será gravada na trilha de auditoria forense com hash SHA-256.</span>
+                        </div>
+                    </div>
+
+                    <footer class="modal-footer">
+                        <button class="btn btn-secondary" @onclick="CloseCancelModal" disabled="@_isSubmitting">Voltar</button>
+                        <button class="btn btn-danger" @onclick="SubmitCancelCommissionAsync" disabled="@(_isSubmitting || string.IsNullOrWhiteSpace(_cancelReason) || _cancelReason.Trim().Length < 10)">
+                            @if (_isSubmitting)
+                            {
+                                <span class="spinner-sm"></span>
+                                <span>Cancelando...</span>
+                            }
+                            else
+                            {
+                                <span>Confirmar Cancelamento</span>
+                            }
+                        </button>
+                    </footer>
+                </div>
+            </div>
+        }
+    </Authorized>
+    <NotAuthorized>
+        <div class="unauthorized-card">
+            <span class="unauthorized-icon">🔒</span>
+            <h2>Acesso Restrito</h2>
+            <p>Seu perfil de administrador não possui a permissão <code>referral.payouts.read</code> necessária para visualizar este painel financeiro.</p>
+        </div>
+    </NotAuthorized>
+</PermissionGuard>
+
+<style>
+    .payouts-page {
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+        padding: 1.5rem;
+    }
+
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+
+    .page-title {
+        font-size: 1.6rem;
+        font-weight: 700;
+        color: #f8fafc;
+        margin: 0.2rem 0;
+    }
+
+    .page-subtitle {
+        color: #94a3b8;
+        font-size: 0.9rem;
+        margin: 0;
+    }
+
+    .badge-finance {
+        display: inline-block;
+        padding: 0.25rem 0.6rem;
+        border-radius: 9999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        background: rgba(16, 185, 129, 0.15);
+        color: #34d399;
+        border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    .badge-danger {
+        display: inline-block;
+        padding: 0.25rem 0.6rem;
+        border-radius: 9999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        background: rgba(239, 68, 68, 0.15);
+        color: #f87171;
+        border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    .badge-warning {
+        display: inline-block;
+        padding: 0.2rem 0.5rem;
+        border-radius: 9999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        background: rgba(245, 158, 11, 0.15);
+        color: #fbbf24;
+        border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+
+    .badge-success {
+        display: inline-block;
+        padding: 0.2rem 0.5rem;
+        border-radius: 9999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        background: rgba(16, 185, 129, 0.15);
+        color: #34d399;
+    }
+
+    .badge-code {
+        background: #1e293b;
+        color: #38bdf8;
+        padding: 0.2rem 0.4rem;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        border: 1px solid #334155;
+    }
+
+    .header-actions {
+        display: flex;
+        gap: 0.75rem;
+    }
+
+    .kpis-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 1rem;
+    }
+
+    .kpi-card {
+        background: #0f172a;
+        border: 1px solid #1e293b;
+        border-radius: 8px;
+        padding: 1.25rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+    }
+
+    .kpi-card.highlight-green {
+        border-color: rgba(16, 185, 129, 0.3);
+        background: linear-gradient(180deg, rgba(16, 185, 129, 0.05) 0%, rgba(15, 23, 42, 1) 100%);
+    }
+
+    .kpi-label {
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #94a3b8;
+        font-weight: 600;
+    }
+
+    .kpi-value {
+        font-size: 1.7rem;
+        font-weight: 700;
+    }
+
+    .kpi-sub {
+        font-size: 0.8rem;
+        color: #64748b;
+    }
+
+    .tabs-bar {
+        display: flex;
+        gap: 0.5rem;
+        border-bottom: 1px solid #334155;
+        padding-bottom: 0.5rem;
+    }
+
+    .tab-button {
+        background: transparent;
+        border: none;
+        color: #94a3b8;
+        padding: 0.6rem 1.2rem;
+        font-weight: 600;
+        font-size: 0.9rem;
+        border-radius: 6px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        transition: all 0.2s ease;
+    }
+
+    .tab-button:hover {
+        background: #1e293b;
+        color: #f1f5f9;
+    }
+
+    .tab-button.active {
+        background: #1e293b;
+        color: #38bdf8;
+        border-bottom: 2px solid #38bdf8;
+    }
+
+    .filters-bar {
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+    }
+
+    .search-box {
+        flex: 1;
+        position: relative;
+        display: flex;
+        align-items: center;
+    }
+
+    .search-icon {
+        position: absolute;
+        left: 0.75rem;
+        color: #64748b;
+    }
+
+    .search-box input {
+        width: 100%;
+        padding: 0.6rem 0.75rem 0.6rem 2.25rem;
+        background: #0f172a;
+        border: 1px solid #334155;
+        border-radius: 6px;
+        color: #f8fafc;
+        font-size: 0.9rem;
+    }
+
+    .table-container {
+        background: #0f172a;
+        border: 1px solid #1e293b;
+        border-radius: 8px;
+        overflow: hidden;
+    }
+
+    .data-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.9rem;
+    }
+
+    .data-table th {
+        background: #1e293b;
+        padding: 0.75rem 1rem;
+        color: #94a3b8;
+        font-weight: 600;
+        text-align: left;
+    }
+
+    .data-table td {
+        padding: 0.85rem 1rem;
+        border-bottom: 1px solid #1e293b;
+        color: #e2e8f0;
+    }
+
+    .partner-row:hover {
+        background: rgba(30, 41, 59, 0.5);
+    }
+
+    .partner-row.expanded {
+        background: rgba(30, 41, 59, 0.7);
+    }
+
+    .btn-accordion {
+        background: transparent;
+        border: none;
+        color: #38bdf8;
+        cursor: pointer;
+        font-size: 0.8rem;
+        padding: 0.2rem;
+    }
+
+    .accordion-details-row td {
+        background: #090d16;
+        padding: 1rem 1.5rem;
+    }
+
+    .sub-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.85rem;
+        margin-top: 0.5rem;
+    }
+
+    .sub-table th {
+        background: #151f30;
+        color: #64748b;
+        padding: 0.5rem 0.75rem;
+        font-weight: 600;
+    }
+
+    .sub-table td {
+        padding: 0.5rem 0.75rem;
+        border-bottom: 1px solid #1e293b;
+    }
+
+    .partner-info {
+        display: flex;
+        flex-direction: column;
+        gap: 0.2rem;
+    }
+
+    .partner-name {
+        font-weight: 600;
+        color: #f8fafc;
+    }
+
+    .partner-trade {
+        font-size: 0.8rem;
+        color: #64748b;
+    }
+
+    .pix-info {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .pix-badge {
+        font-size: 0.7rem;
+        font-weight: 600;
+        padding: 0.15rem 0.4rem;
+        border-radius: 4px;
+        background: #1e293b;
+        color: #a5b4fc;
+        border: 1px solid #334155;
+    }
+
+    .badge-count {
+        background: #1e293b;
+        padding: 0.2rem 0.5rem;
+        border-radius: 4px;
+        color: #94a3b8;
+    }
+
+    .font-mono {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    .font-bold {
+        font-weight: 700;
+    }
+
+    .text-end {
+        text-align: right;
+    }
+
+    .text-center {
+        text-align: center;
+    }
+
+    .text-success {
+        color: #34d399;
+    }
+
+    .text-warning {
+        color: #fbbf24;
+    }
+
+    .text-danger {
+        color: #f87171;
+    }
+
+    .text-info {
+        color: #38bdf8;
+    }
+
+    .text-muted {
+        color: #64748b;
+    }
+
+    .text-xs {
+        font-size: 0.75rem;
+    }
+
+    .text-sm {
+        font-size: 0.85rem;
+    }
+
+    .btn {
+        padding: 0.5rem 1rem;
+        border-radius: 6px;
+        font-weight: 600;
+        font-size: 0.85rem;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        border: none;
+        transition: all 0.2s;
+    }
+
+    .btn-sm {
+        padding: 0.35rem 0.75rem;
+        font-size: 0.8rem;
+    }
+
+    .btn-primary {
+        background: #3b82f6;
+        color: white;
+    }
+
+    .btn-primary:hover {
+        background: #2563eb;
+    }
+
+    .btn-secondary {
+        background: #1e293b;
+        color: #cbd5e1;
+        border: 1px solid #334155;
+    }
+
+    .btn-secondary:hover {
+        background: #334155;
+    }
+
+    .btn-success {
+        background: #10b981;
+        color: white;
+    }
+
+    .btn-success:hover {
+        background: #059669;
+    }
+
+    .btn-outline-success {
+        background: transparent;
+        color: #34d399;
+        border: 1px solid #059669;
+    }
+
+    .btn-outline-success:hover {
+        background: rgba(16, 185, 129, 0.1);
+    }
+
+    .btn-outline-danger {
+        background: transparent;
+        color: #f87171;
+        border: 1px solid #dc2626;
+    }
+
+    .btn-outline-danger:hover {
+        background: rgba(239, 68, 68, 0.1);
+    }
+
+    .btn-outline-info {
+        background: transparent;
+        color: #38bdf8;
+        border: 1px solid #0284c7;
+        text-decoration: none;
+    }
+
+    .btn-outline-info:hover {
+        background: rgba(56, 189, 248, 0.1);
+    }
+
+    .loading-state, .empty-state {
+        padding: 3rem 1rem;
+        text-align: center;
+        color: #94a3b8;
+    }
+
+    .empty-icon {
+        font-size: 2.5rem;
+        display: block;
+        margin-bottom: 0.5rem;
+    }
+
+    .spinner {
+        width: 32px;
+        height: 32px;
+        border: 3px solid rgba(255,255,255,0.1);
+        border-top-color: #38bdf8;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        margin: 0 auto 1rem auto;
+    }
+
+    .spinner-sm {
+        width: 14px;
+        height: 14px;
+        border: 2px solid rgba(255,255,255,0.2);
+        border-top-color: #ffffff;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        display: inline-block;
+    }
+
+    @@keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+
+    /* Modais */
+    .modal-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.7);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+        backdrop-filter: blur(4px);
+    }
+
+    .modal-card {
+        background: #0f172a;
+        border: 1px solid #334155;
+        border-radius: 12px;
+        width: 100%;
+        max-width: 600px;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5);
+    }
+
+    .modal-card.modal-sm {
+        max-width: 480px;
+    }
+
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        padding: 1.25rem;
+        border-bottom: 1px solid #1e293b;
+    }
+
+    .modal-header h2 {
+        font-size: 1.2rem;
+        color: #f8fafc;
+        margin: 0.3rem 0 0 0;
+    }
+
+    .modal-close {
+        background: transparent;
+        border: none;
+        color: #64748b;
+        font-size: 1.25rem;
+        cursor: pointer;
+    }
+
+    .modal-body {
+        padding: 1.25rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1.2rem;
+    }
+
+    .modal-footer {
+        padding: 1rem 1.25rem;
+        background: #090d16;
+        border-top: 1px solid #1e293b;
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.75rem;
+    }
+
+    .summary-box {
+        background: #1e293b;
+        border-radius: 8px;
+        padding: 1rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .summary-item {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.9rem;
+        color: #cbd5e1;
+    }
+
+    .summary-item.total {
+        border-top: 1px solid #334155;
+        padding-top: 0.5rem;
+        margin-top: 0.25rem;
+        font-size: 1.05rem;
+    }
+
+    .form-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+    }
+
+    .form-label {
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: #cbd5e1;
+    }
+
+    .form-label.required::after {
+        content: " *";
+        color: #f87171;
+    }
+
+    .form-input, .form-textarea {
+        background: #090d16;
+        border: 1px solid #334155;
+        border-radius: 6px;
+        padding: 0.6rem 0.75rem;
+        color: #f8fafc;
+        font-size: 0.9rem;
+    }
+
+    .form-textarea {
+        resize: vertical;
+    }
+
+    .form-hint {
+        font-size: 0.75rem;
+        color: #64748b;
+    }
+
+    .file-input {
+        padding: 0.4rem;
+    }
+
+    .file-preview {
+        background: #1e293b;
+        padding: 0.5rem 0.75rem;
+        border-radius: 4px;
+        font-size: 0.85rem;
+        color: #38bdf8;
+    }
+
+    .unauthorized-card {
+        background: #0f172a;
+        border: 1px solid #ef4444;
+        border-radius: 12px;
+        padding: 3rem 2rem;
+        text-align: center;
+        max-width: 500px;
+        margin: 4rem auto;
+    }
+
+    .unauthorized-icon {
+        font-size: 3rem;
+        display: block;
+        margin-bottom: 1rem;
+    }
+</style>
+
+@code {
+    private const string TabAvailable = "available";
+    private const string TabPending = "pending";
+    private const string TabHistory = "history";
+
+    private string _currentTab = TabAvailable;
+    private bool _isLoading = false;
+    private bool _isSubmitting = false;
+    private bool _isExporting = false;
+    private string _searchTerm = string.Empty;
+
+    private PayoutDashboardKpiDto? _kpis;
+    private List<AvailablePartnerPayoutDto> _availablePayouts = new();
+    private List<PendingMaturityCommissionDto> _pendingCommissions = new();
+    private List<PayoutHistoryDto> _payoutHistory = new();
+    private HashSet<Guid> _expandedPartnerIds = new();
+
+    // Modal Payout State
+    private bool _isPayoutModalOpen = false;
+    private AvailablePartnerPayoutDto? _selectedPartnerForPayout;
+    private string _payoutTransactionReference = string.Empty;
+    private IBrowserFile? _selectedFile;
+
+    // Modal Cancel State
+    private bool _isCancelModalOpen = false;
+    private PendingMaturityCommissionDto? _selectedCommissionForCancel;
+    private string _cancelReason = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAllDataAsync();
+    }
+
+    private void SetTab(string tab)
+    {
+        _currentTab = tab;
+    }
+
+    private void ToggleAccordion(Guid partnerId)
+    {
+        if (_expandedPartnerIds.Contains(partnerId))
+            _expandedPartnerIds.Remove(partnerId);
+        else
+            _expandedPartnerIds.Add(partnerId);
+    }
+
+    private async Task HandleSearchKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await LoadCurrentTabDataAsync();
+        }
+    }
+
+    private async Task LoadAllDataAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            _kpis = await ApiClient.GetPayoutDashboardKpisAsync();
+            var availTask = ApiClient.GetAvailablePartnerPayoutsAsync(_searchTerm);
+            var pendTask = ApiClient.GetPendingMaturityCommissionsAsync(_searchTerm);
+            var histTask = ApiClient.GetPayoutHistoryAsync(_searchTerm);
+
+            await Task.WhenAll(availTask, pendTask, histTask);
+
+            _availablePayouts = (await availTask)?.ToList() ?? new List<AvailablePartnerPayoutDto>();
+            _pendingCommissions = (await pendTask)?.ToList() ?? new List<PendingMaturityCommissionDto>();
+            _payoutHistory = (await histTask)?.ToList() ?? new List<PayoutHistoryDto>();
+        }
+        catch (Exception ex)
+        {
+            Toast.ShowError($"Erro ao carregar dados do painel: {ex.Message}");
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task LoadCurrentTabDataAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            if (_currentTab == TabAvailable)
+            {
+                var res = await ApiClient.GetAvailablePartnerPayoutsAsync(_searchTerm);
+                _availablePayouts = res?.ToList() ?? new List<AvailablePartnerPayoutDto>();
+            }
+            else if (_currentTab == TabPending)
+            {
+                var res = await ApiClient.GetPendingMaturityCommissionsAsync(_searchTerm);
+                _pendingCommissions = res?.ToList() ?? new List<PendingMaturityCommissionDto>();
+            }
+            else if (_currentTab == TabHistory)
+            {
+                var res = await ApiClient.GetPayoutHistoryAsync(_searchTerm);
+                _payoutHistory = res?.ToList() ?? new List<PayoutHistoryDto>();
+            }
+        }
+        catch (Exception ex)
+        {
+            Toast.ShowError($"Erro ao filtrar: {ex.Message}");
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task ExportPixBatchAsync()
+    {
+        _isExporting = true;
+        try
+        {
+            var result = await ApiClient.ExportPixBatchCsvAsync();
+            if (result.IsSuccess)
+            {
+                await JS.InvokeVoidAsync("downloadFileFromByteArray", result.FileName, "text/csv", result.Content);
+                Toast.ShowSuccess("Remessa Pix gerada com sucesso!");
+            }
+            else
+            {
+                Toast.ShowError(result.ErrorMessage ?? "Falha ao gerar arquivo de remessa Pix.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Toast.ShowError($"Erro ao exportar remessa: {ex.Message}");
+        }
+        finally
+        {
+            _isExporting = false;
+        }
+    }
+
+    private void OpenPayoutModal(AvailablePartnerPayoutDto partner)
+    {
+        _selectedPartnerForPayout = partner;
+        _payoutTransactionReference = string.Empty;
+        _selectedFile = null;
+        _isPayoutModalOpen = true;
+    }
+
+    private void ClosePayoutModal()
+    {
+        if (_isSubmitting) return;
+        _isPayoutModalOpen = false;
+        _selectedPartnerForPayout = null;
+        _selectedFile = null;
+    }
+
+    private void HandleFileSelected(InputFileChangeEventArgs e)
+    {
+        _selectedFile = e.File;
+        if (_selectedFile != null && _selectedFile.Size > 5 * 1024 * 1024)
+        {
+            Toast.ShowError("O comprovante excede o tamanho máximo de 5 MB.");
+            _selectedFile = null;
+        }
+    }
+
+    private async Task SubmitPayoutAsync()
+    {
+        if (_selectedPartnerForPayout is null || _selectedFile is null || string.IsNullOrWhiteSpace(_payoutTransactionReference))
+        {
+            Toast.ShowError("Preencha o código de transação bancária e anexe o comprovante de pagamento.");
+            return;
+        }
+
+        _isSubmitting = true;
+        try
+        {
+            var ledgerIds = _selectedPartnerForPayout.Commissions.Select(c => c.LedgerId).ToList();
+            await using var stream = _selectedFile.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024);
+
+            var result = await ApiClient.RegisterPartnerPayoutBatchAsync(
+                _selectedPartnerForPayout.ParticipantId,
+                ledgerIds,
+                _payoutTransactionReference.Trim(),
+                stream,
+                _selectedFile.Name,
+                _selectedFile.ContentType
+            );
+
+            if (result.IsSuccess)
+            {
+                Toast.ShowSuccess($"Baixa financeira efetuada com sucesso! {result.Value} comissão(ões) liquidada(s).");
+                ClosePayoutModal();
+                await LoadAllDataAsync();
+            }
+            else
+            {
+                Toast.ShowError(result.Error.Message);
+            }
+        }
+        catch (Exception ex)
+        {
+            Toast.ShowError($"Erro ao registrar baixa: {ex.Message}");
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+
+    private void OpenCancelModal(PendingMaturityCommissionDto commission)
+    {
+        _selectedCommissionForCancel = commission;
+        _cancelReason = string.Empty;
+        _isCancelModalOpen = true;
+    }
+
+    private void CloseCancelModal()
+    {
+        if (_isSubmitting) return;
+        _isCancelModalOpen = false;
+        _selectedCommissionForCancel = null;
+    }
+
+    private async Task SubmitCancelCommissionAsync()
+    {
+        if (_selectedCommissionForCancel is null || string.IsNullOrWhiteSpace(_cancelReason) || _cancelReason.Trim().Length < 10)
+        {
+            Toast.ShowError("A justificativa é obrigatória e deve possuir no mínimo 10 caracteres.");
+            return;
+        }
+
+        _isSubmitting = true;
+        try
+        {
+            var result = await ApiClient.CancelCommissionLedgerEntryAsync(
+                _selectedCommissionForCancel.LedgerId,
+                _cancelReason.Trim()
+            );
+
+            if (result.IsSuccess)
+            {
+                Toast.ShowSuccess("Comissão cancelada com sucesso!");
+                CloseCancelModal();
+                await LoadAllDataAsync();
+            }
+            else
+            {
+                Toast.ShowError(result.Error.Message);
+            }
+        }
+        catch (Exception ex)
+        {
+            Toast.ShowError($"Erro ao cancelar comissão: {ex.Message}");
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+}

@@ -19,3 +19,24 @@ public sealed record WebhookSignatureFailedIntegrationEvent(
     int PayloadLength,
     DateTime OccurredOnUtc
 ) : INotification;
+
+public sealed record StripeChargeRefundedIntegrationEvent(
+    string StripeChargeId,
+    string? StripeInvoiceId,
+    string? StripeCustomerId,
+    decimal AmountRefunded,
+    string Currency,
+    DateTime OccurredOnUtc
+) : INotification;
+
+public sealed record TenantPaymentSucceededIntegrationEvent(
+    Guid TenantId,
+    string StripeCustomerId,
+    string? StripeInvoiceId,
+    string? StripePaymentMethodId,
+    string? StripeCardFingerprint,
+    decimal AmountPaid,
+    string Currency,
+    DateTime PaymentDateUtc
+) : INotification;
+

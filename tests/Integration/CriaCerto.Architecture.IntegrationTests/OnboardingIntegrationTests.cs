@@ -110,6 +110,7 @@ public class OnboardingIntegrationTests : IDisposable
         private readonly string _token;
         public TestJwtService(string token) => _token = token;
         public string GenerateToken(User user, Tenant tenant, UserRole role = UserRole.Admin) => _token;
+        public string GeneratePartnerToken(User user) => _token;
     }
 
     private sealed class NoOpTenantDatabaseProvisioner : CriaCerto.BuildingBlocks.Abstractions.Tenancy.ITenantDatabaseProvisioner

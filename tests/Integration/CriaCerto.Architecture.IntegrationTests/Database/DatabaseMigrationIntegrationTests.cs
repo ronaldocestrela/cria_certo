@@ -2,6 +2,7 @@ using CriaCerto.BuildingBlocks.Abstractions.ReferenceData;
 using CriaCerto.BuildingBlocks.Infrastructure.Persistence;
 using CriaCerto.Modules.Breeding.Infrastructure.Persistence;
 using CriaCerto.Modules.Tenancy.Infrastructure.Persistence;
+using CriaCerto.Modules.Referral.Infrastructure.Persistence;
 using FluentAssertions;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
@@ -272,5 +273,31 @@ public sealed class DatabaseMigrationIntegrationTests : IAsyncLifetime
             """;
         var tableExists = (int)(await command.ExecuteScalarAsync() ?? 0);
         tableExists.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task Referral_Migrate_CreatesParticipantsAndReferralCodesTables()
+    {
+        var options = MigrationTestSupport.CreateSqlServerOptions<ReferralDbContext>(
+            _masterConnectionString,
+            MigrationBaselineMetadata.Referral.Schema);
+
+        await using var dbContext = new ReferralDbContext(options);
+        DatabaseMigrationRunner.ApplyMigrations(dbContext, NullLogger.Instance);
+
+        await using var connection = new SqlConnection(_masterConnectionString);
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT COUNT(1)
+            FROM sys.tables t
+            INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
+            WHERE s.name = 'referral' AND t.name IN ('Participants', 'ReferralCodes', 'Attributions', 'RewardLedger', 'PartnerProfiles')
+            """;
+        var tableCount = (int)(await command.ExecuteScalarAsync() ?? 0);
+        tableCount.Should().Be(5);
+
+        (await MigrationTestSupport.CountHistoryRowsAsync(_masterConnectionString, "referral"))
+            .Should().Be(3);
     }
 }

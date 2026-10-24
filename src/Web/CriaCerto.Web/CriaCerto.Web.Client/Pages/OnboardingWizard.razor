@@ -5,6 +5,7 @@
 @inject NavigationManager Navigation
 @inject Auth.CustomAuthStateProvider AuthStateProvider
 @inject CriaCerto.Web.Client.Services.TenancyApiClient TenancyApiClient
+@inject CriaCerto.Web.Client.Services.IReferralTrackingService ReferralTracker
 
 <PageTitle>Cria Certo - Configuração Inicial da Fazenda</PageTitle>
 
@@ -319,6 +320,51 @@
                         </p>
                     </div>
 
+                    <div style="margin-bottom: 1.5rem; background: #ffffff; border: 1px solid var(--cc-border); border-radius: 12px; padding: 1.15rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem; flex-wrap: wrap; gap: 0.5rem;">
+                            <label class="font-mono text-[12px] font-bold block" style="margin: 0; text-transform: uppercase; color: var(--cc-ink-muted);">
+                                CÓDIGO DE INDICAÇÃO OU CONSULTOR (OPCIONAL)
+                            </label>
+                            @if (_isReferralCodeValid)
+                            {
+                                <span class="font-mono text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded" style="border: 1px solid #bbf7d0; display: inline-flex; align-items: center; gap: 0.25rem;">
+                                    <span class="material-symbols-outlined" style="font-size: 14px;">check_circle</span>
+                                    CÓDIGO APLICADO
+                                </span>
+                            }
+                        </div>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <input type="text"
+                                   value="@ReferralCode"
+                                   @onchange="OnReferralCodeChanged"
+                                   placeholder="Ex: FAZENDA-MODELO ou CONSULTOR10"
+                                   class="w-full h-[46px] px-4 rounded-lg border font-mono uppercase"
+                                   style="width: 100%; height: 46px; padding: 0 1rem; border-radius: 8px; border: 1px solid var(--cc-border); background-color: var(--cc-canvas); font-size: 14px; font-weight: 600;" />
+                            @if (!string.IsNullOrWhiteSpace(ReferralCode))
+                            {
+                                <button type="button"
+                                        @onclick="ValidateReferralCodeAsync"
+                                        disabled="@_isValidatingReferral"
+                                        class="h-[46px] px-4 font-mono text-xs font-bold rounded-lg border transition-all"
+                                        style="background: white; border: 1px solid var(--cc-border); cursor: pointer; white-space: nowrap;">
+                                    @(_isValidatingReferral ? "Validando..." : "Verificar")
+                                </button>
+                            }
+                        </div>
+                        @if (!string.IsNullOrEmpty(_referralValidationMessage))
+                        {
+                            <p class="text-xs mt-1.5" style="font-size: 12px; margin-top: 0.35rem; color: @(_isReferralCodeValid ? "#15803d" : "#b91c1c");">
+                                @_referralValidationMessage
+                            </p>
+                        }
+                        else
+                        {
+                            <p class="text-xs text-gray-500 mt-1" style="font-size: 11px; color: var(--cc-ink-muted); margin-top: 0.35rem;">
+                                Se você foi indicado por um consultor, revenda ou outro produtor parceiro, informe o código para ativar os benefícios de indicação na sua primeira fatura paga.
+                            </p>
+                        }
+                    </div>
+
                     <div class="flex justify-between pt-4" style="display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; flex-wrap: wrap; gap: 1rem;">
                         <button type="button" @onclick="PrevStep" class="h-[46px] px-6 text-gray-700 font-mono text-sm rounded-lg border uppercase font-bold" style="height: 46px; padding: 0 1.5rem; border: 1px solid var(--cc-border); background-color: white; border-radius: 8px; cursor: pointer;">
                             &larr; Voltar
@@ -358,9 +404,17 @@
     [SupplyParameterFromQuery]
     public string? Name { get; set; }
 
+    [SupplyParameterFromQuery(Name = "ref")]
+    public string? RefCodeParam { get; set; }
+
     private int CurrentStep = 1;
     private bool IsLoading;
     private string? ErrorMessage;
+
+    private string? ReferralCode;
+    private bool _isReferralCodeValid;
+    private string? _referralValidationMessage;
+    private bool _isValidatingReferral;
 
     // Form model fields
     private string ProducerName = string.Empty;
@@ -407,6 +461,28 @@
         {
             _isLoadingPlans = false;
         }
+
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(RefCodeParam))
+            {
+                await ReferralTracker.CaptureReferralCodeAsync(RefCodeParam);
+                ReferralCode = RefCodeParam.Trim().ToUpperInvariant();
+            }
+            else
+            {
+                ReferralCode = await ReferralTracker.GetReferralCodeAsync();
+            }
+
+            if (!string.IsNullOrWhiteSpace(ReferralCode))
+            {
+                await ValidateReferralCodeAsync();
+            }
+        }
+        catch
+        {
+            // Silencioso caso storage não esteja disponível
+        }
     }
 
     private void NextStep()
@@ -447,6 +523,65 @@
         Capacity = defaultCapacity > 0 && defaultCapacity <= 500 ? defaultCapacity : 500;
     }
 
+    private async Task OnReferralCodeChanged(ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString();
+        ReferralCode = string.IsNullOrWhiteSpace(value) ? null : value.Trim().ToUpperInvariant();
+        _isReferralCodeValid = false;
+        _referralValidationMessage = null;
+
+        if (!string.IsNullOrWhiteSpace(ReferralCode))
+        {
+            await ReferralTracker.CaptureReferralCodeAsync(ReferralCode);
+            await ValidateReferralCodeAsync();
+        }
+        else
+        {
+            await ReferralTracker.ClearReferralCodeAsync();
+        }
+    }
+
+    private async Task ValidateReferralCodeAsync()
+    {
+        if (string.IsNullOrWhiteSpace(ReferralCode))
+        {
+            _isReferralCodeValid = false;
+            _referralValidationMessage = null;
+            return;
+        }
+
+        _isValidatingReferral = true;
+        try
+        {
+            var validation = await ReferralTracker.ValidateReferralCodeAsync(ReferralCode);
+            if (validation.IsValid)
+            {
+                _isReferralCodeValid = true;
+                var typeDesc = validation.ParticipantType == "CommercialPartner"
+                    ? "Parceiro Comercial / Consultor"
+                    : "Produtor Indicador";
+                var campaign = !string.IsNullOrWhiteSpace(validation.CampaignTitle)
+                    ? $" ({validation.CampaignTitle})"
+                    : "";
+                _referralValidationMessage = $"✓ Código válido: {typeDesc}{campaign} vinculado à sua conta.";
+            }
+            else
+            {
+                _isReferralCodeValid = false;
+                _referralValidationMessage = validation.ErrorMessage ?? "Código de indicação não localizado ou inativo.";
+            }
+        }
+        catch
+        {
+            _isReferralCodeValid = false;
+            _referralValidationMessage = "Não foi possível validar o código neste momento.";
+        }
+        finally
+        {
+            _isValidatingReferral = false;
+        }
+    }
+
     private async Task CompleteOnboarding()
     {
         ErrorMessage = null;
@@ -480,13 +615,23 @@
                 StateRegistration = StateRegistration,
                 AreaInHectares = AreaInHectares,
                 SubscribedPlan = "Starter",
-                Capacity = effectiveCapacity
+                Capacity = effectiveCapacity,
+                ReferralCode = string.IsNullOrWhiteSpace(ReferralCode) ? null : ReferralCode.Trim().ToUpperInvariant()
             };
 
             var response = await Http.PostAsJsonAsync("/api/v1/tenancy/farms", payload);
 
             if (response.IsSuccessStatusCode)
             {
+                try
+                {
+                    await ReferralTracker.ClearReferralCodeAsync();
+                }
+                catch
+                {
+                    // Ignora falha de limpeza
+                }
+
                 var authResult = await response.Content.ReadFromJsonAsync<OnboardingAuthResponse>();
                 if (authResult != null && !string.IsNullOrEmpty(authResult.Token))
                 {

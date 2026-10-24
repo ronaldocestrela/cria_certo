@@ -16,6 +16,13 @@ using CriaCerto.Modules.Backoffice.Application.Features.Approvals.Dtos;
 using CriaCerto.Modules.Backoffice.Application.Features.Audit.Dtos;
 using CriaCerto.Modules.Backoffice.Application.Features.Observability.Dtos;
 using CriaCerto.Modules.Backoffice.Application.Features.Compliance.Dtos;
+using CriaCerto.Modules.Referral.Application.Domain.Enums;
+using CriaCerto.Modules.Referral.Application.Features.CommercialPartners.Dtos;
+using CriaCerto.Modules.Referral.Application.Features.CommercialPartners.Queries;
+using CriaCerto.Modules.Referral.Application.Features.Payouts.Dtos;
+using CriaCerto.Modules.Referral.Application.Features.PlanDiscounts.Dtos;
+using CriaCerto.Modules.Referral.Application.Features.Analytics.Dtos;
+using CriaCerto.Modules.Backoffice.Application.Features.PaidMedia.Dtos;
 using CriaCerto.Web.Client.Models;
 using Microsoft.JSInterop;
 
@@ -40,7 +47,7 @@ public interface IBackofficeApiClient
     Task<bool> AcknowledgeAlertAsync(Guid id, CancellationToken cancellationToken = default);
     Task<bool> ResolveAlertAsync(Guid id, string resolutionNotes, CancellationToken cancellationToken = default);
     Task<BackofficeAlertDto?> SimulateAlertAsync(SimulateAlertRequest request, CancellationToken cancellationToken = default);
-    Task<PagedResult<AdminUserSummaryDto>?> GetAdminUsersAsync(string? searchTerm = null, bool? isActive = null, string? roleName = null, int page = 1, int pageSize = 20, CancellationToken cancellationToken = default);
+    Task<CriaCerto.Modules.Backoffice.Application.Features.AdminUsers.Queries.PagedResult<AdminUserSummaryDto>?> GetAdminUsersAsync(string? searchTerm = null, bool? isActive = null, string? roleName = null, int page = 1, int pageSize = 20, CancellationToken cancellationToken = default);
     Task<AdminUserDetailDto?> GetAdminUserByIdAsync(Guid id, CancellationToken cancellationToken = default);
     Task<bool> CreateAdminUserAsync(string name, string email, string password, List<Guid> roleIds, CancellationToken cancellationToken = default);
     Task<bool> UpdateAdminUserAsync(Guid id, string name, string email, List<Guid> roleIds, CancellationToken cancellationToken = default);
@@ -156,7 +163,51 @@ public interface IBackofficeApiClient
         CancellationToken cancellationToken = default);
     Task<RevealedDataResultDto?> RevealSensitiveDataAsync(RevealSensitiveDataRequest request, CancellationToken cancellationToken = default);
     Task<ComplianceDossierExportDto?> ExportAccessTrailAsync(ExportAccessTrailRequest request, CancellationToken cancellationToken = default);
+
+    // Commercial Partners Management Methods
+    Task<CriaCerto.Modules.Referral.Application.Features.CommercialPartners.Queries.PagedResult<CommercialPartnerListItemDto>?> GetCommercialPartnersAsync(
+        string? searchTerm = null,
+        ParticipantStatus? status = null,
+        CommissionType? commissionType = null,
+        int page = 1,
+        int pageSize = 20,
+        CancellationToken cancellationToken = default);
+
+    Task<CommercialPartnerDto?> GetCommercialPartnerByIdAsync(Guid id, CancellationToken cancellationToken = default);
+    Task<SuggestReferralCodeDto?> SuggestReferralCodeAsync(string name, CancellationToken cancellationToken = default);
+    Task<Result<CommercialPartnerDto>> RegisterCommercialPartnerAsync(RegisterPartnerRequest request, CancellationToken cancellationToken = default);
+    Task<bool> UpdateCommercialPartnerProfileAsync(Guid id, UpdatePartnerProfileRequest request, CancellationToken cancellationToken = default);
+    Task<bool> ProposePartnerContractChangeAsync(Guid id, ProposeContractChangeRequest request, CancellationToken cancellationToken = default);
+    Task<bool> SuspendCommercialPartnerAsync(Guid id, string reason, CancellationToken cancellationToken = default);
+    Task<bool> ReactivateCommercialPartnerAsync(Guid id, CancellationToken cancellationToken = default);
+
+    // Referral Payouts & Commissions
+    Task<PayoutDashboardKpiDto?> GetPayoutDashboardKpisAsync(CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<PendingMaturityCommissionDto>?> GetPendingMaturityCommissionsAsync(string? search = null, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<AvailablePartnerPayoutDto>?> GetAvailablePartnerPayoutsAsync(string? search = null, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<PayoutHistoryDto>?> GetPayoutHistoryAsync(string? search = null, int page = 1, int pageSize = 50, CancellationToken cancellationToken = default);
+    Task<Result<int>> RegisterPartnerPayoutBatchAsync(
+        Guid partnerParticipantId,
+        IReadOnlyList<Guid> ledgerIds,
+        string transactionReference,
+        Stream receiptStream,
+        string fileName,
+        string contentType,
+        CancellationToken cancellationToken = default);
+    Task<Result> CancelCommissionLedgerEntryAsync(Guid ledgerId, string reason, CancellationToken cancellationToken = default);
+    Task<ExportTenantsResult> ExportPixBatchCsvAsync(IReadOnlyList<Guid>? participantIds = null, CancellationToken cancellationToken = default);
+
+    // Referral Plan Discounts
+    Task<IReadOnlyList<PlanDiscountPolicyDto>?> GetPlanDiscountPoliciesAsync(CancellationToken cancellationToken = default);
+    Task<Result<PlanDiscountPolicyDto>> ConfigurePlanDiscountPolicyAsync(Guid planCatalogId, ConfigurePlanDiscountPolicyRequest request, CancellationToken cancellationToken = default);
+    Task<Result<PlanDiscountPolicyDto>> TogglePlanDiscountPolicyStatusAsync(Guid policyId, CancellationToken cancellationToken = default);
+
+    // Referral Analytics & Paid Media
+    Task<ReferralProgramKpisDto?> GetReferralProgramKpisAsync(DateTime? startDate = null, DateTime? endDate = null, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<PaidMediaSpendDto>?> GetPaidMediaSpendsAsync(DateTime? startDate = null, DateTime? endDate = null, CancellationToken cancellationToken = default);
+    Task<Result<PaidMediaSpendDto>> CreatePaidMediaSpendAsync(CreatePaidMediaSpendRequest request, CancellationToken cancellationToken = default);
 }
+
 
 public sealed class ApprovalActionResult
 {
@@ -273,7 +324,7 @@ public class BackofficeApiClient : IBackofficeApiClient
             "api/v1/backoffice/dashboard/kpis", cancellationToken);
     }
 
-    public async Task<PagedResult<AdminUserSummaryDto>?> GetAdminUsersAsync(string? searchTerm = null, bool? isActive = null, string? roleName = null, int page = 1, int pageSize = 20, CancellationToken cancellationToken = default)
+    public async Task<CriaCerto.Modules.Backoffice.Application.Features.AdminUsers.Queries.PagedResult<AdminUserSummaryDto>?> GetAdminUsersAsync(string? searchTerm = null, bool? isActive = null, string? roleName = null, int page = 1, int pageSize = 20, CancellationToken cancellationToken = default)
     {
         await AttachTokenAsync();
         var url = $"api/v1/backoffice/users?page={page}&pageSize={pageSize}";
@@ -281,7 +332,7 @@ public class BackofficeApiClient : IBackofficeApiClient
         if (isActive.HasValue) url += $"&isActive={isActive.Value}";
         if (!string.IsNullOrWhiteSpace(roleName)) url += $"&roleName={Uri.EscapeDataString(roleName)}";
 
-        return await _httpClient.GetFromJsonAsync<PagedResult<AdminUserSummaryDto>>(url, cancellationToken);
+        return await _httpClient.GetFromJsonAsync<CriaCerto.Modules.Backoffice.Application.Features.AdminUsers.Queries.PagedResult<AdminUserSummaryDto>>(url, cancellationToken);
     }
 
     public async Task<AdminUserDetailDto?> GetAdminUserByIdAsync(Guid id, CancellationToken cancellationToken = default)
@@ -1027,5 +1078,288 @@ public class BackofficeApiClient : IBackofficeApiClient
 
         return new ComplianceDossierExportDto(fileName, contentType, content, string.Empty, DateTime.UtcNow);
     }
+
+    public async Task<CriaCerto.Modules.Referral.Application.Features.CommercialPartners.Queries.PagedResult<CommercialPartnerListItemDto>?> GetCommercialPartnersAsync(
+        string? searchTerm = null,
+        ParticipantStatus? status = null,
+        CommissionType? commissionType = null,
+        int page = 1,
+        int pageSize = 20,
+        CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var qb = new List<string> { $"page={page}", $"pageSize={pageSize}" };
+        if (!string.IsNullOrWhiteSpace(searchTerm)) qb.Add($"searchTerm={Uri.EscapeDataString(searchTerm)}");
+        if (status.HasValue) qb.Add($"status={status.Value}");
+        if (commissionType.HasValue) qb.Add($"commissionType={commissionType.Value}");
+
+        var query = string.Join("&", qb);
+        var response = await _httpClient.GetAsync($"api/v1/backoffice/partners?{query}", cancellationToken);
+        if (!response.IsSuccessStatusCode) return null;
+
+        return await response.Content.ReadFromJsonAsync<CriaCerto.Modules.Referral.Application.Features.CommercialPartners.Queries.PagedResult<CommercialPartnerListItemDto>>(cancellationToken: cancellationToken);
+    }
+
+    public async Task<CommercialPartnerDto?> GetCommercialPartnerByIdAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.GetAsync($"api/v1/backoffice/partners/{id}", cancellationToken);
+        if (!response.IsSuccessStatusCode) return null;
+
+        return await response.Content.ReadFromJsonAsync<CommercialPartnerDto>(cancellationToken: cancellationToken);
+    }
+
+    public async Task<SuggestReferralCodeDto?> SuggestReferralCodeAsync(string name, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.GetAsync($"api/v1/backoffice/partners/suggest-code?name={Uri.EscapeDataString(name)}", cancellationToken);
+        if (!response.IsSuccessStatusCode) return null;
+
+        return await response.Content.ReadFromJsonAsync<SuggestReferralCodeDto>(cancellationToken: cancellationToken);
+    }
+
+    public async Task<Result<CommercialPartnerDto>> RegisterCommercialPartnerAsync(RegisterPartnerRequest request, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.PostAsJsonAsync("api/v1/backoffice/partners", request, cancellationToken);
+        if (response.IsSuccessStatusCode)
+        {
+            var data = await response.Content.ReadFromJsonAsync<CommercialPartnerDto>(cancellationToken: cancellationToken);
+            return Result.Success(data!);
+        }
+
+        var error = await response.Content.ReadFromJsonAsync<Error>(cancellationToken: cancellationToken);
+        return Result.Failure<CommercialPartnerDto>(error ?? Error.Failure("Partner.CreateError", "Erro ao cadastrar parceiro comercial."));
+    }
+
+    public async Task<bool> UpdateCommercialPartnerProfileAsync(Guid id, UpdatePartnerProfileRequest request, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.PutAsJsonAsync($"api/v1/backoffice/partners/{id}/profile", request, cancellationToken);
+        return response.IsSuccessStatusCode;
+    }
+
+    public async Task<bool> ProposePartnerContractChangeAsync(Guid id, ProposeContractChangeRequest request, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.PostAsJsonAsync($"api/v1/backoffice/partners/{id}/contracts/propose-update", request, cancellationToken);
+        return response.IsSuccessStatusCode;
+    }
+
+    public async Task<bool> SuspendCommercialPartnerAsync(Guid id, string reason, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.PostAsJsonAsync($"api/v1/backoffice/partners/{id}/suspend", new SuspendPartnerRequest(reason), cancellationToken);
+        return response.IsSuccessStatusCode;
+    }
+
+    public async Task<bool> ReactivateCommercialPartnerAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.PostAsync($"api/v1/backoffice/partners/{id}/reactivate", null, cancellationToken);
+        return response.IsSuccessStatusCode;
+    }
+
+    public async Task<PayoutDashboardKpiDto?> GetPayoutDashboardKpisAsync(CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.GetAsync("api/v1/backoffice/referral/payouts/kpis", cancellationToken);
+        if (!response.IsSuccessStatusCode) return null;
+        return await response.Content.ReadFromJsonAsync<PayoutDashboardKpiDto>(cancellationToken: cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<PendingMaturityCommissionDto>?> GetPendingMaturityCommissionsAsync(string? search = null, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var url = "api/v1/backoffice/referral/payouts/pending";
+        if (!string.IsNullOrWhiteSpace(search)) url += $"?search={Uri.EscapeDataString(search)}";
+        var response = await _httpClient.GetAsync(url, cancellationToken);
+        if (!response.IsSuccessStatusCode) return null;
+        return await response.Content.ReadFromJsonAsync<List<PendingMaturityCommissionDto>>(cancellationToken: cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<AvailablePartnerPayoutDto>?> GetAvailablePartnerPayoutsAsync(string? search = null, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var url = "api/v1/backoffice/referral/payouts/available";
+        if (!string.IsNullOrWhiteSpace(search)) url += $"?search={Uri.EscapeDataString(search)}";
+        var response = await _httpClient.GetAsync(url, cancellationToken);
+        if (!response.IsSuccessStatusCode) return null;
+        return await response.Content.ReadFromJsonAsync<List<AvailablePartnerPayoutDto>>(cancellationToken: cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<PayoutHistoryDto>?> GetPayoutHistoryAsync(string? search = null, int page = 1, int pageSize = 50, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var url = $"api/v1/backoffice/referral/payouts/history?page={page}&pageSize={pageSize}";
+        if (!string.IsNullOrWhiteSpace(search)) url += $"&search={Uri.EscapeDataString(search)}";
+        var response = await _httpClient.GetAsync(url, cancellationToken);
+        if (!response.IsSuccessStatusCode) return null;
+        return await response.Content.ReadFromJsonAsync<List<PayoutHistoryDto>>(cancellationToken: cancellationToken);
+    }
+
+    public async Task<Result<int>> RegisterPartnerPayoutBatchAsync(
+        Guid partnerParticipantId,
+        IReadOnlyList<Guid> ledgerIds,
+        string transactionReference,
+        Stream receiptStream,
+        string fileName,
+        string contentType,
+        CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        using var content = new MultipartFormDataContent();
+        content.Add(new StringContent(partnerParticipantId.ToString()), "partnerParticipantId");
+        content.Add(new StringContent(System.Text.Json.JsonSerializer.Serialize(ledgerIds)), "ledgerIds");
+        content.Add(new StringContent(transactionReference), "transactionReference");
+
+        var streamContent = new StreamContent(receiptStream);
+        streamContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
+        content.Add(streamContent, "receiptFile", fileName);
+
+        var response = await _httpClient.PostAsync("api/v1/backoffice/referral/payouts/batch-payout", content, cancellationToken);
+        if (response.IsSuccessStatusCode)
+        {
+            var count = await response.Content.ReadFromJsonAsync<int>(cancellationToken: cancellationToken);
+            return Result.Success(count);
+        }
+
+        var error = await response.Content.ReadFromJsonAsync<Error>(cancellationToken: cancellationToken);
+        return Result.Failure<int>(error ?? Error.Failure("Payout.RegisterError", "Erro ao registrar repasse financeiro."));
+    }
+
+    public async Task<Result> CancelCommissionLedgerEntryAsync(Guid ledgerId, string reason, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.PostAsJsonAsync($"api/v1/backoffice/referral/payouts/{ledgerId}/cancel", new { Reason = reason }, cancellationToken);
+        if (response.IsSuccessStatusCode)
+        {
+            return Result.Success();
+        }
+
+        var error = await response.Content.ReadFromJsonAsync<Error>(cancellationToken: cancellationToken);
+        return Result.Failure(error ?? Error.Failure("Payout.CancelError", "Erro ao cancelar comissão."));
+    }
+
+    public async Task<ExportTenantsResult> ExportPixBatchCsvAsync(IReadOnlyList<Guid>? participantIds = null, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var url = "api/v1/backoffice/referral/payouts/export-csv";
+        if (participantIds != null && participantIds.Count > 0)
+        {
+            url += $"?participantIds={string.Join(",", participantIds)}";
+        }
+
+        var response = await _httpClient.GetAsync(url, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            return new ExportTenantsResult { ErrorMessage = $"Erro ao exportar remessa Pix: {response.StatusCode}" };
+        }
+
+        var bytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
+        var fileName = response.Content.Headers.ContentDisposition?.FileNameStar ??
+                       response.Content.Headers.ContentDisposition?.FileName?.Trim('"') ??
+                       "lote_pix_criacerto.csv";
+
+        return new ExportTenantsResult { Content = bytes, FileName = fileName };
+    }
+
+    public async Task<IReadOnlyList<PlanDiscountPolicyDto>?> GetPlanDiscountPoliciesAsync(CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.GetAsync("api/v1/backoffice/referral/discount-policies", cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            return null;
+        }
+
+        return await response.Content.ReadFromJsonAsync<IReadOnlyList<PlanDiscountPolicyDto>>(cancellationToken: cancellationToken);
+    }
+
+    public async Task<Result<PlanDiscountPolicyDto>> ConfigurePlanDiscountPolicyAsync(
+        Guid planCatalogId,
+        ConfigurePlanDiscountPolicyRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.PutAsJsonAsync($"api/v1/backoffice/referral/discount-policies/{planCatalogId}", request, cancellationToken);
+        if (response.IsSuccessStatusCode)
+        {
+            var dto = await response.Content.ReadFromJsonAsync<PlanDiscountPolicyDto>(cancellationToken: cancellationToken);
+            return Result.Success(dto!);
+        }
+
+        var error = await response.Content.ReadFromJsonAsync<Error>(cancellationToken: cancellationToken);
+        return Result.Failure<PlanDiscountPolicyDto>(error ?? Error.Failure("DiscountPolicy.ConfigError", "Erro ao configurar política de desconto do plano."));
+    }
+
+    public async Task<Result<PlanDiscountPolicyDto>> TogglePlanDiscountPolicyStatusAsync(
+        Guid policyId,
+        CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.PostAsync($"api/v1/backoffice/referral/discount-policies/{policyId}/toggle-status", null, cancellationToken);
+        if (response.IsSuccessStatusCode)
+        {
+            var dto = await response.Content.ReadFromJsonAsync<PlanDiscountPolicyDto>(cancellationToken: cancellationToken);
+            return Result.Success(dto!);
+        }
+
+        var error = await response.Content.ReadFromJsonAsync<Error>(cancellationToken: cancellationToken);
+        return Result.Failure<PlanDiscountPolicyDto>(error ?? Error.Failure("DiscountPolicy.ToggleError", "Erro ao alterar status da política de desconto."));
+    }
+
+    public async Task<ReferralProgramKpisDto?> GetReferralProgramKpisAsync(
+        DateTime? startDate = null,
+        DateTime? endDate = null,
+        CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var url = "api/v1/backoffice/referral/kpis";
+        var queryParams = new List<string>();
+        if (startDate.HasValue) queryParams.Add($"startDate={Uri.EscapeDataString(startDate.Value.ToString("O"))}");
+        if (endDate.HasValue) queryParams.Add($"endDate={Uri.EscapeDataString(endDate.Value.ToString("O"))}");
+        if (queryParams.Count > 0) url += "?" + string.Join("&", queryParams);
+
+        var response = await _httpClient.GetAsync(url, cancellationToken);
+        if (!response.IsSuccessStatusCode) return null;
+
+        return await response.Content.ReadFromJsonAsync<ReferralProgramKpisDto>(cancellationToken: cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<PaidMediaSpendDto>?> GetPaidMediaSpendsAsync(
+        DateTime? startDate = null,
+        DateTime? endDate = null,
+        CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var url = "api/v1/backoffice/marketing/paid-media";
+        var queryParams = new List<string>();
+        if (startDate.HasValue) queryParams.Add($"startDate={Uri.EscapeDataString(startDate.Value.ToString("O"))}");
+        if (endDate.HasValue) queryParams.Add($"endDate={Uri.EscapeDataString(endDate.Value.ToString("O"))}");
+        if (queryParams.Count > 0) url += "?" + string.Join("&", queryParams);
+
+        var response = await _httpClient.GetAsync(url, cancellationToken);
+        if (!response.IsSuccessStatusCode) return null;
+
+        return await response.Content.ReadFromJsonAsync<IReadOnlyList<PaidMediaSpendDto>>(cancellationToken: cancellationToken);
+    }
+
+    public async Task<Result<PaidMediaSpendDto>> CreatePaidMediaSpendAsync(
+        CreatePaidMediaSpendRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.PostAsJsonAsync("api/v1/backoffice/marketing/paid-media", request, cancellationToken);
+        if (response.IsSuccessStatusCode)
+        {
+            var dto = await response.Content.ReadFromJsonAsync<PaidMediaSpendDto>(cancellationToken: cancellationToken);
+            return Result.Success(dto!);
+        }
+
+        var error = await response.Content.ReadFromJsonAsync<Error>(cancellationToken: cancellationToken);
+        return Result.Failure<PaidMediaSpendDto>(error ?? Error.Failure("PaidMedia.CreateError", "Erro ao registrar gasto de mídia paga."));
+    }
 }
+
 

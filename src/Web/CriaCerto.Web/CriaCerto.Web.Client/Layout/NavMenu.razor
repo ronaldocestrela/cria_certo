@@ -1,4 +1,7 @@
 @using CriaCerto.Web.Client.Models
+@using CriaCerto.Web.Client.Auth
+@inject NavigationManager Navigation
+@inject CustomAuthStateProvider AuthStateProvider
 
 <div class="brand-block">
     <img src="imgs/CriaCerto.png" alt="Cria Certo Logo" style="height: 38px; width: auto; object-fit: contain; border-radius: 6px;" />
@@ -35,8 +38,21 @@
         </NavLink>
     }
 
+    <button type="button" class="nav-link nav-logout-btn" @onclick="HandleLogout" title="Sair da aplicação" id="btn-logout-sidebar">
+        <span class="material-symbols-outlined nav-icon icon-logout" aria-hidden="true">logout</span>
+        <span class="nav-text">Sair da Conta</span>
+    </button>
+
     <div class="promo-card">
         <p class="promo-title">Offline Sync Ready</p>
         <p class="promo-text">Registros de pasto e curral cacheados offline.</p>
     </div>
 </nav>
+
+@code {
+    private async Task HandleLogout()
+    {
+        await AuthStateProvider.MarkUserAsLoggedOut();
+        Navigation.NavigateTo("/login", forceLoad: true);
+    }
+}

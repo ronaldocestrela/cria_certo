@@ -3,6 +3,7 @@
 @layout EmptyLayout
 @inject HttpClient Http
 @inject NavigationManager Navigation
+@inject CriaCerto.Web.Client.Services.IReferralTrackingService ReferralTracker
 
 <PageTitle>Cria Certo - Criar Conta</PageTitle>
 
@@ -121,9 +122,20 @@
     private bool _registrationSuccess;
     private string? _errorMessage;
 
+    [SupplyParameterFromQuery(Name = "ref")]
+    public string? ReferralCodeQuery { get; set; }
+
     private string? _createdUserId;
     private string? _createdUserEmail;
     private string? _createdUserName;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!string.IsNullOrWhiteSpace(ReferralCodeQuery))
+        {
+            await ReferralTracker.CaptureReferralCodeAsync(ReferralCodeQuery);
+        }
+    }
 
     private class RegisterModel
     {
@@ -195,9 +207,14 @@
         }
     }
 
-    private void GoToOnboarding()
+    private async Task GoToOnboarding()
     {
+        var refCode = await ReferralTracker.GetReferralCodeAsync();
         var url = $"/onboarding?userId={_createdUserId}&email={Uri.EscapeDataString(_createdUserEmail ?? "")}&name={Uri.EscapeDataString(_createdUserName ?? "")}";
+        if (!string.IsNullOrWhiteSpace(refCode))
+        {
+            url += $"&ref={Uri.EscapeDataString(refCode)}";
+        }
         Navigation.NavigateTo(url);
     }
 }

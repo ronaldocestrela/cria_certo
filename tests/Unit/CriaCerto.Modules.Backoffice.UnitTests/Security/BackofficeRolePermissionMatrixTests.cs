@@ -46,6 +46,19 @@ public class BackofficeRolePermissionMatrixTests
     [InlineData(BackofficeRoles.ReadOnlyAuditor, BackofficePermissions.TenantsRead, true)]
     [InlineData(BackofficeRoles.ReadOnlyAuditor, BackofficePermissions.SupportRemediate, false)]
     [InlineData(BackofficeRoles.ReadOnlyAuditor, BackofficePermissions.TenantsWrite, false)]
+    [InlineData(BackofficeRoles.FinanceOps, BackofficePermissions.ReferralPayoutsRead, true)]
+    [InlineData(BackofficeRoles.FinanceOps, BackofficePermissions.ReferralPayoutsManage, true)]
+    [InlineData(BackofficeRoles.FinanceOps, BackofficePermissions.ReferralPayoutsExport, true)]
+    [InlineData(BackofficeRoles.ReadOnlyAuditor, BackofficePermissions.ReferralPayoutsRead, true)]
+    [InlineData(BackofficeRoles.ReadOnlyAuditor, BackofficePermissions.ReferralPayoutsManage, false)]
+    [InlineData(BackofficeRoles.SupportN1, BackofficePermissions.ReferralPayoutsManage, false)]
+    [InlineData(BackofficeRoles.PlatformOwner, BackofficePermissions.ReferralDiscountsRead, true)]
+    [InlineData(BackofficeRoles.PlatformOwner, BackofficePermissions.ReferralDiscountsManage, true)]
+    [InlineData(BackofficeRoles.FinanceOps, BackofficePermissions.ReferralDiscountsRead, true)]
+    [InlineData(BackofficeRoles.FinanceOps, BackofficePermissions.ReferralDiscountsManage, true)]
+    [InlineData(BackofficeRoles.ReadOnlyAuditor, BackofficePermissions.ReferralDiscountsRead, true)]
+    [InlineData(BackofficeRoles.ReadOnlyAuditor, BackofficePermissions.ReferralDiscountsManage, false)]
+    [InlineData(BackofficeRoles.SupportN1, BackofficePermissions.ReferralDiscountsManage, false)]
     public void HasPermission_RolePermissionMatrix_ShouldEvaluateCorrectly(string role, string permission, bool expectedResult)
     {
         // Arrange

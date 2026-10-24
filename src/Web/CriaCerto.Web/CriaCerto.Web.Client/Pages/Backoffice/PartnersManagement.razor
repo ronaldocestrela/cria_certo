@@ -1,0 +1,1478 @@
+@page "/backoffice/partners"
+@layout Layout.BackofficeLayout
+@using CriaCerto.BuildingBlocks.Abstractions.Results
+@using CriaCerto.Modules.Backoffice.Application.Security
+@using CriaCerto.Modules.Referral.Application.Domain.Enums
+@using CriaCerto.Modules.Referral.Application.Features.CommercialPartners.Dtos
+@using CriaCerto.Modules.Referral.Application.Features.CommercialPartners.Queries
+@using CriaCerto.Web.Client.Components.Backoffice
+@using CriaCerto.Web.Client.Services
+@inject IBackofficeApiClient ApiClient
+@inject IJSRuntime JS
+@inject IToastService Toast
+
+<PageTitle>CriaCerto Backoffice - Gestão de Parceiros Comerciais</PageTitle>
+
+<PermissionGuard Permission="@BackofficePermissions.ReferralPartnersRead">
+    <Authorized>
+        <div class="partners-page">
+            <header class="page-header">
+                <div>
+                    <span class="badge-growth">Programa de Parcerias & Growth</span>
+                    <h1 class="page-title">Gestão de Parceiros Comerciais</h1>
+                    <p class="page-subtitle">Cadastro de consultores, veterinários e revendas com contratos de comissionamento individualizados e rastreamento de conversão.</p>
+                </div>
+                <div class="header-actions">
+                    <button class="btn btn-secondary" @onclick="LoadPartnersAsync" disabled="@_isLoading">
+                        <span>🔄</span> Atualizar
+                    </button>
+                    <PermissionGuard Permission="@BackofficePermissions.ReferralPartnersManage">
+                        <Authorized>
+                            <button class="btn btn-primary" @onclick="OpenCreateModal">
+                                <span>+</span> Novo Parceiro
+                            </button>
+                        </Authorized>
+                    </PermissionGuard>
+                </div>
+            </header>
+
+            <!-- KPIs Grid -->
+            <div class="kpis-grid">
+                <div class="kpi-card">
+                    <span class="kpi-label">Total de Parceiros</span>
+                    <span class="kpi-value">@(_pagedPartners?.TotalCount ?? 0)</span>
+                </div>
+                <div class="kpi-card">
+                    <span class="kpi-label">Parceiros Ativos</span>
+                    <span class="kpi-value text-success">@(_pagedPartners?.Items.Count(p => p.Status == ParticipantStatus.Active) ?? 0)</span>
+                </div>
+                <div class="kpi-card">
+                    <span class="kpi-label">Parceiros Suspensos</span>
+                    <span class="kpi-value text-danger">@(_pagedPartners?.Items.Count(p => p.Status == ParticipantStatus.Suspended) ?? 0)</span>
+                </div>
+                <div class="kpi-card">
+                    <span class="kpi-label">Total de Cliques</span>
+                    <span class="kpi-value text-info">@(_pagedPartners?.Items.Sum(p => p.ClicksCount).ToString("N0") ?? "0")</span>
+                </div>
+                <div class="kpi-card">
+                    <span class="kpi-label">Indicações Vinculadas</span>
+                    <span class="kpi-value text-warning">@(_pagedPartners?.Items.Sum(p => p.ActiveReferralsCount).ToString("N0") ?? "0")</span>
+                </div>
+            </div>
+
+            <!-- Filtros e Busca -->
+            <div class="filters-bar">
+                <div class="search-box">
+                    <span class="search-icon">🔍</span>
+                    <input type="text" placeholder="Buscar por nome, documento, e-mail, telefone ou código..."
+                           @bind="_searchTerm" @bind:event="oninput" @onkeyup="HandleSearchKeyUp" />
+                </div>
+
+                <div class="filter-group">
+                    <select class="form-select" @bind="_selectedStatus">
+                        <option value="">Todos os Status</option>
+                        <option value="Active">Ativos</option>
+                        <option value="Suspended">Suspensos</option>
+                    </select>
+
+                    <select class="form-select" @bind="_selectedCommissionType">
+                        <option value="">Todos os Modelos</option>
+                        <option value="PercentageRecurring">Percentual Recorrente</option>
+                        <option value="PercentageFirstMonth">1ª Mensalidade</option>
+                        <option value="FixedPerConversion">Fixo por Conversão</option>
+                    </select>
+
+                    <button class="btn btn-secondary" @onclick="ApplyFilters">Filtrar</button>
+                </div>
+            </div>
+
+            <!-- Tabela Principal -->
+            <div class="table-container">
+                @if (_isLoading)
+                {
+                    <div class="loading-state">
+                        <div class="spinner"></div>
+                        <p>Carregando parceiros comerciais...</p>
+                    </div>
+                }
+                else if (_pagedPartners is null || !_pagedPartners.Items.Any())
+                {
+                    <div class="empty-state">
+                        <span class="empty-icon">🤝</span>
+                        <h3>Nenhum parceiro comercial encontrado</h3>
+                        <p>Ajuste os filtros de pesquisa ou cadastre um novo consultor/parceiro.</p>
+                        <button class="btn btn-primary mt-3" @onclick="OpenCreateModal">+ Cadastrar Parceiro</button>
+                    </div>
+                }
+                else
+                {
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Parceiro</th>
+                                <th>Categoria</th>
+                                <th>Documento / Pix</th>
+                                <th>Link / Código</th>
+                                <th>Comissão Vigente</th>
+                                <th>Desempenho</th>
+                                <th>Status</th>
+                                <th style="text-align: right;">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var partner in _pagedPartners.Items)
+                            {
+                                <tr>
+                                    <td>
+                                        <div class="partner-identity">
+                                            <span class="partner-name">@partner.FullName</span>
+                                            @if (!string.IsNullOrWhiteSpace(partner.TradeName))
+                                            {
+                                                <span class="partner-trade">@partner.TradeName</span>
+                                            }
+                                            <span class="partner-contact">📧 @partner.Email | 📱 @partner.PhoneNumber</span>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="category-pill">@FormatCategory(partner.Category)</span>
+                                    </td>
+                                    <td>
+                                        <div class="doc-info">
+                                            <span>Doc: <MaskedDataField Value="@partner.LegalDocumentNumber" EntityType="Partner" EntityId="@partner.ParticipantId" FieldName="Document" Label="CPF/CNPJ" /></span>
+                                            <span class="pix-tag">Pix (@partner.PixKeyType): <MaskedDataField Value="@partner.PixKey" EntityType="Partner" EntityId="@partner.ParticipantId" FieldName="PixKey" Label="Chave Pix" /></span>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="code-box">
+                                            <code>@partner.ReferralCode</code>
+                                            <button class="btn-icon" title="Copiar Link de Indicação" @onclick="() => CopyReferralLink(partner.ReferralCode)">
+                                                📋
+                                            </button>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="commission-badge">
+                                            @FormatCommission(partner.CommissionType, partner.CommissionValue, partner.MaxRecurringMonths)
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div class="metrics-cell">
+                                            <span><strong>@partner.ClicksCount</strong> cliques</span>
+                                            <span class="text-success"><strong>@partner.ActiveReferralsCount</strong> fazendas</span>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        @if (partner.Status == ParticipantStatus.Active)
+                                        {
+                                            <span class="status-badge status-active">Ativo</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="status-badge status-suspended">Suspenso</span>
+                                        }
+                                    </td>
+                                    <td style="text-align: right;">
+                                        <div class="action-buttons">
+                                            <button class="btn btn-sm btn-outline" title="Ver Histórico e Detalhes" @onclick="() => OpenDetailsModal(partner.ParticipantId)">
+                                                👁️
+                                            </button>
+                                            <PermissionGuard Permission="@BackofficePermissions.ApprovalsRequest">
+                                                <Authorized>
+                                                    <button class="btn btn-sm btn-outline text-warning" title="Ajustar Comissão (4-Olhos)" @onclick="() => OpenContractChangeModal(partner)">
+                                                        ⚖️
+                                                    </button>
+                                                </Authorized>
+                                            </PermissionGuard>
+                                            <PermissionGuard Permission="@BackofficePermissions.ReferralPartnersManage">
+                                                <Authorized>
+                                                    @if (partner.Status == ParticipantStatus.Active)
+                                                    {
+                                                        <button class="btn btn-sm btn-outline text-danger" title="Suspender Parceiro" @onclick="() => OpenSuspendModal(partner)">
+                                                            ⏸️
+                                                        </button>
+                                                    }
+                                                    else
+                                                    {
+                                                        <button class="btn btn-sm btn-outline text-success" title="Reativar Parceiro" @onclick="() => HandleReactivate(partner.ParticipantId)">
+                                                            ▶️
+                                                        </button>
+                                                    }
+                                                </Authorized>
+                                            </PermissionGuard>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+
+                    <!-- Paginação -->
+                    <div class="pagination-footer">
+                        <span>Página @_currentPage de @Math.Max(1, (int)Math.Ceiling((double)(_pagedPartners?.TotalCount ?? 0) / _pageSize)) (Total: @(_pagedPartners?.TotalCount ?? 0) parceiros)</span>
+                        <div class="pagination-buttons">
+                            <button class="btn btn-sm btn-secondary" disabled="@(_currentPage <= 1)" @onclick="PreviousPage">Anterior</button>
+                            <button class="btn btn-sm btn-secondary" disabled="@(_currentPage * _pageSize >= (_pagedPartners?.TotalCount ?? 0))" @onclick="NextPage">Próxima</button>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </Authorized>
+    <NotAuthorized>
+        <div class="access-denied">
+            <h2>Acesso Restrito</h2>
+            <p>Você não possui a permissão necessária (<code>referral.partners.read</code>) para acessar a Gestão de Parceiros Comerciais.</p>
+        </div>
+    </NotAuthorized>
+</PermissionGuard>
+
+<!-- MODAL: CADASTRAR NOVO PARCEIRO -->
+@if (_showCreateModal)
+{
+    <div class="modal-backdrop">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div>
+                        <span class="badge-growth">Novo Parceiro</span>
+                        <h2 class="modal-title">Cadastrar Parceiro Comercial</h2>
+                    </div>
+                    <button class="btn-close" @onclick="CloseCreateModal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    @if (!string.IsNullOrWhiteSpace(_createError))
+                    {
+                        <div class="alert alert-danger">@_createError</div>
+                    }
+
+                    <div class="form-section-title">1. Dados Cadastrais e Contato</div>
+                    <div class="form-grid">
+                        <div class="form-group full-width">
+                            <label>Nome Completo ou Razão Social *</label>
+                            <input type="text" class="form-control" @bind="_newPartner.FullName" @bind:event="oninput" @onkeyup="HandleFullNameKeyUp" placeholder="Ex: Dr. Roberto Silva ou Agropecuária São José" />
+                        </div>
+                        <div class="form-group">
+                            <label>Nome Fantasia ou Apelido</label>
+                            <input type="text" class="form-control" @bind="_newPartner.TradeName" placeholder="Ex: Silva Consultoria" />
+                        </div>
+                        <div class="form-group">
+                            <label>Categoria de Atuação *</label>
+                            <select class="form-select" @bind="_newPartner.Category">
+                                <option value="@PartnerCategory.ZootechnicianConsultant">Consultor Zootécnico / Agrônomo</option>
+                                <option value="@PartnerCategory.Veterinarian">Médico Veterinário</option>
+                                <option value="@PartnerCategory.AgriculturalDealer">Revenda Agropecuária / Distribuidor</option>
+                                <option value="@PartnerCategory.BreedAssociation">Associação de Raça / Núcleo</option>
+                                <option value="@PartnerCategory.InfluencerOther">Influenciador Agro / Outro</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>E-mail de Contato * (Será criado login no Identity)</label>
+                            <input type="email" class="form-control" @bind="_newPartner.Email" placeholder="contato@parceiro.com.br" />
+                        </div>
+                        <div class="form-group">
+                            <label>Telefone / WhatsApp *</label>
+                            <input type="text" class="form-control" @bind="_newPartner.PhoneNumber" placeholder="+55 67 99988-7766" />
+                        </div>
+                        <div class="form-group">
+                            <label>Cidade</label>
+                            <input type="text" class="form-control" @bind="_newPartner.City" placeholder="Campo Grande" />
+                        </div>
+                        <div class="form-group">
+                            <label>UF (Estado)</label>
+                            <input type="text" class="form-control" maxlength="2" @bind="_newPartner.State" placeholder="MS" style="text-transform: uppercase;" />
+                        </div>
+                    </div>
+
+                    <div class="form-section-title mt-4">2. Código de Indicação (Link Rastreável)</div>
+                    <div class="form-grid">
+                        <div class="form-group full-width">
+                            <label>Código Slug * (Ex: <code>criacerto.com/r/SILVA-AGRO</code>)</label>
+                            <div class="input-with-button">
+                                <input type="text" class="form-control" @bind="_newPartner.PreferredReferralCode" style="text-transform: uppercase;" placeholder="Sugestão automática..." />
+                                <button type="button" class="btn btn-secondary" @onclick="SuggestCodeAsync">Gerar Slug</button>
+                            </div>
+                            <span class="hint-text">Normalizado automaticamente sem acentos ou caracteres especiais.</span>
+                        </div>
+                    </div>
+
+                    <div class="form-section-title mt-4">3. Dados Fiscais e Chave Pix para Repasses</div>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>CPF ou CNPJ *</label>
+                            <input type="text" class="form-control" @bind="_newPartner.LegalDocumentNumber" placeholder="00.000.000/0001-00 ou 000.000.000-00" />
+                        </div>
+                        <div class="form-group">
+                            <label>Tipo de Chave Pix *</label>
+                            <select class="form-select" @bind="_newPartner.PixKeyType">
+                                <option value="@PixKeyType.Cnpj">CNPJ</option>
+                                <option value="@PixKeyType.Cpf">CPF</option>
+                                <option value="@PixKeyType.Email">E-mail</option>
+                                <option value="@PixKeyType.Phone">Telefone</option>
+                                <option value="@PixKeyType.RandomKey">Chave Aleatória (EVP)</option>
+                            </select>
+                        </div>
+                        <div class="form-group full-width">
+                            <label>Chave Pix *</label>
+                            <input type="text" class="form-control" @bind="_newPartner.PixKey" placeholder="Informe a chave Pix correspondente" />
+                        </div>
+                    </div>
+
+                    <div class="form-section-title mt-4">4. Regra de Comissão e Vigência Contratual</div>
+                    <div class="form-grid">
+                        <div class="form-group full-width">
+                            <label>Modelo de Comissionamento *</label>
+                            <div class="radio-cards">
+                                <label class="radio-card @(_newPartner.CommissionType == CommissionType.PercentageRecurring ? "selected" : "")">
+                                    <input type="radio" name="commType" checked="@(_newPartner.CommissionType == CommissionType.PercentageRecurring)" @onchange="() => _newPartner.CommissionType = CommissionType.PercentageRecurring" />
+                                    <div>
+                                        <strong>Percentual Recorrente</strong>
+                                        <p>Comissão sobre cada mensalidade paga durante a janela definida.</p>
+                                    </div>
+                                </label>
+                                <label class="radio-card @(_newPartner.CommissionType == CommissionType.PercentageFirstMonth ? "selected" : "")">
+                                    <input type="radio" name="commType" checked="@(_newPartner.CommissionType == CommissionType.PercentageFirstMonth)" @onchange="() => _newPartner.CommissionType = CommissionType.PercentageFirstMonth" />
+                                    <div>
+                                        <strong>1ª Mensalidade Apenas</strong>
+                                        <p>Comissão percentual unicamente sobre a primeira fatura convertida.</p>
+                                    </div>
+                                </label>
+                                <label class="radio-card @(_newPartner.CommissionType == CommissionType.FixedPerConversion ? "selected" : "")">
+                                    <input type="radio" name="commType" checked="@(_newPartner.CommissionType == CommissionType.FixedPerConversion)" @onchange="() => _newPartner.CommissionType = CommissionType.FixedPerConversion" />
+                                    <div>
+                                        <strong>Valor Fixo por Conversão</strong>
+                                        <p>Bônus fixo em R$ após a confirmação do primeiro pagamento do indicado.</p>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label>@(_newPartner.CommissionType == CommissionType.FixedPerConversion ? "Valor Fixo (R$) *" : "Taxa de Comissão (%) *")</label>
+                            <input type="number" step="0.01" class="form-control" @bind="_newPartner.CommissionValue" placeholder="@(_newPartner.CommissionType == CommissionType.FixedPerConversion ? "350.00" : "20.00")" />
+                        </div>
+
+                        @if (_newPartner.CommissionType == CommissionType.PercentageRecurring)
+                        {
+                            <div class="form-group">
+                                <label>Duração Máxima em Meses (Deixe vazio para vitalício)</label>
+                                <input type="number" class="form-control" @bind="_newPartner.MaxRecurringMonths" placeholder="Ex: 12" />
+                            </div>
+                        }
+
+                        <div class="form-group">
+                            <label>Prazo de Carência para Repasse (Dias) *</label>
+                            <input type="number" class="form-control" @bind="_newPartner.PaymentTermsDays" placeholder="30" />
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="CloseCreateModal">Cancelar</button>
+                    <button class="btn btn-primary" @onclick="HandleSubmitCreateAsync" disabled="@_isSubmitting">
+                        @(_isSubmitting ? "Cadastrando..." : "Confirmar e Cadastrar Parceiro")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- MODAL: PROPOR AJUSTE DE COMISSÃO (4-OLHOS) -->
+@if (_showContractChangeModal && _selectedPartnerForContract is not null)
+{
+    <div class="modal-backdrop">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div>
+                        <span class="badge-growth">Governança 4-Olhos</span>
+                        <h2 class="modal-title">Ajuste Contratual de Comissão</h2>
+                    </div>
+                    <button class="btn-close" @onclick="CloseContractChangeModal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="partner-summary-banner">
+                        <strong>@_selectedPartnerForContract.FullName</strong>
+                        <span>Comissão Vigente: @FormatCommission(_selectedPartnerForContract.CommissionType, _selectedPartnerForContract.CommissionValue, _selectedPartnerForContract.MaxRecurringMonths)</span>
+                    </div>
+
+                    <div class="alert alert-info mt-3">
+                        🛡️ <strong>Princípio de 4-Olhos (Dual Control):</strong> Esta alteração gera uma solicitação de aprovação administrativa. A nova comissão entrará em vigor imediatamente após a revisão de um segundo operador.
+                    </div>
+
+                    <div class="form-group mt-3">
+                        <label>Novo Modelo de Comissão *</label>
+                        <select class="form-select" @bind="_contractProposal.CommissionType">
+                            <option value="@CommissionType.PercentageRecurring">Percentual Recorrente</option>
+                            <option value="@CommissionType.PercentageFirstMonth">1ª Mensalidade</option>
+                            <option value="@CommissionType.FixedPerConversion">Fixo por Conversão</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group mt-3">
+                        <label>@(_contractProposal.CommissionType == CommissionType.FixedPerConversion ? "Novo Valor Fixo (R$) *" : "Nova Taxa (%) *")</label>
+                        <input type="number" step="0.01" class="form-control" @bind="_contractProposal.CommissionValue" />
+                    </div>
+
+                    @if (_contractProposal.CommissionType == CommissionType.PercentageRecurring)
+                    {
+                        <div class="form-group mt-3">
+                            <label>Duração Máxima em Meses (Vazio para vitalício)</label>
+                            <input type="number" class="form-control" @bind="_contractProposal.MaxRecurringMonths" placeholder="Ex: 12" />
+                        </div>
+                    }
+
+                    <div class="form-group mt-3">
+                        <label>Justificativa Administrativa Obrigatória * (Mínimo 10 caracteres)</label>
+                        <textarea class="form-control" rows="3" @bind="_contractProposal.Justification" placeholder="Descreva os motivos da renegociação comercial..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="CloseContractChangeModal">Cancelar</button>
+                    <button class="btn btn-primary" @onclick="HandleSubmitContractProposalAsync" disabled="@_isSubmitting">
+                        @(_isSubmitting ? "Enviando..." : "Submeter para Aprovação 4-Olhos")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- MODAL: DETALHES E HISTÓRICO CONTRATUAL -->
+@if (_showDetailsModal && _partnerDetail is not null)
+{
+    <div class="modal-backdrop">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div>
+                        <span class="badge-growth">Dossiê do Parceiro</span>
+                        <h2 class="modal-title">@_partnerDetail.FullName</h2>
+                    </div>
+                    <button class="btn-close" @onclick="CloseDetailsModal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="details-overview-grid">
+                        <div class="overview-item">
+                            <span class="overview-label">Código Oficial:</span>
+                            <span class="overview-value"><code>@_partnerDetail.ReferralCode</code></span>
+                        </div>
+                        <div class="overview-item">
+                            <span class="overview-label">E-mail:</span>
+                            <span class="overview-value">@_partnerDetail.Email</span>
+                        </div>
+                        <div class="overview-item">
+                            <span class="overview-label">Telefone:</span>
+                            <span class="overview-value">@_partnerDetail.PhoneNumber</span>
+                        </div>
+                        <div class="overview-item">
+                            <span class="overview-label">Localização:</span>
+                            <span class="overview-value">@(_partnerDetail.City ?? "N/A") / @(_partnerDetail.State ?? "N/A")</span>
+                        </div>
+                        <div class="overview-item">
+                            <span class="overview-label">Total de Cliques:</span>
+                            <span class="overview-value text-info">@_partnerDetail.ClicksCount</span>
+                        </div>
+                        <div class="overview-item">
+                            <span class="overview-label">Status da Conta:</span>
+                            <span class="overview-value">@(_partnerDetail.Status == ParticipantStatus.Active ? "🟢 Ativo" : "🔴 Suspenso")</span>
+                        </div>
+                    </div>
+
+                    <h4 class="mt-4 mb-2">📜 Histórico de Contratos Comerciais</h4>
+                    @if (!_partnerDetail.ContractHistory.Any())
+                    {
+                        <p class="text-muted">Nenhum contrato arquivado.</p>
+                    }
+                    else
+                    {
+                        <table class="data-table mt-2">
+                            <thead>
+                                <tr>
+                                    <th>Vigência</th>
+                                    <th>Comissão</th>
+                                    <th>Prazo</th>
+                                    <th>Chave Pix</th>
+                                    <th>Estado</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var c in _partnerDetail.ContractHistory)
+                                {
+                                    <tr style="@(c.IsActive ? "background: rgba(16, 185, 129, 0.08);" : "")">
+                                        <td>@c.ValidFromUtc.ToLocalTime().ToString("dd/MM/yyyy") @(c.ValidToUtc.HasValue ? $"até {c.ValidToUtc.Value.ToLocalTime():dd/MM/yyyy}" : " (Vigente)")</td>
+                                        <td>@FormatCommission(c.CommissionType, c.CommissionValue, c.MaxRecurringMonths)</td>
+                                        <td>@(c.PaymentTermsDays) dias</td>
+                                        <td><code>@c.PixKey</code> (@c.PixKeyType)</td>
+                                        <td>
+                                            @if (c.IsActive)
+                                            {
+                                                <span class="status-badge status-active">Vigente</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="status-badge status-closed">Encerrado</span>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="CloseDetailsModal">Fechar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- MODAL: SUSPENDER PARCEIRO -->
+@if (_showSuspendModal && _selectedPartnerForSuspend is not null)
+{
+    <div class="modal-backdrop">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div>
+                        <span class="badge-danger">Suspensão de Operação</span>
+                        <h2 class="modal-title">Suspender Parceiro Comercial</h2>
+                    </div>
+                    <button class="btn-close" @onclick="CloseSuspendModal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p>Tem certeza que deseja suspender <strong>@_selectedPartnerForSuspend.FullName</strong>?</p>
+                    <p class="text-muted text-sm">O link de indicação deixará de registrar novos cliques e os repasses serão retidos até a reativação.</p>
+
+                    <div class="form-group mt-3">
+                        <label>Justificativa Obrigatória *</label>
+                        <textarea class="form-control" rows="3" @bind="_suspendReason" placeholder="Motivo da suspensão..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="CloseSuspendModal">Cancelar</button>
+                    <button class="btn btn-danger" @onclick="HandleConfirmSuspendAsync" disabled="@_isSubmitting">
+                        @(_isSubmitting ? "Suspendendo..." : "Confirmar Suspensão")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .partners-page {
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+        padding: 1.5rem;
+    }
+
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+
+    .badge-growth {
+        display: inline-block;
+        padding: 0.25rem 0.6rem;
+        border-radius: 9999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        background: rgba(99, 102, 241, 0.15);
+        color: #818cf8;
+        border: 1px solid rgba(99, 102, 241, 0.3);
+        margin-bottom: 0.5rem;
+    }
+
+    .badge-danger {
+        display: inline-block;
+        padding: 0.25rem 0.6rem;
+        border-radius: 9999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        background: rgba(239, 68, 68, 0.15);
+        color: #f87171;
+        border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    .page-title {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: #f8fafc;
+        margin: 0;
+    }
+
+    .page-subtitle {
+        font-size: 0.875rem;
+        color: #94a3b8;
+        margin-top: 0.25rem;
+    }
+
+    .header-actions {
+        display: flex;
+        gap: 0.75rem;
+    }
+
+    .kpis-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+    }
+
+    .kpi-card {
+        background: #0f172a;
+        border: 1px solid #1e293b;
+        border-radius: 8px;
+        padding: 1.25rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .kpi-label {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        color: #64748b;
+        font-weight: 600;
+    }
+
+    .kpi-value {
+        font-size: 1.75rem;
+        font-weight: 700;
+        color: #f8fafc;
+    }
+
+    .text-success { color: #10b981 !important; }
+    .text-danger { color: #ef4444 !important; }
+    .text-warning { color: #f59e0b !important; }
+    .text-info { color: #38bdf8 !important; }
+
+    .filters-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 1rem;
+        flex-wrap: wrap;
+        background: #0f172a;
+        padding: 1rem;
+        border-radius: 8px;
+        border: 1px solid #1e293b;
+    }
+
+    .search-box {
+        display: flex;
+        align-items: center;
+        background: #1e293b;
+        border-radius: 6px;
+        padding: 0.5rem 0.75rem;
+        gap: 0.5rem;
+        flex: 1;
+        min-width: 280px;
+    }
+
+    .search-box input {
+        background: transparent;
+        border: none;
+        color: #f8fafc;
+        outline: none;
+        width: 100%;
+        font-size: 0.875rem;
+    }
+
+    .filter-group {
+        display: flex;
+        gap: 0.75rem;
+    }
+
+    .form-select, .form-control {
+        background: #1e293b;
+        border: 1px solid #334155;
+        color: #f8fafc;
+        padding: 0.5rem 0.75rem;
+        border-radius: 6px;
+        font-size: 0.875rem;
+        outline: none;
+    }
+
+    .form-select:focus, .form-control:focus {
+        border-color: #38bdf8;
+    }
+
+    .table-container {
+        background: #0f172a;
+        border: 1px solid #1e293b;
+        border-radius: 8px;
+        overflow-x: auto;
+    }
+
+    .data-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.875rem;
+    }
+
+    .data-table th {
+        background: #1e293b;
+        color: #94a3b8;
+        padding: 0.75rem 1rem;
+        text-align: left;
+        font-weight: 600;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+    }
+
+    .data-table td {
+        padding: 1rem;
+        border-bottom: 1px solid #1e293b;
+        color: #cbd5e1;
+    }
+
+    .partner-identity {
+        display: flex;
+        flex-direction: column;
+        gap: 0.2rem;
+    }
+
+    .partner-name {
+        font-weight: 600;
+        color: #f8fafc;
+    }
+
+    .partner-trade {
+        font-size: 0.75rem;
+        color: #38bdf8;
+    }
+
+    .partner-contact {
+        font-size: 0.75rem;
+        color: #64748b;
+    }
+
+    .category-pill {
+        display: inline-block;
+        padding: 0.2rem 0.5rem;
+        background: rgba(56, 189, 248, 0.1);
+        border: 1px solid rgba(56, 189, 248, 0.25);
+        color: #38bdf8;
+        border-radius: 4px;
+        font-size: 0.75rem;
+    }
+
+    .doc-info {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        font-size: 0.8rem;
+    }
+
+    .pix-tag {
+        color: #94a3b8;
+    }
+
+    .code-box {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        background: #1e293b;
+        padding: 0.2rem 0.5rem;
+        border-radius: 4px;
+    }
+
+    .code-box code {
+        color: #f59e0b;
+        font-weight: 700;
+    }
+
+    .commission-badge {
+        display: inline-block;
+        padding: 0.3rem 0.6rem;
+        background: rgba(16, 185, 129, 0.1);
+        border: 1px solid rgba(16, 185, 129, 0.3);
+        color: #10b981;
+        border-radius: 4px;
+        font-weight: 600;
+        font-size: 0.8rem;
+    }
+
+    .metrics-cell {
+        display: flex;
+        flex-direction: column;
+        gap: 0.2rem;
+        font-size: 0.8rem;
+    }
+
+    .status-badge {
+        display: inline-block;
+        padding: 0.2rem 0.5rem;
+        border-radius: 9999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+
+    .status-active {
+        background: rgba(16, 185, 129, 0.15);
+        color: #10b981;
+    }
+
+    .status-suspended {
+        background: rgba(239, 68, 68, 0.15);
+        color: #ef4444;
+    }
+
+    .status-closed {
+        background: rgba(100, 116, 139, 0.15);
+        color: #94a3b8;
+    }
+
+    .btn {
+        padding: 0.5rem 1rem;
+        border-radius: 6px;
+        font-size: 0.875rem;
+        font-weight: 600;
+        cursor: pointer;
+        border: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        transition: all 0.2s;
+    }
+
+    .btn-primary {
+        background: #6366f1;
+        color: #ffffff;
+    }
+
+    .btn-primary:hover {
+        background: #4f46e5;
+    }
+
+    .btn-secondary {
+        background: #334155;
+        color: #f8fafc;
+    }
+
+    .btn-secondary:hover {
+        background: #475569;
+    }
+
+    .btn-danger {
+        background: #ef4444;
+        color: #ffffff;
+    }
+
+    .btn-danger:hover {
+        background: #dc2626;
+    }
+
+    .btn-outline {
+        background: transparent;
+        border: 1px solid #334155;
+        color: #cbd5e1;
+    }
+
+    .btn-outline:hover {
+        background: #1e293b;
+    }
+
+    .btn-sm {
+        padding: 0.3rem 0.5rem;
+        font-size: 0.75rem;
+    }
+
+    .btn-icon {
+        background: transparent;
+        border: none;
+        cursor: pointer;
+        font-size: 0.9rem;
+    }
+
+    .action-buttons {
+        display: inline-flex;
+        gap: 0.4rem;
+    }
+
+    .pagination-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem;
+        border-top: 1px solid #1e293b;
+        color: #64748b;
+        font-size: 0.875rem;
+    }
+
+    .loading-state, .empty-state {
+        padding: 3rem;
+        text-align: center;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 1rem;
+        color: #94a3b8;
+    }
+
+    .spinner {
+        width: 32px;
+        height: 32px;
+        border: 3px solid rgba(56, 189, 248, 0.2);
+        border-top-color: #38bdf8;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+    }
+
+    @@keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+
+    /* Modal Styles */
+    .modal-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.7);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+        backdrop-filter: blur(4px);
+    }
+
+    .modal-dialog {
+        background: #0f172a;
+        border: 1px solid #1e293b;
+        border-radius: 10px;
+        width: 90%;
+        max-width: 600px;
+        max-height: 90vh;
+        overflow-y: auto;
+        color: #f8fafc;
+    }
+
+    .modal-lg {
+        max-width: 800px;
+    }
+
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1.25rem;
+        border-bottom: 1px solid #1e293b;
+    }
+
+    .modal-title {
+        font-size: 1.25rem;
+        margin: 0;
+    }
+
+    .btn-close {
+        background: transparent;
+        border: none;
+        color: #64748b;
+        font-size: 1.5rem;
+        cursor: pointer;
+    }
+
+    .modal-body {
+        padding: 1.25rem;
+    }
+
+    .modal-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.75rem;
+        padding: 1rem 1.25rem;
+        border-top: 1px solid #1e293b;
+    }
+
+    .form-section-title {
+        font-size: 0.85rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        color: #38bdf8;
+        margin-bottom: 0.75rem;
+    }
+
+    .form-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1rem;
+    }
+
+    .full-width {
+        grid-column: span 2;
+    }
+
+    .form-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.35rem;
+    }
+
+    .form-group label {
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: #94a3b8;
+    }
+
+    .hint-text {
+        font-size: 0.7rem;
+        color: #64748b;
+    }
+
+    .input-with-button {
+        display: flex;
+        gap: 0.5rem;
+    }
+
+    .radio-cards {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0.75rem;
+    }
+
+    .radio-card {
+        border: 1px solid #334155;
+        border-radius: 6px;
+        padding: 0.75rem;
+        background: #1e293b;
+        cursor: pointer;
+        display: flex;
+        gap: 0.5rem;
+        align-items: flex-start;
+        font-size: 0.75rem;
+    }
+
+    .radio-card.selected {
+        border-color: #6366f1;
+        background: rgba(99, 102, 241, 0.1);
+    }
+
+    .radio-card p {
+        margin: 0.25rem 0 0 0;
+        color: #64748b;
+        font-size: 0.7rem;
+    }
+
+    .partner-summary-banner {
+        background: #1e293b;
+        padding: 1rem;
+        border-radius: 6px;
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+
+    .details-overview-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1rem;
+        background: #1e293b;
+        padding: 1rem;
+        border-radius: 8px;
+    }
+
+    .overview-item {
+        display: flex;
+        flex-direction: column;
+        gap: 0.2rem;
+    }
+
+    .overview-label {
+        font-size: 0.75rem;
+        color: #64748b;
+    }
+
+    .overview-value {
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: #f8fafc;
+    }
+</style>
+
+@code {
+    private PagedResult<CommercialPartnerListItemDto>? _pagedPartners;
+    private bool _isLoading = true;
+    private bool _isSubmitting = false;
+    private string _searchTerm = string.Empty;
+    private string _selectedStatus = string.Empty;
+    private string _selectedCommissionType = string.Empty;
+    private int _currentPage = 1;
+    private int _pageSize = 20;
+
+    // Create Modal state
+    private bool _showCreateModal = false;
+    private string? _createError;
+    private CreatePartnerFormModel _newPartner = new();
+
+    // 4-Eyes Contract Change Modal state
+    private bool _showContractChangeModal = false;
+    private CommercialPartnerListItemDto? _selectedPartnerForContract;
+    private ProposeContractChangeFormModel _contractProposal = new();
+
+    // Details Modal state
+    private bool _showDetailsModal = false;
+    private CommercialPartnerDto? _partnerDetail;
+
+    // Suspend Modal state
+    private bool _showSuspendModal = false;
+    private CommercialPartnerListItemDto? _selectedPartnerForSuspend;
+    private string _suspendReason = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadPartnersAsync();
+    }
+
+    private async Task LoadPartnersAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            ParticipantStatus? status = Enum.TryParse<ParticipantStatus>(_selectedStatus, out var s) ? s : null;
+            CommissionType? commType = Enum.TryParse<CommissionType>(_selectedCommissionType, out var c) ? c : null;
+
+            _pagedPartners = await ApiClient.GetCommercialPartnersAsync(
+                _searchTerm,
+                status,
+                commType,
+                _currentPage,
+                _pageSize);
+        }
+        catch (Exception ex)
+        {
+            Toast.ShowError($"Erro ao carregar parceiros comerciais: {ex.Message}");
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task ApplyFilters()
+    {
+        _currentPage = 1;
+        await LoadPartnersAsync();
+    }
+
+    private async Task HandleSearchKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await ApplyFilters();
+        }
+    }
+
+    private async Task PreviousPage()
+    {
+        if (_currentPage > 1)
+        {
+            _currentPage--;
+            await LoadPartnersAsync();
+        }
+    }
+
+    private async Task NextPage()
+    {
+        if (_currentPage * _pageSize < (_pagedPartners?.TotalCount ?? 0))
+        {
+            _currentPage++;
+            await LoadPartnersAsync();
+        }
+    }
+
+    private void OpenCreateModal()
+    {
+        _newPartner = new CreatePartnerFormModel();
+        _createError = null;
+        _showCreateModal = true;
+    }
+
+    private void CloseCreateModal()
+    {
+        _showCreateModal = false;
+        _createError = null;
+    }
+
+    private async Task HandleFullNameKeyUp()
+    {
+        if (string.IsNullOrWhiteSpace(_newPartner.PreferredReferralCode) && !string.IsNullOrWhiteSpace(_newPartner.FullName))
+        {
+            await SuggestCodeAsync();
+        }
+    }
+
+    private async Task SuggestCodeAsync()
+    {
+        var seed = !string.IsNullOrWhiteSpace(_newPartner.TradeName) ? _newPartner.TradeName : _newPartner.FullName;
+        if (!string.IsNullOrWhiteSpace(seed))
+        {
+            var res = await ApiClient.SuggestReferralCodeAsync(seed);
+            if (res != null)
+            {
+                _newPartner.PreferredReferralCode = res.SuggestedCode;
+            }
+        }
+    }
+
+    private async Task HandleSubmitCreateAsync()
+    {
+        _createError = null;
+        if (string.IsNullOrWhiteSpace(_newPartner.FullName) ||
+            string.IsNullOrWhiteSpace(_newPartner.Email) ||
+            string.IsNullOrWhiteSpace(_newPartner.PhoneNumber) ||
+            string.IsNullOrWhiteSpace(_newPartner.LegalDocumentNumber) ||
+            string.IsNullOrWhiteSpace(_newPartner.PixKey))
+        {
+            _createError = "Preencha todos os campos obrigatórios (*).";
+            return;
+        }
+
+        if (_newPartner.CommissionValue <= 0)
+        {
+            _createError = "O valor da comissão deve ser maior que zero.";
+            return;
+        }
+
+        _isSubmitting = true;
+        try
+        {
+            var req = new RegisterPartnerRequest(
+                _newPartner.FullName,
+                _newPartner.TradeName,
+                _newPartner.Email,
+                _newPartner.PhoneNumber,
+                _newPartner.Category,
+                _newPartner.City,
+                _newPartner.State,
+                _newPartner.Notes,
+                _newPartner.LegalDocumentNumber,
+                _newPartner.PixKeyType,
+                _newPartner.PixKey,
+                _newPartner.CommissionType,
+                _newPartner.CommissionValue,
+                _newPartner.MaxRecurringMonths,
+                _newPartner.PaymentTermsDays,
+                _newPartner.PreferredReferralCode);
+
+            var result = await ApiClient.RegisterCommercialPartnerAsync(req);
+            if (result.IsSuccess)
+            {
+                Toast.ShowSuccess($"Parceiro '{result.Value.FullName}' cadastrado com sucesso!");
+                CloseCreateModal();
+                await LoadPartnersAsync();
+            }
+            else
+            {
+                _createError = result.Error.Message;
+            }
+        }
+        catch (Exception ex)
+        {
+            _createError = ex.Message;
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+
+    private void OpenContractChangeModal(CommercialPartnerListItemDto partner)
+    {
+        _selectedPartnerForContract = partner;
+        _contractProposal = new ProposeContractChangeFormModel
+        {
+            CommissionType = partner.CommissionType,
+            CommissionValue = partner.CommissionValue,
+            MaxRecurringMonths = partner.MaxRecurringMonths,
+            PaymentTermsDays = 30,
+            PixKey = partner.PixKey,
+            PixKeyType = partner.PixKeyType,
+            Justification = string.Empty
+        };
+        _showContractChangeModal = true;
+    }
+
+    private void CloseContractChangeModal()
+    {
+        _showContractChangeModal = false;
+        _selectedPartnerForContract = null;
+    }
+
+    private async Task HandleSubmitContractProposalAsync()
+    {
+        if (_selectedPartnerForContract == null) return;
+
+        if (string.IsNullOrWhiteSpace(_contractProposal.Justification) || _contractProposal.Justification.Trim().Length < 10)
+        {
+            Toast.ShowError("A justificativa administrativa de 4-Olhos deve ter ao menos 10 caracteres.");
+            return;
+        }
+
+        _isSubmitting = true;
+        try
+        {
+            var req = new ProposeContractChangeRequest(
+                _contractProposal.CommissionType,
+                _contractProposal.CommissionValue,
+                _contractProposal.MaxRecurringMonths,
+                _contractProposal.PaymentTermsDays,
+                _contractProposal.PixKey,
+                _contractProposal.PixKeyType,
+                _contractProposal.Justification);
+
+            var ok = await ApiClient.ProposePartnerContractChangeAsync(_selectedPartnerForContract.ParticipantId, req);
+            if (ok)
+            {
+                Toast.ShowSuccess("Solicitação de ajuste de comissão submetida para aprovação (4-Eyes)!");
+                CloseContractChangeModal();
+            }
+            else
+            {
+                Toast.ShowError("Falha ao submeter proposta de contrato para aprovação.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Toast.ShowError($"Erro: {ex.Message}");
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+
+    private async Task OpenDetailsModal(Guid participantId)
+    {
+        _partnerDetail = await ApiClient.GetCommercialPartnerByIdAsync(participantId);
+        if (_partnerDetail != null)
+        {
+            _showDetailsModal = true;
+        }
+        else
+        {
+            Toast.ShowError("Não foi possível carregar os detalhes do parceiro.");
+        }
+    }
+
+    private void CloseDetailsModal()
+    {
+        _showDetailsModal = false;
+        _partnerDetail = null;
+    }
+
+    private void OpenSuspendModal(CommercialPartnerListItemDto partner)
+    {
+        _selectedPartnerForSuspend = partner;
+        _suspendReason = string.Empty;
+        _showSuspendModal = true;
+    }
+
+    private void CloseSuspendModal()
+    {
+        _showSuspendModal = false;
+        _selectedPartnerForSuspend = null;
+    }
+
+    private async Task HandleConfirmSuspendAsync()
+    {
+        if (_selectedPartnerForSuspend == null) return;
+        if (string.IsNullOrWhiteSpace(_suspendReason) || _suspendReason.Trim().Length < 5)
+        {
+            Toast.ShowError("Informe uma justificativa válida com ao menos 5 caracteres.");
+            return;
+        }
+
+        _isSubmitting = true;
+        try
+        {
+            var ok = await ApiClient.SuspendCommercialPartnerAsync(_selectedPartnerForSuspend.ParticipantId, _suspendReason);
+            if (ok)
+            {
+                Toast.ShowSuccess($"Parceiro '{_selectedPartnerForSuspend.FullName}' suspenso com sucesso.");
+                CloseSuspendModal();
+                await LoadPartnersAsync();
+            }
+            else
+            {
+                Toast.ShowError("Falha ao suspender o parceiro.");
+            }
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+
+    private async Task HandleReactivate(Guid participantId)
+    {
+        var ok = await ApiClient.ReactivateCommercialPartnerAsync(participantId);
+        if (ok)
+        {
+            Toast.ShowSuccess("Parceiro comercial reativado com sucesso.");
+            await LoadPartnersAsync();
+        }
+        else
+        {
+            Toast.ShowError("Falha ao reativar parceiro comercial.");
+        }
+    }
+
+    private async Task CopyReferralLink(string code)
+    {
+        var link = $"https://app.criacerto.com.br/r/{code}";
+        await JS.InvokeVoidAsync("navigator.clipboard.writeText", link);
+        Toast.ShowSuccess($"Link copiado: {link}");
+    }
+
+    private string FormatCategory(PartnerCategory category) => category switch
+    {
+        PartnerCategory.ZootechnicianConsultant => "Consultor Zootécnico",
+        PartnerCategory.Veterinarian => "Médico Veterinário",
+        PartnerCategory.AgriculturalDealer => "Revenda Agropecuária",
+        PartnerCategory.BreedAssociation => "Associação de Raça",
+        PartnerCategory.InfluencerOther => "Influenciador / Outro",
+        _ => category.ToString()
+    };
+
+    private string FormatCommission(CommissionType type, decimal value, int? maxMonths) => type switch
+    {
+        CommissionType.PercentageRecurring => $"{value:N1}% Recorrente {(maxMonths.HasValue ? $"({maxMonths.Value} meses)" : "(Vitalício)")}",
+        CommissionType.PercentageFirstMonth => $"{value:N1}% na 1ª Mensalidade",
+        CommissionType.FixedPerConversion => $"R$ {value:N2} Fixo / Conversão",
+        _ => $"{value}"
+    };
+
+    private class CreatePartnerFormModel
+    {
+        public string FullName { get; set; } = string.Empty;
+        public string? TradeName { get; set; }
+        public PartnerCategory Category { get; set; } = PartnerCategory.ZootechnicianConsultant;
+        public string Email { get; set; } = string.Empty;
+        public string PhoneNumber { get; set; } = string.Empty;
+        public string? City { get; set; }
+        public string? State { get; set; }
+        public string? Notes { get; set; }
+        public string? PreferredReferralCode { get; set; }
+        public string LegalDocumentNumber { get; set; } = string.Empty;
+        public PixKeyType PixKeyType { get; set; } = PixKeyType.Cnpj;
+        public string PixKey { get; set; } = string.Empty;
+        public CommissionType CommissionType { get; set; } = CommissionType.PercentageRecurring;
+        public decimal CommissionValue { get; set; } = 20.00m;
+        public int? MaxRecurringMonths { get; set; } = 12;
+        public int PaymentTermsDays { get; set; } = 30;
+    }
+
+    private class ProposeContractChangeFormModel
+    {
+        public CommissionType CommissionType { get; set; }
+        public decimal CommissionValue { get; set; }
+        public int? MaxRecurringMonths { get; set; }
+        public int PaymentTermsDays { get; set; } = 30;
+        public string? PixKey { get; set; }
+        public PixKeyType? PixKeyType { get; set; }
+        public string Justification { get; set; } = string.Empty;
+    }
+}

@@ -23,6 +23,30 @@
                 <span class="nav-icon">💳</span> Catálogo de Planos
             </NavLink>
         </PermissionGuard>
+
+        <PermissionGuard Permission="@BackofficePermissions.ReferralPartnersRead">
+            <NavLink class="nav-link" href="backoffice/partners">
+                <span class="nav-icon">🤝</span> Parceiros Comerciais
+            </NavLink>
+        </PermissionGuard>
+
+        <PermissionGuard Permission="@BackofficePermissions.ReferralPayoutsRead">
+            <NavLink class="nav-link" href="backoffice/referral/payouts">
+                <span class="nav-icon">💰</span> Comissões & Repasses
+            </NavLink>
+        </PermissionGuard>
+
+        <PermissionGuard Permission="@BackofficePermissions.ReferralDiscountsRead">
+            <NavLink class="nav-link" href="backoffice/referral/discount-policies">
+                <span class="nav-icon">🏷️</span> Descontos por Plano
+            </NavLink>
+        </PermissionGuard>
+
+        <PermissionGuard Permission="@BackofficePermissions.ReferralAnalyticsRead">
+            <NavLink class="nav-link" href="backoffice/referral/analytics">
+                <span class="nav-icon">📊</span> Analytics & CAC/LTV
+            </NavLink>
+        </PermissionGuard>
     </div>
 
     <div class="nav-section">

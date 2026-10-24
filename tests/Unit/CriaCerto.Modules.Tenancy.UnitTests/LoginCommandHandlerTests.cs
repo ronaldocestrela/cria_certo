@@ -145,8 +145,71 @@ public class LoginCommandHandlerTests : IDisposable
         result.Value.Token.Should().Be("token");
     }
 
+    [Fact]
+    public async Task Handle_Should_Allow_CommercialPartner_Without_Tenants()
+    {
+        var userId = Guid.NewGuid();
+        var user = new User
+        {
+            Id = userId,
+            FullName = "Consultor Parceiro",
+            Email = "parceiro@test.com",
+            PasswordHash = PasswordHasher.Hash("Password123!"),
+            IsEmailConfirmed = true
+        };
+        _dbContext.Users.Add(user);
+        await _dbContext.SaveChangesAsync();
+
+        var partnerLookup = new FakePartnerRoleLookupService(isPartner: true);
+        var handler = new LoginCommandHandler(_dbContext, new FakeJwtService(), partnerLookup);
+
+        var result = await handler.Handle(new LoginCommand("parceiro@test.com", "Password123!"), CancellationToken.None);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Should().NotBeNull();
+        result.Value.IsPartner.Should().BeTrue();
+        result.Value.RedirectUrl.Should().Be("/partner/portal");
+        result.Value.Token.Should().Be("partner-token");
+    }
+
+    [Fact]
+    public async Task Handle_Should_Allow_CommercialPartner_With_Unnormalized_Email()
+    {
+        var userId = Guid.NewGuid();
+        var user = new User
+        {
+            Id = userId,
+            FullName = "Consultor Parceiro",
+            Email = "parceiro@test.com",
+            PasswordHash = PasswordHasher.Hash("Password123!"),
+            IsEmailConfirmed = true
+        };
+        _dbContext.Users.Add(user);
+        await _dbContext.SaveChangesAsync();
+
+        var partnerLookup = new FakePartnerRoleLookupService(isPartner: true);
+        var handler = new LoginCommandHandler(_dbContext, new FakeJwtService(), partnerLookup);
+
+        var result = await handler.Handle(new LoginCommand("  PARCEIRO@TEST.COM  ", "Password123!"), CancellationToken.None);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Should().NotBeNull();
+        result.Value.IsPartner.Should().BeTrue();
+        result.Value.RedirectUrl.Should().Be("/partner/portal");
+        result.Value.Token.Should().Be("partner-token");
+    }
+
     private sealed class FakeJwtService : IJwtService
     {
         public string GenerateToken(User user, Tenant tenant, UserRole role) => "token";
+        public string GeneratePartnerToken(User user) => "partner-token";
+    }
+
+    private sealed class FakePartnerRoleLookupService : IPartnerRoleLookupService
+    {
+        private readonly bool _isPartner;
+        public FakePartnerRoleLookupService(bool isPartner) => _isPartner = isPartner;
+        public Task<bool> IsActiveCommercialPartnerAsync(Guid userId, CancellationToken cancellationToken = default)
+            => Task.FromResult(_isPartner);
     }
 }

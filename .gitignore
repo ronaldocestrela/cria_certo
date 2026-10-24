@@ -94,3 +94,4 @@ Thumbs.db
 
 # keys
 src/Web/CriaCerto.Web/CriaCerto.Web/dataprotection-keys/
+src/Host/CriaCerto.Api/dataprotection-keys/key-b23cd2df-65ac-40b1-af70-e2a0fdd58e6a.xml

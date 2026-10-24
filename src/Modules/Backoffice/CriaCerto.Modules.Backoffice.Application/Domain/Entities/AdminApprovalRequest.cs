@@ -8,8 +8,10 @@ public enum ApprovalRequestType
     PublishPlanVersion,
     MassTenantSuspension,
     ExtendedAccessGrant,
+    UpdatePartnerContractCommission,
     CustomCriticalAction
 }
+
 
 public enum ApprovalRequestStatus
 {

@@ -75,4 +75,17 @@
         line-height: 1;
         display: inline-block;
     }
+
+    .mobile-logout-link {
+        background: transparent;
+        cursor: pointer;
+        border: 1px solid transparent;
+        font-family: inherit;
+    }
+
+    .mobile-logout-link:hover {
+        background: rgba(239, 68, 68, 0.12);
+        border-color: rgba(239, 68, 68, 0.25);
+        color: #dc2626;
+    }
 }

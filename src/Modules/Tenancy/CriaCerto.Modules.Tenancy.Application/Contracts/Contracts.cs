@@ -8,5 +8,7 @@ public record AuthResponse(
     List<TenantDto> AvailableTenants,
     Guid UserId,
     string FullName,
-    string Email
+    string Email,
+    bool IsPartner = false,
+    string? RedirectUrl = null
 );

@@ -5,6 +5,7 @@ using CriaCerto.Modules.Tenancy.Application.Abstractions;
 using CriaCerto.Modules.Tenancy.Application.Contracts;
 using CriaCerto.Modules.Tenancy.Application.Domain;
 using CriaCerto.Modules.Tenancy.Application.Domain.Errors;
+using CriaCerto.Modules.Tenancy.Application.Events;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -20,7 +21,10 @@ public record CreateTenantCommand(
     decimal AreaInHectares,
     string SubscribedPlan = CreateTenantCommand.DefaultTrialPlan,
     int Capacity = CreateTenantCommand.DefaultTrialCapacity,
-    string? UserEmail = null
+    string? UserEmail = null,
+    string? ReferralCode = null,
+    string? OriginIpAddress = null,
+    string? UserAgent = null
 ) : IRequest<Result<AuthResponse>>
 {
     public const string DefaultTrialPlan = "Starter";
@@ -33,12 +37,18 @@ public sealed class CreateTenantCommandHandler : IRequestHandler<CreateTenantCom
     private readonly ITenancyDbContext _dbContext;
     private readonly IJwtService _jwtService;
     private readonly ITenantDatabaseProvisioner _provisioner;
+    private readonly IPublisher? _publisher;
 
-    public CreateTenantCommandHandler(ITenancyDbContext dbContext, IJwtService jwtService, ITenantDatabaseProvisioner provisioner)
+    public CreateTenantCommandHandler(
+        ITenancyDbContext dbContext,
+        IJwtService jwtService,
+        ITenantDatabaseProvisioner provisioner,
+        IPublisher? publisher = null)
     {
         _dbContext = dbContext;
         _jwtService = jwtService;
         _provisioner = provisioner;
+        _publisher = publisher;
     }
 
     public async Task<Result<AuthResponse>> Handle(CreateTenantCommand request, CancellationToken cancellationToken)
@@ -119,6 +129,19 @@ public sealed class CreateTenantCommandHandler : IRequestHandler<CreateTenantCom
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         await _provisioner.EnsureTenantDatabaseAsync(tenant.Id, cancellationToken);
+
+        if (_publisher != null)
+        {
+            await _publisher.Publish(new TenantRegisteredIntegrationEvent(
+                TenantId: tenant.Id,
+                UserId: user.Id,
+                UserEmail: user.Email,
+                ReferralCode: request.ReferralCode,
+                OriginIpAddress: request.OriginIpAddress,
+                UserAgent: request.UserAgent,
+                RegisteredAtUtc: now
+            ), cancellationToken);
+        }
 
         var token = _jwtService.GenerateToken(user, tenant);
 

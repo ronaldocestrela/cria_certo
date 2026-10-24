@@ -27,5 +27,9 @@ public sealed class CreateTenantCommandValidator : AbstractValidator<CreateTenan
         RuleFor(x => x.SubscribedPlan)
             .Must(plan => string.Equals(plan, CreateTenantCommand.DefaultTrialPlan, StringComparison.OrdinalIgnoreCase))
             .WithMessage($"O plano inicial de onboarding deve ser {CreateTenantCommand.DefaultTrialPlan} (período de testes gratuito).");
+
+        RuleFor(x => x.ReferralCode)
+            .MaximumLength(50).WithMessage("O código de indicação deve ter no máximo 50 caracteres.")
+            .When(x => !string.IsNullOrWhiteSpace(x.ReferralCode));
     }
 }

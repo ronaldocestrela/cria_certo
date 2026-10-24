@@ -38,6 +38,7 @@
                                 <button type="button" @onclick="GoToOnboardingFromLogin" class="w-full h-[42px] text-white font-bold font-mono text-xs uppercase rounded-lg transition-all" style="width: 100%; height: 42px; background-color: var(--cc-primary); border: none; border-radius: 8px; cursor: pointer;">
                                     Cadastrar Minha Fazenda Agora &rarr;
                                 </button>
+                                <p style="font-size: 11px; margin-top: 0.75rem; margin-bottom: 0; color: #b45309; text-align: center;">É um parceiro comercial? Verifique com o suporte ou equipe de parcerias se seu cadastro foi aprovado.</p>
                             </div>
                         }
                         else if (_hasEmailNotConfirmedError)
@@ -240,7 +241,9 @@
         List<TenantDto> AvailableTenants,
         Guid UserId,
         string FullName,
-        string Email
+        string Email,
+        bool IsPartner = false,
+        string? RedirectUrl = null
     );
 
     protected override async Task OnInitializedAsync()
@@ -248,7 +251,14 @@
         var authState = await AuthStateProvider.GetAuthenticationStateAsync();
         if (authState.User.Identity?.IsAuthenticated == true)
         {
-            Navigation.NavigateTo("/analytics/executive-dashboard");
+            if (authState.User.IsInRole("CommercialPartner") || authState.User.HasClaim("IsPartner", "true"))
+            {
+                Navigation.NavigateTo("/partner/portal");
+            }
+            else
+            {
+                Navigation.NavigateTo("/analytics/executive-dashboard");
+            }
         }
     }
 
@@ -277,7 +287,14 @@
                     else if (!string.IsNullOrEmpty(result.Token))
                     {
                         await AuthStateProvider.MarkUserAsAuthenticated(result.Token);
-                        Navigation.NavigateTo("/analytics/executive-dashboard");
+                        if (result.IsPartner || !string.IsNullOrWhiteSpace(result.RedirectUrl))
+                        {
+                            Navigation.NavigateTo(result.RedirectUrl ?? "/partner/portal");
+                        }
+                        else
+                        {
+                            Navigation.NavigateTo("/analytics/executive-dashboard");
+                        }
                     }
                 }
             }

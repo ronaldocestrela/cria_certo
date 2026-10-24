@@ -199,3 +199,4 @@ Erros: `Tenant.InvalidTransition`, `Tenant.JustificationRequired`, `Tenant.Prote
 - `StripeWebhookIdempotencyTests`: Testes de deduplicação e idempotência de eventos Stripe via tabela dedicada.
 - `StripeWebhookNullKeyAndTenantProtectionTests`: Testes de sanitização de chaves nulas/vazias e salvaguarda de tenants protegidos (`IsProtected`).
 - `OnboardingIntegrationTests`: Teste de integração end-to-end do fluxo Registro -> Onboarding da Fazenda -> Login sem erro `Auth.NoTenantAssociation`.
+- `CommercialPartnerLoginIntegrationTests`: Testes de autenticação de parceiro comercial sem fazenda associada, validação de token de parceiro (`IsPartner = true`, `RedirectUrl = "/partner/portal"`), resolução resiliente de e-mail e auto-reconciliação de parceiros órfãos via `IPartnerRoleLookupService`.

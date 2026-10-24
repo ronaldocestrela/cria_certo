@@ -1,0 +1,1049 @@
+@page "/backoffice/referral/discount-policies"
+@layout Layout.BackofficeLayout
+@using CriaCerto.BuildingBlocks.Abstractions.Results
+@using CriaCerto.Modules.Backoffice.Application.Security
+@using CriaCerto.Modules.Referral.Application.Domain.Enums
+@using CriaCerto.Modules.Referral.Application.Features.PlanDiscounts.Dtos
+@using CriaCerto.Web.Client.Components.Backoffice
+@using CriaCerto.Web.Client.Services
+@inject IBackofficeApiClient ApiClient
+@inject IToastService Toast
+@attribute [Authorize]
+
+<PageTitle>CriaCerto Backoffice - Descontos por Plano</PageTitle>
+
+<PermissionGuard Permission="@BackofficePermissions.ReferralDiscountsRead">
+    <Authorized>
+        <div class="discount-policies-page">
+            <header class="page-header">
+                <div>
+                    <span class="badge-growth">Programa de Indicação & Incentivos</span>
+                    <h1 class="page-title">Configuração de Descontos por Plano</h1>
+                    <p class="page-subtitle">
+                        Parametrize os descontos concedidos aos clientes na mensalidade para cada indicação ativa e defina tetos máximos de abatimento.
+                    </p>
+                </div>
+                <div class="header-actions">
+                    <button class="btn btn-secondary" @onclick="LoadPoliciesAsync" disabled="@_isLoading">
+                        <span>🔄</span> Atualizar
+                    </button>
+                </div>
+            </header>
+
+            <!-- KPIs Grid -->
+            <div class="kpis-grid">
+                <div class="kpi-card">
+                    <span class="kpi-label">Total de Planos</span>
+                    <span class="kpi-value">@(_policies?.Count ?? 0)</span>
+                </div>
+                <div class="kpi-card">
+                    <span class="kpi-label">Políticas Ativas</span>
+                    <span class="kpi-value text-success">@(_policies?.Count(p => p.HasConfiguredPolicy && p.IsActive) ?? 0)</span>
+                </div>
+                <div class="kpi-card">
+                    <span class="kpi-label">Desconto em Percentual</span>
+                    <span class="kpi-value text-info">@(_policies?.Count(p => p.HasConfiguredPolicy && p.DiscountType == DiscountType.Percentage) ?? 0)</span>
+                </div>
+                <div class="kpi-card">
+                    <span class="kpi-label">Desconto Fixo (R$)</span>
+                    <span class="kpi-value text-warning">@(_policies?.Count(p => p.HasConfiguredPolicy && p.DiscountType == DiscountType.FixedValue) ?? 0)</span>
+                </div>
+                <div class="kpi-card">
+                    <span class="kpi-label">Pendentes de Configuração</span>
+                    <span class="kpi-value text-muted">@(_policies?.Count(p => !p.HasConfiguredPolicy) ?? 0)</span>
+                </div>
+            </div>
+
+            <!-- Filters -->
+            <div class="filters-bar">
+                <div class="search-box">
+                    <span class="search-icon">🔍</span>
+                    <input type="text"
+                           placeholder="Buscar por código ou nome do plano..."
+                           @bind="_searchTerm"
+                           @bind:event="oninput" />
+                </div>
+                <div class="filter-group">
+                    <label>Status:</label>
+                    <select @bind="_statusFilter">
+                        <option value="All">Todos</option>
+                        <option value="Active">Ativos</option>
+                        <option value="Inactive">Inativos</option>
+                        <option value="Unconfigured">Não Configurados</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Table / Grid -->
+            @if (_isLoading)
+            {
+                <div class="loading-state">
+                    <div class="spinner"></div>
+                    <p>Carregando políticas de desconto por plano...</p>
+                </div>
+            }
+            else if (!FilteredPolicies.Any())
+            {
+                <div class="empty-state">
+                    <span class="empty-icon">🏷️</span>
+                    <h3>Nenhum plano ou política encontrado</h3>
+                    <p>Tente ajustar os filtros de busca ou verifique se há planos cadastrados no catálogo.</p>
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="policies-table">
+                        <thead>
+                            <tr>
+                                <th>Código do Plano</th>
+                                <th>Nome do Plano</th>
+                                <th>Tipo de Desconto</th>
+                                <th>Desconto p/ Indicação Ativa</th>
+                                <th>Teto Máximo</th>
+                                <th>Status</th>
+                                <th class="text-right">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var policy in FilteredPolicies)
+                            {
+                                <tr>
+                                    <td>
+                                        <span class="plan-code-badge">@policy.PlanCode</span>
+                                    </td>
+                                    <td>
+                                        <strong class="plan-name">@policy.PlanName</strong>
+                                    </td>
+                                    <td>
+                                        @if (!policy.HasConfiguredPolicy)
+                                        {
+                                            <span class="text-muted">Não definido</span>
+                                        }
+                                        else if (policy.DiscountType == DiscountType.Percentage)
+                                        {
+                                            <span class="badge-type percent">Percentual (%)</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge-type fixed">Valor Fixo (R$)</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (!policy.HasConfiguredPolicy)
+                                        {
+                                            <span class="text-muted">—</span>
+                                        }
+                                        else if (policy.DiscountType == DiscountType.Percentage)
+                                        {
+                                            <span class="discount-value highlight">@policy.DiscountValue.ToString("N1")% <small class="text-muted">/ indicação</small></span>
+                                        }
+                                        else
+                                        {
+                                            <span class="discount-value highlight">R$ @policy.DiscountValue.ToString("N2") <small class="text-muted">/ indicação</small></span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (!policy.HasConfiguredPolicy)
+                                        {
+                                            <span class="text-muted">—</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="cap-badge">Até @policy.MaxDiscountCapPercentage.ToString("N0")% da fatura</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (!policy.HasConfiguredPolicy)
+                                        {
+                                            <span class="status-pill unconfigured">⚪ Não Configurado</span>
+                                        }
+                                        else if (policy.IsActive)
+                                        {
+                                            <span class="status-pill active">🟢 Ativo</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="status-pill inactive">🔴 Inativo</span>
+                                        }
+                                    </td>
+                                    <td class="text-right actions-cell">
+                                        <PermissionGuard Permission="@BackofficePermissions.ReferralDiscountsManage">
+                                            <Authorized>
+                                                <button class="btn btn-sm btn-outline-primary" @onclick="() => OpenConfigureModal(policy)">
+                                                    ✏️ @(policy.HasConfiguredPolicy ? "Editar" : "Configurar")
+                                                </button>
+                                                @if (policy.HasConfiguredPolicy && policy.PolicyId.HasValue)
+                                                {
+                                                    <button class="btn btn-sm @(policy.IsActive ? "btn-outline-danger" : "btn-outline-success")"
+                                                            @onclick="() => ToggleStatusAsync(policy.PolicyId.Value)"
+                                                            disabled="@_isToggling">
+                                                        @(policy.IsActive ? "Desativar" : "Reativar")
+                                                    </button>
+                                                }
+                                            </Authorized>
+                                        </PermissionGuard>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+
+            <!-- Modal de Configuração de Desconto -->
+            @if (_showModal && _selectedPolicy != null)
+            {
+                <div class="modal-backdrop" @onclick="CloseModal">
+                    <div class="modal-dialog" @onclick:stopPropagation="true">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <div>
+                                    <h3 class="modal-title">Configurar Desconto de Indicação</h3>
+                                    <p class="modal-subtitle">Plano: <strong>@_selectedPolicy.PlanName</strong> (<code>@_selectedPolicy.PlanCode</code>)</p>
+                                </div>
+                                <button type="button" class="btn-close" @onclick="CloseModal">✕</button>
+                            </div>
+
+                            <div class="modal-body">
+                                @if (!string.IsNullOrWhiteSpace(_modalErrorMessage))
+                                {
+                                    <div class="alert alert-danger">
+                                        @_modalErrorMessage
+                                    </div>
+                                }
+
+                                <div class="form-group">
+                                    <label class="form-label">Modalidade de Desconto</label>
+                                    <div class="radio-toggle-group">
+                                        <button type="button"
+                                                class="toggle-btn @(_modalDiscountType == DiscountType.Percentage ? "active" : "")"
+                                                @onclick="() => SetDiscountType(DiscountType.Percentage)">
+                                            <span class="toggle-icon">%</span> Percentual da Fatura
+                                        </button>
+                                        <button type="button"
+                                                class="toggle-btn @(_modalDiscountType == DiscountType.FixedValue ? "active" : "")"
+                                                @onclick="() => SetDiscountType(DiscountType.FixedValue)">
+                                            <span class="toggle-icon">R$</span> Valor Fixo em Reais
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div class="form-group">
+                                    <label class="form-label" for="discountValueInput">
+                                        @(_modalDiscountType == DiscountType.Percentage ? "Percentual concedido por cada indicação ativa (%)" : "Valor descontado por cada indicação ativa (R$)")
+                                    </label>
+                                    <div class="input-with-prefix">
+                                        <span class="input-prefix">@(_modalDiscountType == DiscountType.Percentage ? "%" : "R$")</span>
+                                        <input id="discountValueInput"
+                                               type="number"
+                                               step="@(_modalDiscountType == DiscountType.Percentage ? "1" : "5")"
+                                               min="0.01"
+                                               max="@(_modalDiscountType == DiscountType.Percentage ? "100" : "5000")"
+                                               class="form-control"
+                                               @bind="_modalDiscountValue" />
+                                    </div>
+                                    <small class="form-hint">
+                                        @(_modalDiscountType == DiscountType.Percentage 
+                                            ? "Exemplo: 15% significa que cada indicado ativo reduz 15% da assinatura do cliente." 
+                                            : "Exemplo: R$ 50,00 significa que cada indicado ativo reduz R$ 50 da próxima fatura.")
+                                    </small>
+                                </div>
+
+                                <div class="form-group">
+                                    <div class="cap-header">
+                                        <label class="form-label" for="capInput">Teto Máximo de Abatimento</label>
+                                        <span class="cap-value-display">@_modalMaxCap.ToString("N0")% da assinatura</span>
+                                    </div>
+                                    <input id="capInput"
+                                           type="range"
+                                           min="10"
+                                           max="100"
+                                           step="5"
+                                           class="form-range"
+                                           @bind="_modalMaxCap" />
+                                    <div class="range-labels">
+                                        <span>10% (Teto Parcial)</span>
+                                        <span>50% (Metade)</span>
+                                        <span>100% (Mensalidade Gratuita)</span>
+                                    </div>
+                                    <small class="form-hint">
+                                        Limita o desconto acumulado total por ciclo para que a fatura nunca gere saldo negativo a devolver ao cliente.
+                                    </small>
+                                </div>
+
+                                <!-- Dynamic Preview Box -->
+                                <div class="preview-box">
+                                    <div class="preview-title">💡 Simulação de Economia para o Produtor:</div>
+                                    <ul class="preview-list">
+                                        @if (_modalDiscountType == DiscountType.Percentage)
+                                        {
+                                            <li><strong>1 indicação ativa:</strong> economiza @_modalDiscountValue.ToString("N1")% na mensalidade.</li>
+                                            <li><strong>2 indicações ativas:</strong> economiza @(Math.Min(_modalDiscountValue * 2, _modalMaxCap).ToString("N1"))% na mensalidade.</li>
+                                            <li><strong>3 indicações ativas:</strong> economiza @(Math.Min(_modalDiscountValue * 3, _modalMaxCap).ToString("N1"))% (teto máx: @_modalMaxCap.ToString("N0")%).</li>
+                                        }
+                                        else
+                                        {
+                                            <li><strong>1 indicação ativa:</strong> economiza R$ @_modalDiscountValue.ToString("N2") na fatura.</li>
+                                            <li><strong>2 indicações ativas:</strong> economiza R$ @((_modalDiscountValue * 2).ToString("N2")) na fatura.</li>
+                                            <li><strong>3 indicações ativas:</strong> economiza R$ @((_modalDiscountValue * 3).ToString("N2")) (respeitando o teto de @_modalMaxCap.ToString("N0")% do valor do plano).</li>
+                                        }
+                                    </ul>
+                                </div>
+                            </div>
+
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" @onclick="CloseModal" disabled="@_isSaving">Cancelar</button>
+                                <button type="button" class="btn btn-primary" @onclick="SavePolicyAsync" disabled="@_isSaving">
+                                    @if (_isSaving)
+                                    {
+                                        <span class="spinner-sm"></span>
+                                        <span>Salvando...</span>
+                                    }
+                                    else
+                                    {
+                                        <span>Salvar Política</span>
+                                    }
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </Authorized>
+    <NotAuthorized>
+        <div class="access-denied-state">
+            <span class="denied-icon">🔒</span>
+            <h2>Acesso Restrito</h2>
+            <p>Seu perfil de administrador não possui a permissão <code>referral.discounts.read</code> necessária para visualizar esta página.</p>
+        </div>
+    </NotAuthorized>
+</PermissionGuard>
+
+@code {
+    private bool _isLoading = true;
+    private bool _isSaving = false;
+    private bool _isToggling = false;
+    private List<PlanDiscountPolicyDto>? _policies;
+    private string _searchTerm = string.Empty;
+    private string _statusFilter = "All";
+
+    // Modal state
+    private bool _showModal = false;
+    private PlanDiscountPolicyDto? _selectedPolicy;
+    private DiscountType _modalDiscountType = DiscountType.Percentage;
+    private decimal _modalDiscountValue = 10m;
+    private decimal _modalMaxCap = 100m;
+    private string? _modalErrorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadPoliciesAsync();
+    }
+
+    private async Task LoadPoliciesAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            var result = await ApiClient.GetPlanDiscountPoliciesAsync();
+            _policies = result?.ToList() ?? new List<PlanDiscountPolicyDto>();
+        }
+        catch (Exception ex)
+        {
+            Toast.ShowError($"Erro ao carregar políticas de desconto: {ex.Message}");
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private IEnumerable<PlanDiscountPolicyDto> FilteredPolicies
+    {
+        get
+        {
+            if (_policies == null) return Enumerable.Empty<PlanDiscountPolicyDto>();
+
+            var list = _policies.AsEnumerable();
+
+            if (!string.IsNullOrWhiteSpace(_searchTerm))
+            {
+                list = list.Where(p =>
+                    p.PlanCode.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase) ||
+                    p.PlanName.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase));
+            }
+
+            list = _statusFilter switch
+            {
+                "Active" => list.Where(p => p.HasConfiguredPolicy && p.IsActive),
+                "Inactive" => list.Where(p => p.HasConfiguredPolicy && !p.IsActive),
+                "Unconfigured" => list.Where(p => !p.HasConfiguredPolicy),
+                _ => list
+            };
+
+            return list;
+        }
+    }
+
+    private void OpenConfigureModal(PlanDiscountPolicyDto policy)
+    {
+        _selectedPolicy = policy;
+        _modalDiscountType = policy.HasConfiguredPolicy ? policy.DiscountType : DiscountType.Percentage;
+        _modalDiscountValue = policy.HasConfiguredPolicy && policy.DiscountValue > 0 ? policy.DiscountValue : 15m;
+        _modalMaxCap = policy.HasConfiguredPolicy && policy.MaxDiscountCapPercentage > 0 ? policy.MaxDiscountCapPercentage : 100m;
+        _modalErrorMessage = null;
+        _showModal = true;
+    }
+
+    private void CloseModal()
+    {
+        _showModal = false;
+        _selectedPolicy = null;
+        _modalErrorMessage = null;
+    }
+
+    private void SetDiscountType(DiscountType type)
+    {
+        _modalDiscountType = type;
+        if (type == DiscountType.Percentage && _modalDiscountValue > 100m)
+        {
+            _modalDiscountValue = 100m;
+        }
+    }
+
+    private async Task SavePolicyAsync()
+    {
+        if (_selectedPolicy == null) return;
+
+        if (_modalDiscountValue <= 0)
+        {
+            _modalErrorMessage = "O valor do desconto deve ser maior que zero.";
+            return;
+        }
+
+        if (_modalDiscountType == DiscountType.Percentage && _modalDiscountValue > 100m)
+        {
+            _modalErrorMessage = "O desconto percentual não pode exceder 100%.";
+            return;
+        }
+
+        if (_modalMaxCap <= 0 || _modalMaxCap > 100m)
+        {
+            _modalErrorMessage = "O teto máximo de desconto deve estar entre 1% e 100%.";
+            return;
+        }
+
+        _isSaving = true;
+        _modalErrorMessage = null;
+
+        try
+        {
+            var request = new ConfigurePlanDiscountPolicyRequest(_modalDiscountType, _modalDiscountValue, _modalMaxCap);
+            var result = await ApiClient.ConfigurePlanDiscountPolicyAsync(_selectedPolicy.PlanCatalogId, request);
+
+            if (result.IsSuccess)
+            {
+                Toast.ShowSuccess($"Política de desconto do plano '{_selectedPolicy.PlanCode}' configurada com sucesso!");
+                CloseModal();
+                await LoadPoliciesAsync();
+            }
+            else
+            {
+                _modalErrorMessage = result.Error.Message;
+            }
+        }
+        catch (Exception ex)
+        {
+            _modalErrorMessage = $"Falha na comunicação: {ex.Message}";
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private async Task ToggleStatusAsync(Guid policyId)
+    {
+        _isToggling = true;
+        try
+        {
+            var result = await ApiClient.TogglePlanDiscountPolicyStatusAsync(policyId);
+            if (result.IsSuccess)
+            {
+                var statusText = result.Value.IsActive ? "ativada" : "desativada";
+                Toast.ShowSuccess($"Política de desconto {statusText} com sucesso!");
+                await LoadPoliciesAsync();
+            }
+            else
+            {
+                Toast.ShowError(result.Error.Message);
+            }
+        }
+        catch (Exception ex)
+        {
+            Toast.ShowError($"Erro ao alterar status: {ex.Message}");
+        }
+        finally
+        {
+            _isToggling = false;
+        }
+    }
+}
+
+<style>
+    .discount-policies-page {
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+        padding: 1.5rem;
+        max-width: 1400px;
+        margin: 0 auto;
+    }
+
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        padding-bottom: 1.25rem;
+        border-bottom: 1px solid #1e293b;
+    }
+
+    .badge-growth {
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        background: linear-gradient(135deg, #10b981, #059669);
+        color: #ffffff;
+        padding: 0.25rem 0.65rem;
+        border-radius: 9999px;
+        letter-spacing: 0.05em;
+        display: inline-block;
+        margin-bottom: 0.5rem;
+    }
+
+    .page-title {
+        font-size: 1.75rem;
+        font-weight: 800;
+        color: #f8fafc;
+        margin: 0 0 0.4rem 0;
+    }
+
+    .page-subtitle {
+        color: #94a3b8;
+        font-size: 0.95rem;
+        margin: 0;
+        max-width: 800px;
+    }
+
+    .kpis-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+    }
+
+    .kpi-card {
+        background: #0f172a;
+        border: 1px solid #1e293b;
+        border-radius: 0.75rem;
+        padding: 1.25rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+    }
+
+    .kpi-label {
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: #64748b;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .kpi-value {
+        font-size: 1.75rem;
+        font-weight: 800;
+        color: #f8fafc;
+    }
+
+    .filters-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: #0f172a;
+        border: 1px solid #1e293b;
+        border-radius: 0.75rem;
+        padding: 1rem 1.25rem;
+        gap: 1rem;
+    }
+
+    .search-box {
+        position: relative;
+        flex: 1;
+        max-width: 450px;
+    }
+
+    .search-icon {
+        position: absolute;
+        left: 0.75rem;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 0.9rem;
+    }
+
+    .search-box input {
+        width: 100%;
+        padding: 0.6rem 0.75rem 0.6rem 2.25rem;
+        background: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 0.5rem;
+        color: #f8fafc;
+        font-size: 0.9rem;
+    }
+
+    .search-box input:focus {
+        outline: none;
+        border-color: #38bdf8;
+    }
+
+    .filter-group {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        color: #94a3b8;
+        font-size: 0.85rem;
+    }
+
+    .filter-group select {
+        padding: 0.5rem 1rem;
+        background: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 0.5rem;
+        color: #f8fafc;
+        font-size: 0.85rem;
+    }
+
+    .table-responsive {
+        background: #0f172a;
+        border: 1px solid #1e293b;
+        border-radius: 0.75rem;
+        overflow-x: auto;
+    }
+
+    .policies-table {
+        width: 100%;
+        border-collapse: collapse;
+        text-align: left;
+    }
+
+    .policies-table th {
+        background: #1e293b;
+        color: #cbd5e1;
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        padding: 1rem;
+        border-bottom: 1px solid #334155;
+    }
+
+    .policies-table td {
+        padding: 1rem;
+        border-bottom: 1px solid #1e293b;
+        color: #e2e8f0;
+        font-size: 0.9rem;
+        vertical-align: middle;
+    }
+
+    .policies-table tr:hover {
+        background: rgba(30, 41, 59, 0.5);
+    }
+
+    .plan-code-badge {
+        font-family: monospace;
+        font-size: 0.85rem;
+        font-weight: 700;
+        background: #1e293b;
+        border: 1px solid #334155;
+        color: #38bdf8;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.375rem;
+    }
+
+    .badge-type {
+        font-size: 0.75rem;
+        font-weight: 600;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.375rem;
+    }
+
+    .badge-type.percent {
+        background: rgba(14, 165, 233, 0.15);
+        color: #38bdf8;
+        border: 1px solid rgba(14, 165, 233, 0.3);
+    }
+
+    .badge-type.fixed {
+        background: rgba(245, 158, 11, 0.15);
+        color: #fbbf24;
+        border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+
+    .discount-value.highlight {
+        font-size: 1.05rem;
+        font-weight: 700;
+        color: #10b981;
+    }
+
+    .cap-badge {
+        font-size: 0.8rem;
+        background: #1e293b;
+        color: #94a3b8;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.375rem;
+        border: 1px solid #334155;
+    }
+
+    .status-pill {
+        font-size: 0.75rem;
+        font-weight: 600;
+        padding: 0.25rem 0.6rem;
+        border-radius: 9999px;
+        display: inline-block;
+    }
+
+    .status-pill.active {
+        background: rgba(16, 185, 129, 0.15);
+        color: #34d399;
+        border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    .status-pill.inactive {
+        background: rgba(239, 68, 68, 0.15);
+        color: #f87171;
+        border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    .status-pill.unconfigured {
+        background: rgba(100, 116, 139, 0.15);
+        color: #94a3b8;
+        border: 1px solid rgba(100, 116, 139, 0.3);
+    }
+
+    .actions-cell {
+        display: flex;
+        gap: 0.5rem;
+        justify-content: flex-end;
+    }
+
+    /* Modal styles */
+    .modal-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.75);
+        backdrop-filter: blur(4px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+        padding: 1rem;
+    }
+
+    .modal-dialog {
+        background: #0f172a;
+        border: 1px solid #334155;
+        border-radius: 1rem;
+        width: 100%;
+        max-width: 580px;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        animation: modalFadeIn 0.2s ease-out;
+    }
+
+    @@keyframes modalFadeIn {
+        from { opacity: 0; transform: scale(0.96); }
+        to { opacity: 1; transform: scale(1); }
+    }
+
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        padding: 1.5rem;
+        border-bottom: 1px solid #1e293b;
+    }
+
+    .modal-title {
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: #f8fafc;
+        margin: 0;
+    }
+
+    .modal-subtitle {
+        color: #94a3b8;
+        font-size: 0.85rem;
+        margin: 0.25rem 0 0 0;
+    }
+
+    .btn-close {
+        background: transparent;
+        border: none;
+        color: #64748b;
+        font-size: 1.25rem;
+        cursor: pointer;
+        padding: 0.25rem;
+    }
+
+    .btn-close:hover {
+        color: #f8fafc;
+    }
+
+    .modal-body {
+        padding: 1.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1.25rem;
+    }
+
+    .modal-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.75rem;
+        padding: 1.25rem 1.5rem;
+        border-top: 1px solid #1e293b;
+        background: #0b1120;
+        border-bottom-left-radius: 1rem;
+        border-bottom-right-radius: 1rem;
+    }
+
+    .radio-toggle-group {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.75rem;
+    }
+
+    .toggle-btn {
+        padding: 0.75rem;
+        background: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 0.5rem;
+        color: #94a3b8;
+        font-size: 0.85rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+    }
+
+    .toggle-btn.active {
+        background: rgba(14, 165, 233, 0.15);
+        border-color: #38bdf8;
+        color: #38bdf8;
+    }
+
+    .input-with-prefix {
+        display: flex;
+        align-items: center;
+        background: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 0.5rem;
+        overflow: hidden;
+    }
+
+    .input-prefix {
+        padding: 0.6rem 0.8rem;
+        background: #334155;
+        color: #94a3b8;
+        font-weight: 600;
+        font-size: 0.85rem;
+    }
+
+    .input-with-prefix input {
+        width: 100%;
+        border: none;
+        background: transparent;
+        padding: 0.6rem 0.8rem;
+        color: #f8fafc;
+        font-size: 1rem;
+        font-weight: 700;
+    }
+
+    .input-with-prefix input:focus {
+        outline: none;
+    }
+
+    .cap-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.4rem;
+    }
+
+    .cap-value-display {
+        font-weight: 700;
+        color: #38bdf8;
+        font-size: 0.9rem;
+    }
+
+    .form-range {
+        width: 100%;
+        accent-color: #38bdf8;
+        cursor: pointer;
+    }
+
+    .range-labels {
+        display: flex;
+        justify-content: space-between;
+        color: #64748b;
+        font-size: 0.75rem;
+        margin-top: 0.25rem;
+    }
+
+    .form-hint {
+        display: block;
+        color: #64748b;
+        font-size: 0.75rem;
+        margin-top: 0.4rem;
+    }
+
+    .preview-box {
+        background: #0b1120;
+        border: 1px dashed #334155;
+        border-radius: 0.5rem;
+        padding: 1rem;
+    }
+
+    .preview-title {
+        font-size: 0.8rem;
+        font-weight: 700;
+        color: #38bdf8;
+        margin-bottom: 0.5rem;
+    }
+
+    .preview-list {
+        margin: 0;
+        padding-left: 1.25rem;
+        color: #94a3b8;
+        font-size: 0.8rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.35rem;
+    }
+
+    /* Common Buttons */
+    .btn {
+        padding: 0.55rem 1rem;
+        border-radius: 0.5rem;
+        font-size: 0.85rem;
+        font-weight: 600;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        border: 1px solid transparent;
+        transition: all 0.2s ease;
+    }
+
+    .btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+
+    .btn-primary {
+        background: linear-gradient(135deg, #0ea5e9, #0284c7);
+        color: #ffffff;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+        background: linear-gradient(135deg, #38bdf8, #0ea5e9);
+    }
+
+    .btn-secondary {
+        background: #1e293b;
+        color: #cbd5e1;
+        border-color: #334155;
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+        background: #334155;
+    }
+
+    .btn-outline-primary {
+        background: transparent;
+        border-color: #0ea5e9;
+        color: #38bdf8;
+    }
+
+    .btn-outline-primary:hover:not(:disabled) {
+        background: rgba(14, 165, 233, 0.15);
+    }
+
+    .btn-outline-success {
+        background: transparent;
+        border-color: #10b981;
+        color: #34d399;
+    }
+
+    .btn-outline-success:hover:not(:disabled) {
+        background: rgba(16, 185, 129, 0.15);
+    }
+
+    .btn-outline-danger {
+        background: transparent;
+        border-color: #ef4444;
+        color: #f87171;
+    }
+
+    .btn-outline-danger:hover:not(:disabled) {
+        background: rgba(239, 68, 68, 0.15);
+    }
+
+    .btn-sm {
+        padding: 0.35rem 0.65rem;
+        font-size: 0.75rem;
+    }
+
+    .loading-state, .empty-state, .access-denied-state {
+        background: #0f172a;
+        border: 1px solid #1e293b;
+        border-radius: 0.75rem;
+        padding: 3rem;
+        text-align: center;
+        color: #94a3b8;
+    }
+
+    .empty-icon, .denied-icon {
+        font-size: 2.5rem;
+        display: block;
+        margin-bottom: 0.75rem;
+    }
+
+    .spinner {
+        width: 32px;
+        height: 32px;
+        border: 3px solid #1e293b;
+        border-top-color: #38bdf8;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        margin: 0 auto 1rem auto;
+    }
+
+    .spinner-sm {
+        width: 14px;
+        height: 14px;
+        border: 2px solid transparent;
+        border-top-color: #ffffff;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        display: inline-block;
+    }
+
+    @@keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+</style>

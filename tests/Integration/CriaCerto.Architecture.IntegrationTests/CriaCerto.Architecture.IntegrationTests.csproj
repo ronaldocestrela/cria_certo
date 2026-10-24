@@ -26,6 +26,7 @@
     <ProjectReference Include="..\..\..\src\Host\CriaCerto.Api\CriaCerto.Api.csproj" />
     <ProjectReference Include="..\..\..\src\Modules\Breeding\CriaCerto.Modules.Breeding.Infrastructure\CriaCerto.Modules.Breeding.Infrastructure.csproj" />
     <ProjectReference Include="..\..\..\src\Modules\Tenancy\CriaCerto.Modules.Tenancy.Infrastructure\CriaCerto.Modules.Tenancy.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\..\src\Modules\Referral\CriaCerto.Modules.Referral.Infrastructure\CriaCerto.Modules.Referral.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

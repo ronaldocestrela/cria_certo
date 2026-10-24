@@ -1,0 +1,586 @@
+@page "/backoffice/referral/analytics"
+@using CriaCerto.BuildingBlocks.Abstractions.Results
+@using CriaCerto.Modules.Backoffice.Application.Security
+@using CriaCerto.Modules.Referral.Application.Features.Analytics.Dtos
+@using CriaCerto.Modules.Backoffice.Application.Features.PaidMedia.Dtos
+@using CriaCerto.Web.Client.Services
+@inject IBackofficeApiClient BackofficeApi
+
+<div class="analytics-container">
+    <div class="analytics-header">
+        <div>
+            <h1 class="analytics-title">Telemetria & Indicadores de Sucesso (KPIs)</h1>
+            <p class="analytics-subtitle">Monitoramento de CAC por Canal, Taxa de Conversão, Viralidade (K-Factor) e LTV de Indicados.</p>
+        </div>
+        <div class="header-actions">
+            <button class="btn btn-secondary" @onclick="LoadDataAsync" disabled="@_isLoading">
+                <span>🔄</span> Atualizar
+            </button>
+            <button class="btn btn-primary" @onclick="OpenNewPaidMediaModal">
+                <span>➕</span> Lançar Mídia Paga
+            </button>
+        </div>
+    </div>
+
+    <!-- Filtros de Período -->
+    <div class="filter-card">
+        <div class="preset-buttons">
+            <button class="btn-filter @(_selectedPreset == "30d" ? "active" : "")" @onclick='() => ApplyPresetAsync("30d")'>Últimos 30 dias</button>
+            <button class="btn-filter @(_selectedPreset == "current_month" ? "active" : "")" @onclick='() => ApplyPresetAsync("current_month")'>Mês Atual</button>
+            <button class="btn-filter @(_selectedPreset == "90d" ? "active" : "")" @onclick='() => ApplyPresetAsync("90d")'>Últimos 90 dias</button>
+            <button class="btn-filter @(_selectedPreset == "all" ? "active" : "")" @onclick='() => ApplyPresetAsync("all")'>Todo o Período</button>
+            <button class="btn-filter @(_selectedPreset == "custom" ? "active" : "")" @onclick='() => ApplyPresetAsync("custom")'>Personalizado</button>
+        </div>
+
+        @if (_selectedPreset == "custom")
+        {
+            <div class="custom-range-inputs">
+                <div class="input-group">
+                    <label>Data Inicial:</label>
+                    <input type="date" class="form-control" @bind="_customStartDate" />
+                </div>
+                <div class="input-group">
+                    <label>Data Final:</label>
+                    <input type="date" class="form-control" @bind="_customEndDate" />
+                </div>
+                <button class="btn btn-sm btn-primary align-self-end" @onclick="ApplyCustomDateRangeAsync">Aplicar</button>
+            </div>
+        }
+    </div>
+
+    @if (_isLoading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Carregando telemetria e calculando indicadores...</p>
+        </div>
+    }
+    else if (_kpis != null)
+    {
+        <!-- Cards Superiores de Destaque -->
+        <div class="kpi-grid">
+            <!-- K-Factor (Viralidade) -->
+            <div class="kpi-card">
+                <div class="kpi-card-header">
+                    <span class="kpi-label">ÍNDICE DE VIRALIDADE (K-FACTOR)</span>
+                    <span class="badge @(_kpis.Virality.KFactor >= 1.0 ? "badge-success" : "badge-neutral")">
+                        @_kpis.Virality.ViralStatus
+                    </span>
+                </div>
+                <div class="kpi-value">@_kpis.Virality.KFactor.ToString("0.0000")</div>
+                <div class="kpi-footer">
+                    <span><strong>@_kpis.Virality.NewCustomersFromCustomerReferrals</strong> indicados por clientes</span>
+                    <span>Base: @_kpis.Virality.ActivePlatformTenantsCount clientes ativos</span>
+                </div>
+            </div>
+
+            <!-- CAC Médio Geral (Blended) -->
+            <div class="kpi-card">
+                <div class="kpi-card-header">
+                    <span class="kpi-label">CAC BLENDED (TODOS OS CANAIS)</span>
+                    <span class="badge badge-info">Aquisição</span>
+                </div>
+                <div class="kpi-value">R$ @_kpis.Cac.BlendedCac.ToString("N2")</div>
+                <div class="kpi-footer">
+                    <span>Total investido: R$ @((_kpis.Cac.CustomerTotalRewardSpent + _kpis.Cac.PartnerTotalCommissionSpent + _kpis.Cac.PaidMediaTotalSpent).ToString("N2"))</span>
+                    <span>Total contas: @((_kpis.Cac.CustomerAcquisitionsCount + _kpis.Cac.PartnerAcquisitionsCount + _kpis.Cac.PaidMediaAcquisitionsCount))</span>
+                </div>
+            </div>
+
+            <!-- Taxa Global de Conversão -->
+            <div class="kpi-card">
+                <div class="kpi-card-header">
+                    <span class="kpi-label">TAXA DE CONVERSÃO GLOBAL</span>
+                    <span class="badge badge-accent">Funil</span>
+                </div>
+                <div class="kpi-value">@_kpis.Funnel.GlobalConversionRate.ToString("0.0")%</div>
+                <div class="kpi-footer">
+                    <span>@_kpis.Funnel.ConvertedAttributions faturas pagas</span>
+                    <span>de @_kpis.Funnel.TotalClicks cliques totais</span>
+                </div>
+            </div>
+
+            <!-- LTV & Permanência -->
+            <div class="kpi-card">
+                <div class="kpi-card-header">
+                    <span class="kpi-label">RETENÇÃO DE INDICADOS (LTV)</span>
+                    <span class="badge @(_kpis.Retention.LifespanAdvantagePercentage >= 0 ? "badge-success" : "badge-warning")">
+                        @(_kpis.Retention.LifespanAdvantagePercentage >= 0 ? "+" : "")@_kpis.Retention.LifespanAdvantagePercentage.ToString("0.0")%
+                    </span>
+                </div>
+                <div class="kpi-value">@_kpis.Retention.ReferredAverageLifespanDays.ToString("0") <span class="unit">dias</span></div>
+                <div class="kpi-footer">
+                    <span>Média geral: @_kpis.Retention.GlobalAverageLifespanDays.ToString("0") dias</span>
+                    <span>Retenção: @_kpis.Retention.ReferredRetentionRatePercentage.ToString("0.0")%</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Seção 1: Comparativo de CAC por Canal -->
+        <div class="section-card">
+            <h2 class="section-title">📊 Comparativo de Eficiência & CAC por Canal</h2>
+            <div class="cac-columns">
+                <!-- Canal Cliente -->
+                <div class="channel-box">
+                    <div class="channel-header">
+                        <span class="channel-icon">🧑‍🌾</span>
+                        <div>
+                            <h3>Indicação de Produtores (Clientes)</h3>
+                            <span class="channel-desc">Recompensados com desconto cumulativo na fatura</span>
+                        </div>
+                    </div>
+                    <div class="channel-cac-stat">
+                        <div class="stat-big">R$ @_kpis.Cac.CustomerCac.ToString("N2")</div>
+                        <span class="stat-label">CAC do Canal</span>
+                    </div>
+                    <div class="channel-metrics">
+                        <div class="metric-row">
+                            <span>Descontos Concedidos:</span>
+                            <strong>R$ @_kpis.Cac.CustomerTotalRewardSpent.ToString("N2")</strong>
+                        </div>
+                        <div class="metric-row">
+                            <span>Novos Clientes Pagantes:</span>
+                            <strong>@_kpis.Cac.CustomerAcquisitionsCount</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Canal Parceiro -->
+                <div class="channel-box">
+                    <div class="channel-header">
+                        <span class="channel-icon">🤝</span>
+                        <div>
+                            <h3>Parceiros Comerciais</h3>
+                            <span class="channel-desc">Comissionamento financeiro com carência D+30</span>
+                        </div>
+                    </div>
+                    <div class="channel-cac-stat">
+                        <div class="stat-big">R$ @_kpis.Cac.PartnerCac.ToString("N2")</div>
+                        <span class="stat-label">CAC do Canal</span>
+                    </div>
+                    <div class="channel-metrics">
+                        <div class="metric-row">
+                            <span>Comissões Emitidas:</span>
+                            <strong>R$ @_kpis.Cac.PartnerTotalCommissionSpent.ToString("N2")</strong>
+                        </div>
+                        <div class="metric-row">
+                            <span>Novos Clientes Pagantes:</span>
+                            <strong>@_kpis.Cac.PartnerAcquisitionsCount</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Canal Mídia Paga -->
+                <div class="channel-box">
+                    <div class="channel-header">
+                        <span class="channel-icon">📢</span>
+                        <div>
+                            <h3>Mídia Paga & Anúncios</h3>
+                            <span class="channel-desc">Investimento em Google Ads, Meta Ads e outros</span>
+                        </div>
+                    </div>
+                    <div class="channel-cac-stat">
+                        <div class="stat-big">R$ @_kpis.Cac.PaidMediaCac.ToString("N2")</div>
+                        <span class="stat-label">CAC do Canal</span>
+                    </div>
+                    <div class="channel-metrics">
+                        <div class="metric-row">
+                            <span>Investimento Lançado:</span>
+                            <strong>R$ @_kpis.Cac.PaidMediaTotalSpent.ToString("N2")</strong>
+                        </div>
+                        <div class="metric-row">
+                            <span>Clientes Adquiridos:</span>
+                            <strong>@_kpis.Cac.PaidMediaAcquisitionsCount</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Seção 2: Funil de Conversão e Saúde das Indicações -->
+        <div class="section-card">
+            <h2 class="section-title">🎯 Funil de Conversão do Programa</h2>
+            <div class="funnel-container">
+                <div class="funnel-step">
+                    <div class="funnel-badge">ETAPA 1</div>
+                    <div class="funnel-number">@_kpis.Funnel.TotalClicks</div>
+                    <div class="funnel-label">Cliques no Link</div>
+                    <div class="funnel-sub">
+                        <span>Produtores: @_kpis.Funnel.CustomerClicks</span> | 
+                        <span>Parceiros: @_kpis.Funnel.PartnerClicks</span>
+                    </div>
+                </div>
+
+                <div class="funnel-arrow">
+                    ➔
+                    <span class="rate-tag">@_kpis.Funnel.ClickToLeadConversionRate.ToString("0.0")%</span>
+                </div>
+
+                <div class="funnel-step">
+                    <div class="funnel-badge">ETAPA 2</div>
+                    <div class="funnel-number">@_kpis.Funnel.TotalAttributions</div>
+                    <div class="funnel-label">Cadastros (Trial)</div>
+                    <div class="funnel-sub">
+                        <span>Em teste: @_kpis.Funnel.PendingAttributions</span>
+                    </div>
+                </div>
+
+                <div class="funnel-arrow">
+                    ➔
+                    <span class="rate-tag">@_kpis.Funnel.LeadToPaidConversionRate.ToString("0.0")%</span>
+                </div>
+
+                <div class="funnel-step">
+                    <div class="funnel-badge">ETAPA 3</div>
+                    <div class="funnel-number highlight">@_kpis.Funnel.ConvertedAttributions</div>
+                    <div class="funnel-label">Faturas Pagas</div>
+                    <div class="funnel-sub">
+                        <span>Fraudes bloqueadas: @_kpis.Funnel.FraudulentAttributions</span> | 
+                        <span>Churned: @_kpis.Funnel.ChurnedAttributions</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Seção 3: Histórico de Lançamentos de Mídia Paga -->
+        <div class="section-card">
+            <div class="table-header-flex">
+                <h2 class="section-title">📝 Lançamentos de Despesas de Mídia Paga</h2>
+                <button class="btn btn-sm btn-outline-primary" @onclick="OpenNewPaidMediaModal">
+                    + Novo Lançamento
+                </button>
+            </div>
+
+            @if (_paidMediaSpends == null || _paidMediaSpends.Count == 0)
+            {
+                <div class="empty-table-state">
+                    Nenhum gasto de mídia paga registrado para o período selecionado.
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Canal</th>
+                                <th>Período</th>
+                                <th>Investimento</th>
+                                <th>Aquisições</th>
+                                <th>CAC Direto</th>
+                                <th>Observações</th>
+                                <th>Data Cadastro</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var spend in _paidMediaSpends)
+                            {
+                                <tr>
+                                    <td><span class="badge badge-neutral">@spend.Channel</span></td>
+                                    <td>@spend.PeriodStartDateUtc.ToString("dd/MM/yyyy") - @spend.PeriodEndDateUtc.ToString("dd/MM/yyyy")</td>
+                                    <td><strong>R$ @spend.Amount.ToString("N2")</strong></td>
+                                    <td>@spend.AcquisitionsCount</td>
+                                    <td>R$ @spend.CacDirect.ToString("N2")</td>
+                                    <td>@(spend.Notes ?? "-")</td>
+                                    <td>@spend.CreatedAtUtc.ToString("dd/MM/yyyy HH:mm")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+<!-- Modal de Novo Lançamento de Mídia Paga -->
+@if (_showModal)
+{
+    <div class="modal-backdrop">
+        <div class="modal-box">
+            <div class="modal-header">
+                <h3>Lançar Investimento de Mídia Paga</h3>
+                <button class="btn-close" @onclick="CloseModal">✕</button>
+            </div>
+            <div class="modal-body">
+                @if (!string.IsNullOrWhiteSpace(_modalErrorMessage))
+                {
+                    <div class="alert alert-danger">@_modalErrorMessage</div>
+                }
+
+                <div class="form-group">
+                    <label>Canal:</label>
+                    <select class="form-control" @bind="_modalChannel">
+                        <option value="GoogleAds">Google Ads</option>
+                        <option value="MetaAds">Meta Ads (Facebook / Instagram)</option>
+                        <option value="Outbound">Outbound / SDR</option>
+                        <option value="Influencers">Influenciadores / Criadores</option>
+                        <option value="Other">Outro</option>
+                    </select>
+                </div>
+
+                <div class="row-inputs">
+                    <div class="form-group">
+                        <label>Início do Período:</label>
+                        <input type="date" class="form-control" @bind="_modalStartDate" />
+                    </div>
+                    <div class="form-group">
+                        <label>Fim do Período:</label>
+                        <input type="date" class="form-control" @bind="_modalEndDate" />
+                    </div>
+                </div>
+
+                <div class="row-inputs">
+                    <div class="form-group">
+                        <label>Valor Investido (R$):</label>
+                        <input type="number" step="0.01" class="form-control" @bind="_modalAmount" />
+                    </div>
+                    <div class="form-group">
+                        <label>Aquisições Geradas (Contas):</label>
+                        <input type="number" class="form-control" @bind="_modalAcquisitions" />
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Observações / Campanha:</label>
+                    <textarea class="form-control" rows="2" @bind="_modalNotes" placeholder="Ex: Campanha Search IATF Outubro"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="CloseModal" disabled="@_isSaving">Cancelar</button>
+                <button class="btn btn-primary" @onclick="SavePaidMediaSpendAsync" disabled="@_isSaving">
+                    @(_isSaving ? "Salvando..." : "Salvar Lançamento")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .analytics-container { padding: 1.5rem; max-width: 1400px; margin: 0 auto; color: #1e293b; }
+    .analytics-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.5rem; }
+    .analytics-title { font-size: 1.75rem; font-weight: 700; color: #0f172a; margin-bottom: 0.25rem; }
+    .analytics-subtitle { color: #64748b; font-size: 0.95rem; }
+    .header-actions { display: flex; gap: 0.75rem; }
+
+    .filter-card { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem; display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; justify-content: space-between; }
+    .preset-buttons { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    .btn-filter { background: #f8fafc; border: 1px solid #cbd5e1; padding: 0.4rem 0.85rem; border-radius: 6px; font-size: 0.85rem; cursor: pointer; transition: all 0.2s; }
+    .btn-filter:hover { background: #f1f5f9; }
+    .btn-filter.active { background: #2563eb; color: #ffffff; border-color: #2563eb; font-weight: 600; }
+    .custom-range-inputs { display: flex; gap: 0.75rem; align-items: center; }
+
+    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.25rem; margin-bottom: 1.5rem; }
+    .kpi-card { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 1.25rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    .kpi-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
+    .kpi-label { font-size: 0.75rem; font-weight: 700; color: #64748b; letter-spacing: 0.05em; }
+    .kpi-value { font-size: 2rem; font-weight: 800; color: #0f172a; margin-bottom: 0.5rem; }
+    .kpi-value .unit { font-size: 1.1rem; font-weight: 500; color: #64748b; }
+    .kpi-footer { font-size: 0.8rem; color: #64748b; display: flex; justify-content: space-between; border-top: 1px solid #f1f5f9; padding-top: 0.5rem; }
+
+    .badge { padding: 0.25rem 0.6rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; }
+    .badge-success { background: #dcfce7; color: #166534; }
+    .badge-info { background: #e0f2fe; color: #0369a1; }
+    .badge-warning { background: #fef9c3; color: #854d0e; }
+    .badge-accent { background: #f3e8ff; color: #6b21a8; }
+    .badge-neutral { background: #f1f5f9; color: #475569; }
+
+    .section-card { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 1.5rem; margin-bottom: 1.5rem; }
+    .section-title { font-size: 1.2rem; font-weight: 700; color: #0f172a; margin-bottom: 1rem; }
+
+    .cac-columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.25rem; }
+    .channel-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1.25rem; }
+    .channel-header { display: flex; gap: 0.75rem; align-items: flex-start; margin-bottom: 1rem; }
+    .channel-icon { font-size: 1.75rem; }
+    .channel-header h3 { font-size: 1rem; font-weight: 700; margin: 0; color: #1e293b; }
+    .channel-desc { font-size: 0.75rem; color: #64748b; }
+    .channel-cac-stat { margin-bottom: 1rem; }
+    .stat-big { font-size: 1.6rem; font-weight: 800; color: #2563eb; }
+    .stat-label { font-size: 0.75rem; color: #64748b; font-weight: 600; }
+    .channel-metrics { border-top: 1px dashed #cbd5e1; padding-top: 0.75rem; display: flex; flex-direction: column; gap: 0.4rem; font-size: 0.85rem; }
+    .metric-row { display: flex; justify-content: space-between; }
+
+    .funnel-container { display: flex; justify-content: space-around; align-items: center; padding: 1rem 0; flex-wrap: wrap; gap: 1rem; }
+    .funnel-step { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 1.25rem; text-align: center; min-width: 220px; }
+    .funnel-badge { font-size: 0.7rem; font-weight: 700; color: #64748b; margin-bottom: 0.5rem; }
+    .funnel-number { font-size: 2.2rem; font-weight: 800; color: #0f172a; }
+    .funnel-number.highlight { color: #16a34a; }
+    .funnel-label { font-weight: 600; font-size: 0.95rem; color: #334155; margin-bottom: 0.25rem; }
+    .funnel-sub { font-size: 0.75rem; color: #64748b; }
+    .funnel-arrow { font-size: 1.5rem; color: #94a3b8; display: flex; flex-direction: column; align-items: center; font-weight: bold; }
+    .rate-tag { font-size: 0.8rem; background: #2563eb; color: #ffffff; padding: 0.15rem 0.5rem; border-radius: 4px; margin-top: 0.25rem; }
+
+    .table-header-flex { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+    .table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    .table th { background: #f8fafc; text-align: left; padding: 0.75rem; font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0; }
+    .table td { padding: 0.75rem; border-bottom: 1px solid #e2e8f0; color: #1e293b; }
+    .empty-table-state { text-align: center; padding: 2rem; color: #94a3b8; font-style: italic; }
+
+    .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+    .modal-box { background: #ffffff; border-radius: 10px; width: 500px; max-width: 90%; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
+    .modal-header { padding: 1.25rem; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; }
+    .modal-header h3 { margin: 0; font-size: 1.2rem; font-weight: 700; color: #0f172a; }
+    .btn-close { background: none; border: none; font-size: 1.25rem; cursor: pointer; color: #64748b; }
+    .modal-body { padding: 1.25rem; display: flex; flex-direction: column; gap: 1rem; }
+    .row-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .form-group { display: flex; flex-direction: column; gap: 0.35rem; }
+    .form-group label { font-size: 0.85rem; font-weight: 600; color: #334155; }
+    .form-control { border: 1px solid #cbd5e1; border-radius: 6px; padding: 0.5rem; font-size: 0.9rem; }
+    .modal-footer { padding: 1rem 1.25rem; border-top: 1px solid #e2e8f0; display: flex; justify-content: flex-end; gap: 0.75rem; }
+
+    .btn { padding: 0.5rem 1rem; border-radius: 6px; font-weight: 600; font-size: 0.9rem; cursor: pointer; border: none; transition: background 0.2s; }
+    .btn-primary { background: #2563eb; color: #ffffff; }
+    .btn-primary:hover { background: #1d4ed8; }
+    .btn-secondary { background: #e2e8f0; color: #334155; }
+    .btn-secondary:hover { background: #cbd5e1; }
+    .btn-outline-primary { background: transparent; border: 1px solid #2563eb; color: #2563eb; }
+    .btn-outline-primary:hover { background: #eff6ff; }
+    .btn-sm { padding: 0.35rem 0.75rem; font-size: 0.8rem; }
+    .alert-danger { background: #fee2e2; color: #991b1b; padding: 0.75rem; border-radius: 6px; font-size: 0.85rem; }
+    .loading-state { text-align: center; padding: 4rem; color: #64748b; }
+    .spinner { border: 3px solid #e2e8f0; border-top: 3px solid #2563eb; border-radius: 50%; width: 36px; height: 36px; animation: spin 1s linear infinite; margin: 0 auto 1rem; }
+    @@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+</style>
+
+@code {
+    private bool _isLoading = true;
+    private bool _isSaving = false;
+    private bool _showModal = false;
+    private string? _modalErrorMessage;
+
+    private string _selectedPreset = "30d";
+    private DateTime? _startDate;
+    private DateTime? _endDate;
+    private DateTime _customStartDate = DateTime.UtcNow.AddDays(-30);
+    private DateTime _customEndDate = DateTime.UtcNow;
+
+    private ReferralProgramKpisDto? _kpis;
+    private IReadOnlyList<PaidMediaSpendDto>? _paidMediaSpends;
+
+    // Campos do Modal
+    private string _modalChannel = "GoogleAds";
+    private DateTime _modalStartDate = DateTime.UtcNow.AddDays(-30);
+    private DateTime _modalEndDate = DateTime.UtcNow;
+    private decimal _modalAmount = 1000m;
+    private int _modalAcquisitions = 5;
+    private string? _modalNotes;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ApplyPresetAsync("30d");
+    }
+
+    private async Task ApplyPresetAsync(string preset)
+    {
+        _selectedPreset = preset;
+        var now = DateTime.UtcNow;
+
+        switch (preset)
+        {
+            case "30d":
+                _startDate = now.AddDays(-30);
+                _endDate = now;
+                break;
+            case "current_month":
+                _startDate = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+                _endDate = now;
+                break;
+            case "90d":
+                _startDate = now.AddDays(-90);
+                _endDate = now;
+                break;
+            case "all":
+                _startDate = null;
+                _endDate = null;
+                break;
+            case "custom":
+                _startDate = _customStartDate;
+                _endDate = _customEndDate;
+                break;
+        }
+
+        await LoadDataAsync();
+    }
+
+    private async Task ApplyCustomDateRangeAsync()
+    {
+        _startDate = _customStartDate;
+        _endDate = _customEndDate;
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            _kpis = await BackofficeApi.GetReferralProgramKpisAsync(_startDate, _endDate);
+            _paidMediaSpends = await BackofficeApi.GetPaidMediaSpendsAsync(_startDate, _endDate);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Erro ao carregar telemetria de referral: {ex.Message}");
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void OpenNewPaidMediaModal()
+    {
+        _modalChannel = "GoogleAds";
+        _modalStartDate = DateTime.UtcNow.AddDays(-30);
+        _modalEndDate = DateTime.UtcNow;
+        _modalAmount = 1000m;
+        _modalAcquisitions = 5;
+        _modalNotes = null;
+        _modalErrorMessage = null;
+        _showModal = true;
+    }
+
+    private void CloseModal()
+    {
+        _showModal = false;
+        _modalErrorMessage = null;
+    }
+
+    private async Task SavePaidMediaSpendAsync()
+    {
+        if (_modalAmount <= 0)
+        {
+            _modalErrorMessage = "O valor investido deve ser maior que zero.";
+            return;
+        }
+
+        if (_modalEndDate < _modalStartDate)
+        {
+            _modalErrorMessage = "A data final não pode ser anterior à data inicial.";
+            return;
+        }
+
+        _isSaving = true;
+        _modalErrorMessage = null;
+
+        var request = new CreatePaidMediaSpendRequest(
+            _modalChannel,
+            _modalStartDate,
+            _modalEndDate,
+            _modalAmount,
+            _modalAcquisitions,
+            _modalNotes);
+
+        var result = await BackofficeApi.CreatePaidMediaSpendAsync(request);
+        _isSaving = false;
+
+        if (result.IsSuccess)
+        {
+            _showModal = false;
+            await LoadDataAsync();
+        }
+        else
+        {
+            _modalErrorMessage = result.Error.Message;
+        }
+    }
+}
