@@ -1,4 +1,7 @@
 @using CriaCerto.Web.Client.Models
+@using CriaCerto.Web.Client.Auth
+@inject NavigationManager Navigation
+@inject CustomAuthStateProvider AuthStateProvider
 
 <nav class="mobile-nav-bar" aria-label="Navegação Móvel Operacional">
     <div class="mobile-nav-scroll">
@@ -11,5 +14,16 @@
                 }
             </NavLink>
         }
+        <button type="button" class="mobile-nav-link mobile-logout-link" @onclick="HandleLogout" title="Sair da aplicação" aria-label="Sair da aplicação" id="btn-logout-mobile">
+            <span class="material-symbols-outlined mobile-nav-icon" aria-hidden="true">logout</span>
+        </button>
     </div>
 </nav>
+
+@code {
+    private async Task HandleLogout()
+    {
+        await AuthStateProvider.MarkUserAsLoggedOut();
+        Navigation.NavigateTo("/login", forceLoad: true);
+    }
+}

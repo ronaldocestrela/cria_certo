@@ -115,6 +115,29 @@
     color: #445a4d;
 }
 
+.desktop-nav .nav-logout-btn {
+    width: 100%;
+    background: transparent;
+    cursor: pointer;
+    text-align: left;
+    font-family: inherit;
+    margin-top: 0.25rem;
+}
+
+.desktop-nav .nav-logout-btn .icon-logout {
+    color: #64748b;
+}
+
+.desktop-nav .nav-logout-btn:hover {
+    background: rgba(239, 68, 68, 0.08);
+    border-color: rgba(239, 68, 68, 0.2);
+    color: #b91c1c;
+}
+
+.desktop-nav .nav-logout-btn:hover .icon-logout {
+    color: #dc2626;
+}
+
 .promo-card {
     margin-top: 1.2rem;
     border-radius: 1rem;
