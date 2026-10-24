@@ -171,6 +171,10 @@ public static class ReferralErrors
         public static readonly Error NotFound = Error.NotFound(
             "CommercialPartnerProfile.NotFound",
             "O perfil do parceiro comercial não foi encontrado.");
+
+        public static readonly Error UserProvisioningFailed = Error.Failure(
+            "CommercialPartnerProfile.UserProvisioningFailed",
+            "Falha ao provisionar a conta de acesso para o parceiro comercial.");
     }
 
     public static class Receipt

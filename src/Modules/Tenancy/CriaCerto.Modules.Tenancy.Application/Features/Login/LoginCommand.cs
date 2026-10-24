@@ -28,10 +28,11 @@ public sealed class LoginCommandHandler : IRequestHandler<LoginCommand, Result<A
 
     public async Task<Result<AuthResponse>> Handle(LoginCommand request, CancellationToken cancellationToken)
     {
+        var normalizedEmail = request.Email?.Trim().ToLowerInvariant() ?? string.Empty;
         var user = await _dbContext.Users
             .Include(u => u.UserTenants)
             .ThenInclude(ut => ut.Tenant)
-            .FirstOrDefaultAsync(u => u.Email == request.Email, cancellationToken);
+            .FirstOrDefaultAsync(u => u.Email == normalizedEmail, cancellationToken);
 
         if (user == null || !PasswordHasher.Verify(request.Password, user.PasswordHash))
         {
@@ -51,7 +52,7 @@ public sealed class LoginCommandHandler : IRequestHandler<LoginCommand, Result<A
 
         if (accessibleTenants.Count == 0)
         {
-            if (_partnerRoleLookupService != null && await _partnerRoleLookupService.IsActiveCommercialPartnerAsync(user.Id, cancellationToken))
+            if (_partnerRoleLookupService != null && await _partnerRoleLookupService.IsActiveCommercialPartnerAsync(user.Id, user.Email, cancellationToken))
             {
                 var partnerToken = _jwtService.GeneratePartnerToken(user);
                 return Result.Success(new AuthResponse(

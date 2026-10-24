@@ -85,7 +85,7 @@ public sealed class PartnerAccountProvisionerIntegrationTests : IDisposable
         createdUser.Should().NotBeNull();
         createdUser!.FullName.Should().Be(fullName);
         createdUser.PhoneNumber.Should().Be(phone);
-        createdUser.IsEmailConfirmed.Should().BeFalse();
+        createdUser.IsEmailConfirmed.Should().BeTrue();
         createdUser.EmailConfirmationToken.Should().NotBeNullOrWhiteSpace();
         createdUser.PasswordResetToken.Should().NotBeNullOrWhiteSpace();
 

@@ -31,11 +31,16 @@ public sealed class RegisterCommercialPartnerCommandHandlerTests : IDisposable
 
     private sealed class TestPartnerAccountProvisioner : IPartnerAccountProvisioner
     {
-        private readonly Guid _userId;
+        private readonly Result<Guid> _result;
 
         public TestPartnerAccountProvisioner(Guid userId)
         {
-            _userId = userId;
+            _result = Result.Success(userId);
+        }
+
+        public TestPartnerAccountProvisioner(Result<Guid> result)
+        {
+            _result = result;
         }
 
         public Task<Result<Guid>> ProvisionPartnerUserAsync(
@@ -45,7 +50,7 @@ public sealed class RegisterCommercialPartnerCommandHandlerTests : IDisposable
             string referralCode,
             CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(Result.Success(_userId));
+            return Task.FromResult(_result);
         }
     }
 
@@ -212,5 +217,85 @@ public sealed class RegisterCommercialPartnerCommandHandlerTests : IDisposable
         // Assert
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("CommercialPartnerProfile.DocumentAlreadyInUse");
+    }
+
+    [Fact]
+    public async Task Handle_WhenAccountProvisionerFails_ShouldReturnFailureAndNotPersistRecords()
+    {
+        // Arrange
+        var failingProvisioner = new TestPartnerAccountProvisioner(
+            Result.Failure<Guid>(Error.Failure("Auth.UserCreationError", "Não foi possível criar o usuário no Identity.")));
+
+        var handler = new RegisterCommercialPartnerCommandHandler(_dbContext, failingProvisioner);
+        var command = new RegisterCommercialPartnerCommand(
+            FullName: "Dr. João Silva",
+            TradeName: "Silva Consultoria",
+            Email: "falha.provisionamento@consultoria.com",
+            PhoneNumber: "+5567999887766",
+            Category: PartnerCategory.ZootechnicianConsultant,
+            City: "Campo Grande",
+            State: "MS",
+            Notes: null,
+            LegalDocumentNumber: "52.998.224/0001-90",
+            PixKeyType: PixKeyType.Email,
+            PixKey: "falha@consultoria.com",
+            CommissionType: CommissionType.PercentageRecurring,
+            CommissionValue: 20m,
+            MaxRecurringMonths: 12,
+            PaymentTermsDays: 30,
+            PreferredReferralCode: "SILVA-AGRO",
+            CreatedByAdminId: Guid.NewGuid());
+
+        // Act
+        var result = await handler.Handle(command, CancellationToken.None);
+
+        // Assert
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("Auth.UserCreationError");
+
+        // DB should remain clean - no orphaned records
+        var savedParticipant = await _dbContext.Participants.FirstOrDefaultAsync();
+        savedParticipant.Should().BeNull();
+
+        var savedProfile = await _dbContext.PartnerProfiles.FirstOrDefaultAsync();
+        savedProfile.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Handle_WhenAccountProvisionerReturnsEmptyGuid_ShouldReturnFailureAndNotPersistRecords()
+    {
+        // Arrange
+        var emptyGuidProvisioner = new TestPartnerAccountProvisioner(Result.Success(Guid.Empty));
+
+        var handler = new RegisterCommercialPartnerCommandHandler(_dbContext, emptyGuidProvisioner);
+        var command = new RegisterCommercialPartnerCommand(
+            FullName: "Dr. João Silva",
+            TradeName: "Silva Consultoria",
+            Email: "empty.guid@consultoria.com",
+            PhoneNumber: "+5567999887766",
+            Category: PartnerCategory.ZootechnicianConsultant,
+            City: "Campo Grande",
+            State: "MS",
+            Notes: null,
+            LegalDocumentNumber: "52.998.224/0001-90",
+            PixKeyType: PixKeyType.Email,
+            PixKey: "empty@consultoria.com",
+            CommissionType: CommissionType.PercentageRecurring,
+            CommissionValue: 20m,
+            MaxRecurringMonths: 12,
+            PaymentTermsDays: 30,
+            PreferredReferralCode: "SILVA-AGRO",
+            CreatedByAdminId: Guid.NewGuid());
+
+        // Act
+        var result = await handler.Handle(command, CancellationToken.None);
+
+        // Assert
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("CommercialPartnerProfile.UserProvisioningFailed");
+
+        // DB should remain clean
+        var savedParticipant = await _dbContext.Participants.FirstOrDefaultAsync();
+        savedParticipant.Should().BeNull();
     }
 }

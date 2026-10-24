@@ -36,11 +36,11 @@ public sealed class RegisterCommercialPartnerCommandHandler
     : IRequestHandler<RegisterCommercialPartnerCommand, Result<CommercialPartnerDto>>
 {
     private readonly IReferralDbContext _dbContext;
-    private readonly IPartnerAccountProvisioner? _accountProvisioner;
+    private readonly IPartnerAccountProvisioner _accountProvisioner;
 
     public RegisterCommercialPartnerCommandHandler(
         IReferralDbContext dbContext,
-        IPartnerAccountProvisioner? accountProvisioner = null)
+        IPartnerAccountProvisioner accountProvisioner)
     {
         _dbContext = dbContext;
         _accountProvisioner = accountProvisioner;
@@ -138,21 +138,25 @@ public sealed class RegisterCommercialPartnerCommandHandler
         }
         var referralCode = referralCodeResult.Value;
 
-        // 8. Provisionamento de Acesso Identity (se provisioner estiver registrado)
-        if (_accountProvisioner is not null)
-        {
-            var provisionResult = await _accountProvisioner.ProvisionPartnerUserAsync(
-                request.FullName,
-                normalizedEmail,
-                request.PhoneNumber,
-                referralCode.Code,
-                cancellationToken);
+        // 8. Provisionamento de Acesso Identity
+        var provisionResult = await _accountProvisioner.ProvisionPartnerUserAsync(
+            request.FullName,
+            normalizedEmail,
+            request.PhoneNumber,
+            referralCode.Code,
+            cancellationToken);
 
-            if (provisionResult.IsSuccess && provisionResult.Value != Guid.Empty)
-            {
-                participant.LinkUserAccount(provisionResult.Value);
-            }
+        if (provisionResult.IsFailure)
+        {
+            return Result.Failure<CommercialPartnerDto>(provisionResult.Error);
         }
+
+        if (provisionResult.Value == Guid.Empty)
+        {
+            return Result.Failure<CommercialPartnerDto>(ReferralErrors.PartnerProfile.UserProvisioningFailed);
+        }
+
+        participant.LinkUserAccount(provisionResult.Value);
 
         // 9. Persistência Atômica no Banco de Dados
         _dbContext.Participants.Add(participant);

@@ -328,3 +328,16 @@ O portal `/partner/portal` (com rota alternativa `/partner`) oferece um ambiente
 ### 10.4 Auditoria Forense e Disparo Manual
 * **Sink de Auditoria Forense:** Implementado em `ReferralBackofficeAuditSink`, inserindo registros com hash criptográfico SHA-256 encadeado no `AuditLog` do Backoffice (`Category = Billing`, `Severity = High`).
 * **Endpoint Administrativo:** Operadores financeiros com permissão `referral.payouts.manage` podem forçar a execução imediata do ciclo por meio do endpoint `POST /api/v1/backoffice/referral/payouts/run-enforcement`.
+
+---
+
+## 11. Provisionamento de Acesso e Autenticação de Parceiros Comerciais (Referral 5.4 / Tenancy Integration)
+
+### 11.1 Provisionamento Confiável de Credenciais
+* **Dependência Mandatória no Handler:** `IPartnerAccountProvisioner` é injetado como dependência obrigatória no `RegisterCommercialPartnerCommandHandler`. O resultado de `ProvisionPartnerUserAsync` é rigorosamente validado conforme o Result Pattern (`Result<Guid>`); qualquer falha aborta a operação com `Result.Failure`, impedindo participantes órfãos (`UserId = null`).
+* **Ativação Inicial de Parceiros Provisionados via Backoffice:** Para novos parceiros cadastrados administrativamente, o `PartnerAccountProvisioner` define `IsEmailConfirmed = true` com `EmailConfirmedAtUtc = Now`, permitindo acesso imediato com as credenciais provisórias geradas (`CriaCerto#XXXXXX`) sem deadlocks de validação de e-mail.
+
+### 11.2 Auto-Reconciliação e Resolução de Papel (`IPartnerRoleLookupService`)
+* **Resolução Desacoplada e Auto-Reconciliação:** Ao efetuar login sem fazendas associadas (`accessibleTenants.Count == 0`), o `LoginCommandHandler` consulta `IPartnerRoleLookupService.IsActiveCommercialPartnerAsync(user.Id, user.Email)`. O serviço verifica a associação e efetua a auto-reconciliação caso o parceiro exista no módulo Referral com e-mail correspondente mas com `UserId` desvinculado, atualizando o vínculo atomicamente.
+* **Normalização Resiliente de E-mail:** O endpoint de autenticação normaliza o e-mail de entrada com `.Trim().ToLowerInvariant()` antes da busca no `Users`, prevenindo falhas de credenciais decorrentes de maiúsculas ou espaços em branco.
+
