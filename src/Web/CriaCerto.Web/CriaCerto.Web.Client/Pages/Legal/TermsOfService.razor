@@ -1,0 +1,144 @@
+@page "/termos-de-uso"
+@page "/terms"
+@layout LegalLayout
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@using CriaCerto.Web.Client.Components.Legal
+@using CriaCerto.Web.Client.Models
+
+<PageTitle>Termos de Uso - CriaCerto Bovino SaaS</PageTitle>
+
+<HeadContent>
+    <meta name="description" content="Termos de Uso e Licenciamento da Plataforma CriaCerto Bovino SaaS. Condições gerais de prestação de serviços agropecuários e diretrizes legais." />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="https://criacerto.com.br/termos-de-uso" />
+</HeadContent>
+
+<div class="legal-document-wrapper">
+    <!-- Header Hero -->
+    <div style="margin-bottom: 2rem; border-bottom: 1px solid var(--cc-border); padding-bottom: 1.5rem;">
+        <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 0.5rem;">
+            <div style="font-family: var(--cc-font-mono); font-size: 0.8rem; color: var(--cc-primary); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; background: #e0f2e9; padding: 0.25rem 0.6rem; border-radius: 4px;">
+                Versão @Document.Version • Vigência: @Document.EffectiveDate
+            </div>
+            <div style="font-family: var(--cc-font-mono); font-size: 0.8rem; color: var(--cc-ink-muted);">
+                Atualizado para .NET 10 & LGPD (Lei 13.709/2018)
+            </div>
+        </div>
+        <h1 style="font-size: 2.25rem; font-weight: 800; color: var(--cc-ink); margin: 0.5rem 0;">
+            Termos de Uso da Plataforma
+        </h1>
+        <p style="font-size: 1.1rem; color: var(--cc-ink-muted); margin: 0; line-height: 1.6;">
+            @Document.Summary
+        </p>
+    </div>
+
+    <!-- Grid Container with Sidebar & Content -->
+    <div style="display: grid; grid-template-columns: 280px 1fr; gap: 2.5rem; align-items: start;">
+        <!-- Left Sticky TOC -->
+        <aside class="d-none d-md-block">
+            <LegalTableOfContents Sections="@Document.Sections" />
+        </aside>
+
+        <!-- Right Content Body -->
+        <article class="legal-article" style="line-height: 1.7; color: var(--cc-ink); font-size: 0.95rem;">
+            
+            <section id="objeto-licenca" style="margin-bottom: 2.5rem; scroll-margin-top: 6rem;">
+                <h2 style="font-size: 1.35rem; color: var(--cc-primary); border-bottom: 1px solid #e2e8f0; padding-bottom: 0.5rem; margin-bottom: 1rem;">
+                    1. Objeto e Licenciamento de Uso
+                </h2>
+                <p>
+                    O presente Termo de Uso rege o acesso e a utilização da plataforma tecnológica <strong>CriaCerto Bovino SaaS</strong> ("Plataforma"), desenvolvida e provida com o objetivo de oferecer soluções digitais integradas para a pecuária de precisão, incluindo, mas não se limitando a: registro de matrizes e reprodutores, protocolos de Inseminação Artificial por Tempo Fixo (IATF), diagnóstico gestacional, controle de parições e desmame, cálculo de Ganho de Peso Diário (GPD), taxa de lotação por pasto/piquete (UA/ha), controle de cocho/trato (TMR), travas sanitárias e indicadores zootécnicos executivos.
+                </p>
+                <p>
+                    A adesão aos serviços dá-se sob o modelo de Software como Serviço (SaaS), mediante concessão de licença de uso temporária, não exclusiva, onerosa (conforme plano contratado) e revogável, sujeita aos limites de animais e usuários previstos no respectivo plano de assinatura.
+                </p>
+            </section>
+
+            <section id="pwa-offline" style="margin-bottom: 2.5rem; scroll-margin-top: 6rem;">
+                <h2 style="font-size: 1.35rem; color: var(--cc-primary); border-bottom: 1px solid #e2e8f0; padding-bottom: 0.5rem; margin-bottom: 1rem;">
+                    2. Operação PWA Offline e Sincronização
+                </h2>
+                <p>
+                    Reconhecendo as particularidades geográficas da atividade agropecuária brasileira e a frequente ausência de sinal de internet nos currais, pastos e mangueiros, o CriaCerto disponibiliza recursos baseados na tecnologia Progressive Web App (PWA).
+                </p>
+                <ul>
+                    <li><strong>Persistência Local:</strong> Lançamentos realizados offline (pesagens, aplicação de medicamentos, inseminações) são armazenados localmente no navegador do dispositivo por meio de bancos de dados locais (IndexedDB).</li>
+                    <li><strong>Dever de Sincronização:</strong> O Usuário reconhece que os dados mantidos apenas localmente estão sujeitos a riscos de perda física do aparelho. É responsabilidade do operador conectar o dispositivo a uma rede de internet estável (Wi-Fi ou dados móveis) assim que possível para efetivar a sincronização e backup em nuvem.</li>
+                    <li><strong>Resolução de Conflitos:</strong> Na ocorrência de lançamentos simultâneos sobre o mesmo animal ou lote a partir de múltiplos dispositivos sem conectividade prévia, a Plataforma aplicará políticas determinísticas de reconciliação de dados, notificando o gestor sobre potenciais divergências.</li>
+                </ul>
+            </section>
+
+            <section id="responsabilidade-zootecnica-sanitaria" style="margin-bottom: 2.5rem; scroll-margin-top: 6rem;">
+                <h2 style="font-size: 1.35rem; color: var(--cc-primary); border-bottom: 1px solid #e2e8f0; padding-bottom: 0.5rem; margin-bottom: 1rem;">
+                    3. Responsabilidade Zootécnica, Veterinária e Sanitária
+                </h2>
+                <div style="background-color: #fefce8; border-left: 4px solid #eab308; padding: 1rem; border-radius: 4px; margin-bottom: 1rem;">
+                    <strong>Aviso Legal Importante:</strong> A Plataforma CriaCerto constitui ferramenta de auxílio à gestão zootécnica e ao planejamento produtivo, não substituindo o julgamento técnico nem a responsabilidade legal de médicos-veterinários, zootecnistas, engenheiros agrônomos ou capatazes da fazenda.
+                </div>
+                <p>
+                    O módulo de <strong>Trava Sanitária de Carência</strong> atua como barreira lógica orientativa baseada nas bulas informadas pelo usuário ou nos parâmetros cadastrados de medicamentos veterinários. A decisão final de liberação de lotes para abate, transporte ou comercialização de carne e leite compete com exclusividade ao Produtor Rural e ao responsável técnico da granja, em estrito cumprimento às normas do Ministério da Agricultura e Pecuária (MAPA).
+                </p>
+            </section>
+
+            <section id="controlador-operador-termos" style="margin-bottom: 2.5rem; scroll-margin-top: 6rem;">
+                <h2 style="font-size: 1.35rem; color: var(--cc-primary); border-bottom: 1px solid #e2e8f0; padding-bottom: 0.5rem; margin-bottom: 1rem;">
+                    4. Papéis LGPD e Dados de Terceiros
+                </h2>
+                <p>
+                    Nos termos da Lei Geral de Proteção de Dados (Lei nº 13.709/2018 - LGPD):
+                </p>
+                <ul>
+                    <li><strong>O Produtor Rural (Cliente):</strong> Atua na qualidade de <strong>Controlador</strong> em relação a todos os dados pessoais de terceiros por ele inseridos no sistema (tais como nomes de vaqueiros, operadores de curral, prestadores de serviço e veterinários autônomos). O Produtor garante possuir base legal válida para a inclusão desses dados na Plataforma.</li>
+                    <li><strong>A CriaCerto:</strong> Atua na qualidade de <strong>Operadora</strong> desses dados inseridos na fazenda, realizando o tratamento exclusivamente conforme as instruções lógicas do sistema e as finalidades contratuais pactuadas. A CriaCerto atua como <strong>Controladora</strong> exclusivamente em relação aos dados cadastrais e de cobrança dos titulares responsáveis pela conta.</li>
+                </ul>
+            </section>
+
+            <section id="propriedade-dados" style="margin-bottom: 2.5rem; scroll-margin-top: 6rem;">
+                <h2 style="font-size: 1.35rem; color: var(--cc-primary); border-bottom: 1px solid #e2e8f0; padding-bottom: 0.5rem; margin-bottom: 1rem;">
+                    5. Propriedade Intelectual e Propriedade dos Dados
+                </h2>
+                <p>
+                    <strong>Dados da Fazenda:</strong> Todos os registros zootécnicos, inventários de rebanho, históricos reprodutivos e custos operacionais inseridos pertencem integralmente e exclusivamente ao Produtor Rural contratante. A CriaCerto compromete-se a não comercializar, ceder ou compartilhar dados individualizados da fazenda com terceiros.
+                </p>
+                <p>
+                    <strong>Dados Anonimizados:</strong> A CriaCerto poderá utilizar dados estatísticos estritamente anonimizados e agregados (sem identificação de fazenda, animais ou proprietários) para geração de índices zootécnicos de referência (benchmarking setorial), aperfeiçoamento de algoritmos e relatórios analíticos de mercado.
+                </p>
+                <p>
+                    <strong>Portabilidade:</strong> O Produtor Rural possui o direito incondicional de solicitar ou exportar seus dados a qualquer momento em formatos interoperáveis abertos (CSV / Excel).
+                </p>
+            </section>
+
+            <section id="sla-rescisao" style="margin-bottom: 2.5rem; scroll-margin-top: 6rem;">
+                <h2 style="font-size: 1.35rem; color: var(--cc-primary); border-bottom: 1px solid #e2e8f0; padding-bottom: 0.5rem; margin-bottom: 1rem;">
+                    6. Nível de Serviço (SLA), Suporte, Suspensão e Rescisão
+                </h2>
+                <p>
+                    A CriaCerto envidará os melhores esforços técnicos para manter a disponibilidade dos serviços em nuvem em no mínimo <strong>99,5% (noventa e nove vírgula cinco por cento)</strong> ao mês, excluídas as janelas de manutenção preventiva programada.
+                </p>
+                <p>
+                    Em caso de encerramento da assinatura ou cancelamento contratual, a CriaCerto assegurará ao Produtor o prazo de <strong>30 (trinta) dias</strong> para download e exportação de todo o seu banco de dados. Expirado o prazo regulamentar e respeitadas as obrigações fiscais e regulatórias vigentes, os dados serão descartados de forma segura e irreversível.
+                </p>
+            </section>
+
+            <div style="background: #ffffff; border: 1px solid var(--cc-border); border-radius: 8px; padding: 1.5rem; margin-top: 3rem;">
+                <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
+                    <div>
+                        <strong style="color: var(--cc-ink);">Dúvidas sobre estes Termos de Uso?</strong>
+                        <div style="font-size: 0.85rem; color: var(--cc-ink-muted); margin-top: 0.25rem;">
+                            Nossa equipe jurídica e de conformidade está à disposição para esclarecimentos.
+                        </div>
+                    </div>
+                    <a href="mailto:privacidade@criacerto.com.br" style="padding: 0.5rem 1rem; border-radius: 6px; background: var(--cc-primary); color: #ffffff; text-decoration: none; font-weight: 600; font-size: 0.85rem;">
+                        Contatar Departamento Legal
+                    </a>
+                </div>
+            </div>
+
+        </article>
+    </div>
+</div>
+
+@code {
+    private LegalDocumentItem Document => LegalDocumentCatalog.GetByRoute("termos-de-uso") 
+        ?? LegalDocumentCatalog.GetAllDocuments().First();
+}

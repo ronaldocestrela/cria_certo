@@ -1,0 +1,46 @@
+@using CriaCerto.Web.Client.Models
+
+<div class="dpo-contact-card" style="background: linear-gradient(145deg, #ffffff 0%, #f4f8f5 100%); border: 1px solid #c2dec9; border-radius: 8px; padding: 1.5rem; margin: 2rem 0; box-shadow: 0 2px 8px rgba(0, 101, 44, 0.04);">
+    <div style="display: flex; align-items: flex-start; gap: 1rem;">
+        <div style="background-color: var(--cc-primary); color: #ffffff; width: 44px; height: 44px; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+            <span class="material-symbols-outlined" style="font-size: 24px;">verified_user</span>
+        </div>
+        <div style="flex: 1;">
+            <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem;">
+                <h4 style="margin: 0; font-size: 1.1rem; color: var(--cc-primary); font-weight: 700;">@Info.Name</h4>
+                <span style="font-family: var(--cc-font-mono); font-size: 0.75rem; background: #e0f2e9; color: var(--cc-primary); padding: 0.2rem 0.5rem; border-radius: 4px; font-weight: 600;">
+                    LGPD Art. 41
+                </span>
+            </div>
+            
+            <p style="margin: 0.5rem 0 1rem 0; font-size: 0.875rem; color: var(--cc-ink-muted); line-height: 1.5;">
+                O Encarregado pelo Tratamento de Dados Pessoais atua como canal de comunicação entre o CriaCerto, os titulares de dados (produtores, veterinários, vaqueiros) e a Autoridade Nacional de Proteção de Dados (ANPD).
+            </p>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0.75rem; font-size: 0.85rem;">
+                <div style="background: #ffffff; border: 1px solid #d1e7d8; border-radius: 6px; padding: 0.65rem 0.85rem;">
+                    <div style="font-family: var(--cc-font-mono); font-size: 0.7rem; color: var(--cc-ink-muted); text-transform: uppercase;">E-mail Oficial do DPO</div>
+                    <a href="mailto:@Info.Email" style="color: var(--cc-primary); font-weight: 600; text-decoration: none; word-break: break-all;">
+                        @Info.Email
+                    </a>
+                </div>
+
+                <div style="background: #ffffff; border: 1px solid #d1e7d8; border-radius: 6px; padding: 0.65rem 0.85rem;">
+                    <div style="font-family: var(--cc-font-mono); font-size: 0.7rem; color: var(--cc-ink-muted); text-transform: uppercase;">Prazo Regulamentar de Resposta</div>
+                    <div style="color: var(--cc-ink); font-weight: 600;">
+                        Até @Info.MaxResponseDays dias úteis
+                    </div>
+                </div>
+            </div>
+
+            <div style="margin-top: 0.75rem; font-size: 0.78rem; color: var(--cc-ink-muted);">
+                <strong>Endereço de Notificação Física:</strong> @Info.PhysicalAddress
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public DpoContactInfo Info { get; set; } = LegalDocumentCatalog.GetDpoContactInfo();
+}

@@ -1,0 +1,185 @@
+@page "/politica-de-privacidade"
+@page "/privacidade"
+@layout LegalLayout
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@using CriaCerto.Web.Client.Components.Legal
+@using CriaCerto.Web.Client.Models
+
+<PageTitle>Política de Privacidade - CriaCerto Bovino SaaS</PageTitle>
+
+<HeadContent>
+    <meta name="description" content="Política de Privacidade e Proteção de Dados da Plataforma CriaCerto Bovino SaaS. Conformidade integral com a LGPD (Lei 13.709/2018)." />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="https://criacerto.com.br/politica-de-privacidade" />
+</HeadContent>
+
+<div class="legal-document-wrapper">
+    <!-- Header Hero -->
+    <div style="margin-bottom: 2rem; border-bottom: 1px solid var(--cc-border); padding-bottom: 1.5rem;">
+        <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 0.5rem;">
+            <div style="font-family: var(--cc-font-mono); font-size: 0.8rem; color: var(--cc-primary); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; background: #e0f2e9; padding: 0.25rem 0.6rem; border-radius: 4px;">
+                Versão @Document.Version • Vigência: @Document.EffectiveDate
+            </div>
+            <div style="font-family: var(--cc-font-mono); font-size: 0.8rem; color: var(--cc-ink-muted);">
+                Conformidade com a LGPD (Lei nº 13.709/2018) & ANPD
+            </div>
+        </div>
+        <h1 style="font-size: 2.25rem; font-weight: 800; color: var(--cc-ink); margin: 0.5rem 0;">
+            Política de Privacidade e Proteção de Dados
+        </h1>
+        <p style="font-size: 1.1rem; color: var(--cc-ink-muted); margin: 0; line-height: 1.6;">
+            @Document.Summary
+        </p>
+    </div>
+
+    <!-- Grid Container with Sidebar & Content -->
+    <div style="display: grid; grid-template-columns: 280px 1fr; gap: 2.5rem; align-items: start;">
+        <!-- Left Sticky TOC -->
+        <aside class="d-none d-md-block">
+            <LegalTableOfContents Sections="@Document.Sections" />
+        </aside>
+
+        <!-- Right Content Body -->
+        <article class="legal-article" style="line-height: 1.7; color: var(--cc-ink); font-size: 0.95rem;">
+
+            <section id="controlador-operador" style="margin-bottom: 2.5rem; scroll-margin-top: 6rem;">
+                <h2 style="font-size: 1.35rem; color: var(--cc-primary); border-bottom: 1px solid #e2e8f0; padding-bottom: 0.5rem; margin-bottom: 1rem;">
+                    1. Papéis sob a LGPD (Controlador e Operador)
+                </h2>
+                <p>
+                    A plataforma <strong>CriaCerto Bovino SaaS</strong> adota o princípio de <em>Privacy by Design e Privacy by Default</em> em todas as suas rotinas de engenharia de software. Para fins de plena transparência com a Lei Geral de Proteção de Dados Pessoais (Lei nº 13.709/2018):
+                </p>
+                <ul>
+                    <li><strong>CriaCerto como Controladora:</strong> Atuamos como Controladora dos dados pessoais de cadastro, autenticação e faturamento pertencentes aos titulares das contas (produtores rurais, administradores de fazenda e parceiros comerciais).</li>
+                    <li><strong>CriaCerto como Operadora:</strong> Quando o Produtor Rural cadastra informações relativas aos seus empregados, vaqueiros de curral, prestadores de serviços agropecuários e veterinários no módulo de manejos e tarefas, o Produtor atua como <strong>Controlador</strong> e o CriaCerto atua como <strong>Operador</strong>, processando tais dados estritamente para a finalidade operacional da fazenda.</li>
+                </ul>
+            </section>
+
+            <section id="dados-coletados" style="margin-bottom: 2.5rem; scroll-margin-top: 6rem;">
+                <h2 style="font-size: 1.35rem; color: var(--cc-primary); border-bottom: 1px solid #e2e8f0; padding-bottom: 0.5rem; margin-bottom: 1rem;">
+                    2. Categorias de Dados Coletados
+                </h2>
+                <p>Para o funcionamento das rotinas de gestão zootécnica e segurança, tratamos as seguintes categorias de dados:</p>
+                <div style="display: flex; flex-direction: column; gap: 0.75rem; margin: 1rem 0;">
+                    <div style="background: #ffffff; border: 1px solid var(--cc-border); border-radius: 6px; padding: 0.75rem 1rem;">
+                        <strong style="color: var(--cc-ink);">a) Dados Cadastrais do Produtor:</strong> Nome completo, e-mail de acesso, telefone/WhatsApp, CPF ou CNPJ e credenciais criptografadas.
+                    </div>
+                    <div style="background: #ffffff; border: 1px solid var(--cc-border); border-radius: 6px; padding: 0.75rem 1rem;">
+                        <strong style="color: var(--cc-ink);">b) Dados da Propriedade Rural:</strong> Nome da fazenda/granja, Inscrição Estadual (IE), Município/UF, área de pastagens (hectares) e geolocalização aproximada para cálculo de lotação UA/ha.
+                    </div>
+                    <div style="background: #ffffff; border: 1px solid var(--cc-border); border-radius: 6px; padding: 0.75rem 1rem;">
+                        <strong style="color: var(--cc-ink);">c) Dados Operacionais e Zootécnicos do Rebanho:</strong> Número de brinco visual, código SISBOV, chip RFID, pesos e pesagens, sêmen/touros, protocolos IATF e registros de vacinação com carência de abate.
+                    </div>
+                    <div style="background: #ffffff; border: 1px solid var(--cc-border); border-radius: 6px; padding: 0.75rem 1rem;">
+                        <strong style="color: var(--cc-ink);">d) Dados Financeiros:</strong> Dados de cartão e meio de pagamento transmitidos diretamente aos cofres certificados do Stripe, sem armazenamento de número completo de cartão em nossos servidores.
+                    </div>
+                    <div style="background: #ffffff; border: 1px solid var(--cc-border); border-radius: 6px; padding: 0.75rem 1rem;">
+                        <strong style="color: var(--cc-ink);">e) Dados de Telemetria e Trilha Forense:</strong> Endereço IP de conexão, identificador de dispositivo, carimbo de data/hora UTC e assinaturas criptográficas SHA-256 encadeadas para conformidade legal (Marco Civil da Internet, Art. 15).
+                    </div>
+                </div>
+            </section>
+
+            <section id="bases-legais" style="margin-bottom: 2.5rem; scroll-margin-top: 6rem;">
+                <h2 style="font-size: 1.35rem; color: var(--cc-primary); border-bottom: 1px solid #e2e8f0; padding-bottom: 0.5rem; margin-bottom: 1rem;">
+                    3. Bases Legais de Tratamento (Art. 7º da LGPD)
+                </h2>
+                <p>Todo tratamento de dados pessoais realizado pelo CriaCerto possui fundamentação estrita em uma das bases legais autorizadas pela LGPD:</p>
+                <ul>
+                    <li><strong>Execução de Contrato (Art. 7º, V):</strong> Para viabilizar a criação de conta, acesso aos módulos zootécnicos, emissão de relatórios e suporte operacional.</li>
+                    <li><strong>Cumprimento de Obrigação Legal e Regulatória (Art. 7º, II):</strong> Para retenção de logs de conexão exigidos pelo Marco Civil da Internet (Lei 12.965/2014) e emissão de notas fiscais junto aos órgãos fazendários.</li>
+                    <li><strong>Legítimo Interesse (Art. 7º, IX):</strong> Para auditoria de integridade antifraude, telemetria de performance de sistema e aprimoramento da usabilidade.</li>
+                    <li><strong>Consentimento (Art. 7º, I):</strong> Coletado formalmente no cadastro para aceitação das políticas e recebimento de comunicações específicas quando aplicável.</li>
+                </ul>
+            </section>
+
+            <section id="subprocessadores" style="margin-bottom: 2.5rem; scroll-margin-top: 6rem;">
+                <h2 style="font-size: 1.35rem; color: var(--cc-primary); border-bottom: 1px solid #e2e8f0; padding-bottom: 0.5rem; margin-bottom: 1rem;">
+                    4. Compartilhamento e Subprocessadores
+                </h2>
+                <p>
+                    A CriaCerto <strong>não comercializa, não aluga e não cede</strong> seus dados pessoais nem seus dados zootécnicos para anunciantes ou corretoras de dados. O compartilhamento ocorre exclusivamente com parceiros tecnológicos essenciais à operação:
+                </p>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; margin: 1rem 0;">
+                    <div style="border: 1px solid var(--cc-border); border-radius: 6px; padding: 1rem; background: #ffffff;">
+                        <div style="font-weight: 700; color: var(--cc-primary); margin-bottom: 0.25rem;">Stripe Inc.</div>
+                        <div style="font-size: 0.82rem; color: var(--cc-ink-muted);">Gateway seguro de pagamentos e assinaturas recorrentes com certificação PCI-DSS Nível 1.</div>
+                    </div>
+                    <div style="border: 1px solid var(--cc-border); border-radius: 6px; padding: 1rem; background: #ffffff;">
+                        <div style="font-weight: 700; color: var(--cc-primary); margin-bottom: 0.25rem;">Resend Inc.</div>
+                        <div style="font-size: 0.82rem; color: var(--cc-ink-muted);">Provedor de infraestrutura de e-mails transacionais (ativação de conta, recuperação de senha e alertas).</div>
+                    </div>
+                    <div style="border: 1px solid var(--cc-border); border-radius: 6px; padding: 1rem; background: #ffffff;">
+                        <div style="font-weight: 700; color: var(--cc-primary); margin-bottom: 0.25rem;">Provedor de Hospedagem Cloud</div>
+                        <div style="font-size: 0.82rem; color: var(--cc-ink-muted);">Servidores de banco de dados PostgreSQL com criptografia de volume, redundância e isolamento multitenant.</div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="seguranca-dados" style="margin-bottom: 2.5rem; scroll-margin-top: 6rem;">
+                <h2 style="font-size: 1.35rem; color: var(--cc-primary); border-bottom: 1px solid #e2e8f0; padding-bottom: 0.5rem; margin-bottom: 1rem;">
+                    5. Medidas de Segurança da Informação
+                </h2>
+                <p>
+                    Adotamos salvaguardas técnicas e administrativas de ponta para proteger as informações contra acessos não autorizados, incidentes e fraudes:
+                </p>
+                <ul>
+                    <li><strong>Mascaramento Determinístico de PII:</strong> Nos consoles administrativos do Backoffice, CPFs, e-mails, telefones e identificadores de rede são mascarados por padrão (<em>Privacy by Default</em>), exigindo justificativa formal para revelação just-in-time.</li>
+                    <li><strong>Trilha Forense Imutável com Hash Encadeado:</strong> Todas as alterações de dados críticos são registradas com hashes SHA-256 encadeados ao registro anterior, inviabilizando alterações ocultas em banco de dados.</li>
+                    <li><strong>Criptografia em Trânsito e Repouso:</strong> Todas as comunicações utilizam TLS 1.3 com HSTS obrigatório. As credenciais de acesso são protegidas por algoritmos de derivação de chave com salt individualizado.</li>
+                </ul>
+            </section>
+
+            <section id="retencao-descarte" style="margin-bottom: 2.5rem; scroll-margin-top: 6rem;">
+                <h2 style="font-size: 1.35rem; color: var(--cc-primary); border-bottom: 1px solid #e2e8f0; padding-bottom: 0.5rem; margin-bottom: 1rem;">
+                    6. Retenção e Descarte de Dados
+                </h2>
+                <p>
+                    Os dados cadastrais e de manejo são retidos enquanto o contrato de prestação de serviços estiver ativo. Após o encerramento da conta, os dados são preservados pelo período de 30 (trinta) dias para que o produtor realize o download.
+                </p>
+                <p>
+                    Findo esse prazo, os dados serão descartados de forma definitiva e segura, ressalvada a retenção de dados estritamente necessários para o cumprimento de obrigações fiscais (5 anos pelo Código Tributário Nacional) e de auditoria de logs (6 meses pelo Marco Civil da Internet).
+                </p>
+            </section>
+
+            <section id="direitos-titular" style="margin-bottom: 2.5rem; scroll-margin-top: 6rem;">
+                <h2 style="font-size: 1.35rem; color: var(--cc-primary); border-bottom: 1px solid #e2e8f0; padding-bottom: 0.5rem; margin-bottom: 1rem;">
+                    7. Direitos do Titular (Art. 18 da LGPD)
+                </h2>
+                <p>
+                    O Produtor Rural e qualquer titular de dados cujas informações constem em nossa plataforma podem exercer seus direitos a qualquer tempo:
+                </p>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 0.75rem; margin: 1rem 0;">
+                    <div style="background: #ffffff; border: 1px solid var(--cc-border); border-radius: 6px; padding: 0.75rem;">
+                        <strong style="color: var(--cc-ink);">• Confirmação e Acesso:</strong> Saber se tratamos seus dados e solicitar cópia integral.
+                    </div>
+                    <div style="background: #ffffff; border: 1px solid var(--cc-border); border-radius: 6px; padding: 0.75rem;">
+                        <strong style="color: var(--cc-ink);">• Retificação:</strong> Corrigir dados incompletos, inexatos ou desatualizados.
+                    </div>
+                    <div style="background: #ffffff; border: 1px solid var(--cc-border); border-radius: 6px; padding: 0.75rem;">
+                        <strong style="color: var(--cc-ink);">• Anonimização e Bloqueio:</strong> Para dados desnecessários ou tratados em desconformidade.
+                    </div>
+                    <div style="background: #ffffff; border: 1px solid var(--cc-border); border-radius: 6px; padding: 0.75rem;">
+                        <strong style="color: var(--cc-ink);">• Portabilidade:</strong> Solicitar o arquivo completo de dados do seu rebanho e fazenda em formato interoperável.
+                    </div>
+                </div>
+            </section>
+
+            <section id="canal-dpo" style="margin-bottom: 2.5rem; scroll-margin-top: 6rem;">
+                <h2 style="font-size: 1.35rem; color: var(--cc-primary); border-bottom: 1px solid #e2e8f0; padding-bottom: 0.5rem; margin-bottom: 1rem;">
+                    8. Canal Oficial do Encarregado de Dados (DPO)
+                </h2>
+                <p>
+                    Para exercer qualquer um dos seus direitos previstos na LGPD, dirimir dúvidas sobre nossas práticas de tratamento ou contatar nosso Encarregado de Proteção de Dados, utilize o canal oficial abaixo:
+                </p>
+
+                <DpoContactCard />
+            </section>
+
+        </article>
+    </div>
+</div>
+
+@code {
+    private LegalDocumentItem Document => LegalDocumentCatalog.GetByRoute("politica-de-privacidade") 
+        ?? LegalDocumentCatalog.GetAllDocuments().Last();
+}
