@@ -194,6 +194,8 @@ builder.Services.AddScoped<ITenantInfoLookupService, TenantInfoLookupService>();
 builder.Services.AddScoped<CriaCerto.Modules.Tenancy.Application.Abstractions.IPartnerRoleLookupService, PartnerRoleLookupService>();
 builder.Services.AddScoped<IReferralPaymentVerificationService, StripePaymentVerificationService>();
 builder.Services.AddScoped<IReferralAuditSink, ReferralBackofficeAuditSink>();
+builder.Services.AddScoped<CriaCerto.Modules.Tenancy.Application.Abstractions.ITenancyAuditSink, CriaCerto.Api.Services.TenancyBackofficeAuditSink>();
+builder.Services.AddScoped<CriaCerto.Modules.Tenancy.Application.Abstractions.IUserClientIpResolver, CriaCerto.Api.Services.HttpContextUserClientIpResolver>();
 builder.Services.AddScoped<IPaidMediaSpendLookupService, PaidMediaSpendLookupService>();
 builder.Services.Configure<ReferralEnforcementOptions>(builder.Configuration.GetSection(ReferralEnforcementOptions.SectionName));
 
@@ -1717,9 +1719,20 @@ app.MapPost("/api/auth/login", async (LoginCommand command, ISender sender) =>
         : Results.Json(result.Error, statusCode: 401);
 });
 
-app.MapPost("/api/auth/register", async (RegisterUserCommand command, ISender sender) =>
+app.MapPost("/api/auth/register", async (RegisterUserCommand command, HttpContext ctx, ISender sender) =>
 {
-    var result = await sender.Send(command);
+    var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "127.0.0.1";
+    if (ctx.Request.Headers.TryGetValue("X-Forwarded-For", out var forwardedFor) && !string.IsNullOrWhiteSpace(forwardedFor))
+    {
+        var firstIp = forwardedFor.ToString().Split(',')[0].Trim();
+        if (!string.IsNullOrWhiteSpace(firstIp))
+        {
+            ip = firstIp;
+        }
+    }
+
+    var enrichedCommand = command with { ClientIpAddress = string.IsNullOrWhiteSpace(command.ClientIpAddress) ? ip : command.ClientIpAddress };
+    var result = await sender.Send(enrichedCommand);
     return result.IsSuccess
         ? Results.Json(result.Value, statusCode: StatusCodes.Status201Created)
         : Results.Json(result.Error, statusCode: ToStatusCode(result.Error.Type));

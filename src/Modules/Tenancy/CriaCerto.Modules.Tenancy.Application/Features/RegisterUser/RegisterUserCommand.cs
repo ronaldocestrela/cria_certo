@@ -12,23 +12,34 @@ public record RegisterUserCommand(
     string FullName,
     string Email,
     string Password,
-    string? PhoneNumber = null
+    string? PhoneNumber = null,
+    bool AcceptTermsAndPrivacy = false,
+    string? ClientIpAddress = null
 ) : IRequest<Result<UserDto>>;
 
 public sealed class RegisterUserCommandHandler : IRequestHandler<RegisterUserCommand, Result<UserDto>>
 {
+    private const string CurrentTermsVersion = "1.0";
+    private const string CurrentPrivacyPolicyVersion = "1.0";
+
     private readonly ITenancyDbContext _dbContext;
     private readonly CriaCerto.BuildingBlocks.Abstractions.Email.IEmailSender? _emailSender;
     private readonly Microsoft.Extensions.Configuration.IConfiguration? _configuration;
+    private readonly IUserClientIpResolver? _ipResolver;
+    private readonly ITenancyAuditSink? _auditSink;
 
     public RegisterUserCommandHandler(
         ITenancyDbContext dbContext,
         CriaCerto.BuildingBlocks.Abstractions.Email.IEmailSender? emailSender = null,
-        Microsoft.Extensions.Configuration.IConfiguration? configuration = null)
+        Microsoft.Extensions.Configuration.IConfiguration? configuration = null,
+        IUserClientIpResolver? ipResolver = null,
+        ITenancyAuditSink? auditSink = null)
     {
         _dbContext = dbContext;
         _emailSender = emailSender;
         _configuration = configuration;
+        _ipResolver = ipResolver;
+        _auditSink = auditSink;
     }
 
     public async Task<Result<UserDto>> Handle(RegisterUserCommand request, CancellationToken cancellationToken)
@@ -42,7 +53,10 @@ public sealed class RegisterUserCommandHandler : IRequestHandler<RegisterUserCom
                 Error.Conflict("User.EmailAlreadyExists", "Este e-mail já está em uso por outra conta."));
         }
 
+        var clientIp = ResolveClientIp(request.ClientIpAddress);
+        var nowUtc = DateTime.UtcNow;
         var confirmationToken = Guid.NewGuid().ToString("N");
+
         var user = new User
         {
             Id = Guid.NewGuid(),
@@ -52,11 +66,27 @@ public sealed class RegisterUserCommandHandler : IRequestHandler<RegisterUserCom
             PhoneNumber = request.PhoneNumber?.Trim(),
             IsEmailConfirmed = false,
             EmailConfirmationToken = confirmationToken,
-            EmailConfirmationTokenExpiresAt = DateTime.UtcNow.AddHours(24)
+            EmailConfirmationTokenExpiresAt = nowUtc.AddHours(24),
+            TermsAcceptedAtUtc = nowUtc,
+            PrivacyPolicyAcceptedAtUtc = nowUtc,
+            TermsVersion = CurrentTermsVersion,
+            PrivacyPolicyVersion = CurrentPrivacyPolicyVersion,
+            ConsentIpAddress = clientIp
         };
 
         _dbContext.Users.Add(user);
         await _dbContext.SaveChangesAsync(cancellationToken);
+
+        if (_auditSink != null)
+        {
+            await _auditSink.RecordUserConsentAuditAsync(
+                user.Id,
+                user.Email,
+                user.TermsVersion,
+                user.PrivacyPolicyVersion,
+                clientIp,
+                cancellationToken);
+        }
 
         if (_emailSender != null)
         {
@@ -124,5 +154,21 @@ public sealed class RegisterUserCommandHandler : IRequestHandler<RegisterUserCom
         }
 
         return Result.Success(new UserDto(user.Id, user.FullName, user.Email, user.PhoneNumber));
+    }
+
+    private string ResolveClientIp(string? commandClientIp)
+    {
+        if (!string.IsNullOrWhiteSpace(commandClientIp))
+        {
+            return commandClientIp.Trim();
+        }
+
+        var resolved = _ipResolver?.ResolveClientIp();
+        if (!string.IsNullOrWhiteSpace(resolved))
+        {
+            return resolved.Trim();
+        }
+
+        return "127.0.0.1";
     }
 }

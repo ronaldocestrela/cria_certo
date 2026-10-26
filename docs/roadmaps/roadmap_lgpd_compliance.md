@@ -128,20 +128,20 @@ O objetivo desta fase é instituir as bases legais de transparência ativa, publ
 - [x] Atualizar a página de Registro ([`Register.razor`](file:///home/rony/LPR/CriaCerto/src/Web/CriaCerto.Web/CriaCerto.Web.Client/Pages/Register.razor)) com links clicáveis que abrem os termos em nova aba (`target="_blank"`).
 
 #### 1.2 Rastreabilidade e Armazenamento Auditável do Consentimento
-- [ ] Evolução da entidade [`User`](file:///home/rony/LPR/CriaCerto/src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Domain/User.cs):
-  - Adicionar campos:
+- [x] Evolução da entidade [`User`](file:///home/rony/LPR/CriaCerto/src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Domain/User.cs):
+  - Adicionado campos:
     - `TermsAcceptedAtUtc` (DateTime?)
     - `PrivacyPolicyAcceptedAtUtc` (DateTime?)
-    - `TermsVersion` (string, e.g., `"1.0"`)
-    - `PrivacyPolicyVersion` (string, e.g., `"1.0"`)
+    - `TermsVersion` (string, `"1.0"`)
+    - `PrivacyPolicyVersion` (string, `"1.0"`)
     - `ConsentIpAddress` (string?, max 45 chars)
-- [ ] Atualizar o mapeamento no [`TenancyDbContext`](file:///home/rony/LPR/CriaCerto/src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Infrastructure/Persistence/TenancyDbContext.cs) e gerar migração do EF Core no schema `tenancy`.
-- [ ] Atualizar o comando [`RegisterUserCommand`](file:///home/rony/LPR/CriaCerto/src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Features/RegisterUser/RegisterUserCommand.cs):
-  - Exigir aceite explícito (`AcceptTermsAndPrivacy: true`) validado via FluentValidation.
-  - Capturar o IP da requisição via `IHttpContextAccessor` no handler.
-- [ ] Atualizar [`Register.razor`](file:///home/rony/LPR/CriaCerto/src/Web/CriaCerto.Web/CriaCerto.Web.Client/Pages/Register.razor) para incluir checkbox obrigatório:
+- [x] Atualizar o mapeamento no [`TenancyDbContext`](file:///home/rony/LPR/CriaCerto/src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Infrastructure/Persistence/TenancyDbContext.cs) e gerar migração do EF Core no schema `tenancy` ([`20261026192711_AddUserConsentTrackingFields.cs`](file:///home/rony/LPR/CriaCerto/src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Infrastructure/Persistence/Migrations/20261026192711_AddUserConsentTrackingFields.cs)).
+- [x] Atualizar o comando [`RegisterUserCommand`](file:///home/rony/LPR/CriaCerto/src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Features/RegisterUser/RegisterUserCommand.cs):
+  - Exigir aceite explícito (`AcceptTermsAndPrivacy: true`) validado via FluentValidation ([`RegisterUserCommandValidator.cs`](file:///home/rony/LPR/CriaCerto/src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Features/RegisterUser/RegisterUserCommandValidator.cs)).
+  - Capturar o IP da requisição de forma limpa e desacoplada via [`IUserClientIpResolver`](file:///home/rony/LPR/CriaCerto/src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Abstractions/IUserClientIpResolver.cs) / [`HttpContextUserClientIpResolver`](file:///home/rony/LPR/CriaCerto/src/Host/CriaCerto.Api/Services/HttpContextUserClientIpResolver.cs) preservando compatibilidade com Blazor WebAssembly.
+- [x] Atualizar [`Register.razor`](file:///home/rony/LPR/CriaCerto/src/Web/CriaCerto.Web/CriaCerto.Web.Client/Pages/Register.razor) para incluir checkbox obrigatório:
   - *"Li e concordo com os [Termos de Uso](/termos-de-uso) e a [Política de Privacidade](/politica-de-privacidade)*" com validação de formulário antes do submit.
-- [ ] Gravar evento de auditoria forense no cadastro (`Action = "USER_CONSENT_REGISTERED"`).
+- [x] Gravar evento de auditoria forense no cadastro (`Action = "USER_CONSENT_REGISTERED"`) via [`ITenancyAuditSink`](file:///home/rony/LPR/CriaCerto/src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Abstractions/ITenancyAuditSink.cs) e [`TenancyBackofficeAuditSink`](file:///home/rony/LPR/CriaCerto/src/Host/CriaCerto.Api/Services/TenancyBackofficeAuditSink.cs) com encadeamento de integridade SHA-256 e severidade High.
 
 #### 1.3 Banner de Cookies e Armazenamento Local (PWA/Offline)
 - [ ] Criar componente atômico Blazor `<CookieConsentBanner.razor>`:

@@ -1,4 +1,5 @@
 using CriaCerto.BuildingBlocks.Abstractions.Results;
+using CriaCerto.Modules.Tenancy.Application.Abstractions;
 using CriaCerto.Modules.Tenancy.Application.Domain;
 using CriaCerto.Modules.Tenancy.Application.Features.RegisterUser;
 using CriaCerto.Modules.Tenancy.Infrastructure.Persistence;
@@ -56,6 +57,11 @@ public class RegisterUserCommandHandlerTests : IDisposable
         userInDb.IsEmailConfirmed.Should().BeFalse();
         userInDb.EmailConfirmationToken.Should().NotBeNullOrEmpty();
         userInDb.EmailConfirmationTokenExpiresAt.Should().BeAfter(DateTime.UtcNow);
+        userInDb.TermsAcceptedAtUtc.Should().NotBeNull();
+        userInDb.PrivacyPolicyAcceptedAtUtc.Should().NotBeNull();
+        userInDb.TermsVersion.Should().Be("1.0");
+        userInDb.PrivacyPolicyVersion.Should().Be("1.0");
+        userInDb.ConsentIpAddress.Should().Be("127.0.0.1");
     }
 
     [Fact]
@@ -104,5 +110,63 @@ public class RegisterUserCommandHandlerTests : IDisposable
                 m.To.Any(r => r.Email == "antonio@fazenda.com.br") &&
                 m.Subject.Contains("Bem-vindo")),
             NSubstitute.Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Handle_Should_Record_Consent_Audit_And_Store_Ip_When_Provided()
+    {
+        // Arrange
+        var auditSink = NSubstitute.Substitute.For<ITenancyAuditSink>();
+        var handler = new RegisterUserCommandHandler(_dbContext, auditSink: auditSink);
+        var command = new RegisterUserCommand(
+            "Audit User",
+            "audit@fazenda.com.br",
+            "Senha@123",
+            "11988887777",
+            AcceptTermsAndPrivacy: true,
+            ClientIpAddress: "203.0.113.195");
+
+        // Act
+        var result = await handler.Handle(command, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.Should().BeTrue();
+        var userInDb = await _dbContext.Users.FirstOrDefaultAsync(u => u.Email == "audit@fazenda.com.br");
+        userInDb.Should().NotBeNull();
+        userInDb!.ConsentIpAddress.Should().Be("203.0.113.195");
+        userInDb.TermsVersion.Should().Be("1.0");
+        userInDb.PrivacyPolicyVersion.Should().Be("1.0");
+
+        await auditSink.Received(1).RecordUserConsentAuditAsync(
+            userInDb.Id,
+            "audit@fazenda.com.br",
+            "1.0",
+            "1.0",
+            "203.0.113.195",
+            NSubstitute.Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Handle_Should_Extract_Ip_From_IpResolver_When_Available()
+    {
+        // Arrange
+        var ipResolver = NSubstitute.Substitute.For<IUserClientIpResolver>();
+        ipResolver.ResolveClientIp().Returns("198.51.100.42");
+
+        var handler = new RegisterUserCommandHandler(_dbContext, ipResolver: ipResolver);
+        var command = new RegisterUserCommand(
+            "Context User",
+            "context@fazenda.com.br",
+            "Senha@123",
+            AcceptTermsAndPrivacy: true);
+
+        // Act
+        var result = await handler.Handle(command, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.Should().BeTrue();
+        var userInDb = await _dbContext.Users.FirstOrDefaultAsync(u => u.Email == "context@fazenda.com.br");
+        userInDb.Should().NotBeNull();
+        userInDb!.ConsentIpAddress.Should().Be("198.51.100.42");
     }
 }

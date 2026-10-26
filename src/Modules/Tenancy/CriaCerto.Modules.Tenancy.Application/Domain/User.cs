@@ -13,5 +13,10 @@ public sealed class User
     public DateTime? EmailConfirmationTokenExpiresAt { get; set; }
     public string? PasswordResetToken { get; set; }
     public DateTime? PasswordResetTokenExpiresAt { get; set; }
+    public DateTime? TermsAcceptedAtUtc { get; set; }
+    public DateTime? PrivacyPolicyAcceptedAtUtc { get; set; }
+    public string? TermsVersion { get; set; }
+    public string? PrivacyPolicyVersion { get; set; }
+    public string? ConsentIpAddress { get; set; }
     public List<UserTenant> UserTenants { get; set; } = new();
 }
