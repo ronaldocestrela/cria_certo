@@ -13,4 +13,26 @@ public interface ITenancyAuditSink
         string privacyPolicyVersion,
         string ipAddress,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Registra auditoria forense quando dados cadastrais do titular são retificados (Art. 18, III).
+    /// </summary>
+    Task RecordUserProfileUpdateAuditAsync(
+        Guid userId,
+        string userEmail,
+        string oldFullName,
+        string newFullName,
+        string? oldPhone,
+        string? newPhone,
+        string ipAddress,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Registra auditoria forense quando a senha do usuário é alterada.
+    /// </summary>
+    Task RecordUserPasswordChangeAuditAsync(
+        Guid userId,
+        string userEmail,
+        string ipAddress,
+        CancellationToken cancellationToken = default);
 }

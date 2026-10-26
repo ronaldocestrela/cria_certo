@@ -40,6 +40,7 @@ public sealed class TenancyDbContext : DbContext, ITenancyDbContext
             builder.Property(u => u.EmailConfirmationTokenExpiresAt);
             builder.Property(u => u.PasswordResetToken).HasMaxLength(100);
             builder.Property(u => u.PasswordResetTokenExpiresAt);
+            builder.Property(u => u.CreatedAtUtc).IsRequired();
             builder.Property(u => u.TermsAcceptedAtUtc);
             builder.Property(u => u.PrivacyPolicyAcceptedAtUtc);
             builder.Property(u => u.TermsVersion).HasMaxLength(20);

@@ -77,4 +77,113 @@ public sealed class TenancyBackofficeAuditSink : ITenancyAuditSink
                 userId, userEmail);
         }
     }
+
+    public async Task RecordUserProfileUpdateAuditAsync(
+        Guid userId,
+        string userEmail,
+        string oldFullName,
+        string newFullName,
+        string? oldPhone,
+        string? newPhone,
+        string ipAddress,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var previousHash = await _dbContext.AuditLogs
+                .AsNoTracking()
+                .OrderByDescending(a => a.TimestampUtc)
+                .Select(a => a.RecordHash)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            var oldValues = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                FullName = oldFullName,
+                PhoneNumber = oldPhone
+            });
+
+            var newValues = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                FullName = newFullName,
+                PhoneNumber = newPhone
+            });
+
+            var audit = AuditLog.CreateForensic(
+                adminUserId: userId,
+                adminUserEmail: userEmail,
+                actorRole: "RegisteredUser",
+                action: "USER_PROFILE_RECTIFIED",
+                category: AuditCategory.Compliance,
+                severity: AuditSeverity.Medium,
+                resource: $"Users/{userId}",
+                targetTenantId: null,
+                targetTenantName: null,
+                ipAddress: string.IsNullOrWhiteSpace(ipAddress) ? "127.0.0.1" : ipAddress,
+                userAgent: "WebUserProfileFlow/1.0",
+                previousRecordHash: previousHash,
+                oldValuesJson: oldValues,
+                newValuesJson: newValues,
+                detailsJson: "{\"Reason\":\"DataSubjectProfileRectification_Art18_III\"}");
+
+            _dbContext.AuditLogs.Add(audit);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            _logger.LogInformation(
+                "Auditoria forense de retificação de perfil LGPD registrada para usuário {UserId} ({Email}) com hash {Hash}.",
+                userId, userEmail, audit.RecordHash);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                ex,
+                "Falha ao registrar auditoria forense de retificação de perfil para usuário {UserId} ({Email}).",
+                userId, userEmail);
+        }
+    }
+
+    public async Task RecordUserPasswordChangeAuditAsync(
+        Guid userId,
+        string userEmail,
+        string ipAddress,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var previousHash = await _dbContext.AuditLogs
+                .AsNoTracking()
+                .OrderByDescending(a => a.TimestampUtc)
+                .Select(a => a.RecordHash)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            var audit = AuditLog.CreateForensic(
+                adminUserId: userId,
+                adminUserEmail: userEmail,
+                actorRole: "RegisteredUser",
+                action: "USER_PASSWORD_CHANGED",
+                category: AuditCategory.Security,
+                severity: AuditSeverity.High,
+                resource: $"Users/{userId}",
+                targetTenantId: null,
+                targetTenantName: null,
+                ipAddress: string.IsNullOrWhiteSpace(ipAddress) ? "127.0.0.1" : ipAddress,
+                userAgent: "WebUserProfileFlow/1.0",
+                previousRecordHash: previousHash,
+                detailsJson: "{\"Action\":\"PasswordCredentialUpdated\"}");
+
+            _dbContext.AuditLogs.Add(audit);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            _logger.LogInformation(
+                "Auditoria forense de alteração de senha registrada para usuário {UserId} ({Email}) com hash {Hash}.",
+                userId, userEmail, audit.RecordHash);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                ex,
+                "Falha ao registrar auditoria forense de alteração de senha para usuário {UserId} ({Email}).",
+                userId, userEmail);
+        }
+    }
 }
+

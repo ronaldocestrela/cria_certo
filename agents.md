@@ -159,6 +159,7 @@ public class Result<TValue> : Result
   * Feature toggling and usage limits (e.g., max head of cattle supported per plan).
   * Producer access enforcement for blocked tenant statuses (`Suspended`, `Cancelled`, `Archived`).
   * Account activation & email confirmation workflow (`ConfirmEmailCommand`, `ResendConfirmationEmailCommand`) enforced at login with 24h token expiration via Resend (ADR 0016).
+  * Data subject rights & profile governance under LGPD Art. 18, III (`GetUserProfileQuery`, `UpdateUserProfileCommand`, `ChangeUserPasswordCommand`) with password entropy enforcement and SHA-256 forensic audit logging (ADR 0017).
 
 ### 5.7 Backoffice Module (`Modules.Backoffice`)
 * **Bootstrap admin (seed):** Parametrizado via `.env` / variáveis de ambiente (`BACKOFFICE_MASTER_ADMIN_EMAIL`, `BACKOFFICE_MASTER_ADMIN_PASSWORD`, `BACKOFFICE_MASTER_ADMIN_NAME`) ou seção `Backoffice:MasterAdmin` do `appsettings.json`, com fallbacks padrão para `admin@criacerto.com.br` / `AdminPassword123!` — criado por `BackofficeDataSeeder` na inicialização da API.

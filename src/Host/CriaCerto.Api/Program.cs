@@ -82,6 +82,9 @@ using CriaCerto.Modules.Tenancy.Application.Features.RemoveTeamMember;
 using CriaCerto.Modules.Tenancy.Application.Features.RefreshToken;
 using CriaCerto.Modules.Tenancy.Application.Features.ConfirmEmail;
 using CriaCerto.Modules.Tenancy.Application.Features.ResendConfirmationEmail;
+using CriaCerto.Modules.Tenancy.Application.Features.GetUserProfile;
+using CriaCerto.Modules.Tenancy.Application.Features.UpdateUserProfile;
+using CriaCerto.Modules.Tenancy.Application.Features.ChangeUserPassword;
 using CriaCerto.Modules.Tenancy.Application.Domain;
 using CriaCerto.Modules.Tenancy.Infrastructure;
 
@@ -1846,6 +1849,77 @@ app.MapPost("/api/auth/refresh-token", async (RefreshTokenRequest? req, ClaimsPr
     var command = new RefreshTokenCommand(userId, tenantId);
     var result = await sender.Send(command);
     return ToHttpResult(result);
+}).RequireAuthorization().WithTags("Auth");
+
+// LGPD Profile & Security Endpoints (Art. 18, III)
+app.MapGet("/api/v1/auth/profile", async (ClaimsPrincipal userClaims, ISender sender) =>
+{
+    var sub = userClaims.FindFirst(ClaimTypes.NameIdentifier)?.Value 
+           ?? userClaims.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value 
+           ?? userClaims.FindFirst("sub")?.Value
+           ?? userClaims.FindFirst("UserId")?.Value;
+
+    if (!Guid.TryParse(sub, out var userId))
+    {
+        return Results.Unauthorized();
+    }
+
+    var result = await sender.Send(new GetUserProfileQuery(userId));
+    return ToHttpResult(result);
+}).RequireAuthorization().WithTags("Auth");
+
+app.MapPut("/api/v1/auth/profile", async (UpdateUserProfileRequest req, ClaimsPrincipal userClaims, HttpContext ctx, ISender sender) =>
+{
+    var sub = userClaims.FindFirst(ClaimTypes.NameIdentifier)?.Value 
+           ?? userClaims.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value 
+           ?? userClaims.FindFirst("sub")?.Value
+           ?? userClaims.FindFirst("UserId")?.Value;
+
+    if (!Guid.TryParse(sub, out var userId))
+    {
+        return Results.Unauthorized();
+    }
+
+    var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "127.0.0.1";
+    if (ctx.Request.Headers.TryGetValue("X-Forwarded-For", out var forwardedFor) && !string.IsNullOrWhiteSpace(forwardedFor))
+    {
+        var firstIp = forwardedFor.ToString().Split(',')[0].Trim();
+        if (!string.IsNullOrWhiteSpace(firstIp))
+        {
+            ip = firstIp;
+        }
+    }
+
+    var command = new UpdateUserProfileCommand(userId, req.FullName, req.PhoneNumber, ip);
+    var result = await sender.Send(command);
+    return ToHttpResult(result);
+}).RequireAuthorization().WithTags("Auth");
+
+app.MapPost("/api/v1/auth/change-password", async (ChangeUserPasswordRequest req, ClaimsPrincipal userClaims, HttpContext ctx, ISender sender) =>
+{
+    var sub = userClaims.FindFirst(ClaimTypes.NameIdentifier)?.Value 
+           ?? userClaims.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value 
+           ?? userClaims.FindFirst("sub")?.Value
+           ?? userClaims.FindFirst("UserId")?.Value;
+
+    if (!Guid.TryParse(sub, out var userId))
+    {
+        return Results.Unauthorized();
+    }
+
+    var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "127.0.0.1";
+    if (ctx.Request.Headers.TryGetValue("X-Forwarded-For", out var forwardedFor) && !string.IsNullOrWhiteSpace(forwardedFor))
+    {
+        var firstIp = forwardedFor.ToString().Split(',')[0].Trim();
+        if (!string.IsNullOrWhiteSpace(firstIp))
+        {
+            ip = firstIp;
+        }
+    }
+
+    var command = new ChangeUserPasswordCommand(userId, req.CurrentPassword, req.NewPassword, req.ConfirmNewPassword, ip);
+    var result = await sender.Send(command);
+    return ToCommandHttpResult(result);
 }).RequireAuthorization().WithTags("Auth");
 
 app.MapGet("/api/v1/tenancy/plans", async (ISender sender) =>

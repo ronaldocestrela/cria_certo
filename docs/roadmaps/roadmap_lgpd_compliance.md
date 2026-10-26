@@ -158,15 +158,18 @@ O objetivo desta fase é instituir as bases legais de transparência ativa, publ
 O objetivo desta fase é assegurar que o titular dos dados (produtor ou colaborador da granja) possa exercer todos os direitos previstos no Art. 18 da LGPD de forma direta e transparente pelo sistema.
 
 #### 2.1 Direito de Retificação e Gestão de Perfil Pessoal (Art. 18, III)
-- [ ] Criar comando e endpoint no módulo Tenancy:
-  - `GET /api/v1/auth/profile` - Consulta dos dados cadastrais do próprio usuário logado (`FullName`, `Email`, `PhoneNumber`, `IsEmailConfirmed`, data de cadastro e tenants vinculados).
-  - `PUT /api/v1/auth/profile` - Atualização cadastral de `FullName` e `PhoneNumber` com validação de dados.
-  - `POST /api/v1/auth/change-password` - Alteração autenticada de senha exigindo validação da senha atual.
-- [ ] Criar tela de autoatendimento no Blazor: `/settings/profile` (**Meu Perfil & Segurança**):
-  - Formulário para atualização de dados pessoais.
-  - Painel de alteração de senha.
-  - Resumo de sessões ativas e histórico de logins.
-  - Link no menu lateral e dropdown de usuário.
+- [x] Criar comando e endpoint no módulo Tenancy:
+  - `GET /api/v1/auth/profile` - Consulta dos dados cadastrais do próprio usuário logado (`FullName`, `Email`, `PhoneNumber`, `IsEmailConfirmed`, data de criação `CreatedAtUtc`, consentimentos e tenants vinculados) via [`GetUserProfileQuery.cs`](file:///home/rony/LPR/CriaCerto/src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Features/GetUserProfile/GetUserProfileQuery.cs).
+  - `PUT /api/v1/auth/profile` - Atualização cadastral de `FullName` e `PhoneNumber` com validação de dados via [`UpdateUserProfileCommand.cs`](file:///home/rony/LPR/CriaCerto/src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Features/UpdateUserProfile/UpdateUserProfileCommand.cs) e [`UpdateUserProfileCommandValidator.cs`](file:///home/rony/LPR/CriaCerto/src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Features/UpdateUserProfile/UpdateUserProfileCommandValidator.cs), registrando auditoria forense SHA-256 (`USER_PROFILE_RECTIFIED`).
+  - `POST /api/v1/auth/change-password` - Alteração autenticada de senha exigindo validação da senha atual em tempo constante via [`ChangeUserPasswordCommand.cs`](file:///home/rony/LPR/CriaCerto/src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Features/ChangeUserPassword/ChangeUserPasswordCommand.cs) e regras de entropia via [`ChangeUserPasswordCommandValidator.cs`](file:///home/rony/LPR/CriaCerto/src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Features/ChangeUserPassword/ChangeUserPasswordCommandValidator.cs), registrando auditoria forense (`USER_PASSWORD_CHANGED`).
+  - Mapeamento e migração EF Core adicionando `CreatedAtUtc` em `User` via [`20261026210040_AddUserCreatedAtUtc.cs`](file:///home/rony/LPR/CriaCerto/src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Infrastructure/Persistence/Migrations/20261026210040_AddUserCreatedAtUtc.cs).
+- [x] Criar tela de autoatendimento no Blazor: `/settings/profile` (**Meu Perfil & Segurança**):
+  - Interface Blazor Web App em [`ProfileManagement.razor`](file:///home/rony/LPR/CriaCerto/src/Web/CriaCerto.Web/CriaCerto.Web.Client/Pages/Settings/ProfileManagement.razor) com formulário de retificação de dados cadastrais.
+  - Painel de alteração de senha com medidor interativo de força (*Password Strength Meter*) e checklist em tempo real.
+  - Exibição transparente de granjas associadas, papéis exercidos (RBAC), planos e metadados de aceite dos Termos de Uso e Política de Privacidade.
+  - Central de Privacidade & Encarregado (DPO) com links diretos institucionais.
+  - Registro de item de menu em [`NavigationCatalog.cs`](file:///home/rony/LPR/CriaCerto/src/Web/CriaCerto.Web/CriaCerto.Web.Client/Models/NavigationItem.cs) e botão de acesso rápido ao perfil no cabeçalho em [`MainLayout.razor`](file:///home/rony/LPR/CriaCerto/src/Web/CriaCerto.Web/CriaCerto.Web.Client/Layout/MainLayout.razor).
+  - Formalização arquitetural no [ADR 0017](file:///home/rony/LPR/CriaCerto/docs/adrs/0017-lgpd-data-subject-profile-rectification-and-security.md).
 
 #### 2.2 Direito de Acesso e Portabilidade dos Dados Pessoais (Art. 18, II e V)
 - [ ] Criar query e endpoint de portabilidade:

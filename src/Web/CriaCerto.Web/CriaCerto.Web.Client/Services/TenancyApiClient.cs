@@ -109,6 +109,40 @@ public sealed record InviteTeamMemberRequest(
     int Role
 );
 
+public sealed record UserTenantAffiliationModel(
+    Guid TenantId,
+    string TenantName,
+    string Role,
+    DateTime JoinedAt,
+    string SubscribedPlan
+);
+
+public sealed record UserProfileModel(
+    Guid Id,
+    string Email,
+    string FullName,
+    string? PhoneNumber,
+    bool IsEmailConfirmed,
+    DateTime? EmailConfirmedAtUtc,
+    DateTime CreatedAtUtc,
+    DateTime? TermsAcceptedAtUtc,
+    DateTime? PrivacyPolicyAcceptedAtUtc,
+    string? TermsVersion,
+    string? PrivacyPolicyVersion,
+    IReadOnlyList<UserTenantAffiliationModel> AssociatedTenants
+);
+
+public sealed record UpdateUserProfileRequest(
+    string FullName,
+    string? PhoneNumber
+);
+
+public sealed record ChangePasswordRequest(
+    string CurrentPassword,
+    string NewPassword,
+    string ConfirmNewPassword
+);
+
 public sealed class TenancyApiClient
 {
     private readonly HttpClient _httpClient;
@@ -377,6 +411,70 @@ public sealed class TenancyApiClient
         catch
         {
             return false;
+        }
+    }
+
+    public async Task<UserProfileModel?> GetUserProfileAsync(CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        try
+        {
+            var response = await _httpClient.GetAsync("/api/v1/auth/profile", cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                return null;
+            }
+
+            return await response.Content.ReadFromJsonAsync<UserProfileModel>(cancellationToken: cancellationToken);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    public async Task<(bool Success, UserProfileModel? Profile, string? ErrorMessage)> UpdateUserProfileAsync(
+        UpdateUserProfileRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        try
+        {
+            var response = await _httpClient.PutAsJsonAsync("/api/v1/auth/profile", request, cancellationToken);
+            if (response.IsSuccessStatusCode)
+            {
+                var profile = await response.Content.ReadFromJsonAsync<UserProfileModel>(cancellationToken: cancellationToken);
+                return (true, profile, null);
+            }
+
+            var error = await response.Content.ReadFromJsonAsync<ApiErrorDto>(cancellationToken: cancellationToken);
+            return (false, null, error?.Message ?? "Erro ao atualizar dados do perfil.");
+        }
+        catch (Exception ex)
+        {
+            return (false, null, ex.Message);
+        }
+    }
+
+    public async Task<(bool Success, string? ErrorMessage)> ChangePasswordAsync(
+        ChangePasswordRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        try
+        {
+            var response = await _httpClient.PostAsJsonAsync("/api/v1/auth/change-password", request, cancellationToken);
+            if (response.IsSuccessStatusCode)
+            {
+                return (true, null);
+            }
+
+            var error = await response.Content.ReadFromJsonAsync<ApiErrorDto>(cancellationToken: cancellationToken);
+            return (false, error?.Message ?? "Erro ao alterar senha.");
+        }
+        catch (Exception ex)
+        {
+            return (false, ex.Message);
         }
     }
 
