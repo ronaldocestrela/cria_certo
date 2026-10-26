@@ -1,4 +1,5 @@
 @page "/settings/profile"
+@page "/settings/privacy"
 @rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
 @attribute [Authorize]
 @using CriaCerto.Web.Client.Services
@@ -6,6 +7,7 @@
 @inject NavigationManager Navigation
 @inject TenancyApiClient TenancyClient
 @inject IToastService ToastService
+@inject IJSRuntime JS
 
 <PageTitle>Cria Certo - Meu Perfil & Segurança</PageTitle>
 
@@ -400,6 +402,85 @@
                             <span class="material-symbols-outlined">privacy_tip</span>
                             Política de Privacidade
                         </a>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Card 5: Direito de Acesso e Portabilidade dos Dados Pessoais (Art. 18, II e V) -->
+            <section class="card portability-card" id="portabilidade-lgpd" aria-labelledby="heading-portabilidade">
+                <div class="card-header">
+                    <div class="card-title-group">
+                        <span class="material-symbols-outlined card-header-icon">download_for_offline</span>
+                        <div>
+                            <h2 id="heading-portabilidade" class="card-title">Acesso & Portabilidade de Dados Pessoais</h2>
+                            <p class="card-description">Exercício do direito à portabilidade e acesso integral aos seus dados cadastrais, consentimentos e histórico (LGPD Art. 18, II e V).</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="portability-content">
+                    <div class="portability-info-box">
+                        <span class="material-symbols-outlined portability-icon">inventory_2</span>
+                        <div>
+                            <h4 class="portability-info-title">Dossiê Estruturado Interoperável</h4>
+                            <p class="portability-info-text">
+                                Ao solicitar o download, nosso sistema gera um pacote padronizado em formato <strong>JSON canônico</strong> legível por máquina, contendo seu perfil, metadados de consentimento, vínculos a granjas e trilha de eventos, assinado digitalmente com integridade forense.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="portability-badges-grid">
+                        <div class="portability-badge-item">
+                            <span class="material-symbols-outlined badge-item-icon">data_object</span>
+                            <div>
+                                <span class="badge-item-label">Formato Canônico</span>
+                                <strong class="badge-item-value">JSON (RFC 8259)</strong>
+                            </div>
+                        </div>
+                        <div class="portability-badge-item">
+                            <span class="material-symbols-outlined badge-item-icon">lock</span>
+                            <div>
+                                <span class="badge-item-label">Segurança Criptográfica</span>
+                                <strong class="badge-item-value">Hash SHA-256 Chained</strong>
+                            </div>
+                        </div>
+                        <div class="portability-badge-item">
+                            <span class="material-symbols-outlined badge-item-icon">verified</span>
+                            <div>
+                                <span class="badge-item-label">Enquadramento Legal</span>
+                                <strong class="badge-item-value">Art. 18, II e V LGPD</strong>
+                            </div>
+                        </div>
+                        <div class="portability-badge-item">
+                            <span class="material-symbols-outlined badge-item-icon">schedule</span>
+                            <div>
+                                <span class="badge-item-label">Disponibilidade</span>
+                                <strong class="badge-item-value">Download Instantâneo</strong>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="portability-actions">
+                        <button type="button"
+                                class="btn btn-primary btn-portability"
+                                id="btn-export-my-data"
+                                @onclick="HandleExportMyDataAsync"
+                                disabled="@_isExportingData">
+                            @if (_isExportingData)
+                            {
+                                <span class="spinner-sm"></span>
+                                <span>Compilando Dossiê e Assinando...</span>
+                            }
+                            else
+                            {
+                                <span class="material-symbols-outlined">file_download</span>
+                                <span>Exportar Meus Dados Pessoais (Portabilidade LGPD)</span>
+                            }
+                        </button>
+                        <p class="portability-hint">
+                            <span class="material-symbols-outlined hint-icon">info</span>
+                            O download iniciará automaticamente no navegador e uma evidência forense imutável será gravada no log de auditoria.
+                        </p>
                     </div>
                 </div>
             </section>
@@ -1027,6 +1108,133 @@
     .legal-link:hover {
         text-decoration: underline;
     }
+
+    .portability-card {
+        grid-column: 1 / -1;
+        border-left: 4px solid #059669;
+        background: linear-gradient(to bottom, #ffffff, #fbfdfc);
+    }
+
+    .portability-content {
+        display: flex;
+        flex-direction: column;
+        gap: 1.25rem;
+    }
+
+    .portability-info-box {
+        display: flex;
+        align-items: flex-start;
+        gap: 1rem;
+        background: #f0fdf4;
+        border: 1px solid #bbf7d0;
+        border-radius: 12px;
+        padding: 1.15rem 1.25rem;
+    }
+
+    .portability-icon {
+        font-size: 2rem;
+        color: #059669;
+        flex-shrink: 0;
+        margin-top: 0.15rem;
+    }
+
+    .portability-info-title {
+        font-size: 0.95rem;
+        font-weight: 700;
+        color: #166534;
+        margin: 0 0 0.35rem 0;
+    }
+
+    .portability-info-text {
+        font-size: 0.85rem;
+        color: #14532d;
+        line-height: 1.5;
+        margin: 0;
+    }
+
+    .portability-badges-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 0.85rem;
+    }
+
+    .portability-badge-item {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 0.75rem 1rem;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+    }
+
+    .badge-item-icon {
+        font-size: 1.4rem;
+        color: #059669;
+    }
+
+    .badge-item-label {
+        display: block;
+        font-size: 0.72rem;
+        color: #64748b;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .badge-item-value {
+        font-size: 0.85rem;
+        color: #0f172a;
+    }
+
+    .portability-actions {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.65rem;
+        padding-top: 0.5rem;
+    }
+
+    .btn-portability {
+        padding: 0.85rem 1.6rem;
+        font-size: 0.92rem;
+        font-weight: 700;
+        border-radius: 10px;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.6rem;
+        background: #059669;
+        color: white;
+        border: none;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        box-shadow: 0 4px 12px rgba(5, 150, 105, 0.25);
+    }
+
+    .btn-portability:hover:not(:disabled) {
+        background: #047857;
+        box-shadow: 0 6px 16px rgba(5, 150, 105, 0.35);
+        transform: translateY(-1px);
+    }
+
+    .btn-portability:disabled {
+        opacity: 0.7;
+        cursor: not-allowed;
+    }
+
+    .portability-hint {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        font-size: 0.8rem;
+        color: #64748b;
+        margin: 0;
+    }
+
+    .hint-icon {
+        font-size: 1rem;
+        color: #94a3b8;
+    }
 </style>
 
 @code {
@@ -1230,5 +1438,35 @@
         var parts = fullName.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
         if (parts.Length == 1) return parts[0][0].ToString().ToUpperInvariant();
         return $"{parts[0][0]}{parts[^1][0]}".ToUpperInvariant();
+    }
+
+    private bool _isExportingData = false;
+
+    private async Task HandleExportMyDataAsync()
+    {
+        if (_isExportingData) return;
+        _isExportingData = true;
+
+        try
+        {
+            var (success, content, fileName, error) = await TenancyClient.ExportUserDataPortabilityAsync();
+            if (success && content != null && content.Length > 0)
+            {
+                await JS.InvokeVoidAsync("downloadFileFromByteArray", fileName, "application/json", content);
+                ToastService.ShowSuccess("Dossiê de portabilidade LGPD gerado com sucesso! O download foi iniciado automaticamente no seu navegador.");
+            }
+            else
+            {
+                ToastService.ShowError(error ?? "Falha ao gerar o dossiê de portabilidade dos dados pessoais.");
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError("Erro ao processar a exportação: " + ex.Message);
+        }
+        finally
+        {
+            _isExportingData = false;
+        }
     }
 }

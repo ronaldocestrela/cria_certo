@@ -35,4 +35,13 @@ public interface ITenancyAuditSink
         string userEmail,
         string ipAddress,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Registra auditoria forense quando o titular exerce o direito de portabilidade (Art. 18, II e V).
+    /// </summary>
+    Task RecordDataSubjectPortabilityExportAuditAsync(
+        Guid userId,
+        string userEmail,
+        string ipAddress,
+        CancellationToken cancellationToken = default);
 }

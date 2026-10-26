@@ -172,15 +172,16 @@ O objetivo desta fase é assegurar que o titular dos dados (produtor ou colabora
   - Formalização arquitetural no [ADR 0017](file:///home/rony/LPR/CriaCerto/docs/adrs/0017-lgpd-data-subject-profile-rectification-and-security.md).
 
 #### 2.2 Direito de Acesso e Portabilidade dos Dados Pessoais (Art. 18, II e V)
-- [ ] Criar query e endpoint de portabilidade:
-  - `GET /api/v1/auth/my-data/export`
-  - Retorna um pacote estruturado em formato canônico interoperável (`JSON` ou `ZIP` com CSVs) contendo:
-    - Dados cadastrais do usuário (`User`).
-    - Termos aceitos e carimbos de data/hora de consentimento.
-    - Fazendas/Tenants vinculados e papéis desempenhados (Admin, Operador, etc.).
-    - Trilha resumida de acessos e ações do usuário.
-- [ ] Na tela `/settings/privacy` (ou aba na gestão de conta), disponibilizar o botão **"Exportar Meus Dados Pessoais (Portabilidade LGPD)"** com download automático no navegador.
-- [ ] Registrar evento de auditoria forense (`Action = "DATA_SUBJECT_PORTABILITY_EXPORTED"`).
+- [x] Criar query e endpoint de portabilidade:
+  - `GET /api/v1/auth/my-data/export` implementado em [`Program.cs`](file:///home/rony/LPR/CriaCerto/src/Host/CriaCerto.Api/Program.cs).
+  - Retorna um pacote estruturado em formato canônico interoperável (`JSON` RFC 8259 indentado) via [`ExportUserDataPortabilityQuery.cs`](file:///home/rony/LPR/CriaCerto/src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Features/ExportUserDataPortability/ExportUserDataPortabilityQuery.cs) contendo:
+    - Dados cadastrais do usuário (`UserDataExportDto`).
+    - Termos aceitos e carimbos de consentimento (`ConsentMetadataExportDto`).
+    - Fazendas/Tenants vinculados e papéis desempenhados (`TenantAffiliationExportDto`).
+    - Trilha resumida de acessos e ações do usuário (`UserAuditTrailEntryExportDto`) obtida via [`IUserAuditTrailLookupService.cs`](file:///home/rony/LPR/CriaCerto/src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Abstractions/IUserAuditTrailLookupService.cs).
+- [x] Na tela `/settings/privacy` e `/settings/profile`, disponibilizar o Card e botão **"Exportar Meus Dados Pessoais (Portabilidade LGPD)"** com download automático no navegador em [`ProfileManagement.razor`](file:///home/rony/LPR/CriaCerto/src/Web/CriaCerto.Web/CriaCerto.Web.Client/Pages/Settings/ProfileManagement.razor) via [`TenancyApiClient.cs`](file:///home/rony/LPR/CriaCerto/src/Web/CriaCerto.Web/CriaCerto.Web.Client/Services/TenancyApiClient.cs) e link no menu [`NavigationItem.cs`](file:///home/rony/LPR/CriaCerto/src/Web/CriaCerto.Web/CriaCerto.Web.Client/Models/NavigationItem.cs).
+- [x] Registrar evento de auditoria forense (`Action = "DATA_SUBJECT_PORTABILITY_EXPORTED"`, `Category = AuditCategory.Compliance`, `Severity = AuditSeverity.High`, hash SHA-256 encadeado) em [`TenancyBackofficeAuditSink.cs`](file:///home/rony/LPR/CriaCerto/src/Host/CriaCerto.Api/Services/TenancyBackofficeAuditSink.cs).
+- [x] Formalização arquitetural no [ADR 0018](file:///home/rony/LPR/CriaCerto/docs/adrs/0018-lgpd-data-subject-access-and-portability.md).
 
 #### 2.3 Direito de Eliminação, Encerramento de Conta e Anonimização (Art. 18, VI)
 - [ ] Definir a **Regra de Harmonização LGPD vs Obrigações Fiscais/Agropecuárias**:

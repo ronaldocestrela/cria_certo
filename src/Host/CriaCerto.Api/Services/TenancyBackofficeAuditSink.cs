@@ -2,12 +2,13 @@ using CriaCerto.Modules.Backoffice.Application.Domain.Entities;
 using CriaCerto.Modules.Backoffice.Application.Domain.Enums;
 using CriaCerto.Modules.Backoffice.Infrastructure.Persistence;
 using CriaCerto.Modules.Tenancy.Application.Abstractions;
+using CriaCerto.Modules.Tenancy.Application.Features.ExportUserDataPortability.Dtos;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 namespace CriaCerto.Api.Services;
 
-public sealed class TenancyBackofficeAuditSink : ITenancyAuditSink
+public sealed class TenancyBackofficeAuditSink : ITenancyAuditSink, IUserAuditTrailLookupService
 {
     private readonly BackofficeDbContext _dbContext;
     private readonly ILogger<TenancyBackofficeAuditSink> _logger;
@@ -183,6 +184,82 @@ public sealed class TenancyBackofficeAuditSink : ITenancyAuditSink
                 ex,
                 "Falha ao registrar auditoria forense de alteração de senha para usuário {UserId} ({Email}).",
                 userId, userEmail);
+        }
+    }
+
+    public async Task RecordDataSubjectPortabilityExportAuditAsync(
+        Guid userId,
+        string userEmail,
+        string ipAddress,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var previousHash = await _dbContext.AuditLogs
+                .AsNoTracking()
+                .OrderByDescending(a => a.TimestampUtc)
+                .Select(a => a.RecordHash)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            var audit = AuditLog.CreateForensic(
+                adminUserId: userId,
+                adminUserEmail: userEmail,
+                actorRole: "RegisteredUser",
+                action: "DATA_SUBJECT_PORTABILITY_EXPORTED",
+                category: AuditCategory.Compliance,
+                severity: AuditSeverity.High,
+                resource: $"Users/{userId}",
+                targetTenantId: null,
+                targetTenantName: null,
+                ipAddress: string.IsNullOrWhiteSpace(ipAddress) ? "127.0.0.1" : ipAddress,
+                userAgent: "WebDataPortabilityFlow/1.0",
+                previousRecordHash: previousHash,
+                detailsJson: "{\"Action\":\"DataSubjectPortabilityExported_Art18_V\"}");
+
+            _dbContext.AuditLogs.Add(audit);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            _logger.LogInformation(
+                "Auditoria forense de portabilidade de dados LGPD registrada para usuário {UserId} ({Email}) com hash {Hash}.",
+                userId, userEmail, audit.RecordHash);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                ex,
+                "Falha ao registrar auditoria forense de portabilidade de dados para usuário {UserId} ({Email}).",
+                userId, userEmail);
+        }
+    }
+
+    public async Task<IReadOnlyList<UserAuditTrailEntryExportDto>> GetUserAuditTrailAsync(
+        Guid userId,
+        int limit = 100,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var userResource = $"Users/{userId}";
+            var logs = await _dbContext.AuditLogs
+                .AsNoTracking()
+                .Where(a => a.AdminUserId == userId || a.Resource == userResource)
+                .OrderByDescending(a => a.TimestampUtc)
+                .Take(limit)
+                .ToListAsync(cancellationToken);
+
+            return logs.Select(a => new UserAuditTrailEntryExportDto(
+                a.TimestampUtc,
+                a.Action,
+                a.Category.ToString(),
+                a.Severity.ToString(),
+                a.IpAddress,
+                a.DetailsJson ?? string.Empty
+            )).ToList();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Erro ao consultar trilha forense do usuário {UserId} para portabilidade LGPD.", userId);
+            return Array.Empty<UserAuditTrailEntryExportDto>();
         }
     }
 }

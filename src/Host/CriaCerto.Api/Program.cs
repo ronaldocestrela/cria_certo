@@ -85,6 +85,7 @@ using CriaCerto.Modules.Tenancy.Application.Features.ResendConfirmationEmail;
 using CriaCerto.Modules.Tenancy.Application.Features.GetUserProfile;
 using CriaCerto.Modules.Tenancy.Application.Features.UpdateUserProfile;
 using CriaCerto.Modules.Tenancy.Application.Features.ChangeUserPassword;
+using CriaCerto.Modules.Tenancy.Application.Features.ExportUserDataPortability;
 using CriaCerto.Modules.Tenancy.Application.Domain;
 using CriaCerto.Modules.Tenancy.Infrastructure;
 
@@ -197,7 +198,9 @@ builder.Services.AddScoped<ITenantInfoLookupService, TenantInfoLookupService>();
 builder.Services.AddScoped<CriaCerto.Modules.Tenancy.Application.Abstractions.IPartnerRoleLookupService, PartnerRoleLookupService>();
 builder.Services.AddScoped<IReferralPaymentVerificationService, StripePaymentVerificationService>();
 builder.Services.AddScoped<IReferralAuditSink, ReferralBackofficeAuditSink>();
-builder.Services.AddScoped<CriaCerto.Modules.Tenancy.Application.Abstractions.ITenancyAuditSink, CriaCerto.Api.Services.TenancyBackofficeAuditSink>();
+builder.Services.AddScoped<CriaCerto.Api.Services.TenancyBackofficeAuditSink>();
+builder.Services.AddScoped<CriaCerto.Modules.Tenancy.Application.Abstractions.ITenancyAuditSink>(sp => sp.GetRequiredService<CriaCerto.Api.Services.TenancyBackofficeAuditSink>());
+builder.Services.AddScoped<CriaCerto.Modules.Tenancy.Application.Abstractions.IUserAuditTrailLookupService>(sp => sp.GetRequiredService<CriaCerto.Api.Services.TenancyBackofficeAuditSink>());
 builder.Services.AddScoped<CriaCerto.Modules.Tenancy.Application.Abstractions.IUserClientIpResolver, CriaCerto.Api.Services.HttpContextUserClientIpResolver>();
 builder.Services.AddScoped<IPaidMediaSpendLookupService, PaidMediaSpendLookupService>();
 builder.Services.Configure<ReferralEnforcementOptions>(builder.Configuration.GetSection(ReferralEnforcementOptions.SectionName));
@@ -1920,6 +1923,42 @@ app.MapPost("/api/v1/auth/change-password", async (ChangeUserPasswordRequest req
     var command = new ChangeUserPasswordCommand(userId, req.CurrentPassword, req.NewPassword, req.ConfirmNewPassword, ip);
     var result = await sender.Send(command);
     return ToCommandHttpResult(result);
+}).RequireAuthorization().WithTags("Auth");
+
+app.MapGet("/api/v1/auth/my-data/export", async (ClaimsPrincipal userClaims, HttpContext ctx, ISender sender) =>
+{
+    var sub = userClaims.FindFirst(ClaimTypes.NameIdentifier)?.Value 
+           ?? userClaims.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value 
+           ?? userClaims.FindFirst("sub")?.Value
+           ?? userClaims.FindFirst("UserId")?.Value;
+
+    if (!Guid.TryParse(sub, out var userId))
+    {
+        return Results.Unauthorized();
+    }
+
+    var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "127.0.0.1";
+    if (ctx.Request.Headers.TryGetValue("X-Forwarded-For", out var forwardedFor) && !string.IsNullOrWhiteSpace(forwardedFor))
+    {
+        var firstIp = forwardedFor.ToString().Split(',')[0].Trim();
+        if (!string.IsNullOrWhiteSpace(firstIp))
+        {
+            ip = firstIp;
+        }
+    }
+
+    var query = new ExportUserDataPortabilityQuery(userId, ip);
+    var result = await sender.Send(query);
+
+    if (result.IsFailure)
+    {
+        return ToHttpResult(result);
+    }
+
+    return Results.File(
+        fileContents: result.Value.Content,
+        contentType: result.Value.ContentType,
+        fileDownloadName: result.Value.FileName);
 }).RequireAuthorization().WithTags("Auth");
 
 app.MapGet("/api/v1/tenancy/plans", async (ISender sender) =>

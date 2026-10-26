@@ -478,6 +478,32 @@ public sealed class TenancyApiClient
         }
     }
 
+    public async Task<(bool Success, byte[]? Content, string? FileName, string? ErrorMessage)> ExportUserDataPortabilityAsync(
+        CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        try
+        {
+            var response = await _httpClient.GetAsync("/api/v1/auth/my-data/export", cancellationToken);
+            if (response.IsSuccessStatusCode)
+            {
+                var bytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
+                var fileName = response.Content.Headers.ContentDisposition?.FileNameStar 
+                            ?? response.Content.Headers.ContentDisposition?.FileName?.Trim('"')
+                            ?? $"meus-dados-lgpd-{DateTime.UtcNow:yyyyMMddHHmmss}.json";
+
+                return (true, bytes, fileName, null);
+            }
+
+            var error = await response.Content.ReadFromJsonAsync<ApiErrorDto>(cancellationToken: cancellationToken);
+            return (false, null, null, error?.Message ?? "Erro ao exportar dados pessoais.");
+        }
+        catch (Exception ex)
+        {
+            return (false, null, null, ex.Message);
+        }
+    }
+
     private async Task AttachTokenAsync()
     {
         if (_jsRuntime == null) return;

@@ -119,4 +119,61 @@ public class TenancyApiClientTests
         plans.Should().Contain(p => p.PlanId == "Pro");
         plans.Should().Contain(p => p.PlanId == "Enterprise");
     }
+
+    [Fact]
+    public async Task ExportUserDataPortabilityAsync_WhenApiReturns200_ShouldReturnContentAndFileName()
+    {
+        // Arrange
+        var jsonBytes = System.Text.Encoding.UTF8.GetBytes("{\"specification\":\"LGPD\"}");
+        string? requestedUri = null;
+
+        var handler = new TestHttpMessageHandler(req =>
+        {
+            requestedUri = req.RequestUri!.PathAndQuery;
+            var response = new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new ByteArrayContent(jsonBytes)
+            };
+            response.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+            response.Content.Headers.ContentDisposition = new System.Net.Http.Headers.ContentDispositionHeaderValue("attachment")
+            {
+                FileName = "meus-dados-lgpd-test.json"
+            };
+            return response;
+        });
+
+        var client = new HttpClient(handler) { BaseAddress = new Uri("https://api.criacerto.com.br/") };
+        var apiClient = new TenancyApiClient(client, _jsRuntime);
+
+        // Act
+        var result = await apiClient.ExportUserDataPortabilityAsync();
+
+        // Assert
+        requestedUri.Should().Be("/api/v1/auth/my-data/export");
+        result.Success.Should().BeTrue();
+        result.Content.Should().BeEquivalentTo(jsonBytes);
+        result.FileName.Should().Be("meus-dados-lgpd-test.json");
+        result.ErrorMessage.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task ExportUserDataPortabilityAsync_WhenApiReturnsError_ShouldReturnFailure()
+    {
+        // Arrange
+        var handler = new TestHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.Unauthorized)
+        {
+            Content = JsonContent.Create(new ApiErrorDto("Auth.Unauthorized", "Sessão expirada.", 401))
+        });
+
+        var client = new HttpClient(handler) { BaseAddress = new Uri("https://api.criacerto.com.br/") };
+        var apiClient = new TenancyApiClient(client, _jsRuntime);
+
+        // Act
+        var result = await apiClient.ExportUserDataPortabilityAsync();
+
+        // Assert
+        result.Success.Should().BeFalse();
+        result.Content.Should().BeNull();
+        result.ErrorMessage.Should().Be("Sessão expirada.");
+    }
 }

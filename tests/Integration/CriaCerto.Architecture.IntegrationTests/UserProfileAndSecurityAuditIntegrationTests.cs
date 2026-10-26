@@ -93,4 +93,53 @@ public class UserProfileAndSecurityAuditIntegrationTests : IDisposable
         savedAudit.RecordHash.Should().NotBeNullOrWhiteSpace();
         savedAudit.VerifyIntegrity().Should().BeTrue();
     }
+
+    [Fact]
+    public async Task TenancyBackofficeAuditSink_Should_Create_Sha256_Audit_Record_For_Data_Portability_Export()
+    {
+        // Arrange
+        var sink = new TenancyBackofficeAuditSink(_backofficeDbContext, NullLogger<TenancyBackofficeAuditSink>.Instance);
+        var userId = Guid.NewGuid();
+        var email = "produtor.portabilidade@criacerto.com.br";
+        var ip = "200.150.10.7";
+
+        // Act
+        await sink.RecordDataSubjectPortabilityExportAuditAsync(userId, email, ip);
+
+        // Assert
+        var savedAudit = await _backofficeDbContext.AuditLogs
+            .FirstOrDefaultAsync(a => a.Action == "DATA_SUBJECT_PORTABILITY_EXPORTED" && a.AdminUserEmail == email);
+
+        savedAudit.Should().NotBeNull();
+        savedAudit!.Category.Should().Be(AuditCategory.Compliance);
+        savedAudit.Severity.Should().Be(AuditSeverity.High);
+        savedAudit.Resource.Should().Be($"Users/{userId}");
+        savedAudit.IpAddress.Should().Be(ip);
+        savedAudit.ActorRole.Should().Be("RegisteredUser");
+        savedAudit.RecordHash.Should().NotBeNullOrWhiteSpace();
+        savedAudit.VerifyIntegrity().Should().BeTrue();
+        savedAudit.DetailsJson.Should().Contain("DataSubjectPortabilityExported_Art18_V");
+    }
+
+    [Fact]
+    public async Task TenancyBackofficeAuditSink_Should_Retrieve_User_Audit_Trail_For_Portability()
+    {
+        // Arrange
+        var sink = new TenancyBackofficeAuditSink(_backofficeDbContext, NullLogger<TenancyBackofficeAuditSink>.Instance);
+        var userId = Guid.NewGuid();
+        var email = "produtor.trilha@criacerto.com.br";
+        var ip = "200.150.10.8";
+
+        await sink.RecordUserConsentAuditAsync(userId, email, "1.0", "1.0", ip);
+        await sink.RecordUserProfileUpdateAuditAsync(userId, email, "Nome Antigo", "Nome Novo", null, null, ip);
+
+        // Act
+        var trail = await sink.GetUserAuditTrailAsync(userId, limit: 10);
+
+        // Assert
+        trail.Should().NotBeNull();
+        trail.Should().HaveCount(2);
+        trail.Should().Contain(t => t.Action == "USER_CONSENT_REGISTERED");
+        trail.Should().Contain(t => t.Action == "USER_PROFILE_RECTIFIED");
+    }
 }
