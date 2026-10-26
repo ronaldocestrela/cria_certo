@@ -1,0 +1,494 @@
+@using CriaCerto.Web.Client.Models
+@using CriaCerto.Web.Client.Services
+@inject ICookieConsentService CookieConsentService
+@implements IDisposable
+
+@if (_isVisible)
+{
+    <aside class="cookie-consent-overlay"
+           role="dialog"
+           aria-live="polite"
+           aria-label="Aviso de Cookies e Armazenamento Local"
+           id="cc-cookie-consent-banner">
+        <div class="cookie-consent-card">
+            <div class="cookie-consent-main">
+                <div class="cookie-consent-icon-wrapper" aria-hidden="true">
+                    <span class="material-symbols-outlined cookie-consent-icon">verified_user</span>
+                </div>
+
+                <div class="cookie-consent-body">
+                    <div class="cookie-consent-header">
+                        <h3 class="cookie-consent-title">Privacidade, Armazenamento Local &amp; Modo Offline (PWA)</h3>
+                        <span class="cookie-consent-badge">LGPD • Lei nº 13.709/2018</span>
+                    </div>
+
+                    <p class="cookie-consent-text">
+                        Utilizamos <strong>armazenamento local estritamente necessário</strong> para manter sua sessão de login segura, viabilizar o <strong>manejo de curral 100% offline</strong> (via IndexedDB e PWA) e registrar eventuais indicações de parceiros comerciais homologados. Não utilizamos cookies invasivos para anúncios de terceiros.
+                    </p>
+
+                    <div class="cookie-consent-badges">
+                        <span class="storage-pill">
+                            <span class="material-symbols-outlined pill-icon">lock</span>
+                            Sessão &amp; Segurança (Essencial)
+                        </span>
+                        <span class="storage-pill">
+                            <span class="material-symbols-outlined pill-icon">signal_wifi_off</span>
+                            PWA Curral Offline (IndexedDB)
+                        </span>
+                        <span class="storage-pill">
+                            <span class="material-symbols-outlined pill-icon">handshake</span>
+                            Atribuição de Parceiro
+                        </span>
+                    </div>
+
+                    @if (_showDetails)
+                    {
+                        <div class="cookie-consent-details" id="cookie-consent-details-panel">
+                            <h4 class="details-title">Tecnologias Utilizadas no Ecossistema CriaCerto</h4>
+                            <div class="details-grid">
+                                @foreach (var cat in CookieConsentCatalog.Categories)
+                                {
+                                    <div class="category-card">
+                                        <div class="category-header">
+                                            <strong class="category-name">@cat.Name</strong>
+                                            @if (cat.IsRequired)
+                                            {
+                                                <span class="category-status required">Obrigatório</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="category-status optional">Funcional</span>
+                                            }
+                                        </div>
+                                        <p class="category-desc">@cat.Description</p>
+                                        <code class="category-tech">@cat.StorageKeyOrTechnology</code>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <div class="cookie-consent-actions">
+                <button type="button"
+                        class="btn-cookie-toggle"
+                        @onclick="ToggleDetails"
+                        aria-expanded="@_showDetails"
+                        aria-controls="cookie-consent-details-panel"
+                        id="btn-cookie-details">
+                    <span class="material-symbols-outlined toggle-icon">@(_showDetails ? "expand_less" : "expand_more")</span>
+                    <span>@(_showDetails ? "Ocultar Detalhes" : "Ver Detalhes")</span>
+                </button>
+
+                <div class="actions-right">
+                    <a href="/politica-de-privacidade"
+                       class="link-privacy-policy"
+                       target="_blank"
+                       rel="noopener noreferrer"
+                       id="link-cookie-privacy">
+                        Política de Privacidade
+                    </a>
+
+                    <button type="button"
+                            class="btn-cookie-accept"
+                            @onclick="HandleAcceptAsync"
+                            disabled="@_isSaving"
+                            id="btn-cookie-accept">
+                        <span class="material-symbols-outlined" style="font-size: 1.15rem;">check_circle</span>
+                        <span>Entendido e Continuar</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </aside>
+}
+
+<style>
+    .cookie-consent-overlay {
+        position: fixed;
+        bottom: 1.25rem;
+        left: 1.25rem;
+        right: 1.25rem;
+        z-index: 1050;
+        display: flex;
+        justify-content: center;
+        pointer-events: none;
+        animation: ccSlideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    .cookie-consent-card {
+        pointer-events: auto;
+        background: #ffffff;
+        border: 1px solid var(--cc-border, #becabc);
+        border-radius: 14px;
+        box-shadow: 0 12px 36px -4px rgba(0, 0, 0, 0.16), 0 4px 12px rgba(0, 101, 44, 0.08);
+        max-width: 980px;
+        width: 100%;
+        padding: 1.25rem 1.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        color: var(--cc-ink, #191c1e);
+    }
+
+    .cookie-consent-main {
+        display: flex;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+
+    .cookie-consent-icon-wrapper {
+        background-color: #e0f2e9;
+        color: var(--cc-primary, #00652c);
+        width: 44px;
+        height: 44px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .cookie-consent-icon {
+        font-size: 26px;
+    }
+
+    .cookie-consent-body {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .cookie-consent-header {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+        margin-bottom: 0.35rem;
+    }
+
+    .cookie-consent-title {
+        margin: 0;
+        font-size: 1.05rem;
+        font-weight: 700;
+        color: var(--cc-primary, #00652c);
+        line-height: 1.3;
+    }
+
+    .cookie-consent-badge {
+        font-family: var(--cc-font-mono, monospace);
+        font-size: 0.7rem;
+        font-weight: 600;
+        background: #eef3ef;
+        color: var(--cc-ink-muted, #3f493f);
+        padding: 0.2rem 0.55rem;
+        border-radius: 4px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+
+    .cookie-consent-text {
+        margin: 0 0 0.75rem 0;
+        font-size: 0.875rem;
+        line-height: 1.5;
+        color: var(--cc-ink, #191c1e);
+    }
+
+    .cookie-consent-text strong {
+        color: var(--cc-primary, #00652c);
+    }
+
+    .cookie-consent-badges {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    .storage-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        background: #f1f5f9;
+        color: #334155;
+        padding: 0.25rem 0.6rem;
+        border-radius: 6px;
+        border: 1px solid #e2e8f0;
+    }
+
+    .pill-icon {
+        font-size: 14px;
+        color: var(--cc-primary, #00652c);
+    }
+
+    .cookie-consent-details {
+        margin-top: 1rem;
+        padding-top: 0.85rem;
+        border-top: 1px dashed var(--cc-border, #becabc);
+        animation: ccFadeIn 0.25s ease-in-out;
+    }
+
+    .details-title {
+        font-size: 0.82rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--cc-ink-muted, #3f493f);
+        margin: 0 0 0.65rem 0;
+    }
+
+    .details-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 0.65rem;
+    }
+
+    .category-card {
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 0.65rem 0.8rem;
+        font-size: 0.8rem;
+    }
+
+    .category-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.25rem;
+    }
+
+    .category-name {
+        color: var(--cc-ink, #191c1e);
+        font-size: 0.82rem;
+    }
+
+    .category-status {
+        font-size: 0.68rem;
+        font-weight: 600;
+        padding: 0.1rem 0.4rem;
+        border-radius: 3px;
+        text-transform: uppercase;
+    }
+
+    .category-status.required {
+        background: #dcfce7;
+        color: #15803d;
+    }
+
+    .category-status.optional {
+        background: #e2e8f0;
+        color: #475569;
+    }
+
+    .category-desc {
+        margin: 0 0 0.4rem 0;
+        font-size: 0.75rem;
+        color: var(--cc-ink-muted, #3f493f);
+        line-height: 1.35;
+    }
+
+    .category-tech {
+        font-family: var(--cc-font-mono, monospace);
+        font-size: 0.7rem;
+        color: #0f766e;
+        background: #f0fdfa;
+        padding: 0.15rem 0.35rem;
+        border-radius: 3px;
+        display: inline-block;
+        word-break: break-all;
+    }
+
+    .cookie-consent-actions {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        padding-top: 0.75rem;
+        border-top: 1px solid #f1f5f9;
+    }
+
+    .btn-cookie-toggle {
+        background: none;
+        border: none;
+        padding: 0.35rem 0.5rem;
+        color: var(--cc-ink-muted, #3f493f);
+        font-size: 0.8rem;
+        font-weight: 600;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        border-radius: 4px;
+        transition: background-color 0.2s;
+    }
+
+    .btn-cookie-toggle:hover {
+        background: #f1f5f9;
+        color: var(--cc-ink, #191c1e);
+    }
+
+    .toggle-icon {
+        font-size: 1.15rem;
+    }
+
+    .actions-right {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+
+    .link-privacy-policy {
+        color: var(--cc-primary, #00652c);
+        font-size: 0.85rem;
+        font-weight: 600;
+        text-decoration: underline;
+        text-underline-offset: 3px;
+    }
+
+    .link-privacy-policy:hover {
+        color: #0b4520;
+    }
+
+    .btn-cookie-accept {
+        background-color: var(--cc-primary, #00652c);
+        color: #ffffff;
+        border: none;
+        padding: 0.6rem 1.4rem;
+        border-radius: 8px;
+        font-size: 0.875rem;
+        font-weight: 600;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        box-shadow: 0 2px 6px rgba(0, 101, 44, 0.25);
+        transition: background-color 0.2s, transform 0.1s;
+    }
+
+    .btn-cookie-accept:hover:not(:disabled) {
+        background-color: #0d7a3a;
+        transform: translateY(-1px);
+    }
+
+    .btn-cookie-accept:active:not(:disabled) {
+        transform: translateY(0);
+    }
+
+    .btn-cookie-accept:disabled {
+        opacity: 0.65;
+        cursor: not-allowed;
+    }
+
+    @@keyframes ccSlideUp {
+        from {
+            opacity: 0;
+            transform: translateY(24px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @@keyframes ccFadeIn {
+        from {
+            opacity: 0;
+        }
+        to {
+            opacity: 1;
+        }
+    }
+
+    @@media (max-width: 640px) {
+        .cookie-consent-overlay {
+            bottom: 0.75rem;
+            left: 0.75rem;
+            right: 0.75rem;
+        }
+
+        .cookie-consent-card {
+            padding: 1rem;
+        }
+
+        .cookie-consent-actions {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .actions-right {
+            flex-direction: column-reverse;
+            align-items: stretch;
+            gap: 0.65rem;
+        }
+
+        .btn-cookie-accept {
+            justify-content: center;
+            width: 100%;
+        }
+
+        .link-privacy-policy {
+            text-align: center;
+        }
+    }
+</style>
+
+@code {
+    private bool _isVisible;
+    private bool _showDetails;
+    private bool _isSaving;
+
+    protected override async Task OnInitializedAsync()
+    {
+        CookieConsentService.OnConsentChanged += HandleConsentChanged;
+        await CheckConsentStatusAsync();
+    }
+
+    private async Task CheckConsentStatusAsync()
+    {
+        var hasValidConsent = await CookieConsentService.HasValidConsentAsync();
+        _isVisible = !hasValidConsent;
+    }
+
+    private void HandleConsentChanged()
+    {
+        _ = InvokeAsync(async () =>
+        {
+            await CheckConsentStatusAsync();
+            StateHasChanged();
+        });
+    }
+
+    private void ToggleDetails()
+    {
+        _showDetails = !_showDetails;
+    }
+
+    private async Task HandleAcceptAsync()
+    {
+        if (_isSaving)
+        {
+            return;
+        }
+
+        _isSaving = true;
+        try
+        {
+            await CookieConsentService.SaveConsentAsync();
+            _isVisible = false;
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    public void Dispose()
+    {
+        CookieConsentService.OnConsentChanged -= HandleConsentChanged;
+    }
+}

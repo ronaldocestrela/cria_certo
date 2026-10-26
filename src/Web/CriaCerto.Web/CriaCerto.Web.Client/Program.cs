@@ -26,6 +26,7 @@ builder.Services.AddScoped<IFeatureFlagClientService, FeatureFlagClientService>(
 builder.Services.AddScoped<IReferralTrackingService, ReferralTrackingService>();
 builder.Services.AddScoped<IReferralApiClient, ReferralApiClient>();
 builder.Services.AddScoped<IPartnerApiClient, PartnerApiClient>();
+builder.Services.AddScoped<ICookieConsentService, CookieConsentService>();
 
 builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) });
 

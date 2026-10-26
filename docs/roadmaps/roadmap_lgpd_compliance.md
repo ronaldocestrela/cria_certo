@@ -144,11 +144,12 @@ O objetivo desta fase é instituir as bases legais de transparência ativa, publ
 - [x] Gravar evento de auditoria forense no cadastro (`Action = "USER_CONSENT_REGISTERED"`) via [`ITenancyAuditSink`](file:///home/rony/LPR/CriaCerto/src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Abstractions/ITenancyAuditSink.cs) e [`TenancyBackofficeAuditSink`](file:///home/rony/LPR/CriaCerto/src/Host/CriaCerto.Api/Services/TenancyBackofficeAuditSink.cs) com encadeamento de integridade SHA-256 e severidade High.
 
 #### 1.3 Banner de Cookies e Armazenamento Local (PWA/Offline)
-- [ ] Criar componente atômico Blazor `<CookieConsentBanner.razor>`:
+- [x] Criar componente atômico Blazor [`CookieConsentBanner.razor`](file:///home/rony/LPR/CriaCerto/src/Web/CriaCerto.Web/CriaCerto.Web.Client/Components/Legal/CookieConsentBanner.razor):
   - Informar de maneira clara o uso de cookies estritamente necessários (sessão de login), armazenamento local para modo off-line no curral (`localStorage` / IndexedDB) e cookie de atribuição de parceiro (`?ref=`).
-  - Botão de confirmação *"Entendido e Continuar"* que persiste o aceite no `localStorage` com expiração de 180 dias.
-  - Link de fácil acesso para a Política de Privacidade.
-- [ ] Injetar o banner no layout principal ([`MainLayout.razor`](file:///home/rony/LPR/CriaCerto/src/Web/CriaCerto.Web/CriaCerto.Web.Client/Layout/MainLayout.razor)).
+  - Botão de confirmação *"Entendido e Continuar"* que persiste o aceite no `localStorage` sob a chave `cria_certo_cookie_consent_v1` com expiração de 180 dias gerenciado por [`ICookieConsentService`](file:///home/rony/LPR/CriaCerto/src/Web/CriaCerto.Web/CriaCerto.Web.Client/Services/CookieConsentService.cs) e [`CookieConsentModels.cs`](file:///home/rony/LPR/CriaCerto/src/Web/CriaCerto.Web/CriaCerto.Web.Client/Models/CookieConsentModels.cs).
+  - Link de fácil acesso para a Política de Privacidade e painel sanfonado para detalhes técnicos das tecnologias de armazenamento.
+- [x] Injetar o banner no layout principal ([`MainLayout.razor`](file:///home/rony/LPR/CriaCerto/src/Web/CriaCerto.Web/CriaCerto.Web.Client/Layout/MainLayout.razor)), nos layouts públicos ([`LegalLayout.razor`](file:///home/rony/LPR/CriaCerto/src/Web/CriaCerto.Web/CriaCerto.Web.Client/Layout/LegalLayout.razor), [`EmptyLayout.razor`](file:///home/rony/LPR/CriaCerto/src/Web/CriaCerto.Web/CriaCerto.Web.Client/Layout/EmptyLayout.razor)) e de parceiros ([`PartnerLayout.razor`](file:///home/rony/LPR/CriaCerto/src/Web/CriaCerto.Web/CriaCerto.Web.Client/Layout/PartnerLayout.razor)).
+
 
 ---
 
