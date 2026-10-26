@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.RateLimiting;
+using Serilog;
 using CriaCerto.Api.Middleware;
 using CriaCerto.Api.BackgroundServices;
 using CriaCerto.Api.Services;
@@ -152,6 +153,15 @@ DotEnvLoader.Load();
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Host.UseSerilog((context, services, configuration) =>
+{
+    configuration
+        .ReadFrom.Configuration(context.Configuration)
+        .Enrich.FromLogContext()
+        .Enrich.WithProperty("Application", "CriaCerto.Api")
+        .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj} {Properties:j}{NewLine}{Exception}");
+});
+
 // Configure Data Protection to persist keys across container restarts
 var keysDirectory = new DirectoryInfo(Path.Combine(builder.Environment.ContentRootPath, "dataprotection-keys"));
 if (!keysDirectory.Exists)
@@ -184,6 +194,7 @@ var connectionString = builder.Configuration.GetConnectionString("SqlServer")
 
 // Register Building Blocks and Infrastructure
 builder.Services.AddBuildingBlocksInfrastructure(connectionString);
+builder.Services.AddPiiRedaction();
 builder.Services.AddDataEncryption(builder.Configuration);
 builder.Services.AddEmailSender(builder.Configuration);
 builder.Services.AddTenancyInfrastructure(builder.Configuration);
@@ -322,7 +333,9 @@ if (app.Services.GetService<CriaCerto.BuildingBlocks.Abstractions.Tenancy.ITenan
 ApplyMigrations(app);
 SeedReferenceData(app);
 
+app.UseGlobalExceptionHandler();
 app.UseSecurityHeaders();
+app.UseRequestLogging();
 app.UseCors("ProductionCorsPolicy");
 app.UseRateLimiter();
 
@@ -2706,7 +2719,7 @@ static IResult ToCommandHttpResult(Result result, int successStatusCode = Status
             : Results.StatusCode(successStatusCode);
     }
 
-    return Results.Json(result.Error, statusCode: ToStatusCode(result.Error.Type));
+    return Results.Json(result.Error, statusCode: ToErrorStatusCode(result.Error));
 }
 
 static IResult ToHttpResult<TValue>(Result<TValue> result, int successStatusCode = StatusCodes.Status200OK)
@@ -2718,7 +2731,7 @@ static IResult ToHttpResult<TValue>(Result<TValue> result, int successStatusCode
             : Results.Json(result.Value, statusCode: successStatusCode);
     }
 
-    return Results.Json(result.Error, statusCode: ToStatusCode(result.Error.Type));
+    return Results.Json(result.Error, statusCode: ToErrorStatusCode(result.Error));
 }
 
 static IResult ToBackofficeLoginHttpResult(Result<AdminAuthResultDto> result)
@@ -2732,11 +2745,17 @@ static IResult ToBackofficeLoginHttpResult(Result<AdminAuthResultDto> result)
     {
         "Backoffice.InvalidCredentials" => StatusCodes.Status401Unauthorized,
         "Backoffice.MfaRequired" => StatusCodes.Status401Unauthorized,
-        _ => ToStatusCode(result.Error.Type)
+        _ => ToErrorStatusCode(result.Error)
     };
 
     return Results.Json(result.Error, statusCode: statusCode);
 }
+
+static int ToErrorStatusCode(Error error) => error.Code switch
+{
+    "Server.UnexpectedError" => StatusCodes.Status500InternalServerError,
+    _ => ToStatusCode(error.Type)
+};
 
 static int ToStatusCode(ErrorType errorType) => errorType switch
 {

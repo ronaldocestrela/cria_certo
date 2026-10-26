@@ -66,8 +66,8 @@ public sealed class BackofficeObservabilityBehavior<TRequest, TResponse> : IPipe
                 new KeyValuePair<string, object?>("is_success", false),
                 new KeyValuePair<string, object?>("exception", ex.GetType().Name));
 
-            activity?.SetTag("backoffice.exception", ex.Message);
-            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            activity?.SetTag("backoffice.exception_type", ex.GetType().Name);
+            activity?.SetStatus(ActivityStatusCode.Error, $"Operation failed with {ex.GetType().Name}");
             throw;
         }
     }

@@ -30,7 +30,14 @@ public static class DependencyInjection
         });
 
         services.AddScoped<IFoundationDbContext>(sp => sp.GetRequiredService<FoundationDbContext>());
+        services.AddSingleton<CriaCerto.BuildingBlocks.Abstractions.Security.IPiiRedactor, CriaCerto.BuildingBlocks.Infrastructure.Security.PiiRedactor>();
 
+        return services;
+    }
+
+    public static IServiceCollection AddPiiRedaction(this IServiceCollection services)
+    {
+        services.AddSingleton<CriaCerto.BuildingBlocks.Abstractions.Security.IPiiRedactor, CriaCerto.BuildingBlocks.Infrastructure.Security.PiiRedactor>();
         return services;
     }
 

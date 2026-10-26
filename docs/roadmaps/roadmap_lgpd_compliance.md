@@ -228,10 +228,15 @@ O objetivo desta fase é proteger dados financeiros e documentos pessoais em ní
   - Formalização arquitetural no [ADR 0020](file:///home/rony/LPR/CriaCerto/docs/adrs/0020-lgpd-referral-at-rest-encryption-and-blind-indexing.md).
 
 #### 3.2 Sanitização e Prevenção de Vazamento de PII em Logs e Telemetria
-- [ ] Revisar configurações de log no ASP.NET Core e Serilog:
-  - Garantir que filtros de redaction estejam ativos em middlewares de requisição/resposta HTTP (`RequestLoggingMiddleware`).
-  - Bloquear gravação em logs de: payloads com tokens JWT, headers de autorização, senhas em texto puro, dados de cartão de crédito e chaves Pix.
-- [ ] Assegurar que exceções não tratadas retornem payloads padronizados com `Result Pattern` (`Error.Unexpected`) e não exponham stack traces ou connection strings para o cliente HTTP.
+- [x] Revisar configurações de log no ASP.NET Core e Serilog:
+  - Integração do pacote `Serilog.AspNetCore` (10.0.0) com enriquecimento estruturado contextual (`Application`, `Environment`, `TraceId`) em [`Program.cs`](file:///home/rony/LPR/CriaCerto/src/Host/CriaCerto.Api/Program.cs).
+  - Implementação de motor centralizado de redaction [`IPiiRedactor.cs`](file:///home/rony/LPR/CriaCerto/src/BuildingBlocks/CriaCerto.BuildingBlocks.Abstractions/Security/IPiiRedactor.cs) e [`PiiRedactor.cs`](file:///home/rony/LPR/CriaCerto/src/BuildingBlocks/CriaCerto.BuildingBlocks.Infrastructure/Security/PiiRedactor.cs).
+  - Middleware de auditoria de requisições [`RequestLoggingMiddleware.cs`](file:///home/rony/LPR/CriaCerto/src/Host/CriaCerto.Api/Middleware/RequestLoggingMiddleware.cs) sanitizando cabeçalhos sensíveis (`Authorization: Bearer [REDACTED]`, `Cookie`, `Set-Cookie`, `X-Api-Key`), query strings e corpos JSON com supressão total (`[REDACTED_SENSITIVE_ENDPOINT]`) para credenciais de login, cartões e Pix.
+  - Blindagem de traces OpenTelemetry no [`BackofficeObservabilityBehavior.cs`](file:///home/rony/LPR/CriaCerto/src/Modules/Backoffice/CriaCerto.Modules.Backoffice.Application/Telemetry/BackofficeObservabilityBehavior.cs), evitando injeção de connection strings e PII em tags de `ActivitySource`.
+- [x] Assegurar que exceções não tratadas retornem payloads padronizados com `Result Pattern` (`Error.Unexpected`) e não exponham stack traces ou connection strings para o cliente HTTP:
+  - Adicionado factory method `Error.Unexpected(string? traceId)` em [`Error.cs`](file:///home/rony/LPR/CriaCerto/src/BuildingBlocks/CriaCerto.BuildingBlocks.Abstractions/Results/Error.cs) e mapeamento HTTP 500 no `ToErrorStatusCode` em [`Program.cs`](file:///home/rony/LPR/CriaCerto/src/Host/CriaCerto.Api/Program.cs).
+  - Implementação de [`GlobalExceptionHandlerMiddleware.cs`](file:///home/rony/LPR/CriaCerto/src/Host/CriaCerto.Api/Middleware/GlobalExceptionHandlerMiddleware.cs) como barreira externa do pipeline HTTP, registrando stack traces de forma segura no log interno e retornando payload JSON Result Pattern opaco ao cliente final.
+  - Formalização arquitetural no [ADR 0021](file:///home/rony/LPR/CriaCerto/docs/adrs/0021-lgpd-pii-redaction-and-unhandled-exception-hardening.md).
 
 ---
 
