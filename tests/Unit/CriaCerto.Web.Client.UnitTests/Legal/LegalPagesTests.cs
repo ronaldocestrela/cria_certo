@@ -92,6 +92,16 @@ public class LegalPagesTests
         terms1.Should().NotBeNull();
         terms2.Should().Be(terms1);
         terms3.Should().Be(terms1);
+
+        var dpa1 = LegalDocumentCatalog.GetByRoute("dpa");
+        var dpa2 = LegalDocumentCatalog.GetByRoute("/dpa");
+        var dpa3 = LegalDocumentCatalog.GetByRoute("aditivo-processamento-dados");
+        var dpa4 = LegalDocumentCatalog.GetByRoute("/ADITIVO-PROCESSAMENTO-DADOS");
+
+        dpa1.Should().NotBeNull();
+        dpa2.Should().Be(dpa1);
+        dpa3.Should().Be(dpa1);
+        dpa4.Should().Be(dpa1);
     }
 
     [Fact]
@@ -105,17 +115,62 @@ public class LegalPagesTests
     }
 
     [Fact]
+    public void LegalDocumentCatalog_ShouldContainDataProcessingAgreement()
+    {
+        // Act
+        var documents = LegalDocumentCatalog.GetAllDocuments();
+
+        // Assert
+        documents.Should().NotBeEmpty();
+        documents.Should().Contain(d => d.Route == "dpa" || d.Route == "/dpa");
+    }
+
+    [Fact]
+    public void DataProcessingAgreement_ShouldDefineDocumentVersionAndEffectiveDate()
+    {
+        // Act
+        var dpa = LegalDocumentCatalog.GetByRoute("dpa");
+
+        // Assert
+        dpa.Should().NotBeNull();
+        dpa!.Version.Should().Be("1.0");
+        dpa.EffectiveDate.Should().NotBeNullOrWhiteSpace();
+        dpa.Title.Should().Contain("Processamento de Dados");
+    }
+
+    [Fact]
+    public void DataProcessingAgreement_ShouldSpecifyMandatoryB2BLgpdSections()
+    {
+        // Act
+        var sections = LegalDocumentCatalog.GetDataProcessingAgreementSections();
+
+        // Assert
+        sections.Should().NotBeEmpty();
+        sections.Should().Contain(s => s.Id == "objeto-escopo");
+        sections.Should().Contain(s => s.Id == "instrucoes-licitas");
+        sections.Should().Contain(s => s.Id == "salvaguardas-seguranca");
+        sections.Should().Contain(s => s.Id == "confidencialidade");
+        sections.Should().Contain(s => s.Id == "subprocessadores");
+        sections.Should().Contain(s => s.Id == "cooperacao-titulares");
+        sections.Should().Contain(s => s.Id == "incidentes-seguranca");
+        sections.Should().Contain(s => s.Id == "rescisao-descarte");
+        sections.Should().Contain(s => s.Id == "auditoria-conformidade");
+    }
+
+    [Fact]
     public void LegalSections_ShouldHaveUniqueIdsAndValidTitles()
     {
         // Act
         var termsSections = LegalDocumentCatalog.GetTermsOfServiceSections();
         var privacySections = LegalDocumentCatalog.GetPrivacyPolicySections();
+        var dpaSections = LegalDocumentCatalog.GetDataProcessingAgreementSections();
 
         // Assert
         termsSections.Select(s => s.Id).Should().OnlyHaveUniqueItems();
         privacySections.Select(s => s.Id).Should().OnlyHaveUniqueItems();
+        dpaSections.Select(s => s.Id).Should().OnlyHaveUniqueItems();
 
-        foreach (var section in termsSections.Concat(privacySections))
+        foreach (var section in termsSections.Concat(privacySections).Concat(dpaSections))
         {
             section.Id.Should().NotBeNullOrWhiteSpace();
             section.Title.Should().NotBeNullOrWhiteSpace();

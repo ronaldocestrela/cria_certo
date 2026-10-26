@@ -245,10 +245,12 @@ O objetivo desta fase é proteger dados financeiros e documentos pessoais em ní
 O objetivo desta fase é formalizar a relação contratual SaaS e implementar rotinas automáticas de expurgo de dados temporários expirados.
 
 #### 4.1 Aditivo de Processamento de Dados (DPA - Data Processing Agreement)
-- [ ] Redigir e publicar o **Termo de Processamento de Dados Pessoais (DPA)** como anexo aos Termos de Serviço:
+- [x] Redigir e publicar o **Termo de Processamento de Dados Pessoais (DPA)** como anexo aos Termos de Serviço:
   - Estabelece as obrigações do CriaCerto como Operador no tratamento dos dados dos colaboradores convidados pela granja (`TeamInvite`).
-  - Obrigações de confidencialidade, salvaguardas técnicas, auxílio ao produtor no atendimento aos seus funcionários e descarte após rescisão contratual.
-  - Cláusula de auditoria e notificação de incidentes entre Controlador (Fazenda) e Operador (CriaCerto).
+  - Obrigações de confidencialidade, salvaguardas técnicas (AES-256-GCM, blind indexing, isolamento multi-tenant, SHA-256), auxílio ao produtor no atendimento aos seus funcionários (Art. 18) e descarte após rescisão contratual.
+  - Cláusula de governança de subprocessadores (Stripe, Resend, Cloud), auditoria e notificação ágil de incidentes de segurança (Art. 48) entre Controlador (Fazenda) e Operador (CriaCerto).
+  - Publicação de página interativa [`DataProcessingAgreement.razor`](file:///home/rony/LPR/CriaCerto/src/Web/CriaCerto.Web/CriaCerto.Web.Client/Pages/Legal/DataProcessingAgreement.razor) sob `/dpa` e `/aditivo-processamento-dados`, integrada ao catálogo centralizado em [`LegalModels.cs`](file:///home/rony/LPR/CriaCerto/src/Web/CriaCerto.Web/CriaCerto.Web.Client/Models/LegalModels.cs), links no layout [`LegalLayout.razor`](file:///home/rony/LPR/CriaCerto/src/Web/CriaCerto.Web/CriaCerto.Web.Client/Layout/LegalLayout.razor), referências cruzadas em [`TermsOfService.razor`](file:///home/rony/LPR/CriaCerto/src/Web/CriaCerto.Web/CriaCerto.Web.Client/Pages/Legal/TermsOfService.razor) e consentimento em [`Register.razor`](file:///home/rony/LPR/CriaCerto/src/Web/CriaCerto.Web/CriaCerto.Web.Client/Pages/Register.razor).
+  - Formalização arquitetural e jurídica no [ADR 0022](file:///home/rony/LPR/CriaCerto/docs/adrs/0022-lgpd-b2b-data-processing-agreement-dpa.md) e suíte de testes em [`LegalPagesTests.cs`](file:///home/rony/LPR/CriaCerto/tests/Unit/CriaCerto.Web.Client.UnitTests/Legal/LegalPagesTests.cs).
 
 #### 4.2 Background Service para Expurgo de Tokens e Convites Expirados (Data Purging)
 - [ ] Criar serviço em segundo plano `DataRetentionPurgingBackgroundService` em `src/Host/CriaCerto.Api/BackgroundServices`:

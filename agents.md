@@ -162,6 +162,7 @@ public class Result<TValue> : Result
   * Data subject rights & profile governance under LGPD Art. 18, III (`GetUserProfileQuery`, `UpdateUserProfileCommand`, `ChangeUserPasswordCommand`) with password entropy enforcement and SHA-256 forensic audit logging (ADR 0017).
   * Data subject access & machine-readable portability under LGPD Art. 18, II e V (`ExportUserDataPortabilityQuery`) emitting canonical JSON packages with SHA-256 forensic audit logging (ADR 0018).
   * Data subject account deletion, unlinking & anonymization under LGPD Art. 18, VI (`AnonymizeUserAccountCommand`, `POST /api/v1/auth/account/delete`) harmonized with agropecuary/tax data retention, sole administrator safeguarding, and Critical SHA-256 forensic audit logging (ADR 0019).
+  * B2B Data Processing Agreement (DPA) under LGPD Art. 39 & 46: Formalization of CriaCerto as Operator and farm/producer as Controller for invited team members (`TeamInvite`) and field operators, specifying technical safeguards (AES-256-GCM, blind indexing, SHA-256), sub-processor governance (Stripe, Resend, Cloud), 30-day export grace period, and incident notification (ADR 0022).
 
 ### 5.7 Backoffice Module (`Modules.Backoffice`)
 * **Bootstrap admin (seed):** Parametrizado via `.env` / variáveis de ambiente (`BACKOFFICE_MASTER_ADMIN_EMAIL`, `BACKOFFICE_MASTER_ADMIN_PASSWORD`, `BACKOFFICE_MASTER_ADMIN_NAME`) ou seção `Backoffice:MasterAdmin` do `appsettings.json`, com fallbacks padrão para `admin@criacerto.com.br` / `AdminPassword123!` — criado por `BackofficeDataSeeder` na inicialização da API.

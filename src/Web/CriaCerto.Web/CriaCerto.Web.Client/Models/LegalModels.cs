@@ -51,6 +51,19 @@ public static class LegalDocumentCatalog
         new("canal-dpo", "8. Canal Oficial do DPO e Atendimento ANPD", "Informações de contato e prazos regulamentares de atendimento.")
     };
 
+    private static readonly List<LegalSectionItem> DpaSections = new()
+    {
+        new("objeto-escopo", "1. Objeto, Escopo e Qualificação das Partes", "Definição do Produtor como Controlador e CriaCerto como Operador para dados de colaboradores e convites."),
+        new("instrucoes-licitas", "2. Instruções Lícitas do Controlador", "Tratamento restrito às instruções documentadas e para as finalidades do SaaS de pecuária."),
+        new("salvaguardas-seguranca", "3. Salvaguardas Técnicas e Administrativas", "Criptografia AES-256-GCM, blind indexing, isolamento lógico e trilha forense SHA-256."),
+        new("confidencialidade", "4. Dever de Confidencialidade da Equipe", "Compromisso de sigilo formal e capacitação contínua da equipe interna CriaCerto."),
+        new("subprocessadores", "5. Subprocessadores Autorizados", "Relação com Stripe, Resend e Cloud, com garantias contratuais de proteção equivalente."),
+        new("cooperacao-titulares", "6. Cooperação no Atendimento aos Titulares", "Mecanismos para auxílio à fazenda no cumprimento dos direitos dos funcionários (Art. 18)."),
+        new("incidentes-seguranca", "7. Notificação e Gestão de Incidentes", "Procedimento e prazo célere de comunicação de incidentes relevantes com dados à fazenda."),
+        new("rescisao-descarte", "8. Rescisão Contratual e Descarte Seguro", "Carência de 30 dias para exportação de dados zootécnicos e expurgo irreversível posterior."),
+        new("auditoria-conformidade", "9. Relatórios de Conformidade e Auditoria", "Disponibilização de atestados técnicos e sumários de segurança da informação.")
+    };
+
     private static readonly List<LegalDocumentItem> Documents = new()
     {
         new(
@@ -68,6 +81,14 @@ public static class LegalDocumentCatalog
             EffectiveDate: "26 de Outubro de 2026",
             Summary: "Normas de transparência, tratamento de dados de produtores rurais e direitos dos titulares conforme a LGPD.",
             Sections: PrivacySections
+        ),
+        new(
+            Title: "Aditivo de Processamento de Dados Pessoais (DPA)",
+            Route: "dpa",
+            Version: "1.0",
+            EffectiveDate: "26 de Outubro de 2026",
+            Summary: "Termo de Processamento de Dados (Data Processing Agreement) regendo as obrigações do CriaCerto como Operador dos dados de colaboradores da fazenda.",
+            Sections: DpaSections
         )
     };
 
@@ -76,12 +97,18 @@ public static class LegalDocumentCatalog
     public static LegalDocumentItem? GetByRoute(string route)
     {
         var cleanRoute = route.TrimStart('/');
+        if (cleanRoute.Equals("aditivo-processamento-dados", StringComparison.OrdinalIgnoreCase))
+        {
+            cleanRoute = "dpa";
+        }
         return Documents.FirstOrDefault(d => d.Route.Equals(cleanRoute, StringComparison.OrdinalIgnoreCase));
     }
 
     public static IReadOnlyList<LegalSectionItem> GetTermsOfServiceSections() => TermsSections.AsReadOnly();
 
     public static IReadOnlyList<LegalSectionItem> GetPrivacyPolicySections() => PrivacySections.AsReadOnly();
+
+    public static IReadOnlyList<LegalSectionItem> GetDataProcessingAgreementSections() => DpaSections.AsReadOnly();
 
     public static DpoContactInfo GetDpoContactInfo() => DpoInfo;
 }
