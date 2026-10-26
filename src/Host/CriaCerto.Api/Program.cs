@@ -221,6 +221,9 @@ builder.Services.Configure<ReferralEnforcementOptions>(builder.Configuration.Get
 // Background Services
 builder.Services.AddHostedService<SubscriptionLifecycleWorker>();
 builder.Services.AddHostedService<ReferralMaturityAndEnforcementWorker>();
+builder.Services.Configure<DataRetentionPurgingOptions>(builder.Configuration.GetSection(DataRetentionPurgingOptions.SectionName));
+builder.Services.AddSingleton<DataRetentionPurgingBackgroundService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<DataRetentionPurgingBackgroundService>());
 
 // Configure CORS Policy
 var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() 
@@ -1125,6 +1128,12 @@ backoffice.MapPost("/compliance/reveal-pii", async (RevealSensitiveDataRequest r
     var result = await sender.Send(command);
     return ToHttpResult(result);
 }).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ComplianceUnmask)).WithTags("Backoffice Compliance");
+
+backoffice.MapPost("/compliance/data-retention/run-purge", async (DataRetentionPurgingBackgroundService purgeWorker, bool? dryRun, CancellationToken ct) =>
+{
+    var result = await purgeWorker.ProcessDataPurgePassSafelyAsync(dryRun: dryRun, cancellationToken: ct);
+    return result is not null ? Results.Ok(result) : Results.StatusCode(500);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.UsersAdminManage)).WithTags("Backoffice Compliance");
 
 // Backoffice Wave Rollout & Feature Flags Endpoints
 backoffice.MapGet("/feature-flags", async (ISender sender) =>

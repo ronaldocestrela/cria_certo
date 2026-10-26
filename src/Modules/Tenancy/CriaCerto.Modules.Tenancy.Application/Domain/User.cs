@@ -75,5 +75,31 @@ public sealed class User
 
         return Result.Success();
     }
+
+    public int ClearExpiredTokens(DateTime referenceDateUtc, int graceDays = 7)
+    {
+        var cutoff = referenceDateUtc.AddDays(-Math.Max(0, graceDays));
+        var cleared = 0;
+
+        if (EmailConfirmationToken != null &&
+            EmailConfirmationTokenExpiresAt.HasValue &&
+            EmailConfirmationTokenExpiresAt.Value < cutoff)
+        {
+            EmailConfirmationToken = null;
+            EmailConfirmationTokenExpiresAt = null;
+            cleared++;
+        }
+
+        if (PasswordResetToken != null &&
+            PasswordResetTokenExpiresAt.HasValue &&
+            PasswordResetTokenExpiresAt.Value < cutoff)
+        {
+            PasswordResetToken = null;
+            PasswordResetTokenExpiresAt = null;
+            cleared++;
+        }
+
+        return cleared;
+    }
 }
 

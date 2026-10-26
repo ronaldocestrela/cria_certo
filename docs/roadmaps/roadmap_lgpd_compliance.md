@@ -253,14 +253,17 @@ O objetivo desta fase é formalizar a relação contratual SaaS e implementar ro
   - Formalização arquitetural e jurídica no [ADR 0022](file:///home/rony/LPR/CriaCerto/docs/adrs/0022-lgpd-b2b-data-processing-agreement-dpa.md) e suíte de testes em [`LegalPagesTests.cs`](file:///home/rony/LPR/CriaCerto/tests/Unit/CriaCerto.Web.Client.UnitTests/Legal/LegalPagesTests.cs).
 
 #### 4.2 Background Service para Expurgo de Tokens e Convites Expirados (Data Purging)
-- [ ] Criar serviço em segundo plano `DataRetentionPurgingBackgroundService` em `src/Host/CriaCerto.Api/BackgroundServices`:
-  - Execução programada diária (madrugada UTC).
-  - **Tokens de Autenticação**: Limpar `PasswordResetToken` e `EmailConfirmationToken` que já expiraram há mais de 7 dias na tabela `Users`.
+- [x] Criar serviço em segundo plano `DataRetentionPurgingBackgroundService` em `src/Host/CriaCerto.Api/BackgroundServices`:
+  - Execução programada periódica (24h) baseada em `PeriodicTimer` com atraso inicial e suporte a encerramento gracioso em [`DataRetentionPurgingBackgroundService.cs`](file:///home/rony/LPR/CriaCerto/src/Host/CriaCerto.Api/BackgroundServices/DataRetentionPurgingBackgroundService.cs) e opções em [`DataRetentionPurgingOptions.cs`](file:///home/rony/LPR/CriaCerto/src/Host/CriaCerto.Api/Configuration/DataRetentionPurgingOptions.cs).
+  - **Tokens de Autenticação**: Limpeza atômica de `PasswordResetToken` e `EmailConfirmationToken` expirados há mais de 7 dias através do método de domínio `ClearExpiredTokens()` em [`User.cs`](file:///home/rony/LPR/CriaCerto/src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Domain/User.cs) orquestrado pelo comando CQRS [`PurgeExpiredTenancyTokensAndInvitesCommand.cs`](file:///home/rony/LPR/CriaCerto/src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Features/DataRetention/PurgeExpiredTenancyTokensAndInvitesCommand.cs).
   - **Convites de Equipe (`TeamInvites`)**:
-    - Identificar convites expirados (`ExpiresAt < DateTime.UtcNow`) e não aceitos há mais de 30 dias.
-    - Expurgo seguro ou anonimização do e-mail do convidado.
-  - **Sessões Administrativas Expiradas**: Limpar sessões e refresh tokens revogados do Backoffice.
-- [ ] Registrar métrica de auditoria com a contagem de registros expurgados no `AuditLog`.
+    - Identificação e expurgo físico seguro de convites não aceitos (`!IsAccepted`) expirados há mais de 30 dias em [`PurgeExpiredTenancyTokensAndInvitesCommandHandler.cs`](file:///home/rony/LPR/CriaCerto/src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Features/DataRetention/PurgeExpiredTenancyTokensAndInvitesCommandHandler.cs).
+  - **Sessões Administrativas Expiradas**:
+    - Expurgo seguro de sessões administrativas revogadas e refresh tokens expirados há mais de 7 dias no schema `backoffice` via [`PurgeExpiredAdminSessionsCommand.cs`](file:///home/rony/LPR/CriaCerto/src/Modules/Backoffice/CriaCerto.Modules.Backoffice.Application/Features/DataRetention/Commands/PurgeExpiredAdminSessionsCommand.cs) e [`PurgeExpiredAdminSessionsCommandHandler.cs`](file:///home/rony/LPR/CriaCerto/src/Modules/Backoffice/CriaCerto.Modules.Backoffice.Application/Features/DataRetention/Commands/PurgeExpiredAdminSessionsCommandHandler.cs).
+- [x] Registrar métrica de auditoria com a contagem de registros expurgados no `AuditLog`:
+  - Registro forense automático no `AuditLog` (`Action = "ADMIN_SESSIONS_PURGED"`, `Category = AuditCategory.Compliance`, `Severity = AuditSeverity.Low`, encadeamento criptográfico SHA-256 e payload estruturado `DetailsJson`).
+  - Endpoint manual para disparo e testes ad-hoc `POST /api/v1/backoffice/compliance/data-retention/run-purge` em [`Program.cs`](file:///home/rony/LPR/CriaCerto/src/Host/CriaCerto.Api/Program.cs).
+  - Formalização arquitetural no [ADR 0023](file:///home/rony/LPR/CriaCerto/docs/adrs/0023-lgpd-automated-data-purging-and-retention.md) e cobertura de testes em [`UserDomainTests.cs`](file:///home/rony/LPR/CriaCerto/tests/Unit/CriaCerto.Modules.Tenancy.UnitTests/Domain/UserDomainTests.cs), [`PurgeExpiredTenancyTokensAndInvitesCommandHandlerTests.cs`](file:///home/rony/LPR/CriaCerto/tests/Unit/CriaCerto.Modules.Tenancy.UnitTests/PurgeExpiredTenancyTokensAndInvitesCommandHandlerTests.cs), [`PurgeExpiredAdminSessionsCommandHandlerTests.cs`](file:///home/rony/LPR/CriaCerto/tests/Unit/CriaCerto.Modules.Backoffice.UnitTests/Features/PurgeExpiredAdminSessionsCommandHandlerTests.cs) e [`DataRetentionPurgingWorkerIntegrationTests.cs`](file:///home/rony/LPR/CriaCerto/tests/Integration/CriaCerto.Architecture.IntegrationTests/DataRetentionPurgingWorkerIntegrationTests.cs).
 
 ---
 
