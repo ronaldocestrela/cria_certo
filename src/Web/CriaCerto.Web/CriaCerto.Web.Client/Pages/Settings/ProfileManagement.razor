@@ -3,7 +3,9 @@
 @rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
 @attribute [Authorize]
 @using CriaCerto.Web.Client.Services
+@using CriaCerto.Web.Client.Auth
 @inject AuthenticationStateProvider AuthStateProvider
+@inject CustomAuthStateProvider CustomAuth
 @inject NavigationManager Navigation
 @inject TenancyApiClient TenancyClient
 @inject IToastService ToastService
@@ -484,6 +486,157 @@
                     </div>
                 </div>
             </section>
+
+            <!-- Card 6: Zona de Perigo - Eliminação de Conta & Anonimização (Art. 18, VI da LGPD) -->
+            <section class="card danger-card" id="eliminacao-conta-lgpd" aria-labelledby="heading-danger-zone">
+                <div class="card-header danger-header">
+                    <div class="card-title-group">
+                        <span class="material-symbols-outlined card-header-icon danger-icon">warning</span>
+                        <div>
+                            <h2 id="heading-danger-zone" class="card-title text-danger">Zona de Perigo: Eliminação de Conta & Anonimização</h2>
+                            <p class="card-description">Exercício do direito à eliminação definitiva e encerramento de conta sob o Artigo 18, VI da LGPD.</p>
+                        </div>
+                    </div>
+                    <span class="badge badge-danger">Ação Irreversível</span>
+                </div>
+
+                <div class="danger-content">
+                    <div class="danger-info-box">
+                        <span class="material-symbols-outlined danger-box-icon">gavel</span>
+                        <div>
+                            <h4 class="danger-info-title">Regra de Harmonização LGPD vs Obrigações Legais Agropecuárias</h4>
+                            <p class="danger-info-text">
+                                Ao confirmar a exclusão, seus <strong>dados pessoais cadastrais</strong> (nome, e-mail, telefone e credenciais) serão imediatamente e irreversivelmente eliminados e substituídos por registros sintéticos anônimos.
+                                Os dados operacionais de manejo pecuário das fazendas (vacinas, pesagens, partos, inseminações) e registros de faturamento são <strong>preservados sob sigilo despersonalizado</strong> por imperativo legal (Código Civil art. 206 § 5º e normas sanitárias do MAPA).
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="danger-actions-row">
+                        <div>
+                            <strong class="danger-action-title">Encerramento Definitivo de Acesso</strong>
+                            <p class="danger-action-desc">Sua conta será desvinculada de todas as granjas e não será mais possível fazer login com suas credenciais.</p>
+                        </div>
+                        <button type="button"
+                                class="btn btn-danger"
+                                id="btn-open-delete-account-modal"
+                                @onclick="OpenDeleteAccountModal">
+                            <span class="material-symbols-outlined">delete_forever</span>
+                            <span>Excluir Minha Conta...</span>
+                        </button>
+                    </div>
+                </div>
+            </section>
+        </div>
+    }
+
+    <!-- Modal de Duplo Aviso e Confirmação de Exclusão de Conta -->
+    @if (_showDeleteAccountModal)
+    {
+        <div class="modal-backdrop" @onclick="CloseDeleteAccountModal" aria-hidden="true"></div>
+        <div class="modal-dialog-danger" role="dialog" aria-modal="true" aria-labelledby="modal-delete-title">
+            <div class="modal-header-danger">
+                <div class="modal-header-title-group">
+                    <span class="material-symbols-outlined modal-danger-icon">crisis_alert</span>
+                    <div>
+                        <h3 id="modal-delete-title" class="modal-title-danger">Confirmar Eliminação e Anonimização de Conta</h3>
+                        <p class="modal-subtitle-danger">Esta ação é permanente e irreversível (LGPD Art. 18, VI)</p>
+                    </div>
+                </div>
+                <button type="button" class="btn-close-modal" @onclick="CloseDeleteAccountModal" aria-label="Fechar modal">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+
+            <div class="modal-body-danger">
+                @if (!string.IsNullOrWhiteSpace(_deleteAccountErrorMessage))
+                {
+                    <div class="alert-danger-box">
+                        <span class="material-symbols-outlined">error</span>
+                        <span>@_deleteAccountErrorMessage</span>
+                    </div>
+                }
+
+                <div class="danger-warning-callout">
+                    <span class="material-symbols-outlined callout-icon">shield_with_heart</span>
+                    <div>
+                        <strong>Atenção Titular de Dados:</strong>
+                        <p>
+                            Após a confirmação, seu acesso será revogado imediatamente e seus dados pessoais serão desassociados. Se você for o único Administrador ativo de alguma fazenda com plano vigente, a exclusão será bloqueada até a transferência da titularidade para outro membro da equipe.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="delete-current-password" class="form-label">
+                        Sua Senha Atual <span class="required">*</span>
+                    </label>
+                    <div class="password-input-wrapper">
+                        <input id="delete-current-password"
+                               type="@(_showDeletePassword ? "text" : "password")"
+                               class="form-input"
+                               @bind="_deleteCurrentPassword"
+                               placeholder="Digite sua senha atual para autorizar" />
+                        <button type="button"
+                                class="btn-toggle-password"
+                                @onclick="() => _showDeletePassword = !_showDeletePassword"
+                                tabindex="-1"
+                                aria-label="Alternar visibilidade da senha">
+                            <span class="material-symbols-outlined">@(_showDeletePassword ? "visibility_off" : "visibility")</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="delete-exit-reason" class="form-label">
+                        Motivo do Encerramento (Opcional)
+                    </label>
+                    <select id="delete-exit-reason" class="form-select" @bind="_deleteExitReason">
+                        <option value="">Selecione um motivo (opcional)</option>
+                        <option value="Não utilizo mais o sistema">Não utilizo mais o sistema</option>
+                        <option value="Encerramento de atividades agropecuárias">Encerramento de atividades agropecuárias</option>
+                        <option value="Migração para outra solução">Migração para outra solução</option>
+                        <option value="Preocupação com privacidade / LGPD">Preocupação com privacidade / LGPD</option>
+                        <option value="Outro motivo">Outro motivo</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="delete-confirmation-text" class="form-label">
+                        Digite <strong>EXCLUIR</strong> para confirmar <span class="required">*</span>
+                    </label>
+                    <input id="delete-confirmation-text"
+                           type="text"
+                           class="form-input font-mono"
+                           @bind="_deleteConfirmationText"
+                           placeholder="EXCLUIR" />
+                </div>
+            </div>
+
+            <div class="modal-footer-danger">
+                <button type="button"
+                        class="btn btn-secondary"
+                        @onclick="CloseDeleteAccountModal"
+                        disabled="@_isDeletingAccount">
+                    Cancelar
+                </button>
+                <button type="button"
+                        class="btn btn-danger-solid"
+                        id="btn-confirm-account-deletion"
+                        @onclick="HandleConfirmAccountDeletionAsync"
+                        disabled="@(_isDeletingAccount || string.IsNullOrWhiteSpace(_deleteCurrentPassword) || !string.Equals(_deleteConfirmationText?.Trim(), "EXCLUIR", StringComparison.OrdinalIgnoreCase))">
+                    @if (_isDeletingAccount)
+                    {
+                        <span class="spinner-sm"></span>
+                        <span>Anonimizando e Encerrando...</span>
+                    }
+                    else
+                    {
+                        <span class="material-symbols-outlined">delete_forever</span>
+                        <span>Confirmar Exclusão Definitiva</span>
+                    }
+                </button>
+            </div>
         </div>
     }
 
@@ -1235,6 +1388,269 @@
         font-size: 1rem;
         color: #94a3b8;
     }
+
+    /* Danger Zone Styles (LGPD Art. 18, VI) */
+    .danger-card {
+        border-color: rgba(239, 68, 68, 0.35);
+        background: linear-gradient(180deg, #ffffff 0%, #fffbfb 100%);
+    }
+
+    .danger-header {
+        border-bottom-color: rgba(239, 68, 68, 0.2);
+    }
+
+    .danger-icon {
+        color: #ef4444;
+    }
+
+    .text-danger {
+        color: #b91c1c !important;
+    }
+
+    .badge-danger {
+        background: rgba(239, 68, 68, 0.12);
+        color: #b91c1c;
+        border: 1px solid rgba(239, 68, 68, 0.3);
+        font-size: 0.75rem;
+        font-weight: 700;
+        padding: 0.35rem 0.75rem;
+        border-radius: 999px;
+    }
+
+    .danger-content {
+        padding: 1.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+    }
+
+    .danger-info-box {
+        display: flex;
+        align-items: flex-start;
+        gap: 1rem;
+        background: #fef2f2;
+        border: 1px solid #fecaca;
+        border-radius: 12px;
+        padding: 1.25rem;
+    }
+
+    .danger-box-icon {
+        color: #dc2626;
+        font-size: 1.75rem;
+        flex-shrink: 0;
+        margin-top: 0.1rem;
+    }
+
+    .danger-info-title {
+        margin: 0 0 0.4rem 0;
+        font-size: 0.95rem;
+        font-weight: 700;
+        color: #991b1b;
+    }
+
+    .danger-info-text {
+        margin: 0;
+        font-size: 0.875rem;
+        color: #7f1d1d;
+        line-height: 1.5;
+    }
+
+    .danger-actions-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 1rem;
+        padding-top: 0.5rem;
+    }
+
+    .danger-action-title {
+        display: block;
+        font-size: 0.95rem;
+        color: #1e293b;
+    }
+
+    .danger-action-desc {
+        margin: 0.25rem 0 0 0;
+        font-size: 0.85rem;
+        color: #64748b;
+    }
+
+    .btn-danger {
+        background: #fee2e2;
+        color: #dc2626;
+        border: 1px solid #fca5a5;
+        padding: 0.65rem 1.25rem;
+        border-radius: 10px;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .btn-danger:hover {
+        background: #dc2626;
+        color: white;
+        border-color: #dc2626;
+        box-shadow: 0 4px 12px rgba(220, 38, 38, 0.25);
+    }
+
+    /* Modal Styles */
+    .modal-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.6);
+        backdrop-filter: blur(4px);
+        z-index: 1050;
+    }
+
+    .modal-dialog-danger {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 90%;
+        max-width: 580px;
+        background: white;
+        border-radius: 16px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25);
+        border: 1px solid #fecaca;
+        z-index: 1060;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    .modal-header-danger {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 1.25rem 1.5rem;
+        background: #fef2f2;
+        border-bottom: 1px solid #fee2e2;
+    }
+
+    .modal-header-title-group {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .modal-danger-icon {
+        color: #dc2626;
+        font-size: 2rem;
+    }
+
+    .modal-title-danger {
+        margin: 0;
+        font-size: 1.15rem;
+        font-weight: 800;
+        color: #991b1b;
+    }
+
+    .modal-subtitle-danger {
+        margin: 0.2rem 0 0 0;
+        font-size: 0.8rem;
+        color: #b91c1c;
+    }
+
+    .btn-close-modal {
+        background: transparent;
+        border: none;
+        color: #64748b;
+        cursor: pointer;
+        padding: 0.25rem;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .btn-close-modal:hover {
+        background: rgba(0, 0, 0, 0.05);
+        color: #0f172a;
+    }
+
+    .modal-body-danger {
+        padding: 1.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1.25rem;
+        max-height: 70vh;
+        overflow-y: auto;
+    }
+
+    .alert-danger-box {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.85rem 1rem;
+        background: #fee2e2;
+        border: 1px solid #fca5a5;
+        border-radius: 8px;
+        color: #991b1b;
+        font-size: 0.875rem;
+        font-weight: 600;
+    }
+
+    .danger-warning-callout {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+        padding: 1rem;
+        background: #fffbeb;
+        border: 1px solid #fde68a;
+        border-radius: 10px;
+        color: #92400e;
+        font-size: 0.85rem;
+        line-height: 1.45;
+    }
+
+    .callout-icon {
+        color: #d97706;
+        font-size: 1.4rem;
+        flex-shrink: 0;
+    }
+
+    .danger-warning-callout p {
+        margin: 0.35rem 0 0 0;
+    }
+
+    .modal-footer-danger {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 0.75rem;
+        padding: 1.25rem 1.5rem;
+        background: #f8fafc;
+        border-top: 1px solid #e2e8f0;
+    }
+
+    .btn-danger-solid {
+        background: #dc2626;
+        color: white;
+        border: 1px solid #b91c1c;
+        padding: 0.65rem 1.25rem;
+        border-radius: 10px;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .btn-danger-solid:hover:not(:disabled) {
+        background: #b91c1c;
+        box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
+    }
+
+    .btn-danger-solid:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
 </style>
 
 @code {
@@ -1467,6 +1883,82 @@
         finally
         {
             _isExportingData = false;
+        }
+    }
+
+    // Account deletion & anonymization state (LGPD Art. 18, VI)
+    private bool _showDeleteAccountModal = false;
+    private string _deleteCurrentPassword = string.Empty;
+    private string _deleteConfirmationText = string.Empty;
+    private string _deleteExitReason = string.Empty;
+    private bool _showDeletePassword = false;
+    private bool _isDeletingAccount = false;
+    private string? _deleteAccountErrorMessage = null;
+
+    private void OpenDeleteAccountModal()
+    {
+        _deleteCurrentPassword = string.Empty;
+        _deleteConfirmationText = string.Empty;
+        _deleteExitReason = string.Empty;
+        _showDeletePassword = false;
+        _deleteAccountErrorMessage = null;
+        _showDeleteAccountModal = true;
+    }
+
+    private void CloseDeleteAccountModal()
+    {
+        if (_isDeletingAccount) return;
+        _showDeleteAccountModal = false;
+    }
+
+    private async Task HandleConfirmAccountDeletionAsync()
+    {
+        if (_isDeletingAccount) return;
+        if (string.IsNullOrWhiteSpace(_deleteCurrentPassword))
+        {
+            _deleteAccountErrorMessage = "A senha atual é obrigatória para confirmar a exclusão.";
+            return;
+        }
+
+        if (!string.Equals(_deleteConfirmationText?.Trim(), "EXCLUIR", StringComparison.OrdinalIgnoreCase))
+        {
+            _deleteAccountErrorMessage = "Digite exatamente 'EXCLUIR' no campo de confirmação.";
+            return;
+        }
+
+        _isDeletingAccount = true;
+        _deleteAccountErrorMessage = null;
+
+        try
+        {
+            var request = new AnonymizeAccountRequest(
+                _deleteCurrentPassword,
+                _deleteConfirmationText?.Trim() ?? string.Empty,
+                string.IsNullOrWhiteSpace(_deleteExitReason) ? null : _deleteExitReason
+            );
+
+            var (success, errorMessage) = await TenancyClient.AnonymizeAccountAsync(request);
+            if (success)
+            {
+                _showDeleteAccountModal = false;
+                ToastService.ShowSuccess("Sua conta foi encerrada e seus dados pessoais foram anonimizados definitivamente em conformidade com o Art. 18, VI da LGPD.");
+                await CustomAuth.MarkUserAsLoggedOut();
+                Navigation.NavigateTo("/login?reason=account_deleted", forceLoad: true);
+            }
+            else
+            {
+                _deleteAccountErrorMessage = errorMessage ?? "Não foi possível encerrar a conta.";
+                ToastService.ShowError(_deleteAccountErrorMessage);
+            }
+        }
+        catch (Exception ex)
+        {
+            _deleteAccountErrorMessage = "Erro de conexão: " + ex.Message;
+            ToastService.ShowError(_deleteAccountErrorMessage);
+        }
+        finally
+        {
+            _isDeletingAccount = false;
         }
     }
 }

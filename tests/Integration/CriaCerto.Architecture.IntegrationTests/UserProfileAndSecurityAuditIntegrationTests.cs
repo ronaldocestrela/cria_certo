@@ -142,4 +142,35 @@ public class UserProfileAndSecurityAuditIntegrationTests : IDisposable
         trail.Should().Contain(t => t.Action == "USER_CONSENT_REGISTERED");
         trail.Should().Contain(t => t.Action == "USER_PROFILE_RECTIFIED");
     }
+
+    [Fact]
+    public async Task TenancyBackofficeAuditSink_Should_Create_Sha256_Audit_Record_For_Account_Anonymization()
+    {
+        // Arrange
+        var sink = new TenancyBackofficeAuditSink(_backofficeDbContext, NullLogger<TenancyBackofficeAuditSink>.Instance);
+        var userId = Guid.NewGuid();
+        var originalEmail = "produtor.eliminar@criacerto.com.br";
+        var anonymizedEmail = $"anon_{Guid.NewGuid():N}@deleted.criacerto.com.br";
+        var exitReason = "Encerramento das atividades agrícolas";
+        var ip = "200.150.10.9";
+
+        // Act
+        await sink.RecordUserAccountAnonymizedAuditAsync(userId, originalEmail, anonymizedEmail, exitReason, ip);
+
+        // Assert
+        var savedAudit = await _backofficeDbContext.AuditLogs
+            .FirstOrDefaultAsync(a => a.Action == "USER_ACCOUNT_ANONYMIZED" && a.AdminUserEmail == anonymizedEmail);
+
+        savedAudit.Should().NotBeNull();
+        savedAudit!.Category.Should().Be(AuditCategory.Compliance);
+        savedAudit.Severity.Should().Be(AuditSeverity.Critical);
+        savedAudit.Resource.Should().Be($"Users/{userId}");
+        savedAudit.IpAddress.Should().Be(ip);
+        savedAudit.ActorRole.Should().Be("RegisteredUser");
+        savedAudit.RecordHash.Should().NotBeNullOrWhiteSpace();
+        savedAudit.VerifyIntegrity().Should().BeTrue();
+        savedAudit.DetailsJson.Should().Contain(originalEmail);
+        savedAudit.DetailsJson.Should().Contain("LGPD Art. 18, VI");
+        savedAudit.DetailsJson.Should().Contain(exitReason);
+    }
 }

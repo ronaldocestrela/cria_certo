@@ -86,6 +86,7 @@ using CriaCerto.Modules.Tenancy.Application.Features.GetUserProfile;
 using CriaCerto.Modules.Tenancy.Application.Features.UpdateUserProfile;
 using CriaCerto.Modules.Tenancy.Application.Features.ChangeUserPassword;
 using CriaCerto.Modules.Tenancy.Application.Features.ExportUserDataPortability;
+using CriaCerto.Modules.Tenancy.Application.Features.AnonymizeUserAccount;
 using CriaCerto.Modules.Tenancy.Application.Domain;
 using CriaCerto.Modules.Tenancy.Infrastructure;
 
@@ -1959,6 +1960,33 @@ app.MapGet("/api/v1/auth/my-data/export", async (ClaimsPrincipal userClaims, Htt
         fileContents: result.Value.Content,
         contentType: result.Value.ContentType,
         fileDownloadName: result.Value.FileName);
+}).RequireAuthorization().WithTags("Auth");
+
+app.MapPost("/api/v1/auth/account/delete", async (AnonymizeUserAccountRequest req, ClaimsPrincipal userClaims, HttpContext ctx, ISender sender) =>
+{
+    var sub = userClaims.FindFirst(ClaimTypes.NameIdentifier)?.Value 
+           ?? userClaims.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value 
+           ?? userClaims.FindFirst("sub")?.Value
+           ?? userClaims.FindFirst("UserId")?.Value;
+
+    if (!Guid.TryParse(sub, out var userId))
+    {
+        return Results.Unauthorized();
+    }
+
+    var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "127.0.0.1";
+    if (ctx.Request.Headers.TryGetValue("X-Forwarded-For", out var forwardedFor) && !string.IsNullOrWhiteSpace(forwardedFor))
+    {
+        var firstIp = forwardedFor.ToString().Split(',')[0].Trim();
+        if (!string.IsNullOrWhiteSpace(firstIp))
+        {
+            ip = firstIp;
+        }
+    }
+
+    var command = new AnonymizeUserAccountCommand(userId, req.CurrentPassword, req.ConfirmationText, req.ExitReason, ip);
+    var result = await sender.Send(command);
+    return ToCommandHttpResult(result);
 }).RequireAuthorization().WithTags("Auth");
 
 app.MapGet("/api/v1/tenancy/plans", async (ISender sender) =>

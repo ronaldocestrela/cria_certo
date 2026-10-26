@@ -262,5 +262,66 @@ public sealed class TenancyBackofficeAuditSink : ITenancyAuditSink, IUserAuditTr
             return Array.Empty<UserAuditTrailEntryExportDto>();
         }
     }
+
+    public async Task RecordUserAccountAnonymizedAuditAsync(
+        Guid userId,
+        string originalEmail,
+        string anonymizedEmail,
+        string? exitReason,
+        string ipAddress,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var previousHash = await _dbContext.AuditLogs
+                .AsNoTracking()
+                .OrderByDescending(a => a.TimestampUtc)
+                .Select(a => a.RecordHash)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            var detailsJson = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                UserId = userId,
+                OriginalEmail = originalEmail,
+                AnonymizedEmail = anonymizedEmail,
+                ExitReason = exitReason,
+                Action = "USER_ACCOUNT_ANONYMIZED",
+                Specification = "LGPD Art. 18, VI",
+                TimestampUtc = DateTime.UtcNow
+            }, new System.Text.Json.JsonSerializerOptions
+            {
+                Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+            });
+
+            var audit = AuditLog.CreateForensic(
+                adminUserId: userId,
+                adminUserEmail: anonymizedEmail,
+                actorRole: "RegisteredUser",
+                action: "USER_ACCOUNT_ANONYMIZED",
+                category: AuditCategory.Compliance,
+                severity: AuditSeverity.Critical,
+                resource: $"Users/{userId}",
+                targetTenantId: null,
+                targetTenantName: null,
+                ipAddress: string.IsNullOrWhiteSpace(ipAddress) ? "127.0.0.1" : ipAddress,
+                userAgent: "WebAccountAnonymizationFlow/1.0",
+                previousRecordHash: previousHash,
+                detailsJson: detailsJson);
+
+            _dbContext.AuditLogs.Add(audit);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            _logger.LogInformation(
+                "Auditoria forense de encerramento e anonimização de conta LGPD registrada para usuário {UserId} ({OriginalEmail} -> {AnonymizedEmail}) com hash {Hash}.",
+                userId, originalEmail, anonymizedEmail, audit.RecordHash);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                ex,
+                "Falha ao registrar auditoria forense de anonimização de conta para usuário {UserId} ({OriginalEmail}).",
+                userId, originalEmail);
+        }
+    }
 }
 

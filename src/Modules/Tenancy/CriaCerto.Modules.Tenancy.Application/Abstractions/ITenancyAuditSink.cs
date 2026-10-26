@@ -44,4 +44,15 @@ public interface ITenancyAuditSink
         string userEmail,
         string ipAddress,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Registra auditoria forense quando o titular exerce o direito de eliminação/anonimização de conta (Art. 18, VI).
+    /// </summary>
+    Task RecordUserAccountAnonymizedAuditAsync(
+        Guid userId,
+        string originalEmail,
+        string anonymizedEmail,
+        string? exitReason,
+        string ipAddress,
+        CancellationToken cancellationToken = default);
 }

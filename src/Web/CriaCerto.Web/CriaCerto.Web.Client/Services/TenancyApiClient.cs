@@ -143,6 +143,12 @@ public sealed record ChangePasswordRequest(
     string ConfirmNewPassword
 );
 
+public sealed record AnonymizeAccountRequest(
+    string CurrentPassword,
+    string ConfirmationText,
+    string? ExitReason = null
+);
+
 public sealed class TenancyApiClient
 {
     private readonly HttpClient _httpClient;
@@ -501,6 +507,28 @@ public sealed class TenancyApiClient
         catch (Exception ex)
         {
             return (false, null, null, ex.Message);
+        }
+    }
+
+    public async Task<(bool Success, string? ErrorMessage)> AnonymizeAccountAsync(
+        AnonymizeAccountRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        try
+        {
+            var response = await _httpClient.PostAsJsonAsync("/api/v1/auth/account/delete", request, cancellationToken);
+            if (response.IsSuccessStatusCode)
+            {
+                return (true, null);
+            }
+
+            var error = await response.Content.ReadFromJsonAsync<ApiErrorDto>(cancellationToken: cancellationToken);
+            return (false, error?.Message ?? "Erro ao encerrar e anonimizar conta.");
+        }
+        catch (Exception ex)
+        {
+            return (false, ex.Message);
         }
     }
 

@@ -184,19 +184,25 @@ O objetivo desta fase é assegurar que o titular dos dados (produtor ou colabora
 - [x] Formalização arquitetural no [ADR 0018](file:///home/rony/LPR/CriaCerto/docs/adrs/0018-lgpd-data-subject-access-and-portability.md).
 
 #### 2.3 Direito de Eliminação, Encerramento de Conta e Anonimização (Art. 18, VI)
-- [ ] Definir a **Regra de Harmonização LGPD vs Obrigações Fiscais/Agropecuárias**:
-  - Dados pessoais estritos do usuário (nome, telefone, credenciais) são passíveis de eliminação com base no Art. 18, VI da LGPD.
+- [x] Definir a **Regra de Harmonização LGPD vs Obrigações Fiscais/Agropecuárias**:
+  - Dados pessoais estritos do usuário (nome, telefone, credenciais) são eliminados e anonimizados com base no Art. 18, VI da LGPD.
   - Dados zootécnicos da fazenda (pesagens de lotes, inseminações, vacinas, partos, transferências) e transações de pagamento (Stripe) **devem ser preservados** por imperativo legal (Código Civil - 5 anos; normas sanitárias do MAPA / rastreabilidade animal).
   - **Mecanismo de Anonimização**:
-    - Substituir `FullName` por `"Titular Anonimizado"`.
-    - Substituir `Email` por hash irreversível `anon_{guid}@deleted.criacerto.com.br`.
-    - Zerar `PhoneNumber`, `PasswordHash`, `EmailConfirmationToken`, `PasswordResetToken`.
-    - Marcar `IsAnonymized = true` e preencher `AnonymizedAtUtc = DateTime.UtcNow`.
-    - Desvincular todas as associações ativas em `UserTenant` ou marcar como inativo.
-- [ ] Criar comando `AnonymizeUserAccountCommand` via endpoint `POST /api/v1/auth/account/delete`:
-  - Exigir confirmação de senha atual e justificativa ou motivo opcional de saída.
-  - Se o usuário for o único Administrador ativo de um Tenant com assinatura vigente, bloquear a operação e orientar a transferência da titularidade da fazenda ou cancelamento prévio da assinatura.
-- [ ] Criar modal de confirmação com duplo aviso em Blazor: *"Excluir Minha Conta & Anonimizar Dados"*.
+    - Substituição de `FullName` por `"Titular Anonimizado"`.
+    - Substituição de `Email` por hash irreversível `anon_{guid}@deleted.criacerto.com.br`.
+    - Zeramento de `PhoneNumber`, `EmailConfirmationToken`, `PasswordResetToken` e sobrescrita de `PasswordHash` para `"ANONYMIZED_DISABLED_CREDENTIAL"`.
+    - Marcação de `IsAnonymized = true` e `AnonymizedAtUtc = DateTime.UtcNow` via método `Anonymize` em [`User.cs`](file:///home/rony/LPR/CriaCerto/src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Domain/User.cs).
+    - Desassociação de todos os vínculos em `UserTenant` via `_dbContext.UserTenants.RemoveRange`.
+    - Migração EF Core adicionando `IsAnonymized`, `AnonymizedAtUtc` e `AnonymizationReason` via [`20261026220418_AddUserAnonymizationFields.cs`](file:///home/rony/LPR/CriaCerto/src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Infrastructure/Persistence/Migrations/20261026220418_AddUserAnonymizationFields.cs).
+- [x] Criar comando e endpoint `AnonymizeUserAccountCommand`:
+  - `POST /api/v1/auth/account/delete` implementado em [`Program.cs`](file:///home/rony/LPR/CriaCerto/src/Host/CriaCerto.Api/Program.cs).
+  - Execução autenticada via [`AnonymizeUserAccountCommand.cs`](file:///home/rony/LPR/CriaCerto/src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Features/AnonymizeUserAccount/AnonymizeUserAccountCommand.cs) com validação de senha atual em tempo constante e validação da palavra-chave `"EXCLUIR"` em [`AnonymizeUserAccountCommandValidator.cs`](file:///home/rony/LPR/CriaCerto/src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Features/AnonymizeUserAccount/AnonymizeUserAccountCommandValidator.cs).
+  - **Salvaguarda de Administrador Único**: Se o usuário for o único Administrador ativo de um Tenant com plano vigente (`CanProducerAccess`), bloqueia a operação com `409 Conflict` e orienta transferência de titularidade ou cancelamento prévio em [`AnonymizeUserAccountCommandHandler.cs`](file:///home/rony/LPR/CriaCerto/src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Features/AnonymizeUserAccount/AnonymizeUserAccountCommandHandler.cs).
+  - Registro de auditoria forense com severidade crítica (`Action = "USER_ACCOUNT_ANONYMIZED"`, `Category = AuditCategory.Compliance`, `Severity = AuditSeverity.Critical`, SHA-256 encadeado) em [`TenancyBackofficeAuditSink.cs`](file:///home/rony/LPR/CriaCerto/src/Host/CriaCerto.Api/Services/TenancyBackofficeAuditSink.cs).
+- [x] Criar Card de Zona de Perigo e Modal de Confirmação com Duplo Aviso em Blazor:
+  - Card **"Zona de Perigo: Eliminação de Conta & Anonimização"** e modal de confirmação com aviso detalhado da regra de harmonização em [`ProfileManagement.razor`](file:///home/rony/LPR/CriaCerto/src/Web/CriaCerto.Web/CriaCerto.Web.Client/Pages/Settings/ProfileManagement.razor).
+  - Integração no cliente via [`TenancyApiClient.cs`](file:///home/rony/LPR/CriaCerto/src/Web/CriaCerto.Web/CriaCerto.Web.Client/Services/TenancyApiClient.cs) acionando `MarkUserAsLoggedOut()` e redirecionando para `/login?reason=account_deleted`.
+  - Formalização arquitetural no [ADR 0019](file:///home/rony/LPR/CriaCerto/docs/adrs/0019-lgpd-data-subject-account-deletion-and-anonymization.md).
 
 ---
 

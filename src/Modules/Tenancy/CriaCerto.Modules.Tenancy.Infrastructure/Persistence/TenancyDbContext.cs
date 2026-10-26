@@ -46,6 +46,10 @@ public sealed class TenancyDbContext : DbContext, ITenancyDbContext
             builder.Property(u => u.TermsVersion).HasMaxLength(20);
             builder.Property(u => u.PrivacyPolicyVersion).HasMaxLength(20);
             builder.Property(u => u.ConsentIpAddress).HasMaxLength(45);
+            builder.Property(u => u.IsAnonymized).IsRequired().HasDefaultValue(false);
+            builder.Property(u => u.AnonymizedAtUtc);
+            builder.Property(u => u.AnonymizationReason).HasMaxLength(500);
+            builder.HasIndex(u => u.IsAnonymized);
         });
 
         modelBuilder.Entity<Tenant>(builder =>

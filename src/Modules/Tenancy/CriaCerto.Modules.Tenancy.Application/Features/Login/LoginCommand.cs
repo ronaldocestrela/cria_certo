@@ -40,6 +40,12 @@ public sealed class LoginCommandHandler : IRequestHandler<LoginCommand, Result<A
                 Error.Unauthorized("Auth.InvalidCredentials", "E-mail ou senha inválidos."));
         }
 
+        if (user.IsAnonymized)
+        {
+            return Result.Failure<AuthResponse>(
+                Error.Unauthorized("Auth.AccountAnonymized", "Esta conta foi encerrada e anonimizada definitivamente em conformidade com a LGPD."));
+        }
+
         if (!user.IsEmailConfirmed)
         {
             return Result.Failure<AuthResponse>(

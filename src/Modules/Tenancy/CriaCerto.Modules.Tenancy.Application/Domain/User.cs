@@ -21,6 +21,9 @@ public sealed class User
     public string? TermsVersion { get; set; }
     public string? PrivacyPolicyVersion { get; set; }
     public string? ConsentIpAddress { get; set; }
+    public bool IsAnonymized { get; set; }
+    public DateTime? AnonymizedAtUtc { get; set; }
+    public string? AnonymizationReason { get; set; }
     public List<UserTenant> UserTenants { get; set; } = new();
 
     public Result UpdateProfile(string fullName, string? phoneNumber)
@@ -43,6 +46,33 @@ public sealed class User
         }
 
         PasswordHash = newPasswordHash;
+        return Result.Success();
+    }
+
+    public Result Anonymize(string anonymizedEmail, string? reason = null)
+    {
+        if (IsAnonymized)
+        {
+            return Result.Failure(Error.Conflict("User.AlreadyAnonymized", "A conta já se encontra anonimizada e encerrada."));
+        }
+
+        if (string.IsNullOrWhiteSpace(anonymizedEmail))
+        {
+            return Result.Failure(Error.Validation("User.InvalidAnonymizedEmail", "O e-mail de anonimização não pode ser vazio."));
+        }
+
+        FullName = "Titular Anonimizado";
+        Email = anonymizedEmail.Trim().ToLowerInvariant();
+        PhoneNumber = null;
+        PasswordHash = "ANONYMIZED_DISABLED_CREDENTIAL";
+        EmailConfirmationToken = null;
+        EmailConfirmationTokenExpiresAt = null;
+        PasswordResetToken = null;
+        PasswordResetTokenExpiresAt = null;
+        IsAnonymized = true;
+        AnonymizedAtUtc = DateTime.UtcNow;
+        AnonymizationReason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
+
         return Result.Success();
     }
 }
