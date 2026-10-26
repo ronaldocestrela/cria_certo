@@ -95,6 +95,7 @@ public sealed class UpdatePartnerContractCommissionCommandHandler
             .FirstOrDefaultAsync(cancellationToken);
 
         var legalDocument = currentContract?.LegalDocumentNumber ?? string.Empty;
+        var legalDocumentHash = currentContract?.LegalDocumentNumberHash ?? string.Empty;
         var pixKey = !string.IsNullOrWhiteSpace(request.PixKey) ? request.PixKey : (currentContract?.PixKey ?? string.Empty);
         var pixKeyType = request.PixKeyType ?? (currentContract?.PixKeyType ?? PixKeyType.RandomKey);
 
@@ -119,7 +120,8 @@ public sealed class UpdatePartnerContractCommissionCommandHandler
             pixKey,
             pixKeyType,
             legalDocument,
-            closeDate);
+            closeDate,
+            legalDocumentHash);
 
         if (newContractResult.IsFailure)
         {

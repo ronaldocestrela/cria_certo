@@ -109,8 +109,13 @@ namespace CriaCerto.Modules.Referral.Infrastructure.Persistence.Migrations
 
                     b.Property<string>("LegalDocumentNumber")
                         .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("nvarchar(30)");
+                        .HasMaxLength(512)
+                        .HasColumnType("nvarchar(512)");
+
+                    b.Property<string>("LegalDocumentNumberHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<int?>("MaxRecurringMonths")
                         .HasColumnType("int");
@@ -125,8 +130,8 @@ namespace CriaCerto.Modules.Referral.Infrastructure.Persistence.Migrations
 
                     b.Property<string>("PixKey")
                         .IsRequired()
-                        .HasMaxLength(150)
-                        .HasColumnType("nvarchar(150)");
+                        .HasMaxLength(512)
+                        .HasColumnType("nvarchar(512)");
 
                     b.Property<string>("PixKeyType")
                         .IsRequired()
@@ -142,6 +147,8 @@ namespace CriaCerto.Modules.Referral.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("IsActive");
+
+                    b.HasIndex("LegalDocumentNumberHash");
 
                     b.HasIndex("ParticipantId");
 

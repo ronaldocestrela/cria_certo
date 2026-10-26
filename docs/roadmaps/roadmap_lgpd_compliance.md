@@ -211,14 +211,21 @@ O objetivo desta fase é assegurar que o titular dos dados (produtor ou colabora
 O objetivo desta fase é proteger dados financeiros e documentos pessoais em nível de persistência contra vazamento em dumps de banco de dados e garantir sanitização de logs.
 
 #### 3.1 Criptografia em Repouso no Módulo de Indicações (`Referral`)
-- [ ] Identificar campos com PII sensível em `PartnerContract`:
+- [x] Identificar campos com PII sensível em `PartnerContract`:
   - `PixKey` (Chave Pix - pode ser CPF, telefone ou e-mail pessoal).
   - `LegalDocumentNumber` (CPF ou CNPJ do parceiro comercial).
-- [ ] Implementar serviço de criptografia simétrica com rotação de chaves:
-  - `IDataEncryptionService` utilizando algoritmo padrão **AES-256-GCM** (ou criptografia via Azure Key Vault / AWS KMS).
-- [ ] Implementar EF Core Value Converter para encriptação transparente no schema `referral`:
-  - `EncryptedStringConverter` que cifra na escrita (`SaveAsync`) e decifra na leitura, garantindo que colunas no SQL Server contenham apenas texto cifrado (Base64).
-- [ ] Criar script de migração e re-encriptação de dados existentes para ambientes legados.
+  - Mapeamento e proteção com envelope Base64 autenticado `$cc1$` em [`PartnerContract.cs`](file:///home/rony/LPR/CriaCerto/src/Modules/Referral/CriaCerto.Modules.Referral.Application/Domain/PartnerContract.cs).
+- [x] Implementar serviço de criptografia simétrica com rotação de chaves:
+  - Abstração centralizada [`IDataEncryptionService.cs`](file:///home/rony/LPR/CriaCerto/src/BuildingBlocks/CriaCerto.BuildingBlocks.Abstractions/Security/IDataEncryptionService.cs) e opções [`EncryptionOptions.cs`](file:///home/rony/LPR/CriaCerto/src/BuildingBlocks/CriaCerto.BuildingBlocks.Abstractions/Security/EncryptionOptions.cs).
+  - Implementação com algoritmo padrão **AES-256-GCM** e chaveiro de rotação de versões (`KeyRing`) em [`AesGcmDataEncryptionService.cs`](file:///home/rony/LPR/CriaCerto/src/BuildingBlocks/CriaCerto.BuildingBlocks.Infrastructure/Security/AesGcmDataEncryptionService.cs).
+  - Padrão **Blind Indexing (HMAC-SHA256)** via `ComputeBlindIndex` para validação de unicidade $O(1)$ sem expor PII nos cadastros em [`RegisterCommercialPartnerCommand.cs`](file:///home/rony/LPR/CriaCerto/src/Modules/Referral/CriaCerto.Modules.Referral.Application/Features/CommercialPartners/Commands/RegisterCommercialPartnerCommand.cs).
+- [x] Implementar EF Core Value Converter para encriptação transparente no schema `referral`:
+  - [`EncryptedStringConverter.cs`](file:///home/rony/LPR/CriaCerto/src/BuildingBlocks/CriaCerto.BuildingBlocks.Infrastructure/Security/EncryptedStringConverter.cs) integrado no [`ReferralDbContext.cs`](file:///home/rony/LPR/CriaCerto/src/Modules/Referral/CriaCerto.Modules.Referral.Infrastructure/Persistence/ReferralDbContext.cs), interceptando leitura/escrita com colunas `PixKey` e `LegalDocumentNumber` expandidas para `nvarchar(512)` e coluna indexada `LegalDocumentNumberHash` (`nvarchar(64)`).
+  - Migração EF Core gerada via [`20261026223606_Add_PartnerContract_Encryption_And_Blind_Index.cs`](file:///home/rony/LPR/CriaCerto/src/Modules/Referral/CriaCerto.Modules.Referral.Infrastructure/Persistence/Migrations/20261026223606_Add_PartnerContract_Encryption_And_Blind_Index.cs).
+- [x] Criar script de migração e re-encriptação de dados existentes para ambientes legados:
+  - Serviço de re-encriptação idempotente [`ReferralDataReencryptionService.cs`](file:///home/rony/LPR/CriaCerto/src/Modules/Referral/CriaCerto.Modules.Referral.Infrastructure/Services/ReferralDataReencryptionService.cs).
+  - Endpoint administrativo autenticado `POST /api/v1/backoffice/referral/reencrypt-contracts` mapeado em [`Program.cs`](file:///home/rony/LPR/CriaCerto/src/Host/CriaCerto.Api/Program.cs).
+  - Formalização arquitetural no [ADR 0020](file:///home/rony/LPR/CriaCerto/docs/adrs/0020-lgpd-referral-at-rest-encryption-and-blind-indexing.md).
 
 #### 3.2 Sanitização e Prevenção de Vazamento de PII em Logs e Telemetria
 - [ ] Revisar configurações de log no ASP.NET Core e Serilog:

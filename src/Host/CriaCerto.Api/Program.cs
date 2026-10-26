@@ -184,6 +184,7 @@ var connectionString = builder.Configuration.GetConnectionString("SqlServer")
 
 // Register Building Blocks and Infrastructure
 builder.Services.AddBuildingBlocksInfrastructure(connectionString);
+builder.Services.AddDataEncryption(builder.Configuration);
 builder.Services.AddEmailSender(builder.Configuration);
 builder.Services.AddTenancyInfrastructure(builder.Configuration);
 builder.Services.AddBreedingInfrastructure();
@@ -1583,6 +1584,12 @@ backoffice.MapPost("/referral/payouts/run-enforcement", async (ISender sender) =
     var result = await sender.Send(command);
     return ToHttpResult(result);
 }).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ReferralPayoutsManage)).WithTags("Backoffice Referral Payouts");
+
+backoffice.MapPost("/referral/reencrypt-contracts", async (IReferralDataReencryptionService reencryptionService) =>
+{
+    var result = await reencryptionService.ReencryptPartnerContractsAsync();
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ReferralPayoutsManage)).WithTags("Backoffice Referral Governance");
 
 backoffice.MapGet("/referral/discount-policies", async (ISender sender) =>
 {

@@ -92,4 +92,29 @@ public static class DependencyInjection
 
         return services;
     }
+
+    public static IServiceCollection AddDataEncryption(
+        this IServiceCollection services,
+        Microsoft.Extensions.Configuration.IConfiguration configuration)
+    {
+        services.Configure<CriaCerto.BuildingBlocks.Abstractions.Security.EncryptionOptions>(options =>
+        {
+            configuration.GetSection(CriaCerto.BuildingBlocks.Abstractions.Security.EncryptionOptions.SectionName).Bind(options);
+
+            var envKey = configuration["ENCRYPTION_CURRENT_KEY"];
+            if (!string.IsNullOrWhiteSpace(envKey))
+            {
+                options.CurrentKey = envKey;
+            }
+
+            var envBlindKey = configuration["ENCRYPTION_BLIND_INDEX_KEY"];
+            if (!string.IsNullOrWhiteSpace(envBlindKey))
+            {
+                options.BlindIndexKey = envBlindKey;
+            }
+        });
+
+        services.AddSingleton<CriaCerto.BuildingBlocks.Abstractions.Security.IDataEncryptionService, CriaCerto.BuildingBlocks.Infrastructure.Security.AesGcmDataEncryptionService>();
+        return services;
+    }
 }
