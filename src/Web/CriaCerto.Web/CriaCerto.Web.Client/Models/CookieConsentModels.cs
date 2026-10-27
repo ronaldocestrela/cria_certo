@@ -21,6 +21,7 @@ public class CookieConsentState
     public bool Essential { get; set; } = true;
     public bool OfflineStorage { get; set; } = true;
     public bool ReferralTracking { get; set; } = true;
+    public bool AnalyticsTracking { get; set; } = true;
 
     public bool IsValid(DateTime? currentUtcTime = null, string expectedVersion = DefaultVersion)
     {
@@ -49,7 +50,8 @@ public class CookieConsentState
             Version = version,
             Essential = true,
             OfflineStorage = true,
-            ReferralTracking = true
+            ReferralTracking = true,
+            AnalyticsTracking = true
         };
     }
 }
@@ -80,6 +82,13 @@ public static class CookieConsentCatalog
             Description: "Registra a indicação de parceiros autorizados para aplicação de benefícios comerciais e descontos na assinatura.",
             IsRequired: false,
             StorageKeyOrTechnology: "localStorage (cc_referral_code)"
+        ),
+        new(
+            Id: "analytics",
+            Name: "Métricas e Desempenho (Google Analytics)",
+            Description: "Coleta métricas anônimas e agregadas de navegação e desempenho via Google Analytics 4 com Google Consent Mode v2 e anonimização de IP.",
+            IsRequired: false,
+            StorageKeyOrTechnology: "Cookies Google Analytics (_ga, _ga_7N8ZX7E0BX) via Google Consent Mode v2"
         )
     };
 }

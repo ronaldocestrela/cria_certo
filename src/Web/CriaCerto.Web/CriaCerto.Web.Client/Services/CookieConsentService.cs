@@ -76,6 +76,22 @@ public class CookieConsentService : ICookieConsentService
             // Ignorado em caso de bloqueio estrito de armazenamento local pelo browser
         }
 
+        try
+        {
+            if (state.AnalyticsTracking)
+            {
+                await _jsRuntime.InvokeVoidAsync("grantAnalyticsConsent");
+            }
+            else
+            {
+                await _jsRuntime.InvokeVoidAsync("revokeAnalyticsConsent");
+            }
+        }
+        catch
+        {
+            // Resiliente se scripts globais não estiverem disponíveis
+        }
+
         _cachedState = state;
         _hasChecked = true;
         OnConsentChanged?.Invoke();
@@ -86,6 +102,15 @@ public class CookieConsentService : ICookieConsentService
         try
         {
             await _jsRuntime.InvokeVoidAsync("localStorage.removeItem", CookieConsentCatalog.StorageKey);
+        }
+        catch
+        {
+            // Resiliente
+        }
+
+        try
+        {
+            await _jsRuntime.InvokeVoidAsync("revokeAnalyticsConsent");
         }
         catch
         {

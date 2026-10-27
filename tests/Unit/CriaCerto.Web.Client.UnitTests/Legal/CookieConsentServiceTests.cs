@@ -37,6 +37,7 @@ public class CookieConsentServiceTests
         state.Essential.Should().BeTrue();
         state.OfflineStorage.Should().BeTrue();
         state.ReferralTracking.Should().BeTrue();
+        state.AnalyticsTracking.Should().BeTrue();
     }
 
     [Fact]
@@ -110,6 +111,7 @@ public class CookieConsentServiceTests
         categories.Should().Contain(c => c.Id == "essential" && c.IsRequired);
         categories.Should().Contain(c => c.Id == "pwa_offline" && c.IsRequired);
         categories.Should().Contain(c => c.Id == "referral" && !c.IsRequired);
+        categories.Should().Contain(c => c.Id == "analytics" && !c.IsRequired);
         CookieConsentCatalog.StorageKey.Should().Be("cria_certo_cookie_consent_v1");
     }
 
@@ -208,6 +210,21 @@ public class CookieConsentServiceTests
         state.Should().NotBeNull();
         state!.IsAccepted.Should().BeTrue();
         state.ExpiresAtUtc.Should().BeAfter(DateTime.UtcNow.AddDays(170));
+        _ = _jsRuntime.Received(1).InvokeVoidAsync("grantAnalyticsConsent");
+    }
+
+    [Fact]
+    public async Task SaveConsentAsync_WhenAnalyticsDisabled_ShouldInvokeRevokeAnalyticsConsent()
+    {
+        // Arrange
+        var state = CookieConsentState.CreateDefaultAccepted();
+        state.AnalyticsTracking = false;
+
+        // Act
+        await _sut.SaveConsentAsync(state);
+
+        // Assert
+        _ = _jsRuntime.Received(1).InvokeVoidAsync("revokeAnalyticsConsent");
     }
 
     [Fact]
@@ -228,5 +245,6 @@ public class CookieConsentServiceTests
 
         var state = await _sut.GetConsentAsync();
         state.Should().BeNull();
+        _ = _jsRuntime.Received(1).InvokeVoidAsync("revokeAnalyticsConsent");
     }
 }

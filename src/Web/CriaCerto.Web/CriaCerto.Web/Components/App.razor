@@ -17,6 +17,61 @@
     <ImportMap />
     <link rel="icon" type="image/png" href="favicon.png" />
     <HeadOutlet />
+
+    <!-- Google tag (gtag.js) com Google Consent Mode v2 (Conformidade LGPD - Lei nº 13.709/2018) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-7N8ZX7E0BX"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+
+        // Verificação prévia de consentimento no localStorage para Privacy by Default
+        (function() {
+            var hasConsent = false;
+            try {
+                var stored = localStorage.getItem('cria_certo_cookie_consent_v1');
+                if (stored) {
+                    var parsed = JSON.parse(stored);
+                    if (parsed && parsed.IsAccepted && (!parsed.ExpiresAtUtc || new Date(parsed.ExpiresAtUtc) > new Date())) {
+                        hasConsent = parsed.AnalyticsTracking !== false;
+                    }
+                }
+            } catch (e) {
+                // Modo defensivo
+            }
+
+            // Google Consent Mode v2: por padrão, armazenamento analítico e de marketing negados até aceite do titular
+            gtag('consent', 'default', {
+                'ad_storage': 'denied',
+                'ad_user_data': 'denied',
+                'ad_personalization': 'denied',
+                'analytics_storage': hasConsent ? 'granted' : 'denied'
+            });
+
+            gtag('js', new Date());
+
+            // Configuração com anonimização de IP ativada (Minimização de Dados - Art. 6º, III da LGPD)
+            gtag('config', 'G-7N8ZX7E0BX', {
+                'anonymize_ip': true
+            });
+        })();
+
+        // Sincronização dinâmica com o banner de cookies em tempo de execução
+        window.grantAnalyticsConsent = function() {
+            if (typeof gtag === 'function') {
+                gtag('consent', 'update', {
+                    'analytics_storage': 'granted'
+                });
+            }
+        };
+
+        window.revokeAnalyticsConsent = function() {
+            if (typeof gtag === 'function') {
+                gtag('consent', 'update', {
+                    'analytics_storage': 'denied'
+                });
+            }
+        };
+    </script>
 </head>
 
 <body>

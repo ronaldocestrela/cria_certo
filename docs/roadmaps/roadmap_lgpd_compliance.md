@@ -145,10 +145,14 @@ O objetivo desta fase é instituir as bases legais de transparência ativa, publ
 
 #### 1.3 Banner de Cookies e Armazenamento Local (PWA/Offline)
 - [x] Criar componente atômico Blazor [`CookieConsentBanner.razor`](file:///home/rony/LPR/CriaCerto/src/Web/CriaCerto.Web/CriaCerto.Web.Client/Components/Legal/CookieConsentBanner.razor):
-  - Informar de maneira clara o uso de cookies estritamente necessários (sessão de login), armazenamento local para modo off-line no curral (`localStorage` / IndexedDB) e cookie de atribuição de parceiro (`?ref=`).
+  - Informar de maneira clara o uso de cookies estritamente necessários (sessão de login), armazenamento local para modo off-line no curral (`localStorage` / IndexedDB), cookie de atribuição de parceiro (`?ref=`) e métricas agregadas de navegação com Google Analytics 4.
   - Botão de confirmação *"Entendido e Continuar"* que persiste o aceite no `localStorage` sob a chave `cria_certo_cookie_consent_v1` com expiração de 180 dias gerenciado por [`ICookieConsentService`](file:///home/rony/LPR/CriaCerto/src/Web/CriaCerto.Web/CriaCerto.Web.Client/Services/CookieConsentService.cs) e [`CookieConsentModels.cs`](file:///home/rony/LPR/CriaCerto/src/Web/CriaCerto.Web/CriaCerto.Web.Client/Models/CookieConsentModels.cs).
   - Link de fácil acesso para a Política de Privacidade e painel sanfonado para detalhes técnicos das tecnologias de armazenamento.
 - [x] Injetar o banner no layout principal ([`MainLayout.razor`](file:///home/rony/LPR/CriaCerto/src/Web/CriaCerto.Web/CriaCerto.Web.Client/Layout/MainLayout.razor)), nos layouts públicos ([`LegalLayout.razor`](file:///home/rony/LPR/CriaCerto/src/Web/CriaCerto.Web/CriaCerto.Web.Client/Layout/LegalLayout.razor), [`EmptyLayout.razor`](file:///home/rony/LPR/CriaCerto/src/Web/CriaCerto.Web/CriaCerto.Web.Client/Layout/EmptyLayout.razor)) e de parceiros ([`PartnerLayout.razor`](file:///home/rony/LPR/CriaCerto/src/Web/CriaCerto.Web/CriaCerto.Web.Client/Layout/PartnerLayout.razor)).
+- [x] Integração da tag Google Analytics (`G-7N8ZX7E0BX`) em [`App.razor`](file:///home/rony/LPR/CriaCerto/src/Web/CriaCerto.Web/CriaCerto.Web/Components/App.razor) em estrita conformidade com a LGPD:
+  - Implementação do **Google Consent Mode v2** com `analytics_storage`, `ad_storage`, `ad_user_data` e `ad_personalization` bloqueados por padrão (*Privacy by Default*).
+  - Anonimização de IP obrigatória (`anonymize_ip: true`) alinhada ao princípio da minimização de dados (Art. 6º, III).
+  - Ativação reativa e dinâmica de consentimento sincronizada ao [`CookieConsentService`](file:///home/rony/LPR/CriaCerto/src/Web/CriaCerto.Web/CriaCerto.Web.Client/Services/CookieConsentService.cs) e documentação na [`PrivacyPolicy.razor`](file:///home/rony/LPR/CriaCerto/src/Web/CriaCerto.Web/CriaCerto.Web.Client/Pages/Legal/PrivacyPolicy.razor).
 
 
 ---
