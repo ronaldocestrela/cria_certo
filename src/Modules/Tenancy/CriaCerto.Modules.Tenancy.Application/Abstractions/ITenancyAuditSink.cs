@@ -55,4 +55,15 @@ public interface ITenancyAuditSink
         string? exitReason,
         string ipAddress,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Registra auditoria forense quando um titular registra uma solicitação DSR ao DPO (Art. 41 e Art. 18).
+    /// </summary>
+    Task RecordDataSubjectRequestSubmittedAuditAsync(
+        string protocolNumber,
+        string dataSubjectEmail,
+        string requestType,
+        string relationshipType,
+        string ipAddress,
+        CancellationToken cancellationToken = default);
 }

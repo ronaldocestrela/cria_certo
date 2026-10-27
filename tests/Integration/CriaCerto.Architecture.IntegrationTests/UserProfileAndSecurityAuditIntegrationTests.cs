@@ -173,4 +173,35 @@ public class UserProfileAndSecurityAuditIntegrationTests : IDisposable
         savedAudit.DetailsJson.Should().Contain("LGPD Art. 18, VI");
         savedAudit.DetailsJson.Should().Contain(exitReason);
     }
+
+    [Fact]
+    public async Task TenancyBackofficeAuditSink_Should_Create_Sha256_Audit_Record_For_Data_Subject_Request()
+    {
+        // Arrange
+        var sink = new TenancyBackofficeAuditSink(_backofficeDbContext, NullLogger<TenancyBackofficeAuditSink>.Instance);
+        var protocol = "DSR-20261026-9A1B";
+        var email = "titular.dsr@fazenda.com.br";
+        var requestType = "AccessAndConfirmation";
+        var relationshipType = "ProducerAdmin";
+        var ip = "187.12.34.56";
+
+        // Act
+        await sink.RecordDataSubjectRequestSubmittedAuditAsync(protocol, email, requestType, relationshipType, ip);
+
+        // Assert
+        var savedAudit = await _backofficeDbContext.AuditLogs
+            .FirstOrDefaultAsync(a => a.Action == "DATA_SUBJECT_REQUEST_SUBMITTED" && a.AdminUserEmail == email);
+
+        savedAudit.Should().NotBeNull();
+        savedAudit!.Category.Should().Be(AuditCategory.Compliance);
+        savedAudit.Severity.Should().Be(AuditSeverity.Medium);
+        savedAudit.Resource.Should().Be($"Dsr/{protocol}");
+        savedAudit.IpAddress.Should().Be(ip);
+        savedAudit.ActorRole.Should().Be("DataSubject");
+        savedAudit.RecordHash.Should().NotBeNullOrWhiteSpace();
+        savedAudit.VerifyIntegrity().Should().BeTrue();
+        savedAudit.DetailsJson.Should().Contain(protocol);
+        savedAudit.DetailsJson.Should().Contain(email);
+        savedAudit.DetailsJson.Should().Contain("LGPD Art. 41 & Art. 18");
+    }
 }

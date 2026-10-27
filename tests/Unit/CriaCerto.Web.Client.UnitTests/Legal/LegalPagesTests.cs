@@ -158,19 +158,65 @@ public class LegalPagesTests
     }
 
     [Fact]
+    public void LegalDocumentCatalog_ShouldContainDpoPortalDocument()
+    {
+        // Act
+        var dpoDoc = LegalDocumentCatalog.GetByRoute("dpo");
+        var aliasDoc1 = LegalDocumentCatalog.GetByRoute("canal-dpo");
+        var aliasDoc2 = LegalDocumentCatalog.GetByRoute("privacidade/canal-dpo");
+
+        // Assert
+        dpoDoc.Should().NotBeNull();
+        dpoDoc!.Route.Should().Be("dpo");
+        dpoDoc.Title.Should().Contain("DPO");
+        aliasDoc1.Should().Be(dpoDoc);
+        aliasDoc2.Should().Be(dpoDoc);
+    }
+
+    [Fact]
+    public void DpoPortal_ShouldSpecifyMandatoryArt41Sections()
+    {
+        // Act
+        var sections = LegalDocumentCatalog.GetDpoSections();
+
+        // Assert
+        sections.Should().NotBeEmpty();
+        sections.Should().Contain(s => s.Id == "identidade-encarregado");
+        sections.Should().Contain(s => s.Id == "atribuicoes-dpo");
+        sections.Should().Contain(s => s.Id == "direitos-titulares");
+        sections.Should().Contain(s => s.Id == "prazos-atendimento");
+        sections.Should().Contain(s => s.Id == "formulario-dsr");
+    }
+
+    [Fact]
+    public void DpoContactInfo_ShouldContainOfficialEmailAndResponseDays()
+    {
+        // Act
+        var dpo = LegalDocumentCatalog.GetDpoContactInfo();
+
+        // Assert
+        dpo.Should().NotBeNull();
+        dpo.Email.Should().Be("privacidade@criacerto.com.br");
+        dpo.MaxResponseDays.Should().Be(15);
+        dpo.PhysicalAddress.Should().NotBeNullOrWhiteSpace();
+    }
+
+    [Fact]
     public void LegalSections_ShouldHaveUniqueIdsAndValidTitles()
     {
         // Act
         var termsSections = LegalDocumentCatalog.GetTermsOfServiceSections();
         var privacySections = LegalDocumentCatalog.GetPrivacyPolicySections();
         var dpaSections = LegalDocumentCatalog.GetDataProcessingAgreementSections();
+        var dpoSections = LegalDocumentCatalog.GetDpoSections();
 
         // Assert
         termsSections.Select(s => s.Id).Should().OnlyHaveUniqueItems();
         privacySections.Select(s => s.Id).Should().OnlyHaveUniqueItems();
         dpaSections.Select(s => s.Id).Should().OnlyHaveUniqueItems();
+        dpoSections.Select(s => s.Id).Should().OnlyHaveUniqueItems();
 
-        foreach (var section in termsSections.Concat(privacySections).Concat(dpaSections))
+        foreach (var section in termsSections.Concat(privacySections).Concat(dpaSections).Concat(dpoSections))
         {
             section.Id.Should().NotBeNullOrWhiteSpace();
             section.Title.Should().NotBeNullOrWhiteSpace();

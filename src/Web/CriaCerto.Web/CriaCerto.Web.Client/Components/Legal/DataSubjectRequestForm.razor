@@ -1,0 +1,715 @@
+@using CriaCerto.Web.Client.Services
+@inject TenancyApiClient TenancyClient
+@inject IJSRuntime JS
+
+<div class="dsr-form-card">
+    @if (_receipt != null)
+    {
+        <div class="dsr-success-view">
+            <div class="success-badge-header">
+                <span class="material-symbols-outlined success-icon">verified</span>
+                <div>
+                    <h3 class="success-title">Solicitação Registrada com Sucesso!</h3>
+                    <p class="success-subtitle">Seu protocolo formal foi gerado e enviado para o seu e-mail.</p>
+                </div>
+            </div>
+
+            <div class="protocol-box">
+                <div class="protocol-label">NÚMERO DE PROTOCOLO OFICIAL (LGPD ART. 41)</div>
+                <div class="protocol-value-row">
+                    <span class="protocol-code font-mono" id="dsr-protocol-number">@_receipt.ProtocolNumber</span>
+                    <button type="button" class="btn-copy-protocol" @onclick="CopyProtocolToClipboardAsync" title="Copiar Protocolo">
+                        <span class="material-symbols-outlined">@(_copiedProtocol ? "check" : "content_copy")</span>
+                        <span>@(_copiedProtocol ? "Copiado!" : "Copiar")</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="receipt-details-grid">
+                <div class="receipt-item">
+                    <span class="receipt-item-label">Titular Requerente</span>
+                    <strong class="receipt-item-value">@_receipt.DataSubjectName</strong>
+                </div>
+                <div class="receipt-item">
+                    <span class="receipt-item-label">E-mail Cadastrado</span>
+                    <strong class="receipt-item-value font-mono">@_receipt.DataSubjectEmail</strong>
+                </div>
+                <div class="receipt-item">
+                    <span class="receipt-item-label">Prazo Legal de Resposta</span>
+                    <strong class="receipt-item-value" style="color: #059669;">
+                        Até @_receipt.MaxResponseDateUtc.ToString("dd/MM/yyyy") (15 dias úteis)
+                    </strong>
+                </div>
+                <div class="receipt-item">
+                    <span class="receipt-item-label">Canal Oficial do DPO</span>
+                    <strong class="receipt-item-value font-mono">@_receipt.DpoEmail</strong>
+                </div>
+            </div>
+
+            <div class="receipt-legal-note">
+                <span class="material-symbols-outlined note-icon">info</span>
+                <p>
+                    Conforme o <strong>Art. 19, II da Lei 13.709/2018 (LGPD)</strong>, nossa equipe de privacidade e o Encarregado de Proteção de Dados adotarão todas as providências técnicas e jurídicas cabíveis, emitindo resposta conclusiva fundamentada para o seu e-mail cadastrado.
+                </p>
+            </div>
+
+            <div class="receipt-actions">
+                <button type="button" class="btn btn-outline" @onclick="ResetForm">
+                    <span class="material-symbols-outlined">restart_alt</span>
+                    <span>Registrar Outra Solicitação</span>
+                </button>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="form-header">
+            <div class="form-header-badge">
+                <span class="material-symbols-outlined">security</span>
+                <span>Canal de Requisição LGPD (DSR - Art. 18 & Art. 41)</span>
+            </div>
+            <h3 class="form-title">Formulário de Atendimento aos Direitos do Titular</h3>
+            <p class="form-subtitle">
+                Utilize este canal oficial para registrar requisições de confirmação, retificação, portabilidade ou eliminação de dados.
+            </p>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(_errorMessage))
+        {
+            <div class="alert-box alert-danger">
+                <span class="material-symbols-outlined">error</span>
+                <span>@_errorMessage</span>
+            </div>
+        }
+
+        <form @onsubmit="HandleSubmitAsync" class="dsr-form">
+            <div class="form-grid">
+                <!-- Nome Completo -->
+                <div class="form-group">
+                    <label for="dsr-full-name" class="form-label">
+                        Nome Completo do Titular <span class="required">*</span>
+                    </label>
+                    <input id="dsr-full-name"
+                           type="text"
+                           class="form-input @(GetFieldErrorClass(nameof(_fullName)))"
+                           @bind="_fullName"
+                           placeholder="Ex: Ana Maria da Silva"
+                           maxlength="150"
+                           disabled="@_isSubmitting" />
+                    @if (_validationErrors.TryGetValue(nameof(_fullName), out var nameErr))
+                    {
+                        <span class="field-error">@nameErr</span>
+                    }
+                </div>
+
+                <!-- E-mail -->
+                <div class="form-group">
+                    <label for="dsr-email" class="form-label">
+                        E-mail para Resposta <span class="required">*</span>
+                    </label>
+                    <input id="dsr-email"
+                           type="email"
+                           class="form-input @(GetFieldErrorClass(nameof(_email)))"
+                           @bind="_email"
+                           placeholder="Ex: ana.silva@fazenda.com.br"
+                           maxlength="200"
+                           disabled="@_isSubmitting" />
+                    @if (_validationErrors.TryGetValue(nameof(_email), out var emailErr))
+                    {
+                        <span class="field-error">@emailErr</span>
+                    }
+                </div>
+
+                <!-- Telefone -->
+                <div class="form-group">
+                    <label for="dsr-phone" class="form-label">
+                        Telefone / WhatsApp <span class="field-hint">(Opcional)</span>
+                    </label>
+                    <input id="dsr-phone"
+                           type="tel"
+                           class="form-input"
+                           @bind="_phoneNumber"
+                           placeholder="Ex: +55 (67) 99988-7766"
+                           maxlength="30"
+                           disabled="@_isSubmitting" />
+                </div>
+
+                <!-- CPF / Documento -->
+                <div class="form-group">
+                    <label for="dsr-document" class="form-label">
+                        CPF ou CNPJ <span class="field-hint">(Opcional - auxilia localização no rebanho)</span>
+                    </label>
+                    <input id="dsr-document"
+                           type="text"
+                           class="form-input"
+                           @bind="_documentNumber"
+                           placeholder="Ex: 123.456.789-00"
+                           maxlength="30"
+                           disabled="@_isSubmitting" />
+                </div>
+
+                <!-- Relação com a plataforma -->
+                <div class="form-group">
+                    <label for="dsr-relationship" class="form-label">
+                        Seu Vínculo com o CriaCerto <span class="required">*</span>
+                    </label>
+                    <select id="dsr-relationship" class="form-select" @bind="_relationshipType" disabled="@_isSubmitting">
+                        <option value="1">Produtor Rural / Administrador de Granja</option>
+                        <option value="2">Colaborador da Fazenda (Veterinário, Vaqueiro, Zootecnista)</option>
+                        <option value="3">Parceiro Comercial Credenciado / Afiliado</option>
+                        <option value="4">Visitante / Candidato a Vaga / Não Cadastrado</option>
+                        <option value="5">Outro / Terceiro Interessado</option>
+                    </select>
+                </div>
+
+                <!-- Tipo de Solicitação -->
+                <div class="form-group">
+                    <label for="dsr-request-type" class="form-label">
+                        Tipo de Solicitação (Art. 18 LGPD) <span class="required">*</span>
+                    </label>
+                    <select id="dsr-request-type" class="form-select" @bind="_requestType" disabled="@_isSubmitting">
+                        <option value="1">Confirmação de Tratamento & Acesso aos Dados (Art. 18, I e II)</option>
+                        <option value="2">Correção de Dados Incompletos, Inexatos ou Desatualizados (Art. 18, III)</option>
+                        <option value="3">Anonimização, Bloqueio ou Eliminação (Art. 18, IV e VI)</option>
+                        <option value="4">Portabilidade dos Dados a Outro Fornecedor (Art. 18, V)</option>
+                        <option value="5">Informação sobre Compartilhamento com Terceiros (Art. 18, VII)</option>
+                        <option value="6">Revogação de Consentimento e Informações sobre Recusa (Art. 18, VIII e IX)</option>
+                        <option value="7">Dúvidas Gerais sobre Privacidade / Contato ANPD (Art. 41)</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Descrição Detalhada -->
+            <div class="form-group" style="margin-top: 1rem;">
+                <div style="display: flex; justify-content: space-between; align-items: baseline;">
+                    <label for="dsr-description" class="form-label">
+                        Descrição Detalhada do Pedido <span class="required">*</span>
+                    </label>
+                    <span class="char-counter @(DescriptionLength < 20 ? "text-muted" : "text-success")">
+                        @(DescriptionLength) / 2000 caracteres (mínimo 20)
+                    </span>
+                </div>
+                <textarea id="dsr-description"
+                          class="form-textarea @(GetFieldErrorClass(nameof(_description)))"
+                          rows="4"
+                          @bind="_description"
+                          @bind:event="oninput"
+                          placeholder="Descreva detalhadamente seu requerimento para que o Encarregado de Dados possa localizar seus registros e adotar providências."
+                          maxlength="2000"
+                          disabled="@_isSubmitting"></textarea>
+                @if (_validationErrors.TryGetValue(nameof(_description), out var descErr))
+                {
+                    <span class="field-error">@descErr</span>
+                }
+            </div>
+
+            <div class="form-actions-row">
+                <span class="sla-notice">
+                    <span class="material-symbols-outlined sla-icon">schedule</span>
+                    Prazo legal de resposta: <strong>15 dias úteis</strong> (LGPD Art. 19, II)
+                </span>
+                <button type="submit"
+                        class="btn btn-primary"
+                        id="btn-submit-dsr"
+                        disabled="@(_isSubmitting || DescriptionLength < 20)">
+                    @if (_isSubmitting)
+                    {
+                        <span class="spinner-sm"></span>
+                        <span>Registrando Protocolo...</span>
+                    }
+                    else
+                    {
+                        <span class="material-symbols-outlined">send</span>
+                        <span>Enviar Solicitação ao DPO</span>
+                    }
+                </button>
+            </div>
+        </form>
+    }
+</div>
+
+<style>
+    .dsr-form-card {
+        background: #ffffff;
+        border: 1px solid #c2dec9;
+        border-radius: 12px;
+        padding: 2rem;
+        box-shadow: 0 4px 16px rgba(0, 101, 44, 0.05);
+        margin: 2rem 0;
+    }
+
+    .form-header {
+        margin-bottom: 1.5rem;
+    }
+
+    .form-header-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.3rem 0.75rem;
+        border-radius: 999px;
+        background: rgba(5, 150, 105, 0.1);
+        color: #059669;
+        font-size: 0.78rem;
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+    }
+
+    .form-header-badge .material-symbols-outlined {
+        font-size: 1rem;
+    }
+
+    .form-title {
+        margin: 0;
+        font-size: 1.35rem;
+        font-weight: 800;
+        color: var(--cc-primary, #00652c);
+        letter-spacing: -0.01em;
+    }
+
+    .form-subtitle {
+        margin: 0.35rem 0 0 0;
+        color: var(--cc-ink-muted, #64748b);
+        font-size: 0.9rem;
+        line-height: 1.5;
+    }
+
+    .form-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 1.25rem;
+    }
+
+    .form-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.35rem;
+    }
+
+    .form-label {
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: var(--cc-ink, #0f172a);
+    }
+
+    .required {
+        color: #dc2626;
+    }
+
+    .field-hint {
+        font-size: 0.75rem;
+        font-weight: normal;
+        color: #64748b;
+    }
+
+    .form-input, .form-select, .form-textarea {
+        padding: 0.65rem 0.85rem;
+        border-radius: 8px;
+        border: 1px solid #cbd5e1;
+        font-size: 0.92rem;
+        color: #0f172a;
+        background: #ffffff;
+        outline: none;
+        transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .form-input:focus, .form-select:focus, .form-textarea:focus {
+        border-color: #059669;
+        box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.15);
+    }
+
+    .input-error {
+        border-color: #dc2626 !important;
+        box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.15) !important;
+    }
+
+    .field-error {
+        font-size: 0.78rem;
+        color: #dc2626;
+        font-weight: 500;
+    }
+
+    .char-counter {
+        font-size: 0.75rem;
+        font-family: var(--cc-font-mono, monospace);
+    }
+
+    .text-muted { color: #64748b; }
+    .text-success { color: #059669; font-weight: 600; }
+
+    .form-actions-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 1rem;
+        margin-top: 1.5rem;
+        padding-top: 1rem;
+        border-top: 1px solid #e2e8f0;
+    }
+
+    .sla-notice {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        font-size: 0.82rem;
+        color: #475569;
+    }
+
+    .sla-icon {
+        font-size: 1.1rem;
+        color: #059669;
+    }
+
+    .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        padding: 0.65rem 1.4rem;
+        border-radius: 8px;
+        font-size: 0.92rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+        border: none;
+    }
+
+    .btn-primary {
+        background: linear-gradient(135deg, #059669, #047857);
+        color: #ffffff;
+        box-shadow: 0 2px 6px rgba(5, 150, 105, 0.25);
+    }
+
+    .btn-primary:hover:not(:disabled) {
+        background: linear-gradient(135deg, #047857, #065f46);
+        box-shadow: 0 4px 12px rgba(5, 150, 105, 0.35);
+        transform: translateY(-1px);
+    }
+
+    .btn-primary:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+
+    .btn-outline {
+        background: #ffffff;
+        border: 1px solid #cbd5e1;
+        color: #334155;
+    }
+
+    .btn-outline:hover {
+        background: #f8fafc;
+        border-color: #94a3b8;
+    }
+
+    .alert-box {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.85rem 1rem;
+        border-radius: 8px;
+        margin-bottom: 1.25rem;
+        font-size: 0.88rem;
+    }
+
+    .alert-danger {
+        background: #fef2f2;
+        border: 1px solid #fecaca;
+        color: #991b1b;
+    }
+
+    /* Success View */
+    .dsr-success-view {
+        animation: fadeIn 0.3s ease;
+    }
+
+    @@keyframes fadeIn {
+        from { opacity: 0; transform: translateY(8px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    .success-badge-header {
+        display: flex;
+        align-items: flex-start;
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .success-icon {
+        font-size: 2.5rem;
+        color: #059669;
+        background: #d1fae5;
+        padding: 0.5rem;
+        border-radius: 12px;
+    }
+
+    .success-title {
+        margin: 0;
+        font-size: 1.4rem;
+        font-weight: 800;
+        color: #065f46;
+    }
+
+    .success-subtitle {
+        margin: 0.25rem 0 0 0;
+        color: #475569;
+        font-size: 0.92rem;
+    }
+
+    .protocol-box {
+        background: #f0fdf4;
+        border: 2px dashed #059669;
+        border-radius: 10px;
+        padding: 1.25rem;
+        margin-bottom: 1.5rem;
+        text-align: center;
+    }
+
+    .protocol-label {
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: #065f46;
+        letter-spacing: 0.05em;
+        margin-bottom: 0.4rem;
+    }
+
+    .protocol-value-row {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+
+    .protocol-code {
+        font-size: 1.6rem;
+        font-weight: 800;
+        color: #047857;
+        letter-spacing: 0.04em;
+    }
+
+    .btn-copy-protocol {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0.4rem 0.85rem;
+        border-radius: 6px;
+        background: #ffffff;
+        border: 1px solid #a7f3d0;
+        color: #065f46;
+        font-size: 0.82rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .btn-copy-protocol:hover {
+        background: #ecfdf5;
+    }
+
+    .receipt-details-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 0.85rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .receipt-item {
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 0.75rem 1rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+
+    .receipt-item-label {
+        font-size: 0.75rem;
+        color: #64748b;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+    }
+
+    .receipt-item-value {
+        font-size: 0.92rem;
+        color: #0f172a;
+    }
+
+    .receipt-legal-note {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+        background: #f0f9ff;
+        border: 1px solid #bae6fd;
+        border-radius: 8px;
+        padding: 0.85rem 1rem;
+        margin-bottom: 1.5rem;
+        font-size: 0.85rem;
+        color: #0369a1;
+        line-height: 1.5;
+    }
+
+    .receipt-legal-note p {
+        margin: 0;
+    }
+
+    .note-icon {
+        font-size: 1.25rem;
+        flex-shrink: 0;
+    }
+
+    .receipt-actions {
+        display: flex;
+        justify-content: flex-end;
+    }
+
+    .spinner-sm {
+        display: inline-block;
+        width: 14px;
+        height: 14px;
+        border: 2px solid #ffffff;
+        border-top-color: transparent;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        margin-right: 0.4rem;
+    }
+
+    @@keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+</style>
+
+@code {
+    [Parameter] public string? InitialFullName { get; set; }
+    [Parameter] public string? InitialEmail { get; set; }
+    [Parameter] public int InitialRelationshipType { get; set; } = 1;
+
+    private string _fullName = string.Empty;
+    private string _email = string.Empty;
+    private string? _phoneNumber;
+    private string? _documentNumber;
+    private int _relationshipType = 1;
+    private int _requestType = 1;
+    private string _description = string.Empty;
+
+    private bool _isSubmitting;
+    private bool _copiedProtocol;
+    private string? _errorMessage;
+    private DataSubjectRequestReceiptModel? _receipt;
+    private Dictionary<string, string> _validationErrors = new();
+
+    private int DescriptionLength => _description?.Trim().Length ?? 0;
+
+    protected override void OnInitialized()
+    {
+        if (!string.IsNullOrWhiteSpace(InitialFullName))
+        {
+            _fullName = InitialFullName;
+        }
+
+        if (!string.IsNullOrWhiteSpace(InitialEmail))
+        {
+            _email = InitialEmail;
+        }
+
+        if (InitialRelationshipType >= 1 && InitialRelationshipType <= 5)
+        {
+            _relationshipType = InitialRelationshipType;
+        }
+    }
+
+    private string GetFieldErrorClass(string fieldName) =>
+        _validationErrors.ContainsKey(fieldName) ? "input-error" : string.Empty;
+
+    private bool ValidateClientSide()
+    {
+        _validationErrors.Clear();
+
+        if (string.IsNullOrWhiteSpace(_fullName) || _fullName.Trim().Length < 3)
+        {
+            _validationErrors[nameof(_fullName)] = "Informe seu nome completo (mínimo de 3 caracteres).";
+        }
+
+        if (string.IsNullOrWhiteSpace(_email) || !_email.Contains('@') || !_email.Contains('.'))
+        {
+            _validationErrors[nameof(_email)] = "Informe um e-mail válido para recebimento do protocolo e resposta.";
+        }
+
+        if (string.IsNullOrWhiteSpace(_description) || _description.Trim().Length < 20)
+        {
+            _validationErrors[nameof(_description)] = "Descreva seu requerimento com no mínimo 20 caracteres.";
+        }
+
+        return _validationErrors.Count == 0;
+    }
+
+    private async Task HandleSubmitAsync()
+    {
+        _errorMessage = null;
+
+        if (!ValidateClientSide())
+        {
+            return;
+        }
+
+        _isSubmitting = true;
+        try
+        {
+            var payload = new SubmitDataSubjectRequestDto(
+                FullName: _fullName.Trim(),
+                Email: _email.Trim().ToLowerInvariant(),
+                PhoneNumber: string.IsNullOrWhiteSpace(_phoneNumber) ? null : _phoneNumber.Trim(),
+                DocumentNumber: string.IsNullOrWhiteSpace(_documentNumber) ? null : _documentNumber.Trim(),
+                RelationshipType: _relationshipType,
+                RequestType: _requestType,
+                Description: _description.Trim()
+            );
+
+            var (success, receipt, error) = await TenancyClient.SubmitDataSubjectRequestAsync(payload);
+            if (success && receipt != null)
+            {
+                _receipt = receipt;
+            }
+            else
+            {
+                _errorMessage = error ?? "Ocorreu um erro ao registrar sua solicitação. Tente novamente mais tarde.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Falha de conexão: {ex.Message}";
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+
+    private async Task CopyProtocolToClipboardAsync()
+    {
+        if (_receipt == null || JS == null) return;
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", _receipt.ProtocolNumber);
+            _copiedProtocol = true;
+            StateHasChanged();
+            await Task.Delay(2500);
+            _copiedProtocol = false;
+            StateHasChanged();
+        }
+        catch
+        {
+            // Clipboard API fallback ignored gracefully
+        }
+    }
+
+    private void ResetForm()
+    {
+        _receipt = null;
+        _description = string.Empty;
+        _errorMessage = null;
+        _validationErrors.Clear();
+    }
+}

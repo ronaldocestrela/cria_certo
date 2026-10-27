@@ -1,0 +1,152 @@
+@page "/dpo"
+@page "/privacidade/canal-dpo"
+@page "/privacidade/dpo"
+@layout LegalLayout
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@using CriaCerto.Web.Client.Components.Legal
+@using CriaCerto.Web.Client.Models
+
+<PageTitle>Canal do Encarregado de Dados (DPO) - CriaCerto Bovino SaaS</PageTitle>
+
+<HeadContent>
+    <meta name="description" content="Canal Oficial de Comunicação do Encarregado pelo Tratamento de Dados Pessoais (DPO) do CriaCerto Bovino SaaS conforme o Art. 41 da LGPD. Requisite seus direitos de privacidade com protocolo formal." />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="https://criacerto.com.br/dpo" />
+</HeadContent>
+
+<div class="legal-document-wrapper">
+    <!-- Header Hero -->
+    <div style="margin-bottom: 2rem; border-bottom: 1px solid var(--cc-border); padding-bottom: 1.5rem;">
+        <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 0.5rem;">
+            <div style="font-family: var(--cc-font-mono); font-size: 0.8rem; color: var(--cc-primary); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; background: #e0f2e9; padding: 0.25rem 0.6rem; border-radius: 4px;">
+                Canal Oficial • LGPD Art. 41 Compliant
+            </div>
+            <div style="font-family: var(--cc-font-mono); font-size: 0.8rem; color: var(--cc-ink-muted);">
+                Prazo Regulamentar: até 15 dias úteis (Art. 19, II)
+            </div>
+        </div>
+        <h1 style="font-size: 2.25rem; font-weight: 800; color: var(--cc-ink); margin: 0.5rem 0;">
+            Central de Privacidade & Canal Oficial do DPO
+        </h1>
+        <p style="font-size: 1.1rem; color: var(--cc-ink-muted); margin: 0; line-height: 1.6;">
+            Identificação pública do Encarregado pelo Tratamento de Dados Pessoais, catálogo dos direitos dos titulares e formulário eletrônico oficial para registro de requisições fundamentadas na Lei nº 13.709/2018 (LGPD).
+        </p>
+    </div>
+
+    <!-- Grid Container with Sidebar & Content -->
+    <div style="display: grid; grid-template-columns: 280px 1fr; gap: 2.5rem; align-items: start;">
+        <!-- Left Sticky TOC -->
+        <aside class="d-none d-md-block">
+            <LegalTableOfContents Sections="@Document.Sections" />
+        </aside>
+
+        <!-- Right Content Body -->
+        <article class="legal-article" style="line-height: 1.7; color: var(--cc-ink); font-size: 0.95rem;">
+
+            <!-- Seção 1: Identidade e Qualificação do DPO -->
+            <section id="identidade-encarregado" style="margin-bottom: 2.5rem; scroll-margin-top: 6rem;">
+                <h2 style="font-size: 1.35rem; color: var(--cc-primary); border-bottom: 1px solid #e2e8f0; padding-bottom: 0.5rem; margin-bottom: 1rem;">
+                    1. Identidade e Qualificação do Encarregado (DPO)
+                </h2>
+                <p>
+                    Em atendimento ao <strong>Artigo 41 da Lei Geral de Proteção de Dados (Lei nº 13.709/2018 - LGPD)</strong> e às diretrizes emanadas pela Autoridade Nacional de Proteção de Dados (ANPD), o <strong>CriaCerto Bovino SaaS</strong> designa publicamente seu Encarregado de Proteção de Dados, responsável por atuar como canal centralizado e qualificado de comunicação entre a organização, os titulares de dados pessoais e os órgãos fiscalizadores.
+                </p>
+
+                <DpoContactCard Info="@DpoInfo" />
+            </section>
+
+            <!-- Seção 2: Atribuições do Encarregado -->
+            <section id="atribuicoes-dpo" style="margin-bottom: 2.5rem; scroll-margin-top: 6rem;">
+                <h2 style="font-size: 1.35rem; color: var(--cc-primary); border-bottom: 1px solid #e2e8f0; padding-bottom: 0.5rem; margin-bottom: 1rem;">
+                    2. Atribuições do Encarregado (Art. 41, § 2º)
+                </h2>
+                <p>
+                    O Encarregado de Dados desempenha atribuições institucionais independentes voltadas à conformidade técnica, administrativa e jurídica:
+                </p>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 0.85rem; margin: 1.25rem 0;">
+                    <div style="background: #ffffff; border: 1px solid var(--cc-border); border-radius: 8px; padding: 1rem;">
+                        <strong style="color: var(--cc-primary);">I. Atendimento aos Titulares</strong>
+                        <p style="margin: 0.35rem 0 0 0; font-size: 0.88rem; color: #475569;">
+                            Receber reclamações, dúvidas e solicitações formais de pecuaristas, colaboradores e terceiros, prestando esclarecimentos e adotando providências.
+                        </p>
+                    </div>
+                    <div style="background: #ffffff; border: 1px solid var(--cc-border); border-radius: 8px; padding: 1rem;">
+                        <strong style="color: var(--cc-primary);">II. Interlocução com a ANPD</strong>
+                        <p style="margin: 0.35rem 0 0 0; font-size: 0.88rem; color: #475569;">
+                            Receber notificações, ofícios e determinações da Autoridade Nacional de Proteção de Dados, intermediando auditorias e planos de conformidade.
+                        </p>
+                    </div>
+                    <div style="background: #ffffff; border: 1px solid var(--cc-border); border-radius: 8px; padding: 1rem;">
+                        <strong style="color: var(--cc-primary);">III. Capacitação Operacional</strong>
+                        <p style="margin: 0.35rem 0 0 0; font-size: 0.88rem; color: #475569;">
+                            Orientar permanentemente colaboradores e fornecedores a respeito das melhores práticas de segurança da informação e sigilo pecuário.
+                        </p>
+                    </div>
+                    <div style="background: #ffffff; border: 1px solid var(--cc-border); border-radius: 8px; padding: 1rem;">
+                        <strong style="color: var(--cc-primary);">IV. Gestão de Riscos & Governança</strong>
+                        <p style="margin: 0.35rem 0 0 0; font-size: 0.88rem; color: #475569;">
+                            Supervisionar o Relatório de Impacto à Proteção de Dados (RIPD), o Registro das Atividades de Tratamento (ROPA) e salvaguardas técnicas (AES-256 e SHA-256).
+                        </p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Seção 3: Catálogo dos Direitos do Titular -->
+            <section id="direitos-titulares" style="margin-bottom: 2.5rem; scroll-margin-top: 6rem;">
+                <h2 style="font-size: 1.35rem; color: var(--cc-primary); border-bottom: 1px solid #e2e8f0; padding-bottom: 0.5rem; margin-bottom: 1rem;">
+                    3. Catálogo dos Direitos do Titular (LGPD Art. 18)
+                </h2>
+                <p>
+                    O titular de dados pessoais pode exercer perante o CriaCerto, a qualquer momento e mediante requisição formal, os seguintes direitos fundamentais:
+                </p>
+                <ul style="padding-left: 1.25rem; margin: 0.75rem 0; display: flex; flex-direction: column; gap: 0.5rem;">
+                    <li><strong>Confirmação e Acesso (Inciso I e II):</strong> Obter a confirmação da existência de tratamento e acessar integralmente os dados pessoais mantidos pela plataforma.</li>
+                    <li><strong>Correção e Retificação (Inciso III):</strong> Solicitar a retificação imediata de dados cadastrais incompletos, inexatos ou desatualizados.</li>
+                    <li><strong>Anonimização ou Eliminação (Inciso IV e VI):</strong> Requerer a anonimização ou exclusão definitiva de credenciais pessoais (harmonizadas com a retenção regulatória de histórico zootécnico e fiscal da fazenda).</li>
+                    <li><strong>Portabilidade Estruturada (Inciso V):</strong> Solicitar o arquivo estruturado canônico (JSON interoperável) dos dados para transferência a outro prestador.</li>
+                    <li><strong>Informação sobre Compartilhamentos (Inciso VII):</strong> Obter transparência sobre os subprocessadores homologados (Stripe, Resend e Cloud).</li>
+                    <li><strong>Revogação de Consentimento (Inciso IX):</strong> Revogar autorizações concedidas anteriormente, sem prejuízo da licitude dos tratamentos realizados com base em obrigações legais ou contratuais.</li>
+                </ul>
+            </section>
+
+            <!-- Seção 4: Prazos Regulamentares de Resposta -->
+            <section id="prazos-atendimento" style="margin-bottom: 2.5rem; scroll-margin-top: 6rem;">
+                <h2 style="font-size: 1.35rem; color: var(--cc-primary); border-bottom: 1px solid #e2e8f0; padding-bottom: 0.5rem; margin-bottom: 1rem;">
+                    4. Prazos Regulamentares de Resposta (Art. 19, II)
+                </h2>
+                <p>
+                    Toda solicitação encaminhada ao Encarregado recebe imediatamente um <strong>número de protocolo oficial e registro de auditoria forense com hash SHA-256</strong>.
+                </p>
+                <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1.25rem; margin: 1rem 0;">
+                    <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem;">
+                        <span class="material-symbols-outlined" style="color: #059669; font-size: 24px;">schedule</span>
+                        <strong style="color: #0f172a; font-size: 1rem;">Prazo de até 15 (quinze) dias úteis</strong>
+                    </div>
+                    <p style="margin: 0; font-size: 0.9rem; color: #475569; line-height: 1.6;">
+                        Conforme preceitua o <strong>Art. 19, II da LGPD</strong>, as requisições que exigirem declaração clara e completa com indicação da origem dos dados, critérios utilizados e finalidade do tratamento serão respondidas fundamentadamente em até 15 dias úteis, contados a partir da data de submissão do protocolo.
+                    </p>
+                </div>
+            </section>
+
+            <!-- Seção 5: Formulário Eletrônico de Atendimento (DSR) -->
+            <section id="formulario-dsr" style="margin-bottom: 2.5rem; scroll-margin-top: 6rem;">
+                <h2 style="font-size: 1.35rem; color: var(--cc-primary); border-bottom: 1px solid #e2e8f0; padding-bottom: 0.5rem; margin-bottom: 1rem;">
+                    5. Formulário Oficial de Atendimento a Requisições (DSR)
+                </h2>
+                <p>
+                    Preencha o formulário eletrônico seguro abaixo. Sua solicitação gerará um protocolo instantâneo auditado e notificará diretamente a caixa postal do Encarregado de Dados.
+                </p>
+
+                <DataSubjectRequestForm />
+            </section>
+
+        </article>
+    </div>
+</div>
+
+@code {
+    private LegalDocumentItem Document => LegalDocumentCatalog.GetByRoute("dpo") 
+        ?? LegalDocumentCatalog.GetAllDocuments().First();
+
+    private DpoContactInfo DpoInfo => LegalDocumentCatalog.GetDpoContactInfo();
+}

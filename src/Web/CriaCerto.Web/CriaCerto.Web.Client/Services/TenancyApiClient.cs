@@ -45,6 +45,29 @@ public sealed record StripePortalSessionResponse(string Url);
 public sealed record RefreshTokenResponseDto(string Token, Guid TenantId, string SubscribedPlan, string Role);
 public sealed record ApiErrorDto(string? Code, string? Message, int? Type);
 
+public sealed record SubmitDataSubjectRequestDto(
+    string FullName,
+    string Email,
+    string? PhoneNumber,
+    string? DocumentNumber,
+    int RelationshipType,
+    int RequestType,
+    string Description
+);
+
+public sealed record DataSubjectRequestReceiptModel(
+    string ProtocolNumber,
+    string DataSubjectName,
+    string DataSubjectEmail,
+    int RelationshipType,
+    int RequestType,
+    DateTime SubmittedAtUtc,
+    DateTime MaxResponseDateUtc,
+    int EstimatedBusinessDays,
+    string DpoEmail,
+    string ConfirmationMessage
+);
+
 public sealed record ProductionUnitModel(
     Guid Id,
     Guid TenantId,
@@ -529,6 +552,29 @@ public sealed class TenancyApiClient
         catch (Exception ex)
         {
             return (false, ex.Message);
+        }
+    }
+
+    public async Task<(bool Success, DataSubjectRequestReceiptModel? Receipt, string? ErrorMessage)> SubmitDataSubjectRequestAsync(
+        SubmitDataSubjectRequestDto request,
+        CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        try
+        {
+            var response = await _httpClient.PostAsJsonAsync("/api/v1/compliance/dpo/requests", request, cancellationToken);
+            if (response.IsSuccessStatusCode)
+            {
+                var receipt = await response.Content.ReadFromJsonAsync<DataSubjectRequestReceiptModel>(cancellationToken: cancellationToken);
+                return (true, receipt, null);
+            }
+
+            var error = await response.Content.ReadFromJsonAsync<ApiErrorDto>(cancellationToken: cancellationToken);
+            return (false, null, error?.Message ?? "Erro ao registrar solicitação formal de privacidade.");
+        }
+        catch (Exception ex)
+        {
+            return (false, null, ex.Message);
         }
     }
 

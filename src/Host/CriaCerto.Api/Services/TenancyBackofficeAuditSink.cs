@@ -323,5 +323,66 @@ public sealed class TenancyBackofficeAuditSink : ITenancyAuditSink, IUserAuditTr
                 userId, originalEmail);
         }
     }
+
+    public async Task RecordDataSubjectRequestSubmittedAuditAsync(
+        string protocolNumber,
+        string dataSubjectEmail,
+        string requestType,
+        string relationshipType,
+        string ipAddress,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var previousHash = await _dbContext.AuditLogs
+                .AsNoTracking()
+                .OrderByDescending(a => a.TimestampUtc)
+                .Select(a => a.RecordHash)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            var detailsJson = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                ProtocolNumber = protocolNumber,
+                DataSubjectEmail = dataSubjectEmail,
+                RequestType = requestType,
+                RelationshipType = relationshipType,
+                Action = "DATA_SUBJECT_REQUEST_SUBMITTED",
+                Specification = "LGPD Art. 41 & Art. 18",
+                TimestampUtc = DateTime.UtcNow
+            }, new System.Text.Json.JsonSerializerOptions
+            {
+                Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+            });
+
+            var audit = AuditLog.CreateForensic(
+                adminUserId: Guid.Empty,
+                adminUserEmail: dataSubjectEmail,
+                actorRole: "DataSubject",
+                action: "DATA_SUBJECT_REQUEST_SUBMITTED",
+                category: AuditCategory.Compliance,
+                severity: AuditSeverity.Medium,
+                resource: $"Dsr/{protocolNumber}",
+                targetTenantId: null,
+                targetTenantName: null,
+                ipAddress: string.IsNullOrWhiteSpace(ipAddress) ? "127.0.0.1" : ipAddress,
+                userAgent: "WebDataSubjectRequestPortal/1.0",
+                previousRecordHash: previousHash,
+                detailsJson: detailsJson);
+
+            _dbContext.AuditLogs.Add(audit);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            _logger.LogInformation(
+                "Auditoria forense de solicitação de titular LGPD (DSR) registrada com protocolo {Protocol} ({Email}) e hash {Hash}.",
+                protocolNumber, dataSubjectEmail, audit.RecordHash);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                ex,
+                "Falha ao registrar auditoria forense de solicitação DSR para protocolo {Protocol} ({Email}).",
+                protocolNumber, dataSubjectEmail);
+        }
+    }
 }
 

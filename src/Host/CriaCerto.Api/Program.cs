@@ -88,6 +88,8 @@ using CriaCerto.Modules.Tenancy.Application.Features.UpdateUserProfile;
 using CriaCerto.Modules.Tenancy.Application.Features.ChangeUserPassword;
 using CriaCerto.Modules.Tenancy.Application.Features.ExportUserDataPortability;
 using CriaCerto.Modules.Tenancy.Application.Features.AnonymizeUserAccount;
+using CriaCerto.Modules.Tenancy.Application.Features.Compliance.Dpo;
+using CriaCerto.Modules.Tenancy.Application.Features.Compliance.Dpo.Models;
 using CriaCerto.Modules.Tenancy.Application.Domain;
 using CriaCerto.Modules.Tenancy.Infrastructure;
 
@@ -2017,6 +2019,39 @@ app.MapPost("/api/v1/auth/account/delete", async (AnonymizeUserAccountRequest re
     var result = await sender.Send(command);
     return ToCommandHttpResult(result);
 }).RequireAuthorization().WithTags("Auth");
+
+app.MapPost("/api/v1/compliance/dpo/requests", async (
+    SubmitDataSubjectRequestRequest req,
+    HttpContext ctx,
+    ISender sender) =>
+{
+    var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "127.0.0.1";
+    if (ctx.Request.Headers.TryGetValue("X-Forwarded-For", out var forwardedFor) && !string.IsNullOrWhiteSpace(forwardedFor))
+    {
+        var firstIp = forwardedFor.ToString().Split(',')[0].Trim();
+        if (!string.IsNullOrWhiteSpace(firstIp))
+        {
+            ip = firstIp;
+        }
+    }
+
+    var userAgent = ctx.Request.Headers.UserAgent.ToString();
+
+    var command = new SubmitDataSubjectRequestCommand(
+        FullName: req.FullName,
+        Email: req.Email,
+        PhoneNumber: req.PhoneNumber,
+        DocumentNumber: req.DocumentNumber,
+        RelationshipType: req.RelationshipType,
+        RequestType: req.RequestType,
+        Description: req.Description,
+        IpAddress: ip,
+        UserAgent: userAgent
+    );
+
+    var result = await sender.Send(command);
+    return ToHttpResult(result, StatusCodes.Status201Created);
+}).AllowAnonymous().WithTags("Compliance");
 
 app.MapGet("/api/v1/tenancy/plans", async (ISender sender) =>
 {

@@ -64,6 +64,15 @@ public static class LegalDocumentCatalog
         new("auditoria-conformidade", "9. Relatórios de Conformidade e Auditoria", "Disponibilização de atestados técnicos e sumários de segurança da informação.")
     };
 
+    private static readonly List<LegalSectionItem> DpoSections = new()
+    {
+        new("identidade-encarregado", "1. Identidade e Qualificação do DPO", "Designação formal e contatos institucionais conforme o Art. 41 da Lei nº 13.709/2018."),
+        new("atribuicoes-dpo", "2. Atribuições do Encarregado (Art. 41 § 2º)", "Canal de comunicação com titulares, orientações operacionais e relacionamento com a ANPD."),
+        new("direitos-titulares", "3. Catálogo de Direitos dos Titulares (Art. 18)", "Exercício de acesso, retificação, anonimização, portabilidade e revogação de consentimento."),
+        new("prazos-atendimento", "4. Prazos Regulamentares de Resposta", "Atendimento fundamentado em até 15 dias úteis (Art. 19, II) com emissão de protocolo seguro."),
+        new("formulario-dsr", "5. Formulário Eletrônico de Atendimento (DSR)", "Submissão direta de requisição formal com recibo e rastreamento.")
+    };
+
     private static readonly List<LegalDocumentItem> Documents = new()
     {
         new(
@@ -89,6 +98,14 @@ public static class LegalDocumentCatalog
             EffectiveDate: "26 de Outubro de 2026",
             Summary: "Termo de Processamento de Dados (Data Processing Agreement) regendo as obrigações do CriaCerto como Operador dos dados de colaboradores da fazenda.",
             Sections: DpaSections
+        ),
+        new(
+            Title: "Canal Oficial do Encarregado de Dados (DPO)",
+            Route: "dpo",
+            Version: "1.0",
+            EffectiveDate: "26 de Outubro de 2026",
+            Summary: "Canal oficial de comunicação do Encarregado pelo Tratamento de Dados Pessoais (DPO - LGPD Art. 41) e submissão formal de requisições de titulares.",
+            Sections: DpoSections
         )
     };
 
@@ -101,6 +118,12 @@ public static class LegalDocumentCatalog
         {
             cleanRoute = "dpa";
         }
+        else if (cleanRoute.Equals("canal-dpo", StringComparison.OrdinalIgnoreCase) ||
+                 cleanRoute.Equals("privacidade/canal-dpo", StringComparison.OrdinalIgnoreCase) ||
+                 cleanRoute.Equals("privacidade/dpo", StringComparison.OrdinalIgnoreCase))
+        {
+            cleanRoute = "dpo";
+        }
         return Documents.FirstOrDefault(d => d.Route.Equals(cleanRoute, StringComparison.OrdinalIgnoreCase));
     }
 
@@ -109,6 +132,8 @@ public static class LegalDocumentCatalog
     public static IReadOnlyList<LegalSectionItem> GetPrivacyPolicySections() => PrivacySections.AsReadOnly();
 
     public static IReadOnlyList<LegalSectionItem> GetDataProcessingAgreementSections() => DpaSections.AsReadOnly();
+
+    public static IReadOnlyList<LegalSectionItem> GetDpoSections() => DpoSections.AsReadOnly();
 
     public static DpoContactInfo GetDpoContactInfo() => DpoInfo;
 }
