@@ -1,4 +1,5 @@
 using CriaCerto.BuildingBlocks.Abstractions.Results;
+using CriaCerto.BuildingBlocks.Abstractions.Security;
 using CriaCerto.Modules.Referral.Application.Abstractions;
 using CriaCerto.Modules.Referral.Application.Domain;
 using CriaCerto.Modules.Referral.Application.Domain.Enums;
@@ -37,13 +38,16 @@ public sealed class RegisterCommercialPartnerCommandHandler
 {
     private readonly IReferralDbContext _dbContext;
     private readonly IPartnerAccountProvisioner _accountProvisioner;
+    private readonly IDataEncryptionService _encryptionService;
 
     public RegisterCommercialPartnerCommandHandler(
         IReferralDbContext dbContext,
-        IPartnerAccountProvisioner accountProvisioner)
+        IPartnerAccountProvisioner accountProvisioner,
+        IDataEncryptionService? encryptionService = null)
     {
         _dbContext = dbContext;
         _accountProvisioner = accountProvisioner;
+        _encryptionService = encryptionService ?? NullDataEncryptionService.Instance;
     }
 
     public async Task<Result<CommercialPartnerDto>> Handle(
@@ -52,6 +56,7 @@ public sealed class RegisterCommercialPartnerCommandHandler
     {
         var normalizedEmail = request.Email.Trim().ToLowerInvariant();
         var normalizedDoc = LegalDocumentValidator.Normalize(request.LegalDocumentNumber);
+        var docHash = _encryptionService.ComputeBlindIndex(normalizedDoc);
 
         // 1. Unicidade de E-mail
         var emailExists = await _dbContext.PartnerProfiles
@@ -61,9 +66,9 @@ public sealed class RegisterCommercialPartnerCommandHandler
             return Result.Failure<CommercialPartnerDto>(ReferralErrors.PartnerProfile.EmailAlreadyInUse);
         }
 
-        // 2. Unicidade de CPF / CNPJ
+        // 2. Unicidade de CPF / CNPJ via Blind Index determinístico
         var docExists = await _dbContext.PartnerContracts
-            .AnyAsync(c => c.LegalDocumentNumber == normalizedDoc, cancellationToken);
+            .AnyAsync(c => c.LegalDocumentNumberHash == docHash, cancellationToken);
         if (docExists)
         {
             return Result.Failure<CommercialPartnerDto>(ReferralErrors.PartnerProfile.DocumentAlreadyInUse);
@@ -123,7 +128,8 @@ public sealed class RegisterCommercialPartnerCommandHandler
             request.PixKey,
             request.PixKeyType,
             normalizedDoc,
-            DateTime.UtcNow);
+            DateTime.UtcNow,
+            docHash);
         if (contractResult.IsFailure)
         {
             return Result.Failure<CommercialPartnerDto>(contractResult.Error);

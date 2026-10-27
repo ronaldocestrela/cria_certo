@@ -29,6 +29,7 @@ public static class DependencyInjection
         services.AddSingleton<IPayoutReceiptStorageService>(new Storage.LocalPayoutReceiptStorageService(receiptsDir));
         services.AddSingleton<Application.Features.Payouts.Services.IPixBatchCsvGenerator, Application.Features.Payouts.Services.PixBatchCsvGenerator>();
         services.AddScoped<IReferralMaturityEnforcementService, Application.Features.Enforcement.Services.ReferralMaturityEnforcementService>();
+        services.AddScoped<IReferralDataReencryptionService, Services.ReferralDataReencryptionService>();
 
         return services;
     }

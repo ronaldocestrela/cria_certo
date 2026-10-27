@@ -298,6 +298,6 @@ public sealed class DatabaseMigrationIntegrationTests : IAsyncLifetime
         tableCount.Should().Be(5);
 
         (await MigrationTestSupport.CountHistoryRowsAsync(_masterConnectionString, "referral"))
-            .Should().Be(3);
+            .Should().Be(4);
     }
 }

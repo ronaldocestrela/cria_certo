@@ -15,6 +15,7 @@ public sealed class PartnerContract
     public string PixKey { get; private set; } = string.Empty;
     public PixKeyType PixKeyType { get; private set; }
     public string LegalDocumentNumber { get; private set; } = string.Empty;
+    public string LegalDocumentNumberHash { get; private set; } = string.Empty;
     public DateTime ValidFromUtc { get; private set; }
     public DateTime? ValidToUtc { get; private set; }
     public bool IsActive { get; private set; }
@@ -31,7 +32,8 @@ public sealed class PartnerContract
         string pixKey,
         PixKeyType pixKeyType,
         string legalDocumentNumber,
-        DateTime validFromUtc)
+        DateTime validFromUtc,
+        string legalDocumentNumberHash = "")
     {
         if (participantId == Guid.Empty)
             return Result.Failure<PartnerContract>(Error.Validation("PartnerContract.ParticipantRequired", "O participante é obrigatório."));
@@ -64,6 +66,7 @@ public sealed class PartnerContract
             PixKey = pixKey.Trim(),
             PixKeyType = pixKeyType,
             LegalDocumentNumber = legalDocumentNumber.Trim(),
+            LegalDocumentNumberHash = legalDocumentNumberHash.Trim().ToLowerInvariant(),
             ValidFromUtc = validFromUtc,
             ValidToUtc = null,
             IsActive = true,
@@ -71,6 +74,14 @@ public sealed class PartnerContract
         };
 
         return Result.Success(contract);
+    }
+
+    public void SetLegalDocumentNumberHash(string hash)
+    {
+        if (!string.IsNullOrWhiteSpace(hash))
+        {
+            LegalDocumentNumberHash = hash.Trim().ToLowerInvariant();
+        }
     }
 
     public Result CloseContract(DateTime validToUtc)

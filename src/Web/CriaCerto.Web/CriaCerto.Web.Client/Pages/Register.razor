@@ -86,6 +86,21 @@
                         <ValidationMessage For="@(() => _registerModel.ConfirmPassword)" class="text-xs text-red-600 mt-1" />
                     </div>
 
+                    <div style="margin-bottom: 1.5rem;">
+                        <div style="display: flex; align-items: flex-start; gap: 0.75rem;">
+                            <InputCheckbox @bind-Value="_registerModel.AcceptTermsAndPrivacy" id="acceptTermsCheckbox" 
+                                           style="margin-top: 0.25rem; width: 18px; height: 18px; accent-color: var(--cc-primary); cursor: pointer;" />
+                            <label for="acceptTermsCheckbox" style="font-size: 13px; color: var(--cc-ink); line-height: 1.5; cursor: pointer;">
+                                Li e concordo com os 
+                                <a href="/termos-de-uso" target="_blank" rel="noopener noreferrer" style="color: var(--cc-primary); font-weight: 600; text-decoration: underline;">Termos de Uso</a> 
+                                (incluindo o <a href="/dpa" target="_blank" rel="noopener noreferrer" style="color: var(--cc-primary); font-weight: 600; text-decoration: underline;">Aditivo DPA</a>) 
+                                e a 
+                                <a href="/politica-de-privacidade" target="_blank" rel="noopener noreferrer" style="color: var(--cc-primary); font-weight: 600; text-decoration: underline;">Política de Privacidade</a>.
+                            </label>
+                        </div>
+                        <ValidationMessage For="@(() => _registerModel.AcceptTermsAndPrivacy)" class="text-xs text-red-600 mt-1" />
+                    </div>
+
                     <button class="w-full h-[48px] text-white font-mono text-[14px] rounded-lg uppercase tracking-wider transition-all" 
                             style="width: 100%; height: 48px; background-color: var(--cc-primary); border: none; border-radius: 8px; font-weight: bold; cursor: pointer;"
                             type="submit" disabled="@_isLoading">
@@ -109,8 +124,8 @@
 
         </div>
 
-        <footer class="mt-6 text-center text-xs opacity-60" style="margin-top: 1.5rem; text-align: center; font-size: 12px; color: var(--cc-ink-muted);">
-            Ao cadastrar-se, você concorda com nossos Termos de Uso e Política de Privacidade.
+        <footer class="mt-6 text-center text-xs opacity-75" style="margin-top: 1.5rem; text-align: center; font-size: 12px; color: var(--cc-ink-muted);">
+            Plataforma em conformidade com a Lei Geral de Proteção de Dados (LGPD - Lei 13.709/2018).
         </footer>
 
     </main>
@@ -156,6 +171,9 @@
         [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "A confirmação de senha é obrigatória.")]
         [System.ComponentModel.DataAnnotations.Compare(nameof(Password), ErrorMessage = "As senhas não coincidem.")]
         public string ConfirmPassword { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Range(typeof(bool), "true", "true", ErrorMessage = "Você deve concordar com os Termos de Uso e a Política de Privacidade para continuar.")]
+        public bool AcceptTermsAndPrivacy { get; set; }
     }
 
     private record RegisteredUserResponse(Guid Id, string FullName, string Email, string? PhoneNumber);
@@ -172,7 +190,8 @@
                 FullName = _registerModel.FullName,
                 Email = _registerModel.Email,
                 Password = _registerModel.Password,
-                PhoneNumber = _registerModel.PhoneNumber
+                PhoneNumber = _registerModel.PhoneNumber,
+                AcceptTermsAndPrivacy = _registerModel.AcceptTermsAndPrivacy
             };
 
             var response = await Http.PostAsJsonAsync("/api/auth/register", payload);

@@ -7,6 +7,7 @@ using CriaCerto.Modules.Backoffice.Application.Features.Approvals.Commands;
 using CriaCerto.Modules.Backoffice.Application.Features.Audit.Queries;
 using CriaCerto.Modules.Backoffice.Application.Features.Compliance.Commands;
 using CriaCerto.Modules.Backoffice.Application.Features.Compliance.Dtos;
+using CriaCerto.Modules.Backoffice.Application.Features.Compliance.IncidentResponse;
 using CriaCerto.Modules.Backoffice.Application.Features.Rollout.Commands;
 using CriaCerto.Modules.Backoffice.Infrastructure.Persistence;
 using CriaCerto.Modules.Tenancy.Application.Contracts;
@@ -291,5 +292,98 @@ public class IncidentResponseSimulationTests : IDisposable
         audit!.Severity.Should().Be(AuditSeverity.High);
         audit.AdminUserEmail.Should().Be("support_n2@criacerto.com.br");
         audit.VerifyIntegrity().Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Runbook07_SecurityIncidentAssessmentAndAnpdNotification_ExecutesEndToEndSimulationWithForensicAudit()
+    {
+        // 1. Arrange: Incident detected with potential PII breach in tenant
+        var evaluator = new PrivacyIncidentEvaluator();
+        var discoveredAt = new DateTime(2026, 10, 26, 11, 0, 0, DateTimeKind.Utc);
+        var containedAt = discoveredAt.AddMinutes(20);
+        var tenantId = Guid.NewGuid();
+        const string tenantName = "Fazenda Santa Maria";
+
+        var evalRequest = new PrivacyIncidentEvaluationRequest(
+            IncidentId: "INC-20261026-9901",
+            Title: "Exfiltração indevida de dados de operadores e produtores",
+            DiscoveredAtUtc: discoveredAt,
+            Severity: PrivacyIncidentSeverity.High,
+            IsPiiExposedInPlainText: true,
+            ImpactedDataSubjectsCount: 85,
+            HasFinancialOrCredentialData: true,
+            IsB2BOperatorData: true,
+            AffectedTenantId: tenantId,
+            AffectedTenantName: tenantName
+        );
+
+        // 2. Act: Assess incident under Art. 48 & Resolução CD/ANPD nº 15/2024
+        var evalResult = evaluator.Evaluate(evalRequest);
+
+        evalResult.IsSuccess.Should().BeTrue();
+        var assessment = evalResult.Value;
+        assessment.RequiresAnpdNotification.Should().BeTrue();
+        assessment.RequiresDataSubjectNotification.Should().BeTrue();
+        assessment.RequiresB2BControllerNotification.Should().BeTrue();
+
+        // 3 dias úteis para notificação à ANPD (26/10 Segunda -> 29/10 Quinta)
+        assessment.AnpdNotificationDeadlineUtc.Should().Be(new DateTime(2026, 10, 29, 11, 0, 0, DateTimeKind.Utc));
+        // 24 horas para notificação B2B sob DPA (ADR 0022)
+        assessment.B2BControllerNotificationDeadlineUtc.Should().Be(discoveredAt.AddHours(24));
+
+        // 3. Act: Generate preliminary report for ANPD
+        var reportRequest = new AnpdIncidentReportRequest(
+            IncidentProtocol: assessment.IncidentId,
+            DiscoveredAtUtc: discoveredAt,
+            ContainedAtUtc: containedAt,
+            VulnerabilityVector: "Falha mitigada via ativação emergencial de Kill-Switch (RUNBOOK-01)",
+            CompromisedCategories: new[] { "Nome", "CPF", "Telefone", "Função no Curral" },
+            ImpactedSubjectsCount: evalRequest.ImpactedDataSubjectsCount,
+            PotentialImpacts: "Risco de phishing direcionado aos operadores rurais",
+            ContainmentMeasures: "Ativação do Kill-Switch, revogação de sessões e auditoria de hash SHA-256",
+            DataSubjectCommunicationStrategy: "Disparo de e-mail transacional via Resend e nota de transparência em /dpo"
+        );
+
+        var reportResult = evaluator.GenerateAnpdPreliminaryReport(reportRequest);
+        reportResult.IsSuccess.Should().BeTrue();
+        var report = reportResult.Value;
+        report.ElapsedHoursToContainment.Should().BeApproximately(0.33, 0.01);
+        report.Protocol.Should().Be("INC-20261026-9901");
+
+        // 4. Assert & Forensics: Record forensic incident audit log in Backoffice
+        var auditLog = AuditLog.CreateForensic(
+            adminUserId: Guid.NewGuid(),
+            adminUserEmail: "dpo@criacerto.com.br",
+            actorRole: "DPO",
+            action: "SECURITY_INCIDENT_ANPD_NOTIFIED",
+            category: AuditCategory.Compliance,
+            severity: AuditSeverity.Critical,
+            resource: $"Incident/{report.Protocol}",
+            targetTenantId: tenantId,
+            targetTenantName: tenantName,
+            ipAddress: "10.0.0.1",
+            userAgent: "IncidentResponse-Drill",
+            detailsJson: System.Text.Json.JsonSerializer.Serialize(new
+            {
+                assessment.IncidentId,
+                assessment.Severity,
+                assessment.RequiresAnpdNotification,
+                assessment.AnpdNotificationDeadlineUtc,
+                assessment.B2BControllerNotificationDeadlineUtc,
+                report.ConclusiveReportDeadlineUtc
+            })
+        );
+
+        _dbContext.AuditLogs.Add(auditLog);
+        await _dbContext.SaveChangesAsync();
+
+        var persisted = await _dbContext.AuditLogs
+            .FirstOrDefaultAsync(a => a.Action == "SECURITY_INCIDENT_ANPD_NOTIFIED");
+
+        persisted.Should().NotBeNull();
+        persisted!.Severity.Should().Be(AuditSeverity.Critical);
+        persisted.Category.Should().Be(AuditCategory.Compliance);
+        persisted.RecordHash.Should().NotBeNullOrWhiteSpace();
+        persisted.VerifyIntegrity().Should().BeTrue();
     }
 }

@@ -1,3 +1,5 @@
+using CriaCerto.BuildingBlocks.Abstractions.Results;
+
 namespace CriaCerto.Modules.Tenancy.Application.Domain;
 
 public sealed class User
@@ -13,5 +15,91 @@ public sealed class User
     public DateTime? EmailConfirmationTokenExpiresAt { get; set; }
     public string? PasswordResetToken { get; set; }
     public DateTime? PasswordResetTokenExpiresAt { get; set; }
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+    public DateTime? TermsAcceptedAtUtc { get; set; }
+    public DateTime? PrivacyPolicyAcceptedAtUtc { get; set; }
+    public string? TermsVersion { get; set; }
+    public string? PrivacyPolicyVersion { get; set; }
+    public string? ConsentIpAddress { get; set; }
+    public bool IsAnonymized { get; set; }
+    public DateTime? AnonymizedAtUtc { get; set; }
+    public string? AnonymizationReason { get; set; }
     public List<UserTenant> UserTenants { get; set; } = new();
+
+    public Result UpdateProfile(string fullName, string? phoneNumber)
+    {
+        if (string.IsNullOrWhiteSpace(fullName))
+        {
+            return Result.Failure(Error.Validation("User.InvalidFullName", "O nome completo é obrigatório."));
+        }
+
+        FullName = fullName.Trim();
+        PhoneNumber = string.IsNullOrWhiteSpace(phoneNumber) ? null : phoneNumber.Trim();
+        return Result.Success();
+    }
+
+    public Result ChangePassword(string newPasswordHash)
+    {
+        if (string.IsNullOrWhiteSpace(newPasswordHash))
+        {
+            return Result.Failure(Error.Validation("User.InvalidPasswordHash", "O hash da nova senha não pode ser vazio."));
+        }
+
+        PasswordHash = newPasswordHash;
+        return Result.Success();
+    }
+
+    public Result Anonymize(string anonymizedEmail, string? reason = null)
+    {
+        if (IsAnonymized)
+        {
+            return Result.Failure(Error.Conflict("User.AlreadyAnonymized", "A conta já se encontra anonimizada e encerrada."));
+        }
+
+        if (string.IsNullOrWhiteSpace(anonymizedEmail))
+        {
+            return Result.Failure(Error.Validation("User.InvalidAnonymizedEmail", "O e-mail de anonimização não pode ser vazio."));
+        }
+
+        FullName = "Titular Anonimizado";
+        Email = anonymizedEmail.Trim().ToLowerInvariant();
+        PhoneNumber = null;
+        PasswordHash = "ANONYMIZED_DISABLED_CREDENTIAL";
+        EmailConfirmationToken = null;
+        EmailConfirmationTokenExpiresAt = null;
+        PasswordResetToken = null;
+        PasswordResetTokenExpiresAt = null;
+        IsAnonymized = true;
+        AnonymizedAtUtc = DateTime.UtcNow;
+        AnonymizationReason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
+
+        return Result.Success();
+    }
+
+    public int ClearExpiredTokens(DateTime referenceDateUtc, int graceDays = 7)
+    {
+        var cutoff = referenceDateUtc.AddDays(-Math.Max(0, graceDays));
+        var cleared = 0;
+
+        if (EmailConfirmationToken != null &&
+            EmailConfirmationTokenExpiresAt.HasValue &&
+            EmailConfirmationTokenExpiresAt.Value < cutoff)
+        {
+            EmailConfirmationToken = null;
+            EmailConfirmationTokenExpiresAt = null;
+            cleared++;
+        }
+
+        if (PasswordResetToken != null &&
+            PasswordResetTokenExpiresAt.HasValue &&
+            PasswordResetTokenExpiresAt.Value < cutoff)
+        {
+            PasswordResetToken = null;
+            PasswordResetTokenExpiresAt = null;
+            cleared++;
+        }
+
+        return cleared;
+    }
 }
+

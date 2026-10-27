@@ -1,0 +1,1972 @@
+@page "/settings/profile"
+@page "/settings/privacy"
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@attribute [Authorize]
+@using CriaCerto.Web.Client.Services
+@using CriaCerto.Web.Client.Auth
+@inject AuthenticationStateProvider AuthStateProvider
+@inject CustomAuthStateProvider CustomAuth
+@inject NavigationManager Navigation
+@inject TenancyApiClient TenancyClient
+@inject IToastService ToastService
+@inject IJSRuntime JS
+
+<PageTitle>Cria Certo - Meu Perfil & Segurança</PageTitle>
+
+<div class="profile-container font-headline">
+
+    <!-- Page Header & Breadcrumb -->
+    <div class="page-header">
+        <nav class="breadcrumb font-mono">
+            <span>CONFIGURAÇÕES</span>
+            <span class="material-symbols-outlined breadcrumb-icon">chevron_right</span>
+            <span class="breadcrumb-active">MEU PERFIL & SEGURANÇA</span>
+        </nav>
+        <div class="header-content">
+            <div>
+                <h1 class="page-title">Meu Perfil & Governança Pessoal</h1>
+                <p class="page-subtitle">
+                    Retificação de dados cadastrais (LGPD Art. 18, III), gestão de credenciais e transparência de privacidade.
+                </p>
+            </div>
+            <div class="header-badges">
+                <span class="badge badge-lgpd">
+                    <span class="material-symbols-outlined badge-icon">verified_user</span>
+                    LGPD Art. 18, III Compliant
+                </span>
+            </div>
+        </div>
+    </div>
+
+    @if (_isLoading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Carregando dados cadastrais e credenciais...</p>
+        </div>
+    }
+    else if (_profile == null)
+    {
+        <div class="error-state">
+            <span class="material-symbols-outlined error-icon">error</span>
+            <h3>Não foi possível carregar seu perfil</h3>
+            <p>Verifique sua conexão ou tente recarregar a página.</p>
+            <button class="btn btn-outline" @onclick="LoadProfileAsync">
+                <span class="material-symbols-outlined">refresh</span>
+                Tentar Novamente
+            </button>
+        </div>
+    }
+    else
+    {
+        <div class="profile-grid">
+            <!-- Card 1: Retificação Cadastral (Art. 18, III) -->
+            <section class="card profile-card" aria-labelledby="heading-dados-cadastrais">
+                <div class="card-header">
+                    <div class="card-title-group">
+                        <span class="material-symbols-outlined card-header-icon">badge</span>
+                        <div>
+                            <h2 id="heading-dados-cadastrais" class="card-title">Dados Cadastrais & Contato</h2>
+                            <p class="card-description">Mantenha suas informações pessoais exatas e atualizadas conforme o Art. 18, III da LGPD.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="avatar-hero">
+                    <div class="avatar-circle">
+                        <span>@GetInitials(_profile.FullName)</span>
+                    </div>
+                    <div class="avatar-info">
+                        <h3 class="avatar-name">@_profile.FullName</h3>
+                        <p class="avatar-email">@_profile.Email</p>
+                        <div class="email-status-pill @(_profile.IsEmailConfirmed ? "confirmed" : "pending")">
+                            <span class="material-symbols-outlined pill-icon">@(_profile.IsEmailConfirmed ? "check_circle" : "warning")</span>
+                            @(_profile.IsEmailConfirmed ? "E-mail Verificado" : "Confirmação Pendente")
+                        </div>
+                    </div>
+                </div>
+
+                <form @onsubmit="HandleSaveProfileAsync" class="form-container">
+                    <div class="form-group">
+                        <label for="input-full-name" class="form-label">
+                            Nome Completo <span class="required">*</span>
+                        </label>
+                        <input id="input-full-name"
+                               type="text"
+                               class="form-input @(_profileErrors.ContainsKey("FullName") ? "input-error" : "")"
+                               @bind="_editFullName"
+                               placeholder="Ex: João da Silva Sauro"
+                               disabled="@_isSavingProfile"
+                               maxlength="150" />
+                        @if (_profileErrors.TryGetValue("FullName", out var nameErr))
+                        {
+                            <span class="field-error">@nameErr</span>
+                        }
+                    </div>
+
+                    <div class="form-group">
+                        <label for="input-email" class="form-label">
+                            E-mail Cadastral <span class="field-hint">(Identificador de Acesso)</span>
+                        </label>
+                        <input id="input-email"
+                               type="email"
+                               class="form-input input-readonly"
+                               value="@_profile.Email"
+                               readonly
+                               title="O e-mail cadastral é fixo e utilizado como credencial primária." />
+                        <span class="field-info">Para alterar seu e-mail cadastral, entre em contato com nosso DPO.</span>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="input-phone" class="form-label">
+                            Telefone / WhatsApp <span class="field-hint">(Notificações operacionais)</span>
+                        </label>
+                        <input id="input-phone"
+                               type="tel"
+                               class="form-input @(_profileErrors.ContainsKey("PhoneNumber") ? "input-error" : "")"
+                               @bind="_editPhoneNumber"
+                               placeholder="Ex: +55 (67) 99988-7766"
+                               disabled="@_isSavingProfile"
+                               maxlength="30" />
+                        @if (_profileErrors.TryGetValue("PhoneNumber", out var phoneErr))
+                        {
+                            <span class="field-error">@phoneErr</span>
+                        }
+                    </div>
+
+                    <div class="metadata-box">
+                        <div class="metadata-item">
+                            <span class="meta-label">Membro desde:</span>
+                            <span class="meta-value">@_profile.CreatedAtUtc.ToString("dd/MM/yyyy HH:mm") UTC</span>
+                        </div>
+                        @if (_profile.TermsAcceptedAtUtc.HasValue)
+                        {
+                            <div class="metadata-item">
+                                <span class="meta-label">Termos de Uso:</span>
+                                <span class="meta-value">v@(_profile.TermsVersion ?? "1.0") em @_profile.TermsAcceptedAtUtc.Value.ToString("dd/MM/yyyy")</span>
+                            </div>
+                        }
+                        @if (_profile.PrivacyPolicyAcceptedAtUtc.HasValue)
+                        {
+                            <div class="metadata-item">
+                                <span class="meta-label">Política de Privacidade:</span>
+                                <span class="meta-value">v@(_profile.PrivacyPolicyVersion ?? "1.0") em @_profile.PrivacyPolicyAcceptedAtUtc.Value.ToString("dd/MM/yyyy")</span>
+                            </div>
+                        }
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit"
+                                class="btn btn-primary"
+                                id="btn-save-profile"
+                                disabled="@_isSavingProfile">
+                            @if (_isSavingProfile)
+                            {
+                                <span class="spinner-sm"></span>
+                                <span>Salvando alterações...</span>
+                            }
+                            else
+                            {
+                                <span class="material-symbols-outlined">save</span>
+                                <span>Salvar Alterações</span>
+                            }
+                        </button>
+                    </div>
+                </form>
+            </section>
+
+            <!-- Card 2: Segurança & Gestão de Senha -->
+            <section class="card security-card" aria-labelledby="heading-seguranca">
+                <div class="card-header">
+                    <div class="card-title-group">
+                        <span class="material-symbols-outlined card-header-icon">lock_reset</span>
+                        <div>
+                            <h2 id="heading-seguranca" class="card-title">Segurança & Senha de Acesso</h2>
+                            <p class="card-description">Altere sua senha periodicamente para resguardar o acesso à plataforma.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <form @onsubmit="HandleChangePasswordAsync" class="form-container">
+                    <div class="form-group">
+                        <label for="input-current-password" class="form-label">
+                            Senha Atual <span class="required">*</span>
+                        </label>
+                        <div class="password-input-wrapper">
+                            <input id="input-current-password"
+                                   type="@(_showCurrentPassword ? "text" : "password")"
+                                   class="form-input @(_passwordErrors.ContainsKey("CurrentPassword") ? "input-error" : "")"
+                                   @bind="_currentPassword"
+                                   placeholder="Informe sua senha atual"
+                                   disabled="@_isChangingPassword" />
+                            <button type="button"
+                                    class="btn-toggle-password"
+                                    @onclick="() => _showCurrentPassword = !_showCurrentPassword"
+                                    tabindex="-1"
+                                    aria-label="Alternar visibilidade da senha atual">
+                                <span class="material-symbols-outlined">@(_showCurrentPassword ? "visibility_off" : "visibility")</span>
+                            </button>
+                        </div>
+                        @if (_passwordErrors.TryGetValue("CurrentPassword", out var curPassErr))
+                        {
+                            <span class="field-error">@curPassErr</span>
+                        }
+                    </div>
+
+                    <div class="form-group">
+                        <label for="input-new-password" class="form-label">
+                            Nova Senha <span class="required">*</span>
+                        </label>
+                        <div class="password-input-wrapper">
+                            <input id="input-new-password"
+                                   type="@(_showNewPassword ? "text" : "password")"
+                                   class="form-input @(_passwordErrors.ContainsKey("NewPassword") ? "input-error" : "")"
+                                   @bind="_newPassword"
+                                   @bind:event="oninput"
+                                   placeholder="Crie uma nova senha forte"
+                                   disabled="@_isChangingPassword" />
+                            <button type="button"
+                                    class="btn-toggle-password"
+                                    @onclick="() => _showNewPassword = !_showNewPassword"
+                                    tabindex="-1"
+                                    aria-label="Alternar visibilidade da nova senha">
+                                <span class="material-symbols-outlined">@(_showNewPassword ? "visibility_off" : "visibility")</span>
+                            </button>
+                        </div>
+                        @if (_passwordErrors.TryGetValue("NewPassword", out var newPassErr))
+                        {
+                            <span class="field-error">@newPassErr</span>
+                        }
+                    </div>
+
+                    <!-- Password Strength Meter -->
+                    <div class="strength-meter-container">
+                        <div class="strength-bars">
+                            <div class="strength-bar @(GetStrengthScore() >= 1 ? GetStrengthClass() : "")"></div>
+                            <div class="strength-bar @(GetStrengthScore() >= 2 ? GetStrengthClass() : "")"></div>
+                            <div class="strength-bar @(GetStrengthScore() >= 3 ? GetStrengthClass() : "")"></div>
+                            <div class="strength-bar @(GetStrengthScore() >= 4 ? GetStrengthClass() : "")"></div>
+                        </div>
+                        <span class="strength-label">Força da Senha: <strong>@GetStrengthLabel()</strong></span>
+
+                        <ul class="strength-checklist">
+                            <li class="@(HasMinLength ? "check-pass" : "check-fail")">
+                                <span class="material-symbols-outlined">@(HasMinLength ? "check" : "close")</span>
+                                Mínimo de 8 caracteres
+                            </li>
+                            <li class="@(HasUpper ? "check-pass" : "check-fail")">
+                                <span class="material-symbols-outlined">@(HasUpper ? "check" : "close")</span>
+                                Ao menos 1 letra maiúscula
+                            </li>
+                            <li class="@(HasLower ? "check-pass" : "check-fail")">
+                                <span class="material-symbols-outlined">@(HasLower ? "check" : "close")</span>
+                                Ao menos 1 letra minúscula
+                            </li>
+                            <li class="@(HasNumber ? "check-pass" : "check-fail")">
+                                <span class="material-symbols-outlined">@(HasNumber ? "check" : "close")</span>
+                                Ao menos 1 número
+                            </li>
+                            <li class="@(HasSymbol ? "check-pass" : "check-fail")">
+                                <span class="material-symbols-outlined">@(HasSymbol ? "check" : "close")</span>
+                                Ao menos 1 caractere especial (!@("@")#$%^&*)
+                            </li>
+                        </ul>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="input-confirm-password" class="form-label">
+                            Confirme a Nova Senha <span class="required">*</span>
+                        </label>
+                        <div class="password-input-wrapper">
+                            <input id="input-confirm-password"
+                                   type="@(_showConfirmPassword ? "text" : "password")"
+                                   class="form-input @(_passwordErrors.ContainsKey("ConfirmNewPassword") ? "input-error" : "")"
+                                   @bind="_confirmNewPassword"
+                                   placeholder="Repita exatamente a nova senha"
+                                   disabled="@_isChangingPassword" />
+                            <button type="button"
+                                    class="btn-toggle-password"
+                                    @onclick="() => _showConfirmPassword = !_showConfirmPassword"
+                                    tabindex="-1"
+                                    aria-label="Alternar visibilidade da confirmação">
+                                <span class="material-symbols-outlined">@(_showConfirmPassword ? "visibility_off" : "visibility")</span>
+                            </button>
+                        </div>
+                        @if (_passwordErrors.TryGetValue("ConfirmNewPassword", out var confPassErr))
+                        {
+                            <span class="field-error">@confPassErr</span>
+                        }
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit"
+                                class="btn btn-primary"
+                                id="btn-change-password"
+                                disabled="@_isChangingPassword">
+                            @if (_isChangingPassword)
+                            {
+                                <span class="spinner-sm"></span>
+                                <span>Atualizando senha...</span>
+                            }
+                            else
+                            {
+                                <span class="material-symbols-outlined">vpn_key</span>
+                                <span>Atualizar Senha</span>
+                            }
+                        </button>
+                    </div>
+                </form>
+            </section>
+
+            <!-- Card 3: Granjas & Vínculos Autorizados -->
+            <section class="card affiliations-card" aria-labelledby="heading-granjas">
+                <div class="card-header">
+                    <div class="card-title-group">
+                        <span class="material-symbols-outlined card-header-icon">domain</span>
+                        <div>
+                            <h2 id="heading-granjas" class="card-title">Fazendas & Granjas Vinculadas</h2>
+                            <p class="card-description">Organizações pecuárias às quais sua conta possui privilégio de acesso.</p>
+                        </div>
+                    </div>
+                </div>
+
+                @if (_profile.AssociatedTenants.Count == 0)
+                {
+                    <div class="empty-affiliations">
+                        <span class="material-symbols-outlined">corporate_fare</span>
+                        <p>Nenhuma fazenda associada no momento.</p>
+                    </div>
+                }
+                else
+                {
+                    <div class="tenants-list">
+                        @foreach (var tenant in _profile.AssociatedTenants)
+                        {
+                            <div class="tenant-item">
+                                <div class="tenant-main">
+                                    <span class="material-symbols-outlined tenant-icon">agriculture</span>
+                                    <div>
+                                        <h4 class="tenant-name">@tenant.TenantName</h4>
+                                        <p class="tenant-meta">
+                                            Membro desde @tenant.JoinedAt.ToString("dd/MM/yyyy")
+                                        </p>
+                                    </div>
+                                </div>
+                                <div class="tenant-badges">
+                                    <span class="badge badge-role">@tenant.Role</span>
+                                    <span class="badge badge-plan">Plano @tenant.SubscribedPlan</span>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </section>
+
+            <!-- Card 4: Governança LGPD & Atendimento ao Titular -->
+            <section class="card dpo-card" aria-labelledby="heading-dpo">
+                <div class="card-header">
+                    <div class="card-title-group">
+                        <span class="material-symbols-outlined card-header-icon">policy</span>
+                        <div>
+                            <h2 id="heading-dpo" class="card-title">Central de Privacidade & DPO</h2>
+                            <p class="card-description">Canais oficiais para o exercício de direitos fundamentais sob a Lei 13.709/2018.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="dpo-content">
+                    <div class="dpo-highlight">
+                        <span class="material-symbols-outlined dpo-icon">shield</span>
+                        <div>
+                            <p class="dpo-text">
+                                Sob a LGPD, você possui direito a retificação de dados incorretos, portabilidade, eliminação e revogação de consentimentos.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="dpo-contact-row">
+                        <div class="contact-pill">
+                            <span class="material-symbols-outlined">alternate_email</span>
+                            <span>Encarregado (DPO): <strong>dpo@criacerto.com.br</strong></span>
+                        </div>
+                        <div class="contact-pill">
+                            <span class="material-symbols-outlined">schedule</span>
+                            <span>Prazo legal de resposta: <strong>15 dias úteis</strong></span>
+                        </div>
+                    </div>
+
+                    <div class="legal-links-row">
+                        <a href="/termos-de-uso" target="_blank" class="legal-link">
+                            <span class="material-symbols-outlined">description</span>
+                            Termos de Uso
+                        </a>
+                        <a href="/politica-de-privacidade" target="_blank" class="legal-link">
+                            <span class="material-symbols-outlined">privacy_tip</span>
+                            Política de Privacidade
+                        </a>
+                        <a href="/dpa" target="_blank" class="legal-link">
+                            <span class="material-symbols-outlined">handshake</span>
+                            Aditivo DPA (B2B)
+                        </a>
+                        <a href="/dpo" target="_blank" class="legal-link" style="color: var(--cc-primary, #059669); font-weight: 700;">
+                            <span class="material-symbols-outlined">outgoing_mail</span>
+                            Canal DPO (Requerimento Formal)
+                        </a>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Card 5: Direito de Acesso e Portabilidade dos Dados Pessoais (Art. 18, II e V) -->
+            <section class="card portability-card" id="portabilidade-lgpd" aria-labelledby="heading-portabilidade">
+                <div class="card-header">
+                    <div class="card-title-group">
+                        <span class="material-symbols-outlined card-header-icon">download_for_offline</span>
+                        <div>
+                            <h2 id="heading-portabilidade" class="card-title">Acesso & Portabilidade de Dados Pessoais</h2>
+                            <p class="card-description">Exercício do direito à portabilidade e acesso integral aos seus dados cadastrais, consentimentos e histórico (LGPD Art. 18, II e V).</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="portability-content">
+                    <div class="portability-info-box">
+                        <span class="material-symbols-outlined portability-icon">inventory_2</span>
+                        <div>
+                            <h4 class="portability-info-title">Dossiê Estruturado Interoperável</h4>
+                            <p class="portability-info-text">
+                                Ao solicitar o download, nosso sistema gera um pacote padronizado em formato <strong>JSON canônico</strong> legível por máquina, contendo seu perfil, metadados de consentimento, vínculos a granjas e trilha de eventos, assinado digitalmente com integridade forense.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="portability-badges-grid">
+                        <div class="portability-badge-item">
+                            <span class="material-symbols-outlined badge-item-icon">data_object</span>
+                            <div>
+                                <span class="badge-item-label">Formato Canônico</span>
+                                <strong class="badge-item-value">JSON (RFC 8259)</strong>
+                            </div>
+                        </div>
+                        <div class="portability-badge-item">
+                            <span class="material-symbols-outlined badge-item-icon">lock</span>
+                            <div>
+                                <span class="badge-item-label">Segurança Criptográfica</span>
+                                <strong class="badge-item-value">Hash SHA-256 Chained</strong>
+                            </div>
+                        </div>
+                        <div class="portability-badge-item">
+                            <span class="material-symbols-outlined badge-item-icon">verified</span>
+                            <div>
+                                <span class="badge-item-label">Enquadramento Legal</span>
+                                <strong class="badge-item-value">Art. 18, II e V LGPD</strong>
+                            </div>
+                        </div>
+                        <div class="portability-badge-item">
+                            <span class="material-symbols-outlined badge-item-icon">schedule</span>
+                            <div>
+                                <span class="badge-item-label">Disponibilidade</span>
+                                <strong class="badge-item-value">Download Instantâneo</strong>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="portability-actions">
+                        <button type="button"
+                                class="btn btn-primary btn-portability"
+                                id="btn-export-my-data"
+                                @onclick="HandleExportMyDataAsync"
+                                disabled="@_isExportingData">
+                            @if (_isExportingData)
+                            {
+                                <span class="spinner-sm"></span>
+                                <span>Compilando Dossiê e Assinando...</span>
+                            }
+                            else
+                            {
+                                <span class="material-symbols-outlined">file_download</span>
+                                <span>Exportar Meus Dados Pessoais (Portabilidade LGPD)</span>
+                            }
+                        </button>
+                        <p class="portability-hint">
+                            <span class="material-symbols-outlined hint-icon">info</span>
+                            O download iniciará automaticamente no navegador e uma evidência forense imutável será gravada no log de auditoria.
+                        </p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Card 6: Zona de Perigo - Eliminação de Conta & Anonimização (Art. 18, VI da LGPD) -->
+            <section class="card danger-card" id="eliminacao-conta-lgpd" aria-labelledby="heading-danger-zone">
+                <div class="card-header danger-header">
+                    <div class="card-title-group">
+                        <span class="material-symbols-outlined card-header-icon danger-icon">warning</span>
+                        <div>
+                            <h2 id="heading-danger-zone" class="card-title text-danger">Zona de Perigo: Eliminação de Conta & Anonimização</h2>
+                            <p class="card-description">Exercício do direito à eliminação definitiva e encerramento de conta sob o Artigo 18, VI da LGPD.</p>
+                        </div>
+                    </div>
+                    <span class="badge badge-danger">Ação Irreversível</span>
+                </div>
+
+                <div class="danger-content">
+                    <div class="danger-info-box">
+                        <span class="material-symbols-outlined danger-box-icon">gavel</span>
+                        <div>
+                            <h4 class="danger-info-title">Regra de Harmonização LGPD vs Obrigações Legais Agropecuárias</h4>
+                            <p class="danger-info-text">
+                                Ao confirmar a exclusão, seus <strong>dados pessoais cadastrais</strong> (nome, e-mail, telefone e credenciais) serão imediatamente e irreversivelmente eliminados e substituídos por registros sintéticos anônimos.
+                                Os dados operacionais de manejo pecuário das fazendas (vacinas, pesagens, partos, inseminações) e registros de faturamento são <strong>preservados sob sigilo despersonalizado</strong> por imperativo legal (Código Civil art. 206 § 5º e normas sanitárias do MAPA).
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="danger-actions-row">
+                        <div>
+                            <strong class="danger-action-title">Encerramento Definitivo de Acesso</strong>
+                            <p class="danger-action-desc">Sua conta será desvinculada de todas as granjas e não será mais possível fazer login com suas credenciais.</p>
+                        </div>
+                        <button type="button"
+                                class="btn btn-danger"
+                                id="btn-open-delete-account-modal"
+                                @onclick="OpenDeleteAccountModal">
+                            <span class="material-symbols-outlined">delete_forever</span>
+                            <span>Excluir Minha Conta...</span>
+                        </button>
+                    </div>
+                </div>
+            </section>
+        </div>
+    }
+
+    <!-- Modal de Duplo Aviso e Confirmação de Exclusão de Conta -->
+    @if (_showDeleteAccountModal)
+    {
+        <div class="modal-backdrop" @onclick="CloseDeleteAccountModal" aria-hidden="true"></div>
+        <div class="modal-dialog-danger" role="dialog" aria-modal="true" aria-labelledby="modal-delete-title">
+            <div class="modal-header-danger">
+                <div class="modal-header-title-group">
+                    <span class="material-symbols-outlined modal-danger-icon">crisis_alert</span>
+                    <div>
+                        <h3 id="modal-delete-title" class="modal-title-danger">Confirmar Eliminação e Anonimização de Conta</h3>
+                        <p class="modal-subtitle-danger">Esta ação é permanente e irreversível (LGPD Art. 18, VI)</p>
+                    </div>
+                </div>
+                <button type="button" class="btn-close-modal" @onclick="CloseDeleteAccountModal" aria-label="Fechar modal">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+
+            <div class="modal-body-danger">
+                @if (!string.IsNullOrWhiteSpace(_deleteAccountErrorMessage))
+                {
+                    <div class="alert-danger-box">
+                        <span class="material-symbols-outlined">error</span>
+                        <span>@_deleteAccountErrorMessage</span>
+                    </div>
+                }
+
+                <div class="danger-warning-callout">
+                    <span class="material-symbols-outlined callout-icon">shield_with_heart</span>
+                    <div>
+                        <strong>Atenção Titular de Dados:</strong>
+                        <p>
+                            Após a confirmação, seu acesso será revogado imediatamente e seus dados pessoais serão desassociados. Se você for o único Administrador ativo de alguma fazenda com plano vigente, a exclusão será bloqueada até a transferência da titularidade para outro membro da equipe.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="delete-current-password" class="form-label">
+                        Sua Senha Atual <span class="required">*</span>
+                    </label>
+                    <div class="password-input-wrapper">
+                        <input id="delete-current-password"
+                               type="@(_showDeletePassword ? "text" : "password")"
+                               class="form-input"
+                               @bind="_deleteCurrentPassword"
+                               placeholder="Digite sua senha atual para autorizar" />
+                        <button type="button"
+                                class="btn-toggle-password"
+                                @onclick="() => _showDeletePassword = !_showDeletePassword"
+                                tabindex="-1"
+                                aria-label="Alternar visibilidade da senha">
+                            <span class="material-symbols-outlined">@(_showDeletePassword ? "visibility_off" : "visibility")</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="delete-exit-reason" class="form-label">
+                        Motivo do Encerramento (Opcional)
+                    </label>
+                    <select id="delete-exit-reason" class="form-select" @bind="_deleteExitReason">
+                        <option value="">Selecione um motivo (opcional)</option>
+                        <option value="Não utilizo mais o sistema">Não utilizo mais o sistema</option>
+                        <option value="Encerramento de atividades agropecuárias">Encerramento de atividades agropecuárias</option>
+                        <option value="Migração para outra solução">Migração para outra solução</option>
+                        <option value="Preocupação com privacidade / LGPD">Preocupação com privacidade / LGPD</option>
+                        <option value="Outro motivo">Outro motivo</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="delete-confirmation-text" class="form-label">
+                        Digite <strong>EXCLUIR</strong> para confirmar <span class="required">*</span>
+                    </label>
+                    <input id="delete-confirmation-text"
+                           type="text"
+                           class="form-input font-mono"
+                           @bind="_deleteConfirmationText"
+                           placeholder="EXCLUIR" />
+                </div>
+            </div>
+
+            <div class="modal-footer-danger">
+                <button type="button"
+                        class="btn btn-secondary"
+                        @onclick="CloseDeleteAccountModal"
+                        disabled="@_isDeletingAccount">
+                    Cancelar
+                </button>
+                <button type="button"
+                        class="btn btn-danger-solid"
+                        id="btn-confirm-account-deletion"
+                        @onclick="HandleConfirmAccountDeletionAsync"
+                        disabled="@(_isDeletingAccount || string.IsNullOrWhiteSpace(_deleteCurrentPassword) || !string.Equals(_deleteConfirmationText?.Trim(), "EXCLUIR", StringComparison.OrdinalIgnoreCase))">
+                    @if (_isDeletingAccount)
+                    {
+                        <span class="spinner-sm"></span>
+                        <span>Anonimizando e Encerrando...</span>
+                    }
+                    else
+                    {
+                        <span class="material-symbols-outlined">delete_forever</span>
+                        <span>Confirmar Exclusão Definitiva</span>
+                    }
+                </button>
+            </div>
+        </div>
+    }
+
+</div>
+
+<style>
+    .profile-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding-bottom: 3rem;
+    }
+
+    .page-header {
+        margin-bottom: 2rem;
+    }
+
+    .breadcrumb {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.75rem;
+        color: var(--cc-ink-muted, #64748b);
+        margin-bottom: 0.5rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .breadcrumb-icon {
+        font-size: 0.9rem;
+    }
+
+    .breadcrumb-active {
+        color: var(--cc-primary, #059669);
+        font-weight: 700;
+    }
+
+    .header-content {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+
+    .page-title {
+        margin: 0;
+        font-size: 1.85rem;
+        font-weight: 800;
+        color: var(--cc-ink, #0f172a);
+        letter-spacing: -0.02em;
+    }
+
+    .page-subtitle {
+        margin: 0.35rem 0 0 0;
+        color: var(--cc-ink-muted, #64748b);
+        font-size: 0.95rem;
+    }
+
+    .badge-lgpd {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.4rem 0.85rem;
+        border-radius: 999px;
+        background: rgba(5, 150, 105, 0.1);
+        color: #059669;
+        border: 1px solid rgba(5, 150, 105, 0.25);
+        font-size: 0.82rem;
+        font-weight: 700;
+    }
+
+    .badge-icon {
+        font-size: 1.1rem;
+    }
+
+    .loading-state, .error-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 4rem 2rem;
+        text-align: center;
+        background: white;
+        border-radius: 16px;
+        border: 1px solid var(--cc-border, #e2e8f0);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+    }
+
+    .spinner {
+        width: 44px;
+        height: 44px;
+        border: 4px solid #e2e8f0;
+        border-top-color: #059669;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        margin-bottom: 1rem;
+    }
+
+    .spinner-sm {
+        display: inline-block;
+        width: 16px;
+        height: 16px;
+        border: 2px solid white;
+        border-top-color: transparent;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        margin-right: 0.5rem;
+    }
+
+    @@keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+
+    .error-icon {
+        font-size: 3rem;
+        color: #dc2626;
+        margin-bottom: 0.75rem;
+    }
+
+    .profile-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(480px, 1fr));
+        gap: 1.5rem;
+    }
+
+    @@media (max-width: 640px) {
+        .profile-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .card {
+        background: white;
+        border-radius: 16px;
+        border: 1px solid var(--cc-border, #e2e8f0);
+        padding: 1.75rem;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.03);
+        display: flex;
+        flex-direction: column;
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .card-header {
+        margin-bottom: 1.5rem;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid var(--cc-border, #f1f5f9);
+    }
+
+    .card-title-group {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.85rem;
+    }
+
+    .card-header-icon {
+        font-size: 1.8rem;
+        color: var(--cc-primary, #059669);
+        background: rgba(5, 150, 105, 0.08);
+        padding: 0.5rem;
+        border-radius: 10px;
+    }
+
+    .card-title {
+        margin: 0;
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: var(--cc-ink, #0f172a);
+    }
+
+    .card-description {
+        margin: 0.25rem 0 0 0;
+        font-size: 0.85rem;
+        color: var(--cc-ink-muted, #64748b);
+    }
+
+    .avatar-hero {
+        display: flex;
+        align-items: center;
+        gap: 1.25rem;
+        background: linear-gradient(135deg, rgba(240, 253, 244, 0.8), rgba(236, 253, 245, 0.5));
+        border: 1px solid #d1fae5;
+        border-radius: 12px;
+        padding: 1.2rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .avatar-circle {
+        width: 64px;
+        height: 64px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #059669, #047857);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        font-weight: 800;
+        box-shadow: 0 4px 10px rgba(5, 150, 105, 0.25);
+    }
+
+    .avatar-name {
+        margin: 0;
+        font-size: 1.15rem;
+        font-weight: 700;
+        color: #0f172a;
+    }
+
+    .avatar-email {
+        margin: 0.15rem 0 0.4rem 0;
+        font-size: 0.85rem;
+        color: #475569;
+    }
+
+    .email-status-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0.2rem 0.65rem;
+        border-radius: 999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+
+    .email-status-pill.confirmed {
+        background: #dcfce7;
+        color: #15803d;
+        border: 1px solid #bbf7d0;
+    }
+
+    .email-status-pill.pending {
+        background: #fef3c7;
+        color: #b45309;
+        border: 1px solid #fde68a;
+    }
+
+    .pill-icon {
+        font-size: 0.95rem;
+    }
+
+    .form-container {
+        display: flex;
+        flex-direction: column;
+        gap: 1.25rem;
+    }
+
+    .form-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.35rem;
+    }
+
+    .form-label {
+        font-size: 0.88rem;
+        font-weight: 600;
+        color: var(--cc-ink, #1e293b);
+    }
+
+    .required {
+        color: #dc2626;
+    }
+
+    .field-hint {
+        font-size: 0.78rem;
+        font-weight: normal;
+        color: #64748b;
+    }
+
+    .form-input {
+        padding: 0.65rem 0.9rem;
+        border-radius: 8px;
+        border: 1px solid var(--cc-border, #cbd5e1);
+        font-size: 0.95rem;
+        color: #0f172a;
+        background: white;
+        transition: border-color 0.2s, box-shadow 0.2s;
+        outline: none;
+    }
+
+    .form-input:focus {
+        border-color: #059669;
+        box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.15);
+    }
+
+    .input-readonly {
+        background: #f8fafc;
+        color: #64748b;
+        cursor: not-allowed;
+    }
+
+    .input-error {
+        border-color: #dc2626 !important;
+        box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.15) !important;
+    }
+
+    .field-error {
+        font-size: 0.78rem;
+        color: #dc2626;
+        font-weight: 500;
+    }
+
+    .field-info {
+        font-size: 0.78rem;
+        color: #64748b;
+    }
+
+    .password-input-wrapper {
+        position: relative;
+        display: flex;
+        align-items: center;
+    }
+
+    .password-input-wrapper .form-input {
+        width: 100%;
+        padding-right: 2.75rem;
+    }
+
+    .btn-toggle-password {
+        position: absolute;
+        right: 0.65rem;
+        background: transparent;
+        border: none;
+        color: #64748b;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.25rem;
+        border-radius: 4px;
+    }
+
+    .btn-toggle-password:hover {
+        color: #0f172a;
+    }
+
+    .strength-meter-container {
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 1rem;
+    }
+
+    .strength-bars {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 0.4rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .strength-bar {
+        height: 5px;
+        background: #e2e8f0;
+        border-radius: 999px;
+        transition: background-color 0.3s;
+    }
+
+    .strength-weak { background-color: #ef4444 !important; }
+    .strength-medium { background-color: #f59e0b !important; }
+    .strength-strong { background-color: #10b981 !important; }
+
+    .strength-label {
+        font-size: 0.8rem;
+        color: #475569;
+        display: block;
+        margin-bottom: 0.75rem;
+    }
+
+    .strength-checklist {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.35rem;
+    }
+
+    .strength-checklist li {
+        font-size: 0.78rem;
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+    }
+
+    .strength-checklist li .material-symbols-outlined {
+        font-size: 0.95rem;
+    }
+
+    .check-pass {
+        color: #15803d;
+        font-weight: 500;
+    }
+
+    .check-fail {
+        color: #94a3b8;
+    }
+
+    .metadata-box {
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 0.9rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+    }
+
+    .metadata-item {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.82rem;
+    }
+
+    .meta-label {
+        color: #64748b;
+    }
+
+    .meta-value {
+        color: #0f172a;
+        font-weight: 600;
+    }
+
+    .form-actions {
+        display: flex;
+        justify-content: flex-end;
+        margin-top: 0.5rem;
+    }
+
+    .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        padding: 0.65rem 1.4rem;
+        border-radius: 8px;
+        font-size: 0.92rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        border: none;
+    }
+
+    .btn-primary {
+        background: linear-gradient(135deg, #059669, #047857);
+        color: white;
+        box-shadow: 0 2px 6px rgba(5, 150, 105, 0.25);
+    }
+
+    .btn-primary:hover:not(:disabled) {
+        background: linear-gradient(135deg, #047857, #065f46);
+        box-shadow: 0 4px 12px rgba(5, 150, 105, 0.35);
+        transform: translateY(-1px);
+    }
+
+    .btn-primary:disabled {
+        opacity: 0.65;
+        cursor: not-allowed;
+    }
+
+    .btn-outline {
+        background: white;
+        border: 1px solid #cbd5e1;
+        color: #334155;
+    }
+
+    .btn-outline:hover {
+        background: #f8fafc;
+        border-color: #94a3b8;
+    }
+
+    .tenants-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+    .tenant-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.9rem 1.1rem;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        background: #f8fafc;
+        transition: border-color 0.2s;
+    }
+
+    .tenant-item:hover {
+        border-color: #cbd5e1;
+        background: white;
+    }
+
+    .tenant-main {
+        display: flex;
+        align-items: center;
+        gap: 0.85rem;
+    }
+
+    .tenant-icon {
+        font-size: 1.6rem;
+        color: #059669;
+        background: white;
+        padding: 0.4rem;
+        border-radius: 8px;
+        border: 1px solid #e2e8f0;
+    }
+
+    .tenant-name {
+        margin: 0;
+        font-size: 0.98rem;
+        font-weight: 700;
+        color: #0f172a;
+    }
+
+    .tenant-meta {
+        margin: 0.15rem 0 0 0;
+        font-size: 0.78rem;
+        color: #64748b;
+    }
+
+    .tenant-badges {
+        display: flex;
+        gap: 0.45rem;
+    }
+
+    .badge-role {
+        padding: 0.25rem 0.6rem;
+        border-radius: 6px;
+        background: #e0f2fe;
+        color: #0369a1;
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+    }
+
+    .badge-plan {
+        padding: 0.25rem 0.6rem;
+        border-radius: 6px;
+        background: #fef3c7;
+        color: #b45309;
+        font-size: 0.75rem;
+        font-weight: 700;
+    }
+
+    .empty-affiliations {
+        text-align: center;
+        padding: 2.5rem 1rem;
+        color: #64748b;
+    }
+
+    .empty-affiliations span {
+        font-size: 2.5rem;
+        margin-bottom: 0.5rem;
+        display: block;
+    }
+
+    .dpo-content {
+        display: flex;
+        flex-direction: column;
+        gap: 1.25rem;
+    }
+
+    .dpo-highlight {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.85rem;
+        background: #eff6ff;
+        border: 1px solid #bfdbfe;
+        border-radius: 10px;
+        padding: 1rem;
+    }
+
+    .dpo-icon {
+        font-size: 1.5rem;
+        color: #2563eb;
+    }
+
+    .dpo-text {
+        margin: 0;
+        font-size: 0.88rem;
+        color: #1e40af;
+        line-height: 1.45;
+    }
+
+    .dpo-contact-row {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 0.75rem;
+    }
+
+    .contact-pill {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.65rem 0.9rem;
+        border-radius: 8px;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        font-size: 0.82rem;
+        color: #334155;
+    }
+
+    .contact-pill span.material-symbols-outlined {
+        color: #059669;
+        font-size: 1.15rem;
+    }
+
+    .legal-links-row {
+        display: flex;
+        gap: 1rem;
+        margin-top: 0.5rem;
+    }
+
+    .legal-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        color: #059669;
+        font-size: 0.85rem;
+        font-weight: 600;
+        text-decoration: none;
+    }
+
+    .legal-link:hover {
+        text-decoration: underline;
+    }
+
+    .portability-card {
+        grid-column: 1 / -1;
+        border-left: 4px solid #059669;
+        background: linear-gradient(to bottom, #ffffff, #fbfdfc);
+    }
+
+    .portability-content {
+        display: flex;
+        flex-direction: column;
+        gap: 1.25rem;
+    }
+
+    .portability-info-box {
+        display: flex;
+        align-items: flex-start;
+        gap: 1rem;
+        background: #f0fdf4;
+        border: 1px solid #bbf7d0;
+        border-radius: 12px;
+        padding: 1.15rem 1.25rem;
+    }
+
+    .portability-icon {
+        font-size: 2rem;
+        color: #059669;
+        flex-shrink: 0;
+        margin-top: 0.15rem;
+    }
+
+    .portability-info-title {
+        font-size: 0.95rem;
+        font-weight: 700;
+        color: #166534;
+        margin: 0 0 0.35rem 0;
+    }
+
+    .portability-info-text {
+        font-size: 0.85rem;
+        color: #14532d;
+        line-height: 1.5;
+        margin: 0;
+    }
+
+    .portability-badges-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 0.85rem;
+    }
+
+    .portability-badge-item {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 0.75rem 1rem;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+    }
+
+    .badge-item-icon {
+        font-size: 1.4rem;
+        color: #059669;
+    }
+
+    .badge-item-label {
+        display: block;
+        font-size: 0.72rem;
+        color: #64748b;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .badge-item-value {
+        font-size: 0.85rem;
+        color: #0f172a;
+    }
+
+    .portability-actions {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.65rem;
+        padding-top: 0.5rem;
+    }
+
+    .btn-portability {
+        padding: 0.85rem 1.6rem;
+        font-size: 0.92rem;
+        font-weight: 700;
+        border-radius: 10px;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.6rem;
+        background: #059669;
+        color: white;
+        border: none;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        box-shadow: 0 4px 12px rgba(5, 150, 105, 0.25);
+    }
+
+    .btn-portability:hover:not(:disabled) {
+        background: #047857;
+        box-shadow: 0 6px 16px rgba(5, 150, 105, 0.35);
+        transform: translateY(-1px);
+    }
+
+    .btn-portability:disabled {
+        opacity: 0.7;
+        cursor: not-allowed;
+    }
+
+    .portability-hint {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        font-size: 0.8rem;
+        color: #64748b;
+        margin: 0;
+    }
+
+    .hint-icon {
+        font-size: 1rem;
+        color: #94a3b8;
+    }
+
+    /* Danger Zone Styles (LGPD Art. 18, VI) */
+    .danger-card {
+        border-color: rgba(239, 68, 68, 0.35);
+        background: linear-gradient(180deg, #ffffff 0%, #fffbfb 100%);
+    }
+
+    .danger-header {
+        border-bottom-color: rgba(239, 68, 68, 0.2);
+    }
+
+    .danger-icon {
+        color: #ef4444;
+    }
+
+    .text-danger {
+        color: #b91c1c !important;
+    }
+
+    .badge-danger {
+        background: rgba(239, 68, 68, 0.12);
+        color: #b91c1c;
+        border: 1px solid rgba(239, 68, 68, 0.3);
+        font-size: 0.75rem;
+        font-weight: 700;
+        padding: 0.35rem 0.75rem;
+        border-radius: 999px;
+    }
+
+    .danger-content {
+        padding: 1.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+    }
+
+    .danger-info-box {
+        display: flex;
+        align-items: flex-start;
+        gap: 1rem;
+        background: #fef2f2;
+        border: 1px solid #fecaca;
+        border-radius: 12px;
+        padding: 1.25rem;
+    }
+
+    .danger-box-icon {
+        color: #dc2626;
+        font-size: 1.75rem;
+        flex-shrink: 0;
+        margin-top: 0.1rem;
+    }
+
+    .danger-info-title {
+        margin: 0 0 0.4rem 0;
+        font-size: 0.95rem;
+        font-weight: 700;
+        color: #991b1b;
+    }
+
+    .danger-info-text {
+        margin: 0;
+        font-size: 0.875rem;
+        color: #7f1d1d;
+        line-height: 1.5;
+    }
+
+    .danger-actions-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 1rem;
+        padding-top: 0.5rem;
+    }
+
+    .danger-action-title {
+        display: block;
+        font-size: 0.95rem;
+        color: #1e293b;
+    }
+
+    .danger-action-desc {
+        margin: 0.25rem 0 0 0;
+        font-size: 0.85rem;
+        color: #64748b;
+    }
+
+    .btn-danger {
+        background: #fee2e2;
+        color: #dc2626;
+        border: 1px solid #fca5a5;
+        padding: 0.65rem 1.25rem;
+        border-radius: 10px;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .btn-danger:hover {
+        background: #dc2626;
+        color: white;
+        border-color: #dc2626;
+        box-shadow: 0 4px 12px rgba(220, 38, 38, 0.25);
+    }
+
+    /* Modal Styles */
+    .modal-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.6);
+        backdrop-filter: blur(4px);
+        z-index: 1050;
+    }
+
+    .modal-dialog-danger {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 90%;
+        max-width: 580px;
+        background: white;
+        border-radius: 16px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25);
+        border: 1px solid #fecaca;
+        z-index: 1060;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    .modal-header-danger {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 1.25rem 1.5rem;
+        background: #fef2f2;
+        border-bottom: 1px solid #fee2e2;
+    }
+
+    .modal-header-title-group {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .modal-danger-icon {
+        color: #dc2626;
+        font-size: 2rem;
+    }
+
+    .modal-title-danger {
+        margin: 0;
+        font-size: 1.15rem;
+        font-weight: 800;
+        color: #991b1b;
+    }
+
+    .modal-subtitle-danger {
+        margin: 0.2rem 0 0 0;
+        font-size: 0.8rem;
+        color: #b91c1c;
+    }
+
+    .btn-close-modal {
+        background: transparent;
+        border: none;
+        color: #64748b;
+        cursor: pointer;
+        padding: 0.25rem;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .btn-close-modal:hover {
+        background: rgba(0, 0, 0, 0.05);
+        color: #0f172a;
+    }
+
+    .modal-body-danger {
+        padding: 1.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1.25rem;
+        max-height: 70vh;
+        overflow-y: auto;
+    }
+
+    .alert-danger-box {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.85rem 1rem;
+        background: #fee2e2;
+        border: 1px solid #fca5a5;
+        border-radius: 8px;
+        color: #991b1b;
+        font-size: 0.875rem;
+        font-weight: 600;
+    }
+
+    .danger-warning-callout {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+        padding: 1rem;
+        background: #fffbeb;
+        border: 1px solid #fde68a;
+        border-radius: 10px;
+        color: #92400e;
+        font-size: 0.85rem;
+        line-height: 1.45;
+    }
+
+    .callout-icon {
+        color: #d97706;
+        font-size: 1.4rem;
+        flex-shrink: 0;
+    }
+
+    .danger-warning-callout p {
+        margin: 0.35rem 0 0 0;
+    }
+
+    .modal-footer-danger {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 0.75rem;
+        padding: 1.25rem 1.5rem;
+        background: #f8fafc;
+        border-top: 1px solid #e2e8f0;
+    }
+
+    .btn-danger-solid {
+        background: #dc2626;
+        color: white;
+        border: 1px solid #b91c1c;
+        padding: 0.65rem 1.25rem;
+        border-radius: 10px;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .btn-danger-solid:hover:not(:disabled) {
+        background: #b91c1c;
+        box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
+    }
+
+    .btn-danger-solid:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+</style>
+
+@code {
+    private UserProfileModel? _profile;
+    private bool _isLoading = true;
+    private bool _isSavingProfile = false;
+    private bool _isChangingPassword = false;
+
+    // Profile form state
+    private string _editFullName = string.Empty;
+    private string? _editPhoneNumber = null;
+    private Dictionary<string, string> _profileErrors = new();
+
+    // Password form state
+    private string _currentPassword = string.Empty;
+    private string _newPassword = string.Empty;
+    private string _confirmNewPassword = string.Empty;
+    private bool _showCurrentPassword = false;
+    private bool _showNewPassword = false;
+    private bool _showConfirmPassword = false;
+    private Dictionary<string, string> _passwordErrors = new();
+
+    // Password strength evaluation
+    private bool HasMinLength => _newPassword.Length >= 8;
+    private bool HasUpper => _newPassword.Any(char.IsUpper);
+    private bool HasLower => _newPassword.Any(char.IsLower);
+    private bool HasNumber => _newPassword.Any(char.IsDigit);
+    private bool HasSymbol => _newPassword.Any(c => !char.IsLetterOrDigit(c));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadProfileAsync();
+    }
+
+    private async Task LoadProfileAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            _profile = await TenancyClient.GetUserProfileAsync();
+            if (_profile != null)
+            {
+                _editFullName = _profile.FullName;
+                _editPhoneNumber = _profile.PhoneNumber;
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError("Erro ao carregar dados do perfil: " + ex.Message);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task HandleSaveProfileAsync()
+    {
+        _profileErrors.Clear();
+
+        if (string.IsNullOrWhiteSpace(_editFullName) || _editFullName.Trim().Length < 3)
+        {
+            _profileErrors["FullName"] = "O nome completo deve conter no mínimo 3 caracteres.";
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(_editPhoneNumber))
+        {
+            var digits = new string(_editPhoneNumber.Where(char.IsDigit).ToArray());
+            if (digits.Length < 8 || digits.Length > 15)
+            {
+                _profileErrors["PhoneNumber"] = "Informe um telefone válido (entre 8 e 15 dígitos).";
+                return;
+            }
+        }
+
+        _isSavingProfile = true;
+        try
+        {
+            var request = new UpdateUserProfileRequest(_editFullName.Trim(), _editPhoneNumber?.Trim());
+            var (success, updatedProfile, errorMessage) = await TenancyClient.UpdateUserProfileAsync(request);
+
+            if (success && updatedProfile != null)
+            {
+                _profile = updatedProfile;
+                _editFullName = updatedProfile.FullName;
+                _editPhoneNumber = updatedProfile.PhoneNumber;
+                ToastService.ShowSuccess("Dados cadastrais retificados com sucesso!");
+            }
+            else
+            {
+                ToastService.ShowError(errorMessage ?? "Não foi possível atualizar o perfil.");
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError("Falha na requisição: " + ex.Message);
+        }
+        finally
+        {
+            _isSavingProfile = false;
+        }
+    }
+
+    private async Task HandleChangePasswordAsync()
+    {
+        _passwordErrors.Clear();
+
+        if (string.IsNullOrWhiteSpace(_currentPassword))
+        {
+            _passwordErrors["CurrentPassword"] = "Informe sua senha atual.";
+            return;
+        }
+
+        if (!HasMinLength || !HasUpper || !HasLower || !HasNumber || !HasSymbol)
+        {
+            _passwordErrors["NewPassword"] = "A nova senha não atende a todos os critérios de segurança.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_confirmNewPassword) || _newPassword != _confirmNewPassword)
+        {
+            _passwordErrors["ConfirmNewPassword"] = "A confirmação de senha não confere.";
+            return;
+        }
+
+        if (_currentPassword == _newPassword)
+        {
+            _passwordErrors["NewPassword"] = "A nova senha deve ser diferente da senha atual.";
+            return;
+        }
+
+        _isChangingPassword = true;
+        try
+        {
+            var request = new ChangePasswordRequest(_currentPassword, _newPassword, _confirmNewPassword);
+            var (success, errorMessage) = await TenancyClient.ChangePasswordAsync(request);
+
+            if (success)
+            {
+                _currentPassword = string.Empty;
+                _newPassword = string.Empty;
+                _confirmNewPassword = string.Empty;
+                ToastService.ShowSuccess("Senha alterada com sucesso!");
+            }
+            else
+            {
+                ToastService.ShowError(errorMessage ?? "Não foi possível alterar a senha.");
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError("Falha na requisição: " + ex.Message);
+        }
+        finally
+        {
+            _isChangingPassword = false;
+        }
+    }
+
+    private int GetStrengthScore()
+    {
+        if (string.IsNullOrEmpty(_newPassword)) return 0;
+        int score = 0;
+        if (HasMinLength) score++;
+        if (HasUpper && HasLower) score++;
+        if (HasNumber) score++;
+        if (HasSymbol) score++;
+        return score;
+    }
+
+    private string GetStrengthClass()
+    {
+        var score = GetStrengthScore();
+        return score switch
+        {
+            1 => "strength-weak",
+            2 => "strength-medium",
+            3 or 4 => "strength-strong",
+            _ => ""
+        };
+    }
+
+    private string GetStrengthLabel()
+    {
+        var score = GetStrengthScore();
+        return score switch
+        {
+            0 => "Não informada",
+            1 => "Muito Fraca",
+            2 => "Razoável",
+            3 => "Boa",
+            4 => "Forte",
+            _ => "Indefinida"
+        };
+    }
+
+    private static string GetInitials(string fullName)
+    {
+        if (string.IsNullOrWhiteSpace(fullName)) return "CC";
+        var parts = fullName.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 1) return parts[0][0].ToString().ToUpperInvariant();
+        return $"{parts[0][0]}{parts[^1][0]}".ToUpperInvariant();
+    }
+
+    private bool _isExportingData = false;
+
+    private async Task HandleExportMyDataAsync()
+    {
+        if (_isExportingData) return;
+        _isExportingData = true;
+
+        try
+        {
+            var (success, content, fileName, error) = await TenancyClient.ExportUserDataPortabilityAsync();
+            if (success && content != null && content.Length > 0)
+            {
+                await JS.InvokeVoidAsync("downloadFileFromByteArray", fileName, "application/json", content);
+                ToastService.ShowSuccess("Dossiê de portabilidade LGPD gerado com sucesso! O download foi iniciado automaticamente no seu navegador.");
+            }
+            else
+            {
+                ToastService.ShowError(error ?? "Falha ao gerar o dossiê de portabilidade dos dados pessoais.");
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError("Erro ao processar a exportação: " + ex.Message);
+        }
+        finally
+        {
+            _isExportingData = false;
+        }
+    }
+
+    // Account deletion & anonymization state (LGPD Art. 18, VI)
+    private bool _showDeleteAccountModal = false;
+    private string _deleteCurrentPassword = string.Empty;
+    private string _deleteConfirmationText = string.Empty;
+    private string _deleteExitReason = string.Empty;
+    private bool _showDeletePassword = false;
+    private bool _isDeletingAccount = false;
+    private string? _deleteAccountErrorMessage = null;
+
+    private void OpenDeleteAccountModal()
+    {
+        _deleteCurrentPassword = string.Empty;
+        _deleteConfirmationText = string.Empty;
+        _deleteExitReason = string.Empty;
+        _showDeletePassword = false;
+        _deleteAccountErrorMessage = null;
+        _showDeleteAccountModal = true;
+    }
+
+    private void CloseDeleteAccountModal()
+    {
+        if (_isDeletingAccount) return;
+        _showDeleteAccountModal = false;
+    }
+
+    private async Task HandleConfirmAccountDeletionAsync()
+    {
+        if (_isDeletingAccount) return;
+        if (string.IsNullOrWhiteSpace(_deleteCurrentPassword))
+        {
+            _deleteAccountErrorMessage = "A senha atual é obrigatória para confirmar a exclusão.";
+            return;
+        }
+
+        if (!string.Equals(_deleteConfirmationText?.Trim(), "EXCLUIR", StringComparison.OrdinalIgnoreCase))
+        {
+            _deleteAccountErrorMessage = "Digite exatamente 'EXCLUIR' no campo de confirmação.";
+            return;
+        }
+
+        _isDeletingAccount = true;
+        _deleteAccountErrorMessage = null;
+
+        try
+        {
+            var request = new AnonymizeAccountRequest(
+                _deleteCurrentPassword,
+                _deleteConfirmationText?.Trim() ?? string.Empty,
+                string.IsNullOrWhiteSpace(_deleteExitReason) ? null : _deleteExitReason
+            );
+
+            var (success, errorMessage) = await TenancyClient.AnonymizeAccountAsync(request);
+            if (success)
+            {
+                _showDeleteAccountModal = false;
+                ToastService.ShowSuccess("Sua conta foi encerrada e seus dados pessoais foram anonimizados definitivamente em conformidade com o Art. 18, VI da LGPD.");
+                await CustomAuth.MarkUserAsLoggedOut();
+                Navigation.NavigateTo("/login?reason=account_deleted", forceLoad: true);
+            }
+            else
+            {
+                _deleteAccountErrorMessage = errorMessage ?? "Não foi possível encerrar a conta.";
+                ToastService.ShowError(_deleteAccountErrorMessage);
+            }
+        }
+        catch (Exception ex)
+        {
+            _deleteAccountErrorMessage = "Erro de conexão: " + ex.Message;
+            ToastService.ShowError(_deleteAccountErrorMessage);
+        }
+        finally
+        {
+            _isDeletingAccount = false;
+        }
+    }
+}

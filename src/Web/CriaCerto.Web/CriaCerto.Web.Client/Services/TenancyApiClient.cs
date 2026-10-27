@@ -45,6 +45,29 @@ public sealed record StripePortalSessionResponse(string Url);
 public sealed record RefreshTokenResponseDto(string Token, Guid TenantId, string SubscribedPlan, string Role);
 public sealed record ApiErrorDto(string? Code, string? Message, int? Type);
 
+public sealed record SubmitDataSubjectRequestDto(
+    string FullName,
+    string Email,
+    string? PhoneNumber,
+    string? DocumentNumber,
+    int RelationshipType,
+    int RequestType,
+    string Description
+);
+
+public sealed record DataSubjectRequestReceiptModel(
+    string ProtocolNumber,
+    string DataSubjectName,
+    string DataSubjectEmail,
+    int RelationshipType,
+    int RequestType,
+    DateTime SubmittedAtUtc,
+    DateTime MaxResponseDateUtc,
+    int EstimatedBusinessDays,
+    string DpoEmail,
+    string ConfirmationMessage
+);
+
 public sealed record ProductionUnitModel(
     Guid Id,
     Guid TenantId,
@@ -107,6 +130,46 @@ public sealed record InviteTeamMemberRequest(
     Guid TenantId,
     string Email,
     int Role
+);
+
+public sealed record UserTenantAffiliationModel(
+    Guid TenantId,
+    string TenantName,
+    string Role,
+    DateTime JoinedAt,
+    string SubscribedPlan
+);
+
+public sealed record UserProfileModel(
+    Guid Id,
+    string Email,
+    string FullName,
+    string? PhoneNumber,
+    bool IsEmailConfirmed,
+    DateTime? EmailConfirmedAtUtc,
+    DateTime CreatedAtUtc,
+    DateTime? TermsAcceptedAtUtc,
+    DateTime? PrivacyPolicyAcceptedAtUtc,
+    string? TermsVersion,
+    string? PrivacyPolicyVersion,
+    IReadOnlyList<UserTenantAffiliationModel> AssociatedTenants
+);
+
+public sealed record UpdateUserProfileRequest(
+    string FullName,
+    string? PhoneNumber
+);
+
+public sealed record ChangePasswordRequest(
+    string CurrentPassword,
+    string NewPassword,
+    string ConfirmNewPassword
+);
+
+public sealed record AnonymizeAccountRequest(
+    string CurrentPassword,
+    string ConfirmationText,
+    string? ExitReason = null
 );
 
 public sealed class TenancyApiClient
@@ -377,6 +440,141 @@ public sealed class TenancyApiClient
         catch
         {
             return false;
+        }
+    }
+
+    public async Task<UserProfileModel?> GetUserProfileAsync(CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        try
+        {
+            var response = await _httpClient.GetAsync("/api/v1/auth/profile", cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                return null;
+            }
+
+            return await response.Content.ReadFromJsonAsync<UserProfileModel>(cancellationToken: cancellationToken);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    public async Task<(bool Success, UserProfileModel? Profile, string? ErrorMessage)> UpdateUserProfileAsync(
+        UpdateUserProfileRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        try
+        {
+            var response = await _httpClient.PutAsJsonAsync("/api/v1/auth/profile", request, cancellationToken);
+            if (response.IsSuccessStatusCode)
+            {
+                var profile = await response.Content.ReadFromJsonAsync<UserProfileModel>(cancellationToken: cancellationToken);
+                return (true, profile, null);
+            }
+
+            var error = await response.Content.ReadFromJsonAsync<ApiErrorDto>(cancellationToken: cancellationToken);
+            return (false, null, error?.Message ?? "Erro ao atualizar dados do perfil.");
+        }
+        catch (Exception ex)
+        {
+            return (false, null, ex.Message);
+        }
+    }
+
+    public async Task<(bool Success, string? ErrorMessage)> ChangePasswordAsync(
+        ChangePasswordRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        try
+        {
+            var response = await _httpClient.PostAsJsonAsync("/api/v1/auth/change-password", request, cancellationToken);
+            if (response.IsSuccessStatusCode)
+            {
+                return (true, null);
+            }
+
+            var error = await response.Content.ReadFromJsonAsync<ApiErrorDto>(cancellationToken: cancellationToken);
+            return (false, error?.Message ?? "Erro ao alterar senha.");
+        }
+        catch (Exception ex)
+        {
+            return (false, ex.Message);
+        }
+    }
+
+    public async Task<(bool Success, byte[]? Content, string? FileName, string? ErrorMessage)> ExportUserDataPortabilityAsync(
+        CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        try
+        {
+            var response = await _httpClient.GetAsync("/api/v1/auth/my-data/export", cancellationToken);
+            if (response.IsSuccessStatusCode)
+            {
+                var bytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
+                var fileName = response.Content.Headers.ContentDisposition?.FileNameStar 
+                            ?? response.Content.Headers.ContentDisposition?.FileName?.Trim('"')
+                            ?? $"meus-dados-lgpd-{DateTime.UtcNow:yyyyMMddHHmmss}.json";
+
+                return (true, bytes, fileName, null);
+            }
+
+            var error = await response.Content.ReadFromJsonAsync<ApiErrorDto>(cancellationToken: cancellationToken);
+            return (false, null, null, error?.Message ?? "Erro ao exportar dados pessoais.");
+        }
+        catch (Exception ex)
+        {
+            return (false, null, null, ex.Message);
+        }
+    }
+
+    public async Task<(bool Success, string? ErrorMessage)> AnonymizeAccountAsync(
+        AnonymizeAccountRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        try
+        {
+            var response = await _httpClient.PostAsJsonAsync("/api/v1/auth/account/delete", request, cancellationToken);
+            if (response.IsSuccessStatusCode)
+            {
+                return (true, null);
+            }
+
+            var error = await response.Content.ReadFromJsonAsync<ApiErrorDto>(cancellationToken: cancellationToken);
+            return (false, error?.Message ?? "Erro ao encerrar e anonimizar conta.");
+        }
+        catch (Exception ex)
+        {
+            return (false, ex.Message);
+        }
+    }
+
+    public async Task<(bool Success, DataSubjectRequestReceiptModel? Receipt, string? ErrorMessage)> SubmitDataSubjectRequestAsync(
+        SubmitDataSubjectRequestDto request,
+        CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        try
+        {
+            var response = await _httpClient.PostAsJsonAsync("/api/v1/compliance/dpo/requests", request, cancellationToken);
+            if (response.IsSuccessStatusCode)
+            {
+                var receipt = await response.Content.ReadFromJsonAsync<DataSubjectRequestReceiptModel>(cancellationToken: cancellationToken);
+                return (true, receipt, null);
+            }
+
+            var error = await response.Content.ReadFromJsonAsync<ApiErrorDto>(cancellationToken: cancellationToken);
+            return (false, null, error?.Message ?? "Erro ao registrar solicitação formal de privacidade.");
+        }
+        catch (Exception ex)
+        {
+            return (false, null, ex.Message);
         }
     }
 

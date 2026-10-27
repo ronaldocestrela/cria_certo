@@ -111,6 +111,20 @@ public static class NavigationCatalog
             Href: "settings/referrals",
             Category: "Configurações",
             Icon: "card_giftcard"
+        ),
+        new(
+            Title: "Meu Perfil & Segurança",
+            ShortTitle: "Meu Perfil",
+            Href: "settings/profile",
+            Category: "Configurações",
+            Icon: "manage_accounts"
+        ),
+        new(
+            Title: "Privacidade & Portabilidade (LGPD)",
+            ShortTitle: "Privacidade LGPD",
+            Href: "settings/privacy",
+            Category: "Configurações",
+            Icon: "shield_person"
         )
     };
 

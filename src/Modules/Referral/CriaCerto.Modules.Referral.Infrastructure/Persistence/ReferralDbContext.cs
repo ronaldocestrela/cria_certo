@@ -1,3 +1,5 @@
+using CriaCerto.BuildingBlocks.Abstractions.Security;
+using CriaCerto.BuildingBlocks.Infrastructure.Security;
 using CriaCerto.Modules.Referral.Application.Abstractions;
 using CriaCerto.Modules.Referral.Application.Domain;
 using Microsoft.EntityFrameworkCore;
@@ -6,6 +8,8 @@ namespace CriaCerto.Modules.Referral.Infrastructure.Persistence;
 
 public class ReferralDbContext : DbContext, IReferralDbContext
 {
+    private readonly IDataEncryptionService _encryptionService;
+
     public DbSet<ReferralProgramParticipant> Participants => Set<ReferralProgramParticipant>();
     public DbSet<ReferralCode> ReferralCodes => Set<ReferralCode>();
     public DbSet<CommercialPartnerProfile> PartnerProfiles => Set<CommercialPartnerProfile>();
@@ -14,9 +18,16 @@ public class ReferralDbContext : DbContext, IReferralDbContext
     public DbSet<ReferralAttribution> Attributions => Set<ReferralAttribution>();
     public DbSet<ReferralRewardLedger> RewardLedger => Set<ReferralRewardLedger>();
 
-    public ReferralDbContext(DbContextOptions<ReferralDbContext> options)
+    public ReferralDbContext(
+        DbContextOptions<ReferralDbContext> options,
+        IDataEncryptionService? encryptionService = null)
         : base(options)
     {
+        _encryptionService = encryptionService ?? new AesGcmDataEncryptionService(new EncryptionOptions
+        {
+            CurrentKey = EncryptionDefaults.DefaultDevKey,
+            BlindIndexKey = EncryptionDefaults.DefaultDevBlindIndexKey
+        });
     }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -139,6 +150,8 @@ public class ReferralDbContext : DbContext, IReferralDbContext
                 .OnDelete(DeleteBehavior.Restrict);
         });
 
+        var encryptedConverter = new EncryptedStringConverter(_encryptionService);
+
         modelBuilder.Entity<PartnerContract>(builder =>
         {
             builder.ToTable("PartnerContracts");
@@ -162,7 +175,8 @@ public class ReferralDbContext : DbContext, IReferralDbContext
                 .HasDefaultValue(30);
 
             builder.Property(c => c.PixKey)
-                .HasMaxLength(150)
+                .HasConversion(encryptedConverter)
+                .HasMaxLength(512)
                 .IsRequired();
 
             builder.Property(c => c.PixKeyType)
@@ -171,7 +185,12 @@ public class ReferralDbContext : DbContext, IReferralDbContext
                 .IsRequired();
 
             builder.Property(c => c.LegalDocumentNumber)
-                .HasMaxLength(30)
+                .HasConversion(encryptedConverter)
+                .HasMaxLength(512)
+                .IsRequired();
+
+            builder.Property(c => c.LegalDocumentNumberHash)
+                .HasMaxLength(64)
                 .IsRequired();
 
             builder.Property(c => c.ValidFromUtc).IsRequired();
@@ -181,6 +200,7 @@ public class ReferralDbContext : DbContext, IReferralDbContext
 
             builder.HasIndex(c => c.ParticipantId);
             builder.HasIndex(c => c.IsActive);
+            builder.HasIndex(c => c.LegalDocumentNumberHash);
             builder.HasIndex(c => new { c.ValidFromUtc, c.ValidToUtc });
 
             builder.HasOne<ReferralProgramParticipant>()

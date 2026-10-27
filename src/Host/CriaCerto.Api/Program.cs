@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.RateLimiting;
+using Serilog;
 using CriaCerto.Api.Middleware;
 using CriaCerto.Api.BackgroundServices;
 using CriaCerto.Api.Services;
@@ -82,6 +83,13 @@ using CriaCerto.Modules.Tenancy.Application.Features.RemoveTeamMember;
 using CriaCerto.Modules.Tenancy.Application.Features.RefreshToken;
 using CriaCerto.Modules.Tenancy.Application.Features.ConfirmEmail;
 using CriaCerto.Modules.Tenancy.Application.Features.ResendConfirmationEmail;
+using CriaCerto.Modules.Tenancy.Application.Features.GetUserProfile;
+using CriaCerto.Modules.Tenancy.Application.Features.UpdateUserProfile;
+using CriaCerto.Modules.Tenancy.Application.Features.ChangeUserPassword;
+using CriaCerto.Modules.Tenancy.Application.Features.ExportUserDataPortability;
+using CriaCerto.Modules.Tenancy.Application.Features.AnonymizeUserAccount;
+using CriaCerto.Modules.Tenancy.Application.Features.Compliance.Dpo;
+using CriaCerto.Modules.Tenancy.Application.Features.Compliance.Dpo.Models;
 using CriaCerto.Modules.Tenancy.Application.Domain;
 using CriaCerto.Modules.Tenancy.Infrastructure;
 
@@ -147,6 +155,15 @@ DotEnvLoader.Load();
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Host.UseSerilog((context, services, configuration) =>
+{
+    configuration
+        .ReadFrom.Configuration(context.Configuration)
+        .Enrich.FromLogContext()
+        .Enrich.WithProperty("Application", "CriaCerto.Api")
+        .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj} {Properties:j}{NewLine}{Exception}");
+});
+
 // Configure Data Protection to persist keys across container restarts
 var keysDirectory = new DirectoryInfo(Path.Combine(builder.Environment.ContentRootPath, "dataprotection-keys"));
 if (!keysDirectory.Exists)
@@ -179,6 +196,8 @@ var connectionString = builder.Configuration.GetConnectionString("SqlServer")
 
 // Register Building Blocks and Infrastructure
 builder.Services.AddBuildingBlocksInfrastructure(connectionString);
+builder.Services.AddPiiRedaction();
+builder.Services.AddDataEncryption(builder.Configuration);
 builder.Services.AddEmailSender(builder.Configuration);
 builder.Services.AddTenancyInfrastructure(builder.Configuration);
 builder.Services.AddBreedingInfrastructure();
@@ -194,12 +213,19 @@ builder.Services.AddScoped<ITenantInfoLookupService, TenantInfoLookupService>();
 builder.Services.AddScoped<CriaCerto.Modules.Tenancy.Application.Abstractions.IPartnerRoleLookupService, PartnerRoleLookupService>();
 builder.Services.AddScoped<IReferralPaymentVerificationService, StripePaymentVerificationService>();
 builder.Services.AddScoped<IReferralAuditSink, ReferralBackofficeAuditSink>();
+builder.Services.AddScoped<CriaCerto.Api.Services.TenancyBackofficeAuditSink>();
+builder.Services.AddScoped<CriaCerto.Modules.Tenancy.Application.Abstractions.ITenancyAuditSink>(sp => sp.GetRequiredService<CriaCerto.Api.Services.TenancyBackofficeAuditSink>());
+builder.Services.AddScoped<CriaCerto.Modules.Tenancy.Application.Abstractions.IUserAuditTrailLookupService>(sp => sp.GetRequiredService<CriaCerto.Api.Services.TenancyBackofficeAuditSink>());
+builder.Services.AddScoped<CriaCerto.Modules.Tenancy.Application.Abstractions.IUserClientIpResolver, CriaCerto.Api.Services.HttpContextUserClientIpResolver>();
 builder.Services.AddScoped<IPaidMediaSpendLookupService, PaidMediaSpendLookupService>();
 builder.Services.Configure<ReferralEnforcementOptions>(builder.Configuration.GetSection(ReferralEnforcementOptions.SectionName));
 
 // Background Services
 builder.Services.AddHostedService<SubscriptionLifecycleWorker>();
 builder.Services.AddHostedService<ReferralMaturityAndEnforcementWorker>();
+builder.Services.Configure<DataRetentionPurgingOptions>(builder.Configuration.GetSection(DataRetentionPurgingOptions.SectionName));
+builder.Services.AddSingleton<DataRetentionPurgingBackgroundService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<DataRetentionPurgingBackgroundService>());
 
 // Configure CORS Policy
 var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() 
@@ -312,7 +338,9 @@ if (app.Services.GetService<CriaCerto.BuildingBlocks.Abstractions.Tenancy.ITenan
 ApplyMigrations(app);
 SeedReferenceData(app);
 
+app.UseGlobalExceptionHandler();
 app.UseSecurityHeaders();
+app.UseRequestLogging();
 app.UseCors("ProductionCorsPolicy");
 app.UseRateLimiter();
 
@@ -1103,6 +1131,12 @@ backoffice.MapPost("/compliance/reveal-pii", async (RevealSensitiveDataRequest r
     return ToHttpResult(result);
 }).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ComplianceUnmask)).WithTags("Backoffice Compliance");
 
+backoffice.MapPost("/compliance/data-retention/run-purge", async (DataRetentionPurgingBackgroundService purgeWorker, bool? dryRun, CancellationToken ct) =>
+{
+    var result = await purgeWorker.ProcessDataPurgePassSafelyAsync(dryRun: dryRun, cancellationToken: ct);
+    return result is not null ? Results.Ok(result) : Results.StatusCode(500);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.UsersAdminManage)).WithTags("Backoffice Compliance");
+
 // Backoffice Wave Rollout & Feature Flags Endpoints
 backoffice.MapGet("/feature-flags", async (ISender sender) =>
 {
@@ -1575,6 +1609,12 @@ backoffice.MapPost("/referral/payouts/run-enforcement", async (ISender sender) =
     return ToHttpResult(result);
 }).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ReferralPayoutsManage)).WithTags("Backoffice Referral Payouts");
 
+backoffice.MapPost("/referral/reencrypt-contracts", async (IReferralDataReencryptionService reencryptionService) =>
+{
+    var result = await reencryptionService.ReencryptPartnerContractsAsync();
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.ReferralPayoutsManage)).WithTags("Backoffice Referral Governance");
+
 backoffice.MapGet("/referral/discount-policies", async (ISender sender) =>
 {
     var query = new GetPlanDiscountPoliciesQuery();
@@ -1717,9 +1757,20 @@ app.MapPost("/api/auth/login", async (LoginCommand command, ISender sender) =>
         : Results.Json(result.Error, statusCode: 401);
 });
 
-app.MapPost("/api/auth/register", async (RegisterUserCommand command, ISender sender) =>
+app.MapPost("/api/auth/register", async (RegisterUserCommand command, HttpContext ctx, ISender sender) =>
 {
-    var result = await sender.Send(command);
+    var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "127.0.0.1";
+    if (ctx.Request.Headers.TryGetValue("X-Forwarded-For", out var forwardedFor) && !string.IsNullOrWhiteSpace(forwardedFor))
+    {
+        var firstIp = forwardedFor.ToString().Split(',')[0].Trim();
+        if (!string.IsNullOrWhiteSpace(firstIp))
+        {
+            ip = firstIp;
+        }
+    }
+
+    var enrichedCommand = command with { ClientIpAddress = string.IsNullOrWhiteSpace(command.ClientIpAddress) ? ip : command.ClientIpAddress };
+    var result = await sender.Send(enrichedCommand);
     return result.IsSuccess
         ? Results.Json(result.Value, statusCode: StatusCodes.Status201Created)
         : Results.Json(result.Error, statusCode: ToStatusCode(result.Error.Type));
@@ -1834,6 +1885,173 @@ app.MapPost("/api/auth/refresh-token", async (RefreshTokenRequest? req, ClaimsPr
     var result = await sender.Send(command);
     return ToHttpResult(result);
 }).RequireAuthorization().WithTags("Auth");
+
+// LGPD Profile & Security Endpoints (Art. 18, III)
+app.MapGet("/api/v1/auth/profile", async (ClaimsPrincipal userClaims, ISender sender) =>
+{
+    var sub = userClaims.FindFirst(ClaimTypes.NameIdentifier)?.Value 
+           ?? userClaims.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value 
+           ?? userClaims.FindFirst("sub")?.Value
+           ?? userClaims.FindFirst("UserId")?.Value;
+
+    if (!Guid.TryParse(sub, out var userId))
+    {
+        return Results.Unauthorized();
+    }
+
+    var result = await sender.Send(new GetUserProfileQuery(userId));
+    return ToHttpResult(result);
+}).RequireAuthorization().WithTags("Auth");
+
+app.MapPut("/api/v1/auth/profile", async (UpdateUserProfileRequest req, ClaimsPrincipal userClaims, HttpContext ctx, ISender sender) =>
+{
+    var sub = userClaims.FindFirst(ClaimTypes.NameIdentifier)?.Value 
+           ?? userClaims.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value 
+           ?? userClaims.FindFirst("sub")?.Value
+           ?? userClaims.FindFirst("UserId")?.Value;
+
+    if (!Guid.TryParse(sub, out var userId))
+    {
+        return Results.Unauthorized();
+    }
+
+    var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "127.0.0.1";
+    if (ctx.Request.Headers.TryGetValue("X-Forwarded-For", out var forwardedFor) && !string.IsNullOrWhiteSpace(forwardedFor))
+    {
+        var firstIp = forwardedFor.ToString().Split(',')[0].Trim();
+        if (!string.IsNullOrWhiteSpace(firstIp))
+        {
+            ip = firstIp;
+        }
+    }
+
+    var command = new UpdateUserProfileCommand(userId, req.FullName, req.PhoneNumber, ip);
+    var result = await sender.Send(command);
+    return ToHttpResult(result);
+}).RequireAuthorization().WithTags("Auth");
+
+app.MapPost("/api/v1/auth/change-password", async (ChangeUserPasswordRequest req, ClaimsPrincipal userClaims, HttpContext ctx, ISender sender) =>
+{
+    var sub = userClaims.FindFirst(ClaimTypes.NameIdentifier)?.Value 
+           ?? userClaims.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value 
+           ?? userClaims.FindFirst("sub")?.Value
+           ?? userClaims.FindFirst("UserId")?.Value;
+
+    if (!Guid.TryParse(sub, out var userId))
+    {
+        return Results.Unauthorized();
+    }
+
+    var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "127.0.0.1";
+    if (ctx.Request.Headers.TryGetValue("X-Forwarded-For", out var forwardedFor) && !string.IsNullOrWhiteSpace(forwardedFor))
+    {
+        var firstIp = forwardedFor.ToString().Split(',')[0].Trim();
+        if (!string.IsNullOrWhiteSpace(firstIp))
+        {
+            ip = firstIp;
+        }
+    }
+
+    var command = new ChangeUserPasswordCommand(userId, req.CurrentPassword, req.NewPassword, req.ConfirmNewPassword, ip);
+    var result = await sender.Send(command);
+    return ToCommandHttpResult(result);
+}).RequireAuthorization().WithTags("Auth");
+
+app.MapGet("/api/v1/auth/my-data/export", async (ClaimsPrincipal userClaims, HttpContext ctx, ISender sender) =>
+{
+    var sub = userClaims.FindFirst(ClaimTypes.NameIdentifier)?.Value 
+           ?? userClaims.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value 
+           ?? userClaims.FindFirst("sub")?.Value
+           ?? userClaims.FindFirst("UserId")?.Value;
+
+    if (!Guid.TryParse(sub, out var userId))
+    {
+        return Results.Unauthorized();
+    }
+
+    var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "127.0.0.1";
+    if (ctx.Request.Headers.TryGetValue("X-Forwarded-For", out var forwardedFor) && !string.IsNullOrWhiteSpace(forwardedFor))
+    {
+        var firstIp = forwardedFor.ToString().Split(',')[0].Trim();
+        if (!string.IsNullOrWhiteSpace(firstIp))
+        {
+            ip = firstIp;
+        }
+    }
+
+    var query = new ExportUserDataPortabilityQuery(userId, ip);
+    var result = await sender.Send(query);
+
+    if (result.IsFailure)
+    {
+        return ToHttpResult(result);
+    }
+
+    return Results.File(
+        fileContents: result.Value.Content,
+        contentType: result.Value.ContentType,
+        fileDownloadName: result.Value.FileName);
+}).RequireAuthorization().WithTags("Auth");
+
+app.MapPost("/api/v1/auth/account/delete", async (AnonymizeUserAccountRequest req, ClaimsPrincipal userClaims, HttpContext ctx, ISender sender) =>
+{
+    var sub = userClaims.FindFirst(ClaimTypes.NameIdentifier)?.Value 
+           ?? userClaims.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value 
+           ?? userClaims.FindFirst("sub")?.Value
+           ?? userClaims.FindFirst("UserId")?.Value;
+
+    if (!Guid.TryParse(sub, out var userId))
+    {
+        return Results.Unauthorized();
+    }
+
+    var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "127.0.0.1";
+    if (ctx.Request.Headers.TryGetValue("X-Forwarded-For", out var forwardedFor) && !string.IsNullOrWhiteSpace(forwardedFor))
+    {
+        var firstIp = forwardedFor.ToString().Split(',')[0].Trim();
+        if (!string.IsNullOrWhiteSpace(firstIp))
+        {
+            ip = firstIp;
+        }
+    }
+
+    var command = new AnonymizeUserAccountCommand(userId, req.CurrentPassword, req.ConfirmationText, req.ExitReason, ip);
+    var result = await sender.Send(command);
+    return ToCommandHttpResult(result);
+}).RequireAuthorization().WithTags("Auth");
+
+app.MapPost("/api/v1/compliance/dpo/requests", async (
+    SubmitDataSubjectRequestRequest req,
+    HttpContext ctx,
+    ISender sender) =>
+{
+    var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "127.0.0.1";
+    if (ctx.Request.Headers.TryGetValue("X-Forwarded-For", out var forwardedFor) && !string.IsNullOrWhiteSpace(forwardedFor))
+    {
+        var firstIp = forwardedFor.ToString().Split(',')[0].Trim();
+        if (!string.IsNullOrWhiteSpace(firstIp))
+        {
+            ip = firstIp;
+        }
+    }
+
+    var userAgent = ctx.Request.Headers.UserAgent.ToString();
+
+    var command = new SubmitDataSubjectRequestCommand(
+        FullName: req.FullName,
+        Email: req.Email,
+        PhoneNumber: req.PhoneNumber,
+        DocumentNumber: req.DocumentNumber,
+        RelationshipType: req.RelationshipType,
+        RequestType: req.RequestType,
+        Description: req.Description,
+        IpAddress: ip,
+        UserAgent: userAgent
+    );
+
+    var result = await sender.Send(command);
+    return ToHttpResult(result, StatusCodes.Status201Created);
+}).AllowAnonymous().WithTags("Compliance");
 
 app.MapGet("/api/v1/tenancy/plans", async (ISender sender) =>
 {
@@ -2545,7 +2763,7 @@ static IResult ToCommandHttpResult(Result result, int successStatusCode = Status
             : Results.StatusCode(successStatusCode);
     }
 
-    return Results.Json(result.Error, statusCode: ToStatusCode(result.Error.Type));
+    return Results.Json(result.Error, statusCode: ToErrorStatusCode(result.Error));
 }
 
 static IResult ToHttpResult<TValue>(Result<TValue> result, int successStatusCode = StatusCodes.Status200OK)
@@ -2557,7 +2775,7 @@ static IResult ToHttpResult<TValue>(Result<TValue> result, int successStatusCode
             : Results.Json(result.Value, statusCode: successStatusCode);
     }
 
-    return Results.Json(result.Error, statusCode: ToStatusCode(result.Error.Type));
+    return Results.Json(result.Error, statusCode: ToErrorStatusCode(result.Error));
 }
 
 static IResult ToBackofficeLoginHttpResult(Result<AdminAuthResultDto> result)
@@ -2571,11 +2789,17 @@ static IResult ToBackofficeLoginHttpResult(Result<AdminAuthResultDto> result)
     {
         "Backoffice.InvalidCredentials" => StatusCodes.Status401Unauthorized,
         "Backoffice.MfaRequired" => StatusCodes.Status401Unauthorized,
-        _ => ToStatusCode(result.Error.Type)
+        _ => ToErrorStatusCode(result.Error)
     };
 
     return Results.Json(result.Error, statusCode: statusCode);
 }
+
+static int ToErrorStatusCode(Error error) => error.Code switch
+{
+    "Server.UnexpectedError" => StatusCodes.Status500InternalServerError,
+    _ => ToStatusCode(error.Type)
+};
 
 static int ToStatusCode(ErrorType errorType) => errorType switch
 {

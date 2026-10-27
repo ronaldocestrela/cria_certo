@@ -21,5 +21,9 @@ public sealed class RegisterUserCommandValidator : AbstractValidator<RegisterUse
             .Matches(@"[A-Z]").WithMessage("A senha deve conter ao menos uma letra maiúscula.")
             .Matches(@"[a-z]").WithMessage("A senha deve conter ao menos uma letra minúscula.")
             .Matches(@"[0-9]").WithMessage("A senha deve conter ao menos um número.");
+
+        RuleFor(x => x.AcceptTermsAndPrivacy)
+            .Equal(true)
+            .WithMessage("É obrigatório ler e concordar com os Termos de Uso e a Política de Privacidade para criar uma conta.");
     }
 }

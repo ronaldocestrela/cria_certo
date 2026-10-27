@@ -1,0 +1,36 @@
+@using CriaCerto.Web.Client.Models
+
+<nav class="legal-toc-card" style="background: #ffffff; border: 1px solid var(--cc-border); border-radius: 8px; padding: 1.25rem; position: sticky; top: 5rem;">
+    <div style="font-family: var(--cc-font-mono); font-size: 0.75rem; text-transform: uppercase; color: var(--cc-ink-muted); font-weight: 700; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.4rem;">
+        <span class="material-symbols-outlined" style="font-size: 1rem; color: var(--cc-primary);">menu_book</span>
+        Índice do Documento
+    </div>
+    
+    <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.5rem;">
+        @foreach (var item in Sections)
+        {
+            <li>
+                <a href="@($"#{item.Id}")" 
+                   style="color: var(--cc-ink); text-decoration: none; font-size: 0.85rem; display: block; padding: 0.35rem 0.5rem; border-radius: 4px; transition: background 0.2s;"
+                   onmouseover="this.style.background='var(--cc-canvas)'; this.style.color='var(--cc-primary)';"
+                   onmouseout="this.style.background='transparent'; this.style.color='var(--cc-ink)';">
+                    @item.Title
+                </a>
+            </li>
+        }
+    </ul>
+
+    <div style="margin-top: 1.25rem; border-top: 1px dashed var(--cc-border); padding-top: 0.75rem;">
+        <button type="button" 
+                onclick="window.print()" 
+                style="width: 100%; border: 1px solid var(--cc-border); background: transparent; padding: 0.4rem 0.75rem; border-radius: 6px; font-size: 0.8rem; font-family: var(--cc-font-mono); cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.4rem; color: var(--cc-ink-muted);">
+            <span class="material-symbols-outlined" style="font-size: 1rem;">print</span>
+            Imprimir Documento
+        </button>
+    </div>
+</nav>
+
+@code {
+    [Parameter, EditorRequired]
+    public IReadOnlyList<LegalSectionItem> Sections { get; set; } = Array.Empty<LegalSectionItem>();
+}

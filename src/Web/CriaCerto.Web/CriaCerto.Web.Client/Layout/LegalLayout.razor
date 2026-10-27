@@ -1,0 +1,70 @@
+@inherits LayoutComponentBase
+
+<div class="legal-layout-container" style="background-color: var(--cc-canvas); min-height: 100vh; display: flex; flex-direction: column; color: var(--cc-ink);">
+    <!-- Legal Navigation Header -->
+    <header class="legal-header" style="background-color: #ffffff; border-bottom: 1px solid var(--cc-border); position: sticky; top: 0; z-index: 100; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+        <div class="legal-header-inner" style="max-width: 1200px; margin: 0 auto; padding: 0.75rem 1.5rem; display: flex; align-items: center; justify-content: space-between;">
+            <a href="/" style="display: flex; align-items: center; gap: 0.75rem; text-decoration: none; color: inherit;">
+                <img src="imgs/CriaCerto.png" alt="CriaCerto Logo" style="height: 38px; width: auto; object-fit: contain; border-radius: 6px;" />
+                <div>
+                    <div style="font-weight: 700; font-size: 1.1rem; line-height: 1.2; color: var(--cc-primary);">CriaCerto</div>
+                    <div style="font-family: var(--cc-font-mono); font-size: 0.7rem; color: var(--cc-ink-muted); letter-spacing: 0.05em; text-transform: uppercase;">Portal de Conformidade & LGPD</div>
+                </div>
+            </a>
+
+            <nav style="display: flex; align-items: center; gap: 1rem;">
+                <a href="/" class="legal-nav-link" style="color: var(--cc-ink-muted); text-decoration: none; font-size: 0.875rem; font-weight: 500; display: inline-flex; align-items: center; gap: 0.35rem;">
+                    <span class="material-symbols-outlined" style="font-size: 1.1rem;">arrow_back</span>
+                    Início
+                </a>
+                <a href="/termos-de-uso" class="legal-nav-link" style="color: var(--cc-ink); text-decoration: none; font-size: 0.875rem; font-weight: 600;">
+                    Termos
+                </a>
+                <a href="/politica-de-privacidade" class="legal-nav-link" style="color: var(--cc-ink); text-decoration: none; font-size: 0.875rem; font-weight: 600;">
+                    Privacidade
+                </a>
+                <a href="/dpa" class="legal-nav-link" style="color: var(--cc-ink); text-decoration: none; font-size: 0.875rem; font-weight: 600;">
+                    DPA (B2B)
+                </a>
+                <a href="/dpo" class="legal-nav-link" style="color: var(--cc-primary); text-decoration: none; font-size: 0.875rem; font-weight: 700;">
+                    Canal DPO
+                </a>
+                <a href="/login" class="legal-btn-login" style="padding: 0.4rem 0.9rem; border-radius: 6px; border: 1px solid var(--cc-border); background: #ffffff; color: var(--cc-ink); text-decoration: none; font-size: 0.85rem; font-weight: 600;">
+                    Entrar
+                </a>
+                <a href="/register" class="legal-btn-register" style="padding: 0.4rem 1rem; border-radius: 6px; background: var(--cc-primary); color: #ffffff; text-decoration: none; font-size: 0.85rem; font-weight: 600; display: inline-flex; align-items: center; gap: 0.3rem;">
+                    Criar Conta
+                </a>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main Content Body -->
+    <main style="flex: 1; padding: 2rem 1.5rem 4rem 1.5rem; max-width: 1200px; margin: 0 auto; width: 100%;">
+        @Body
+    </main>
+
+    <!-- Legal Footer -->
+    <footer style="background-color: #ffffff; border-top: 1px solid var(--cc-border); padding: 2rem 1.5rem; margin-top: auto;">
+        <div style="max-width: 1200px; margin: 0 auto; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 1.5rem; font-size: 0.875rem; color: var(--cc-ink-muted);">
+            <div>
+                <strong style="color: var(--cc-ink);">CriaCerto Bovino SaaS</strong> — Plataforma de Gestão Agropecuária de Alta Precisão
+                <div style="font-size: 0.8rem; margin-top: 0.25rem;">
+                    Conformidade com a Lei Geral de Proteção de Dados (Lei nº 13.709/2018 - LGPD).
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 1.5rem; align-items: center;">
+                <a href="/termos-de-uso" style="color: var(--cc-ink-muted); text-decoration: none; font-weight: 500;">Termos de Uso</a>
+                <a href="/politica-de-privacidade" style="color: var(--cc-ink-muted); text-decoration: none; font-weight: 500;">Política de Privacidade</a>
+                <a href="/dpa" style="color: var(--cc-ink-muted); text-decoration: none; font-weight: 500;">Aditivo de Dados (DPA)</a>
+                <a href="/dpo" style="color: var(--cc-primary); text-decoration: none; font-weight: 600;">Canal DPO (Art. 41)</a>
+            </div>
+        </div>
+        <div style="max-width: 1200px; margin: 1.5rem auto 0 auto; padding-top: 1rem; border-top: 1px solid #f1f5f9; text-align: center; font-family: var(--cc-font-mono); font-size: 0.75rem; color: #94a3b8;">
+            © 2026 CriaCerto Bovino SaaS. Todos os direitos reservados.
+        </div>
+    </footer>
+</div>
+
+<CriaCerto.Web.Client.Components.Legal.CookieConsentBanner />
