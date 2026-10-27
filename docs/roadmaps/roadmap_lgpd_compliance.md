@@ -294,10 +294,11 @@ O objetivo desta fase é cumprir os requisitos de governança institucional exig
   - Formalização arquitetural no [ADR 0025](file:///home/rony/LPR/CriaCerto/docs/adrs/0025-lgpd-incident-response-and-anpd-notification.md) e cobertura de testes em [`PrivacyIncidentEvaluatorTests.cs`](file:///home/rony/LPR/CriaCerto/tests/Unit/CriaCerto.Modules.Backoffice.UnitTests/Features/PrivacyIncidentEvaluatorTests.cs) e simulação operacional em [`IncidentResponseSimulationTests.cs`](file:///home/rony/LPR/CriaCerto/tests/Unit/CriaCerto.Modules.Backoffice.UnitTests/Operations/IncidentResponseSimulationTests.cs).
 
 #### 5.3 Formalização do Inventário de Dados (ROPA - Art. 37) e RIPD
-- [ ] Criar documento em `docs/compliance/ropa_data_inventory.md`:
-  - **ROPA (Record of Processing Activities)**: Mapeamento detalhado de cada processo de tratamento do CriaCerto (Cadastro, Faturamento, Operação do Rebanho, Suporte Assistido, Programa de Afiliados), com bases legais, categorias de dados, operadores envolvidos e prazos de retenção.
-- [ ] Criar documento em `docs/compliance/ripd_dpia_overview.md`:
-  - **RIPD (Relatório de Impacto à Proteção de Dados Pessoais)** avaliando os riscos inerentes à funcionalidade de impersonação de suporte e processamento financeiro com Stripe, atestando as medidas mitigadoras existentes (dupla salvaguarda, hash SHA-256 e Kill-Switch).
+- [x] Criar documento em [`docs/compliance/ropa_data_inventory.md`](file:///home/rony/LPR/CriaCerto/docs/compliance/ropa_data_inventory.md):
+  - **ROPA (Record of Processing Activities)**: Mapeamento detalhado dos 7 macroprocessos de tratamento do CriaCerto (Cadastro e Autenticação, Faturamento Stripe, Operação Zootécnica sob DPA, Suporte Assistido e Impersonação, Programa de Afiliados Referral, Canal do DPO / DSR e Resposta a Incidentes), com bases legais (Art. 7º), categorias de dados, operadores envolvidos, transferências internacionais (Art. 33), salvaguardas (AES-256-GCM, HMAC-SHA256, hash encadeado SHA-256) e prazos de retenção legais (Marco Civil, CTN e Código Civil).
+- [x] Criar documento em [`docs/compliance/ripd_dpia_overview.md`](file:///home/rony/LPR/CriaCerto/docs/compliance/ripd_dpia_overview.md):
+  - **RIPD (Relatório de Impacto à Proteção de Dados Pessoais)** avaliando os riscos inerentes à funcionalidade de impersonação de suporte e processamento financeiro com Stripe/Referral, atestando as medidas mitigadoras existentes (dupla salvaguarda, bloqueio em middleware `BackofficeAccessMiddleware`, mascaramento contextual dinâmico `IPiiDataMasker`, hash forense SHA-256, Kill-Switch em < 1s, cifra AES-256-GCM, blind indexing HMAC-SHA256, carência D+30 e aprovação 4-Eyes), com matriz de redução de risco inerente para risco residual baixo e parecer formal homologado pelo DPO.
+  - Formalização arquitetural e diretrizes de revisão contínua no [ADR 0026](file:///home/rony/LPR/CriaCerto/docs/adrs/0026-lgpd-ropa-data-inventory-and-ripd-governance.md) e cobertura de testes automatizados de Living Documentation em [`LgpdComplianceDocumentationTests.cs`](file:///home/rony/LPR/CriaCerto/tests/Unit/CriaCerto.Modules.Backoffice.UnitTests/Operations/LgpdComplianceDocumentationTests.cs).
 
 ---
 
@@ -315,6 +316,9 @@ tests/
 |   |   `-- Features/ExportPersonalDataTests.cs        -> Valida montagem do JSON de portabilidade
 |   |-- CriaCerto.Modules.Referral.UnitTests/
 |   |   `-- Security/EncryptedPixKeyConverterTests.cs  -> Valida cifra e decifra AES-256 no banco
+|   |-- CriaCerto.Modules.Backoffice.UnitTests/
+|   |   |-- Operations/IncidentResponseSimulationTests.cs -> Valida simulações operacionais e resposta a vazamentos
+|   |   `-- Operations/LgpdComplianceDocumentationTests.cs -> Valida integridade e completude de ROPA, RIPD e ADRs
 |   `-- CriaCerto.Host.Api.UnitTests/
 |       `-- BackgroundServices/PurgingServiceTests.cs  -> Valida limpeza de tokens e convites órfãos
 `-- Integration/
