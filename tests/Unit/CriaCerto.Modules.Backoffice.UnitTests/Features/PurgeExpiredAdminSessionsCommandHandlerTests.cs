@@ -35,7 +35,7 @@ public class PurgeExpiredAdminSessionsCommandHandlerTests : IDisposable
     {
         // Arrange
         var adminId = Guid.NewGuid();
-        var now = new DateTime(2026, 10, 26, 12, 0, 0, DateTimeKind.Utc);
+        var now = DateTime.UtcNow;
 
         // 1. Sessão ativa (não revogada, expira no futuro) -> Manter
         var activeSession = AdminSession.Create(
@@ -100,7 +100,7 @@ public class PurgeExpiredAdminSessionsCommandHandlerTests : IDisposable
     {
         // Arrange
         var adminId = Guid.NewGuid();
-        var now = new DateTime(2026, 10, 26, 12, 0, 0, DateTimeKind.Utc);
+        var now = DateTime.UtcNow;
 
         var staleSession = AdminSession.Create(
             adminId, "token-stale", "refresh-stale", "127.0.0.1", "Browser",

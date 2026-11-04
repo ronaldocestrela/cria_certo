@@ -154,7 +154,12 @@ public class AuditLog
         if (action.StartsWith("Impersonation.", StringComparison.OrdinalIgnoreCase)) return AuditCategory.Security;
         if (action.StartsWith("AdminUser.", StringComparison.OrdinalIgnoreCase)) return AuditCategory.Security;
         if (action.StartsWith("Tenant.", StringComparison.OrdinalIgnoreCase)) return AuditCategory.TenantManagement;
-        if (action.StartsWith("Plan.", StringComparison.OrdinalIgnoreCase) || action.StartsWith("PlanCatalog.", StringComparison.OrdinalIgnoreCase) || action.StartsWith("PlanVersion.", StringComparison.OrdinalIgnoreCase)) return AuditCategory.PlanCatalog;
+        if (action.StartsWith("Plan.", StringComparison.OrdinalIgnoreCase) ||
+            action.StartsWith("PlanCatalog.", StringComparison.OrdinalIgnoreCase) ||
+            action.StartsWith("PlanVersion.", StringComparison.OrdinalIgnoreCase) ||
+            action.StartsWith("HeadTierCatalog.", StringComparison.OrdinalIgnoreCase) ||
+            action.StartsWith("ModuleCatalog.", StringComparison.OrdinalIgnoreCase) ||
+            action.StartsWith("ModuleTierPrice.", StringComparison.OrdinalIgnoreCase)) return AuditCategory.PlanCatalog;
         if (action.StartsWith("Billing.", StringComparison.OrdinalIgnoreCase)) return AuditCategory.Billing;
         if (action.StartsWith("Support.", StringComparison.OrdinalIgnoreCase)) return AuditCategory.Support;
 

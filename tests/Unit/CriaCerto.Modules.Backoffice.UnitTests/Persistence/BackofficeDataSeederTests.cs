@@ -201,5 +201,45 @@ public class BackofficeDataSeederTests
                 .Should().BeTrue();
         }
     }
+
+    [Fact]
+    public async Task SeedAsync_ShouldPopulate4HeadTiers_7Modules_And28PublishedPrices_Idempotently()
+    {
+        var (dbContext, connection) = CreateDbContext();
+        using (connection)
+        using (dbContext)
+        {
+            var passwordHasher = new PasswordHasherService();
+
+            // Act: Run twice to verify idempotency
+            await BackofficeDataSeeder.SeedAsync(dbContext, passwordHasher);
+            await BackofficeDataSeeder.SeedAsync(dbContext, passwordHasher);
+
+            // Assert Tiers
+            var tiers = await dbContext.HeadTierCatalogs.OrderBy(t => t.SortOrder).ToListAsync();
+            tiers.Should().HaveCount(4);
+            tiers.Select(t => t.TierCode).Should().Equal("TIER_500", "TIER_1500", "TIER_3000", "TIER_5000_PLUS");
+
+            // Assert Modules
+            var modules = await dbContext.ModuleCatalogs
+                .Include(m => m.TierPrices)
+                .OrderBy(m => m.SortOrder)
+                .ToListAsync();
+            modules.Should().HaveCount(7);
+            modules.Select(m => m.ModuleKey).Should().Equal(
+                "Cows", "Breeding", "Calving", "Growth", "Sanitary", "Nutrition", "Analytics");
+            modules.Single(m => m.ModuleKey == "Cows").IsCore.Should().BeTrue();
+            modules.Where(m => m.ModuleKey != "Cows").Should().OnlyContain(m => !m.IsCore);
+
+            // Assert Prices
+            var prices = await dbContext.ModuleTierPrices.ToListAsync();
+            prices.Should().HaveCount(28);
+            prices.Should().OnlyContain(p => p.Status == CriaCerto.Modules.Backoffice.Application.Domain.Entities.PlanVersionStatus.Published);
+
+            var cowsModule = modules.Single(m => m.ModuleKey == "Cows");
+            var tier500 = tiers.Single(t => t.TierCode == "TIER_500");
+            cowsModule.TierPrices.Single(p => p.HeadTierCatalogId == tier500.Id).MonthlyPrice.Should().Be(79m);
+        }
+    }
 }
 

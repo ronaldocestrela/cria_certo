@@ -748,6 +748,82 @@ backoffice.MapPost("/plans/versions/{versionId:guid}/publish", async (Guid versi
     return ToHttpResult(result);
 }).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.PlansPublish)).WithTags("Backoffice Plans");
 
+// --- BACKOFFICE MODULAR SELF-SERVICE CATALOG ENDPOINTS ---
+backoffice.MapGet("/catalog/tiers", async (bool? includeInactive, ISender sender) =>
+{
+    var result = await sender.Send(new GetHeadTierCatalogsQuery(includeInactive ?? false));
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.PlansRead)).WithTags("Backoffice Catalog");
+
+backoffice.MapPost("/catalog/tiers", async (CreateHeadTierCatalogCommand req, HttpContext ctx, ISender sender) =>
+{
+    var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var command = req with { PerformedByAdminUserId = callerId, PerformedByAdminEmail = callerEmail, IpAddress = ip };
+    var result = await sender.Send(command);
+    return ToHttpResult(result, StatusCodes.Status201Created);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.PlansWrite)).WithTags("Backoffice Catalog");
+
+backoffice.MapPut("/catalog/tiers/{tierId:guid}", async (Guid tierId, UpdateHeadTierCatalogCommand req, HttpContext ctx, ISender sender) =>
+{
+    var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var command = req with { TierId = tierId, PerformedByAdminUserId = callerId, PerformedByAdminEmail = callerEmail, IpAddress = ip };
+    var result = await sender.Send(command);
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.PlansWrite)).WithTags("Backoffice Catalog");
+
+backoffice.MapGet("/catalog/modules", async (bool? includeInactive, ISender sender) =>
+{
+    var result = await sender.Send(new GetModuleCatalogsQuery(includeInactive ?? false));
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.PlansRead)).WithTags("Backoffice Catalog");
+
+backoffice.MapGet("/catalog/modules/{moduleId:guid}", async (Guid moduleId, ISender sender) =>
+{
+    var result = await sender.Send(new GetModuleCatalogByIdQuery(moduleId));
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.PlansRead)).WithTags("Backoffice Catalog");
+
+backoffice.MapPost("/catalog/modules", async (CreateModuleCatalogCommand req, HttpContext ctx, ISender sender) =>
+{
+    var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var command = req with { PerformedByAdminUserId = callerId, PerformedByAdminEmail = callerEmail, IpAddress = ip };
+    var result = await sender.Send(command);
+    return ToHttpResult(result, StatusCodes.Status201Created);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.PlansWrite)).WithTags("Backoffice Catalog");
+
+backoffice.MapPut("/catalog/modules/{moduleId:guid}", async (Guid moduleId, UpdateModuleCatalogCommand req, HttpContext ctx, ISender sender) =>
+{
+    var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var command = req with { ModuleId = moduleId, PerformedByAdminUserId = callerId, PerformedByAdminEmail = callerEmail, IpAddress = ip };
+    var result = await sender.Send(command);
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.PlansWrite)).WithTags("Backoffice Catalog");
+
+backoffice.MapPost("/catalog/modules/{moduleId:guid}/prices", async (Guid moduleId, CreateModuleTierPriceDraftCommand req, HttpContext ctx, ISender sender) =>
+{
+    var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var command = req with { ModuleCatalogId = moduleId, PerformedByAdminUserId = callerId, PerformedByAdminEmail = callerEmail, IpAddress = ip };
+    var result = await sender.Send(command);
+    return ToHttpResult(result, StatusCodes.Status201Created);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.PlansWrite)).WithTags("Backoffice Catalog");
+
+backoffice.MapPut("/catalog/modules/prices/{priceId:guid}", async (Guid priceId, UpdateModuleTierPriceDraftCommand req, HttpContext ctx, ISender sender) =>
+{
+    var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var command = req with { PriceId = priceId, PerformedByAdminUserId = callerId, PerformedByAdminEmail = callerEmail, IpAddress = ip };
+    var result = await sender.Send(command);
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.PlansWrite)).WithTags("Backoffice Catalog");
+
+backoffice.MapPost("/catalog/modules/prices/{priceId:guid}/publish", async (Guid priceId, PublishPlanVersionRequest req, HttpContext ctx, ISender sender) =>
+{
+    var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var role = GetBackofficeActorRole(ctx);
+    var command = new PublishModuleTierPriceCommand(priceId, req.ApprovalNotes, callerId, callerEmail, ip, role);
+    var result = await sender.Send(command);
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.PlansPublish)).WithTags("Backoffice Catalog");
+
 // --- BACKOFFICE IMPERSONATION ENDPOINTS ---
 backoffice.MapPost("/impersonation/start", async (StartImpersonationRequest req, HttpContext ctx, ISender sender) =>
 {

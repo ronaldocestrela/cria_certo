@@ -607,6 +607,50 @@ namespace CriaCerto.Modules.Backoffice.Infrastructure.Persistence.Migrations
                     b.ToTable("FeatureFlags", "backoffice");
                 });
 
+            modelBuilder.Entity("CriaCerto.Modules.Backoffice.Application.Domain.Entities.HeadTierCatalog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("MaxHeads")
+                        .HasColumnType("int");
+
+                    b.Property<int>("MinHeads")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<string>("TierCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTimeOffset>("UpdatedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SortOrder");
+
+                    b.HasIndex("TierCode")
+                        .IsUnique();
+
+                    b.ToTable("HeadTierCatalogs", "backoffice");
+                });
+
             modelBuilder.Entity("CriaCerto.Modules.Backoffice.Application.Domain.Entities.ImpersonationSession", b =>
                 {
                     b.Property<Guid>("Id")
@@ -688,6 +732,118 @@ namespace CriaCerto.Modules.Backoffice.Infrastructure.Persistence.Migrations
                     b.HasIndex("TargetTenantId");
 
                     b.ToTable("ImpersonationSessions", "backoffice");
+                });
+
+            modelBuilder.Entity("CriaCerto.Modules.Backoffice.Application.Domain.Entities.ModuleCatalog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("Icon")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsCore")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("ModuleKey")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset>("UpdatedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ModuleKey")
+                        .IsUnique();
+
+                    b.HasIndex("SortOrder");
+
+                    b.ToTable("ModuleCatalogs", "backoffice");
+                });
+
+            modelBuilder.Entity("CriaCerto.Modules.Backoffice.Application.Domain.Entities.ModuleTierPrice", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("AnnualPriceMonthly")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("ApprovalNotes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid>("HeadTierCatalogId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ModuleCatalogId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("MonthlyPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTimeOffset?>("PublishedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("PublishedByAdminId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("StripePriceIdAnnual")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("StripePriceIdMonthly")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int>("VersionNumber")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("HeadTierCatalogId");
+
+                    b.HasIndex("ModuleCatalogId", "HeadTierCatalogId", "Status");
+
+                    b.HasIndex("ModuleCatalogId", "HeadTierCatalogId", "VersionNumber")
+                        .IsUnique();
+
+                    b.ToTable("ModuleTierPrices", "backoffice");
                 });
 
             modelBuilder.Entity("CriaCerto.Modules.Backoffice.Application.Domain.Entities.PaidMediaSpend", b =>
@@ -958,6 +1114,21 @@ namespace CriaCerto.Modules.Backoffice.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("CriaCerto.Modules.Backoffice.Application.Domain.Entities.ModuleTierPrice", b =>
+                {
+                    b.HasOne("CriaCerto.Modules.Backoffice.Application.Domain.Entities.HeadTierCatalog", null)
+                        .WithMany()
+                        .HasForeignKey("HeadTierCatalogId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("CriaCerto.Modules.Backoffice.Application.Domain.Entities.ModuleCatalog", null)
+                        .WithMany("TierPrices")
+                        .HasForeignKey("ModuleCatalogId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("CriaCerto.Modules.Backoffice.Application.Domain.Entities.PlanFeature", b =>
                 {
                     b.HasOne("CriaCerto.Modules.Backoffice.Application.Domain.Entities.PlanVersion", null)
@@ -983,6 +1154,11 @@ namespace CriaCerto.Modules.Backoffice.Infrastructure.Persistence.Migrations
                         .HasForeignKey("PlanCatalogId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("CriaCerto.Modules.Backoffice.Application.Domain.Entities.ModuleCatalog", b =>
+                {
+                    b.Navigation("TierPrices");
                 });
 
             modelBuilder.Entity("CriaCerto.Modules.Backoffice.Application.Domain.Entities.PlanCatalog", b =>

@@ -98,3 +98,38 @@ O catálogo comercial configurado no Backoffice é a fonte única da verdade par
    - Permite seleção de planos com base no catálogo atualizado, preenchendo automaticamente capacidades e valores do período de teste de 30 dias.
 3. **Gestão de Assinatura (`/settings/subscription` - `SubscriptionManagement.razor`):**
    - Apresenta os cards de planos, limites de cabeças e matriz comparativa de funcionalidades dinamicamente conforme os preços e módulos cadastrados no Backoffice.
+
+---
+
+## 7. Catálogo Modular Self-Service e Precificação por Faixas de Cabeças (Fase 1.1)
+
+A partir da migração para **Assinatura Self-Service Modular (À La Carte)**, o `Modules.Backoffice` incorpora três entidades de catálogo comercial desacopladas por faixa de cabeças e módulo:
+
+### 7.1. Entidades do Catálogo Modular
+- **`HeadTierCatalog` (`backoffice.HeadTierCatalogs`):**
+  - Define as faixas comerciais de capacidade de cabeças (`TIER_500`, `TIER_1500`, `TIER_3000`, `TIER_5000_PLUS`).
+  - Atributos: `Id`, `TierCode` (único), `DisplayName`, `MinHeads`, `MaxHeads`, `SortOrder`, `IsActive`.
+- **`ModuleCatalog` (`backoffice.ModuleCatalogs`):**
+  - Define cada módulo comercializável da plataforma (`Cows`, `Breeding`, `Calving`, `Growth`, `Sanitary`, `Nutrition`, `Analytics`).
+  - Atributos: `Id`, `ModuleKey` (único), `Name`, `Description`, `Icon`, `IsCore` (`true` apenas para `Cows` / Plantel Base, protegido contra desativação via `PlanErrors.CannotDeactivateCoreModule`), `IsActive`, `SortOrder`.
+- **`ModuleTierPrice` (`backoffice.ModuleTierPrices`):**
+  - Tabela versionada e imutável relacionando `ModuleCatalog` + `HeadTierCatalog`.
+  - Atributos: `Id`, `ModuleCatalogId`, `HeadTierCatalogId`, `VersionNumber`, `Status` (`Draft`, `Published`, `Deprecated`), `MonthlyPrice`, `AnnualPriceMonthly`, `StripePriceIdMonthly`, `StripePriceIdAnnual`, `PublishedAtUtc`, `PublishedByAdminId`, `ApprovalNotes`.
+  - Impede múltiplos rascunhos simultâneos para o mesmo par `(ModuleCatalogId, HeadTierCatalogId)` e deprecia automaticamente a versão `Published` anterior daquela faixa ao publicar uma nova versão.
+
+### 7.2. Endpoints do Catálogo Modular
+| Operação | Endpoint | Permissão Exigida |
+| :--- | :--- | :--- |
+| **Listar Faixas de Cabeças** | `GET /api/v1/backoffice/catalog/tiers` | `plans.read` |
+| **Criar Faixa de Cabeças** | `POST /api/v1/backoffice/catalog/tiers` | `plans.write` |
+| **Atualizar Faixa de Cabeças** | `PUT /api/v1/backoffice/catalog/tiers/{tierId}` | `plans.write` |
+| **Listar Módulos e Preços por Faixa** | `GET /api/v1/backoffice/catalog/modules` | `plans.read` |
+| **Detalhar Módulo por ID** | `GET /api/v1/backoffice/catalog/modules/{moduleId}` | `plans.read` |
+| **Criar Módulo no Catálogo** | `POST /api/v1/backoffice/catalog/modules` | `plans.write` |
+| **Atualizar Módulo no Catálogo** | `PUT /api/v1/backoffice/catalog/modules/{moduleId}` | `plans.write` |
+| **Criar Rascunho de Preço por Faixa** | `POST /api/v1/backoffice/catalog/modules/{moduleId}/prices` | `plans.write` |
+| **Editar Rascunho de Preço** | `PUT /api/v1/backoffice/catalog/modules/prices/{priceId}` | `plans.write` |
+| **Publicar Versão de Preço por Faixa** | `POST /api/v1/backoffice/catalog/modules/prices/{priceId}/publish` | `plans.publish` (+ flag `backoffice.feature.plan_publishing`) |
+
+### 7.3. Seed Inicial (`BackofficeDataSeeder.SeedModularCatalogAsync`)
+Popula de forma idempotente as **4 faixas de cabeças** (`TIER_500`, `TIER_1500`, `TIER_3000`, `TIER_5000_PLUS`), os **7 módulos** (`Cows` base obrigatório + 6 add-ons opcionais) e os **28 preços publicados (`ModuleTierPrice`)** correspondentes à matriz comercial.

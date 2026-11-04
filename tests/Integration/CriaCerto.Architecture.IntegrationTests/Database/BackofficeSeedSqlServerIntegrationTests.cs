@@ -81,6 +81,10 @@ public sealed class BackofficeSeedSqlServerIntegrationTests : IAsyncLifetime
         masterAdmin.Roles.Should().Contain(r => r.Name == BackofficeRoles.PlatformOwner);
         _passwordHasher.VerifyPassword(BackofficeDataSeeder.MasterAdminPassword, masterAdmin.PasswordHash)
             .Should().BeTrue();
+
+        (await backofficeDb.HeadTierCatalogs.CountAsync()).Should().Be(4);
+        (await backofficeDb.ModuleCatalogs.CountAsync()).Should().Be(7);
+        (await backofficeDb.ModuleTierPrices.CountAsync()).Should().Be(28);
     }
 
     [Fact]
@@ -99,6 +103,9 @@ public sealed class BackofficeSeedSqlServerIntegrationTests : IAsyncLifetime
         (await backofficeDb.Permissions.CountAsync()).Should().Be(BackofficePermissions.AllPermissions.Count);
         (await backofficeDb.AdminRoles.CountAsync()).Should().Be(BackofficeRoles.AllRoles.Count);
         (await backofficeDb.AdminUsers.CountAsync()).Should().Be(1);
+        (await backofficeDb.HeadTierCatalogs.CountAsync()).Should().Be(4);
+        (await backofficeDb.ModuleCatalogs.CountAsync()).Should().Be(7);
+        (await backofficeDb.ModuleTierPrices.CountAsync()).Should().Be(28);
     }
 
     [Fact]

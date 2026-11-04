@@ -52,21 +52,24 @@ public static class BackofficeDataSeeder
         await dbContext.SaveChangesAsync(cancellationToken);
 
         var plansCreated = await SeedPlansAsync(dbContext, logger, cancellationToken);
+        var (tiersCreated, modulesCreated) = await SeedModularCatalogAsync(dbContext, logger, cancellationToken);
         var flagsCreated = await SeedFeatureFlagsAsync(dbContext, logger, cancellationToken);
 
-        if (plansCreated > 0 || flagsCreated > 0)
+        if (plansCreated > 0 || tiersCreated > 0 || modulesCreated > 0 || flagsCreated > 0)
         {
             await dbContext.SaveChangesAsync(cancellationToken);
         }
 
         logger?.LogInformation(
-            "Backoffice seed completed. PermissionsCreated={PermissionsCreated}, RolesCreated={RolesCreated}, AdminCreated={AdminCreated}, AdminRoleRepaired={AdminRoleRepaired}, AdminPasswordReset={AdminPasswordReset}, PlansCreated={PlansCreated}, FlagsCreated={FlagsCreated}.",
+            "Backoffice seed completed. PermissionsCreated={PermissionsCreated}, RolesCreated={RolesCreated}, AdminCreated={AdminCreated}, AdminRoleRepaired={AdminRoleRepaired}, AdminPasswordReset={AdminPasswordReset}, PlansCreated={PlansCreated}, TiersCreated={TiersCreated}, ModulesCreated={ModulesCreated}, FlagsCreated={FlagsCreated}.",
             iamResult.PermissionsCreated,
             iamResult.RolesCreated,
             iamResult.AdminCreated,
             iamResult.AdminRoleRepaired,
             iamResult.AdminPasswordReset,
             plansCreated,
+            tiersCreated,
+            modulesCreated,
             flagsCreated);
     }
 
@@ -482,6 +485,214 @@ public static class BackofficeDataSeeder
 
         dbContext.PlanCatalogs.Add(plan);
         return 1;
+    }
+
+    public static async Task<(int TiersCreated, int ModulesCreated)> SeedModularCatalogAsync(
+        BackofficeDbContext dbContext,
+        ILogger? logger = null,
+        CancellationToken cancellationToken = default)
+    {
+        var existingTiers = await dbContext.HeadTierCatalogs.ToListAsync(cancellationToken);
+        var tiersMap = existingTiers.ToDictionary(t => t.TierCode, StringComparer.OrdinalIgnoreCase);
+        var tiersCreated = 0;
+
+        var defaultTiers = new (string TierCode, string DisplayName, int MinHeads, int MaxHeads, int SortOrder)[]
+        {
+            ("TIER_500", "Até 500 cabeças", 1, 500, 1),
+            ("TIER_1500", "De 501 a 1.500 cabeças", 501, 1500, 2),
+            ("TIER_3000", "De 1.501 a 3.000 cabeças", 1501, 3000, 3),
+            ("TIER_5000_PLUS", "Acima de 3.000 cabeças", 3001, 10000, 4)
+        };
+
+        foreach (var (tierCode, displayName, minHeads, maxHeads, sortOrder) in defaultTiers)
+        {
+            if (tiersMap.ContainsKey(tierCode))
+            {
+                continue;
+            }
+
+            var tierResult = HeadTierCatalog.Create(tierCode, displayName, minHeads, maxHeads, sortOrder);
+            if (tierResult.IsFailure)
+            {
+                logger?.LogWarning(
+                    "Skipping head tier seed {TierCode}: failed with {ErrorCode}.",
+                    tierCode,
+                    tierResult.Error.Code);
+                continue;
+            }
+
+            dbContext.HeadTierCatalogs.Add(tierResult.Value);
+            tiersMap[tierCode] = tierResult.Value;
+            tiersCreated++;
+        }
+
+        var existingModules = await dbContext.ModuleCatalogs
+            .Include(m => m.TierPrices)
+            .ToListAsync(cancellationToken);
+        var modulesMap = existingModules.ToDictionary(m => m.ModuleKey, StringComparer.OrdinalIgnoreCase);
+        var modulesCreated = 0;
+        var bootstrapAdminId = Guid.NewGuid();
+
+        var defaultModules = new (
+            string ModuleKey,
+            string Name,
+            string Description,
+            string Icon,
+            bool IsCore,
+            int SortOrder,
+            (string TierCode, decimal MonthlyPrice)[] Prices)[]
+        {
+            (
+                "Cows",
+                "Gestão do Plantel (Base)",
+                "Gestão cadastral do rebanho, lotes básicos, unidades produtivas e dashboard executivo.",
+                "bi-grid-1x2-fill",
+                true,
+                1,
+                [
+                    ("TIER_500", 79m),
+                    ("TIER_1500", 139m),
+                    ("TIER_3000", 219m),
+                    ("TIER_5000_PLUS", 349m)
+                ]
+            ),
+            (
+                "Breeding",
+                "Reprodução & IATF",
+                "Protocolos de IATF, inseminação artificial, monta natural e diagnóstico de gestação.",
+                "bi-heart-pulse-fill",
+                false,
+                2,
+                [
+                    ("TIER_500", 49m),
+                    ("TIER_1500", 89m),
+                    ("TIER_3000", 139m),
+                    ("TIER_5000_PLUS", 199m)
+                ]
+            ),
+            (
+                "Calving",
+                "Maternidade & Bezerreiro",
+                "Registro de partos, identificação de bezerros, desmama e peso ajustado aos 205 dias.",
+                "bi-stars",
+                false,
+                3,
+                [
+                    ("TIER_500", 39m),
+                    ("TIER_1500", 69m),
+                    ("TIER_3000", 109m),
+                    ("TIER_5000_PLUS", 159m)
+                ]
+            ),
+            (
+                "Growth",
+                "Recria, Engorda & Pastos",
+                "Pesagens, cálculo de GPD/@, movimentação de lotes e taxa de lotação de pastos (UA/ha).",
+                "bi-graph-up-arrow",
+                false,
+                4,
+                [
+                    ("TIER_500", 59m),
+                    ("TIER_1500", 99m),
+                    ("TIER_3000", 159m),
+                    ("TIER_5000_PLUS", 229m)
+                ]
+            ),
+            (
+                "Sanitary",
+                "Sanitário & Carência",
+                "Campanhas de vacinação, vermifugação, tratamentos veterinários e bloqueio de carência de abate.",
+                "bi-shield-fill-plus",
+                false,
+                5,
+                [
+                    ("TIER_500", 49m),
+                    ("TIER_1500", 89m),
+                    ("TIER_3000", 139m),
+                    ("TIER_5000_PLUS", 199m)
+                ]
+            ),
+            (
+                "Nutrition",
+                "Nutrição & Confinamento",
+                "Suplementação a pasto, estoque de silos, carregamento de trato TMR e conversão alimentar.",
+                "bi-basket2-fill",
+                false,
+                6,
+                [
+                    ("TIER_500", 79m),
+                    ("TIER_1500", 149m),
+                    ("TIER_3000", 239m),
+                    ("TIER_5000_PLUS", 349m)
+                ]
+            ),
+            (
+                "Analytics",
+                "BI & Analytics Avançado",
+                "Relatórios zootécnicos avançados, inteligência de rebanho e indicadores executivos.",
+                "bi-bar-chart-line-fill",
+                false,
+                7,
+                [
+                    ("TIER_500", 49m),
+                    ("TIER_1500", 79m),
+                    ("TIER_3000", 129m),
+                    ("TIER_5000_PLUS", 189m)
+                ]
+            )
+        };
+
+        foreach (var (moduleKey, name, description, icon, isCore, sortOrder, prices) in defaultModules)
+        {
+            if (!modulesMap.TryGetValue(moduleKey, out var module))
+            {
+                var moduleResult = ModuleCatalog.Create(moduleKey, name, description, icon, isCore, sortOrder);
+                if (moduleResult.IsFailure)
+                {
+                    logger?.LogWarning(
+                        "Skipping module catalog seed {ModuleKey}: failed with {ErrorCode}.",
+                        moduleKey,
+                        moduleResult.Error.Code);
+                    continue;
+                }
+
+                module = moduleResult.Value;
+                dbContext.ModuleCatalogs.Add(module);
+                modulesMap[moduleKey] = module;
+                modulesCreated++;
+            }
+
+            foreach (var (tierCode, monthlyPrice) in prices)
+            {
+                if (!tiersMap.TryGetValue(tierCode, out var tier))
+                {
+                    continue;
+                }
+
+                if (module.TierPrices.Any(p => p.HeadTierCatalogId == tier.Id))
+                {
+                    continue;
+                }
+
+                var annualPriceMonthly = Math.Round(monthlyPrice * 0.80m, 2);
+                var stripePriceMonthly = $"price_{moduleKey.ToLowerInvariant()}_{tierCode.ToLowerInvariant()}_monthly";
+                var stripePriceAnnual = $"price_{moduleKey.ToLowerInvariant()}_{tierCode.ToLowerInvariant()}_annual";
+
+                var draftResult = module.CreateTierPriceDraft(
+                    tier.Id,
+                    monthlyPrice,
+                    annualPriceMonthly,
+                    stripePriceMonthly,
+                    stripePriceAnnual);
+
+                if (draftResult.IsSuccess)
+                {
+                    module.PublishTierPrice(draftResult.Value.Id, bootstrapAdminId, "Seed inicial catálogo modular v1.0");
+                }
+            }
+        }
+
+        return (tiersCreated, modulesCreated);
     }
 
     private static async Task<int> SeedFeatureFlagsAsync(
