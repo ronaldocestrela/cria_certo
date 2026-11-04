@@ -19,3 +19,34 @@ public sealed record SubscriptionPlanDto(
     string? StripePriceIdMonthly = null,
     string? StripePriceIdAnnual = null
 );
+
+public sealed record HeadTierOptionDto(
+    string TierCode,
+    string DisplayName,
+    int MinHeads,
+    int MaxHeads,
+    int SortOrder
+);
+
+public sealed record ModuleTierPriceOptionDto(
+    string TierCode,
+    decimal MonthlyPrice,
+    decimal AnnualPriceMonthly,
+    string? StripePriceIdMonthly = null,
+    string? StripePriceIdAnnual = null
+);
+
+public sealed record CommercialModuleOptionDto(
+    string ModuleKey,
+    string Name,
+    string Description,
+    string Icon,
+    bool IsCore,
+    int SortOrder,
+    IReadOnlyList<ModuleTierPriceOptionDto> PricesByTier
+);
+
+public sealed record ModularSubscriptionCatalogDto(
+    IReadOnlyList<HeadTierOptionDto> HeadTiers,
+    IReadOnlyList<CommercialModuleOptionDto> Modules
+);

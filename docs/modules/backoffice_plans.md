@@ -131,5 +131,5 @@ A partir da migração para **Assinatura Self-Service Modular (À La Carte)**, o
 | **Editar Rascunho de Preço** | `PUT /api/v1/backoffice/catalog/modules/prices/{priceId}` | `plans.write` |
 | **Publicar Versão de Preço por Faixa** | `POST /api/v1/backoffice/catalog/modules/prices/{priceId}/publish` | `plans.publish` (+ flag `backoffice.feature.plan_publishing`) |
 
-### 7.3. Seed Inicial (`BackofficeDataSeeder.SeedModularCatalogAsync`)
-Popula de forma idempotente as **4 faixas de cabeças** (`TIER_500`, `TIER_1500`, `TIER_3000`, `TIER_5000_PLUS`), os **7 módulos** (`Cows` base obrigatório + 6 add-ons opcionais) e os **28 preços publicados (`ModuleTierPrice`)** correspondentes à matriz comercial.
+### 7.3. Seed Inicial (`BackofficeDataSeeder.SeedModularCatalogAsync`) e Ponte com Tenancy (`BackofficeSubscriptionPlansProvider.GetModularCatalogAsync`)
+Popula de forma idempotente as **4 faixas de cabeças** (`TIER_500`, `TIER_1500`, `TIER_3000`, `TIER_5000_PLUS`), os **7 módulos** (`Cows` base obrigatório + 6 add-ons opcionais) e os **28 preços publicados (`ModuleTierPrice`)** correspondentes à matriz comercial. O serviço `BackofficeSubscriptionPlansProvider` implementa `GetModularCatalogAsync`, projetando as faixas e módulos ativos com seus respectivos preços publicados para consumo público no módulo `Tenancy` (`GET /api/v1/tenancy/catalog`).

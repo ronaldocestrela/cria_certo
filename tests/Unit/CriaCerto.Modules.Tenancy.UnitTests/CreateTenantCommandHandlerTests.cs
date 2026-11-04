@@ -122,19 +122,62 @@ public class CreateTenantCommandHandlerTests : IDisposable
         result.Value.Token.Should().Be("fake_jwt_token");
         result.Value.UserId.Should().Be(user.Id);
 
-        var tenantInDb = await _dbContext.Tenants.FirstOrDefaultAsync(t => t.Name == "Fazenda Esperança");
+        var tenantInDb = await _dbContext.Tenants
+            .Include(t => t.SubscribedModules)
+            .FirstOrDefaultAsync(t => t.Name == "Fazenda Esperança");
         tenantInDb.Should().NotBeNull();
         tenantInDb!.State.Should().Be("MT");
         tenantInDb.SubscribedPlan.Should().Be("Starter");
+        tenantInDb.HeadTierCode.Should().Be("TIER_500");
         tenantInDb.Capacity.Should().Be(500);
         tenantInDb.Status.Should().Be("Trial");
         tenantInDb.CurrentPeriodEndUtc.Should().NotBeNull();
         tenantInDb.CurrentPeriodEndUtc.Should().BeCloseTo(DateTime.UtcNow.AddDays(CreateTenantCommand.DefaultTrialDays), TimeSpan.FromSeconds(30));
         CreateTenantCommand.DefaultTrialDays.Should().Be(30);
+        tenantInDb.SubscribedModules.Select(m => m.ModuleKey).Should().BeEquivalentTo(PlanCapacityLimits.AllCommercialModules);
 
         var userTenantInDb = await _dbContext.UserTenants
             .FirstOrDefaultAsync(ut => ut.UserId == user.Id && ut.TenantId == tenantInDb.Id);
         userTenantInDb.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task Handle_Should_Create_Tenant_With_Selected_Modules_And_Always_Include_Core_Cows_Module()
+    {
+        var user = new User
+        {
+            Id = Guid.NewGuid(),
+            FullName = "Produtor Modular",
+            Email = "modular@fazenda.com.br",
+            PasswordHash = "hash"
+        };
+        _dbContext.Users.Add(user);
+        await _dbContext.SaveChangesAsync();
+
+        var handler = new CreateTenantCommandHandler(_dbContext, _jwtService, new NoOpTenantDatabaseProvisioner());
+        var command = new CreateTenantCommand(
+            user.Id,
+            "Fazenda Modular",
+            "12.345.678/0001-90",
+            "MT",
+            "Sorriso",
+            "12345678",
+            900,
+            HeadTierCode: "TIER_500",
+            SelectedModules: ["Breeding", "Sanitary"]
+        );
+
+        var result = await handler.Handle(command, CancellationToken.None);
+
+        result.IsSuccess.Should().BeTrue();
+
+        var tenantInDb = await _dbContext.Tenants
+            .Include(t => t.SubscribedModules)
+            .FirstOrDefaultAsync(t => t.Name == "Fazenda Modular");
+        tenantInDb.Should().NotBeNull();
+        tenantInDb!.HeadTierCode.Should().Be("TIER_500");
+        tenantInDb.Capacity.Should().Be(500);
+        tenantInDb.SubscribedModules.Select(m => m.ModuleKey).Should().BeEquivalentTo(["Cows", "Breeding", "Sanitary"]);
     }
 
     [Fact]

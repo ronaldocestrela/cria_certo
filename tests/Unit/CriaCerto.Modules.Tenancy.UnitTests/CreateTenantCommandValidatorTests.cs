@@ -53,4 +53,41 @@ public class CreateTenantCommandValidatorTests
         var result = _validator.Validate(command);
         result.IsValid.Should().BeFalse();
     }
+
+    [Fact]
+    public void Validate_Should_Fail_When_HeadTierCode_Is_Not_Trial_Tier()
+    {
+        var command = new CreateTenantCommand(
+            Guid.NewGuid(),
+            "Fazenda Boi Gordo",
+            "12345678000199",
+            "MS",
+            "Campo Grande",
+            "IE999",
+            800,
+            HeadTierCode: "TIER_3000"
+        );
+
+        var result = _validator.Validate(command);
+        result.IsValid.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Validate_Should_Fail_When_SelectedModules_Contains_Invalid_Module()
+    {
+        var command = new CreateTenantCommand(
+            Guid.NewGuid(),
+            "Fazenda Boi Gordo",
+            "12345678000199",
+            "MS",
+            "Campo Grande",
+            "IE999",
+            800,
+            HeadTierCode: "TIER_500",
+            SelectedModules: ["Cows", "ModuloInvalido"]
+        );
+
+        var result = _validator.Validate(command);
+        result.IsValid.Should().BeFalse();
+    }
 }

@@ -24,10 +24,13 @@ public record CreateTenantCommand(
     string? UserEmail = null,
     string? ReferralCode = null,
     string? OriginIpAddress = null,
-    string? UserAgent = null
+    string? UserAgent = null,
+    string HeadTierCode = CreateTenantCommand.DefaultTrialHeadTier,
+    IReadOnlyList<string>? SelectedModules = null
 ) : IRequest<Result<AuthResponse>>
 {
     public const string DefaultTrialPlan = "Starter";
+    public const string DefaultTrialHeadTier = PlanCapacityLimits.Tier500;
     public const int DefaultTrialCapacity = PlanCapacityLimits.StarterLimit; // 500
     public const int DefaultTrialDays = 30;
 }
@@ -106,6 +109,7 @@ public sealed class CreateTenantCommandHandler : IRequestHandler<CreateTenantCom
             StateRegistration = request.StateRegistration?.Trim() ?? string.Empty,
             AreaInHectares = request.AreaInHectares,
             SubscribedPlan = plan,
+            HeadTierCode = CreateTenantCommand.DefaultTrialHeadTier,
             Capacity = capacity,
             Status = TenantLifecycle.ToStatusString(TenantStatus.Trial),
             CurrentPeriodEndUtc = now.AddDays(CreateTenantCommand.DefaultTrialDays),
@@ -114,6 +118,16 @@ public sealed class CreateTenantCommandHandler : IRequestHandler<CreateTenantCom
             UpdatedAtUtc = now
         };
         tenant.ApplyDefaultSegmentation();
+
+        var modulesToActivate = request.SelectedModules is { Count: > 0 }
+            ? request.SelectedModules
+            : PlanCapacityLimits.AllCommercialModules;
+
+        var setModulesResult = tenant.SetSubscribedModules(modulesToActivate, activatedAtUtc: now);
+        if (setModulesResult.IsFailure)
+        {
+            return Result.Failure<AuthResponse>(setModulesResult.Error);
+        }
 
         var userTenant = new UserTenant
         {

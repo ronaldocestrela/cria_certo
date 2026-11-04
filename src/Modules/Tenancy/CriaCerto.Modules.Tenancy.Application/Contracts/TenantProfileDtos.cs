@@ -15,7 +15,9 @@ public sealed record TenantProfileDto(
     string? StripeCustomerId = null,
     string? StripeSubscriptionId = null,
     DateTime? CurrentPeriodEndUtc = null,
-    bool CancelAtPeriodEnd = false
+    bool CancelAtPeriodEnd = false,
+    string HeadTierCode = "TIER_500",
+    IReadOnlyList<string>? SubscribedModules = null
 );
 
 public sealed record ProductionUnitDto(

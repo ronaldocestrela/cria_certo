@@ -107,4 +107,16 @@ public static class TenancyErrors
     public static readonly Error SubscriptionExpired = Error.Unauthorized(
         "Tenant.SubscriptionExpired",
         "A assinatura desta organização/fazenda está vencida. Por favor, regularize o faturamento para continuar utilizando o Cria Certo.");
+
+    public static readonly Error InvalidHeadTierCode = Error.Validation(
+        "Tenant.InvalidHeadTierCode",
+        "A faixa de capacidade de cabeças informada é inválida.");
+
+    public static readonly Error InvalidModuleKey = Error.Validation(
+        "Tenant.InvalidModuleKey",
+        "Um ou mais módulos informados não pertencem ao catálogo comercial válido.");
+
+    public static readonly Error InvalidSubscribedModuleData = Error.Validation(
+        "Tenant.InvalidSubscribedModuleData",
+        "Os dados de ativação do módulo contratado são inválidos.");
 }

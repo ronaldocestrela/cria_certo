@@ -86,4 +86,74 @@ public sealed class BackofficeSubscriptionPlansProvider : ISubscriptionPlansProv
 
         return result.OrderBy(p => p.MonthlyPrice).ToList();
     }
+
+    public async Task<ModularSubscriptionCatalogDto?> GetModularCatalogAsync(CancellationToken cancellationToken = default)
+    {
+        var tiers = await _dbContext.HeadTierCatalogs
+            .Where(t => t.IsActive)
+            .OrderBy(t => t.SortOrder)
+            .ThenBy(t => t.MinHeads)
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+
+        var modules = await _dbContext.ModuleCatalogs
+            .Where(m => m.IsActive)
+            .Include(m => m.TierPrices)
+            .OrderBy(m => m.SortOrder)
+            .ThenBy(m => m.Name)
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+
+        if (tiers.Count == 0 || modules.Count == 0)
+        {
+            return null;
+        }
+
+        var tierDtos = tiers
+            .Select(t => new HeadTierOptionDto(
+                TierCode: t.TierCode,
+                DisplayName: t.DisplayName,
+                MinHeads: t.MinHeads,
+                MaxHeads: t.MaxHeads,
+                SortOrder: t.SortOrder))
+            .ToList();
+
+        var moduleDtos = new List<CommercialModuleOptionDto>();
+
+        foreach (var module in modules)
+        {
+            var pricesByTier = new List<ModuleTierPriceOptionDto>();
+
+            foreach (var tier in tiers)
+            {
+                var tierPrice = module.TierPrices
+                    .Where(p => p.HeadTierCatalogId == tier.Id)
+                    .OrderByDescending(p => p.Status == PlanVersionStatus.Published)
+                    .ThenByDescending(p => p.Status == PlanVersionStatus.Draft)
+                    .ThenByDescending(p => p.VersionNumber)
+                    .FirstOrDefault();
+
+                if (tierPrice != null)
+                {
+                    pricesByTier.Add(new ModuleTierPriceOptionDto(
+                        TierCode: tier.TierCode,
+                        MonthlyPrice: tierPrice.MonthlyPrice,
+                        AnnualPriceMonthly: tierPrice.AnnualPriceMonthly,
+                        StripePriceIdMonthly: tierPrice.StripePriceIdMonthly,
+                        StripePriceIdAnnual: tierPrice.StripePriceIdAnnual));
+                }
+            }
+
+            moduleDtos.Add(new CommercialModuleOptionDto(
+                ModuleKey: module.ModuleKey,
+                Name: module.Name,
+                Description: module.Description,
+                Icon: module.Icon,
+                IsCore: module.IsCore,
+                SortOrder: module.SortOrder,
+                PricesByTier: pricesByTier));
+        }
+
+        return new ModularSubscriptionCatalogDto(tierDtos, moduleDtos);
+    }
 }

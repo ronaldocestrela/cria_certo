@@ -2137,6 +2137,14 @@ app.MapGet("/api/v1/tenancy/plans", async (ISender sender) =>
         : Results.Json(result.Error, statusCode: 400);
 }).AllowAnonymous().WithTags("Tenancy");
 
+app.MapGet("/api/v1/tenancy/catalog", async (ISender sender) =>
+{
+    var result = await sender.Send(new GetModularSubscriptionCatalogQuery());
+    return result.IsSuccess
+        ? Results.Ok(result.Value)
+        : Results.Json(result.Error, statusCode: 400);
+}).AllowAnonymous().WithTags("Tenancy");
+
 app.MapPost("/api/v1/tenancy/farms", async (CreateTenantCommand command, HttpContext httpContext, ISender sender) =>
 {
     var ipAddress = httpContext.Connection.RemoteIpAddress?.ToString();

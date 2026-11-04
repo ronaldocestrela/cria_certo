@@ -13,6 +13,7 @@ public sealed class Tenant
     public string? ExternalIdentifier { get; set; }
     public string Status { get; set; } = TenantLifecycle.ToStatusString(TenantStatus.Active);
     public string SubscribedPlan { get; set; } = "Starter";
+    public string HeadTierCode { get; set; } = PlanCapacityLimits.Tier500;
     public int Capacity { get; set; } = 1000;
     public string State { get; set; } = string.Empty;
     public string City { get; set; } = string.Empty;
@@ -40,6 +41,127 @@ public sealed class Tenant
     public List<UserTenant> UserTenants { get; set; } = new();
     public List<ProductionUnit> ProductionUnits { get; set; } = new();
     public List<TenantOperationalTag> OperationalTags { get; set; } = new();
+    public List<TenantSubscribedModule> SubscribedModules { get; set; } = new();
+
+    public Result SetHeadTier(string headTierCode, int? customCapacityWithinTier = null)
+    {
+        if (!PlanCapacityLimits.IsValidHeadTierCode(headTierCode))
+        {
+            return Result.Failure(TenancyErrors.InvalidHeadTierCode);
+        }
+
+        var normalizedTier = PlanCapacityLimits.NormalizeHeadTierCode(headTierCode);
+        var maxHeadsForTier = PlanCapacityLimits.GetMaxHeadsForTier(normalizedTier);
+
+        if (customCapacityWithinTier.HasValue &&
+            (customCapacityWithinTier.Value <= 0 || customCapacityWithinTier.Value > maxHeadsForTier))
+        {
+            return Result.Failure(TenancyErrors.CapacityExceedsPlan);
+        }
+
+        HeadTierCode = normalizedTier;
+        Capacity = customCapacityWithinTier ?? maxHeadsForTier;
+        SizeSegment = TenantSegmentationCatalog.ResolveSizeSegmentFromCapacity(Capacity);
+        UpdatedAtUtc = DateTime.UtcNow;
+        return Result.Success();
+    }
+
+    public Result SetSubscribedModules(
+        IEnumerable<string>? moduleKeys,
+        IReadOnlyDictionary<string, decimal>? priceSnapshots = null,
+        IReadOnlyDictionary<string, string?>? stripeSubscriptionItemIds = null,
+        DateTime? activatedAtUtc = null)
+    {
+        var normalizedSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            PlanCapacityLimits.CoreModuleKey
+        };
+
+        if (moduleKeys is not null)
+        {
+            foreach (var rawKey in moduleKeys)
+            {
+                var normalized = PlanCapacityLimits.NormalizeCommercialModuleKey(rawKey);
+                if (normalized is null)
+                {
+                    return Result.Failure(TenancyErrors.InvalidModuleKey);
+                }
+
+                normalizedSet.Add(normalized);
+            }
+        }
+
+        var effectiveId = Id == Guid.Empty ? Guid.NewGuid() : Id;
+        Id = effectiveId;
+
+        var existingByKey = SubscribedModules.ToDictionary(m => m.ModuleKey, StringComparer.OrdinalIgnoreCase);
+        var updatedList = new List<TenantSubscribedModule>();
+        var now = activatedAtUtc ?? DateTime.UtcNow;
+
+        foreach (var canonicalKey in PlanCapacityLimits.AllCommercialModules)
+        {
+            if (!normalizedSet.Contains(canonicalKey))
+            {
+                continue;
+            }
+
+            decimal price = 0m;
+            if (priceSnapshots is not null && priceSnapshots.TryGetValue(canonicalKey, out var p))
+            {
+                price = p;
+            }
+
+            string? itemId = null;
+            if (stripeSubscriptionItemIds is not null && stripeSubscriptionItemIds.TryGetValue(canonicalKey, out var s))
+            {
+                itemId = s;
+            }
+
+            if (existingByKey.TryGetValue(canonicalKey, out var existing))
+            {
+                if (price < 0m)
+                {
+                    return Result.Failure(TenancyErrors.InvalidSubscribedModuleData);
+                }
+
+                existing.MonthlyPriceSnapshot = price;
+                if (stripeSubscriptionItemIds is not null)
+                {
+                    existing.StripeSubscriptionItemId = string.IsNullOrWhiteSpace(itemId) ? null : itemId.Trim();
+                }
+
+                updatedList.Add(existing);
+            }
+            else
+            {
+                var createResult = TenantSubscribedModule.Create(effectiveId, canonicalKey, price, itemId, now);
+                if (createResult.IsFailure)
+                {
+                    return Result.Failure(createResult.Error);
+                }
+
+                updatedList.Add(createResult.Value);
+            }
+        }
+
+        SubscribedModules.Clear();
+        SubscribedModules.AddRange(updatedList);
+        UpdatedAtUtc = DateTime.UtcNow;
+        return Result.Success();
+    }
+
+    public IReadOnlyList<string> GetSubscribedModuleKeys()
+    {
+        if (SubscribedModules is { Count: > 0 })
+        {
+            return SubscribedModules
+                .Select(m => m.ModuleKey)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
+        return [PlanCapacityLimits.CoreModuleKey];
+    }
 
     public void ApplyDefaultSegmentation()
     {

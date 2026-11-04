@@ -20,6 +20,7 @@ public class GetTenantProfileQueryHandler : IRequestHandler<GetTenantProfileQuer
     public async Task<Result<TenantProfileDto>> Handle(GetTenantProfileQuery request, CancellationToken cancellationToken)
     {
         var tenant = await _dbContext.Tenants
+            .Include(t => t.SubscribedModules)
             .AsNoTracking()
             .FirstOrDefaultAsync(t => t.Id == request.TenantId, cancellationToken);
 
@@ -43,7 +44,9 @@ public class GetTenantProfileQueryHandler : IRequestHandler<GetTenantProfileQuer
             tenant.StripeCustomerId,
             tenant.StripeSubscriptionId,
             tenant.CurrentPeriodEndUtc,
-            tenant.CancelAtPeriodEnd
+            tenant.CancelAtPeriodEnd,
+            tenant.HeadTierCode,
+            tenant.GetSubscribedModuleKeys()
         );
 
         return Result.Success(dto);

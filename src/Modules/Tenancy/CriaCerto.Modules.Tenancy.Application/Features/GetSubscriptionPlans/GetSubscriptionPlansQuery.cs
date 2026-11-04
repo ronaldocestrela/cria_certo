@@ -5,13 +5,67 @@ namespace CriaCerto.Modules.Tenancy.Application.Features.GetSubscriptionPlans;
 
 public record GetSubscriptionPlansQuery : IRequest<Result<List<SubscriptionPlanDto>>>;
 
-public sealed class GetSubscriptionPlansQueryHandler : IRequestHandler<GetSubscriptionPlansQuery, Result<List<SubscriptionPlanDto>>>
+public record GetModularSubscriptionCatalogQuery : IRequest<Result<ModularSubscriptionCatalogDto>>;
+
+public sealed class GetSubscriptionPlansQueryHandler :
+    IRequestHandler<GetSubscriptionPlansQuery, Result<List<SubscriptionPlanDto>>>,
+    IRequestHandler<GetModularSubscriptionCatalogQuery, Result<ModularSubscriptionCatalogDto>>
 {
     private readonly ISubscriptionPlansProvider? _plansProvider;
 
     public GetSubscriptionPlansQueryHandler(ISubscriptionPlansProvider? plansProvider = null)
     {
         _plansProvider = plansProvider;
+    }
+
+    public async Task<Result<ModularSubscriptionCatalogDto>> Handle(GetModularSubscriptionCatalogQuery request, CancellationToken cancellationToken)
+    {
+        if (_plansProvider != null)
+        {
+            var catalogFromProvider = await _plansProvider.GetModularCatalogAsync(cancellationToken);
+            if (catalogFromProvider is { HeadTiers.Count: > 0, Modules.Count: > 0 })
+            {
+                return Result.Success(catalogFromProvider);
+            }
+        }
+
+        return Result.Success(GetDefaultModularCatalog());
+    }
+
+    public static ModularSubscriptionCatalogDto GetDefaultModularCatalog()
+    {
+        var tiers = new List<HeadTierOptionDto>
+        {
+            new("TIER_500", "Até 500 cabeças", 1, 500, 1),
+            new("TIER_1500", "De 501 a 1.500 cabeças", 501, 1500, 2),
+            new("TIER_3000", "De 1.501 a 3.000 cabeças", 1501, 3000, 3),
+            new("TIER_5000_PLUS", "Acima de 3.000 cabeças", 3001, 10000, 4)
+        };
+
+        static IReadOnlyList<ModuleTierPriceOptionDto> BuildPrices(string moduleKey, decimal p500, decimal p1500, decimal p3000, decimal p5000)
+        {
+            var k = moduleKey.ToLowerInvariant();
+            return
+            [
+                new("TIER_500", p500, Math.Round(p500 * 0.80m, 2), $"price_{k}_tier_500_monthly", $"price_{k}_tier_500_annual"),
+                new("TIER_1500", p1500, Math.Round(p1500 * 0.80m, 2), $"price_{k}_tier_1500_monthly", $"price_{k}_tier_1500_annual"),
+                new("TIER_3000", p3000, Math.Round(p3000 * 0.80m, 2), $"price_{k}_tier_3000_monthly", $"price_{k}_tier_3000_annual"),
+                new("TIER_5000_PLUS", p5000, Math.Round(p5000 * 0.80m, 2), $"price_{k}_tier_5000_plus_monthly", $"price_{k}_tier_5000_plus_annual")
+            ];
+        }
+
+        var modules = new List<CommercialModuleOptionDto>
+        {
+            new("Cows", "Gestão do Plantel (Base)", "Gestão cadastral do rebanho, lotes básicos, unidades produtivas e dashboard executivo.", "bi-grid-1x2-fill", true, 1, BuildPrices("Cows", 79m, 139m, 219m, 349m)),
+            new("Breeding", "Reprodução & IATF", "Protocolos de IATF, inseminação artificial, monta natural e diagnóstico de gestação.", "bi-heart-pulse-fill", false, 2, BuildPrices("Breeding", 49m, 89m, 139m, 199m)),
+            new("Calving", "Maternidade & Bezerreiro", "Registro de partos, identificação de bezerros, desmama e peso ajustado aos 205 dias.", "bi-stars", false, 3, BuildPrices("Calving", 39m, 69m, 109m, 159m)),
+            new("Growth", "Recria, Engorda & Pastos", "Pesagens, cálculo de GPD/@, movimentação de lotes e taxa de lotação de pastos (UA/ha).", "bi-graph-up-arrow", false, 4, BuildPrices("Growth", 59m, 99m, 159m, 229m)),
+            new("Sanitary", "Sanitário & Carência", "Campanhas de vacinação, vermifugação, tratamentos veterinários e bloqueio de carência de abate.", "bi-shield-fill-plus", false, 5, BuildPrices("Sanitary", 49m, 89m, 139m, 199m)),
+            new("Nutrition", "Nutrição & Confinamento", "Suplementação a pasto, estoque de silos, carregamento de trato TMR e conversão alimentar.", "bi-basket2-fill", false, 6, BuildPrices("Nutrition", 79m, 149m, 239m, 349m)),
+            new("Analytics", "BI & Analytics Avançado", "Relatórios zootécnicos avançados, inteligência de rebanho e indicadores executivos.", "bi-bar-chart-line-fill", false, 7, BuildPrices("Analytics", 49m, 79m, 129m, 189m))
+        };
+
+        return new ModularSubscriptionCatalogDto(tiers, modules);
     }
 
     public async Task<Result<List<SubscriptionPlanDto>>> Handle(GetSubscriptionPlansQuery request, CancellationToken cancellationToken)

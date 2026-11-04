@@ -29,8 +29,10 @@ O módulo `Modules.Tenancy` gerencia as identidades dos usuários, organizaçõe
   - `IsProtected`: `bool` — impede suspensão/cancelamento/arquivamento
   - `StatusReason`: `string?` — última justificativa de transição
   - `StatusChangedAtUtc`: `DateTime?`
-  - `SubscribedPlan`: `string` (Starter, Pro, Enterprise)
-  - `Capacity`: `int` (limite de cabeças; validado via `PlanCapacityLimits`)
+  - `SubscribedPlan`: `string` (Starter, Pro, Enterprise — mantido para compatibilidade durante transição)
+  - `HeadTierCode`: `string` (`TIER_500`, `TIER_1500`, `TIER_3000`, `TIER_5000_PLUS`, padrão `TIER_500` no Trial)
+  - `Capacity`: `int` (limite de cabeças sincronizado com o `MaxHeads` da faixa contratada via `PlanCapacityLimits`)
+  - `SubscribedModules`: `List<TenantSubscribedModule>` — módulos contratados/ativos na assinatura self-service (módulo base `"Cows"` sempre incluído)
   - `TechnicalOwnerName` / `TechnicalOwnerEmail`
   - `CommercialOwnerName` / `CommercialOwnerEmail`
   - `SizeSegment`: `Micro`, `Small`, `Medium`, `Large` (default por `Capacity`)
@@ -38,6 +40,14 @@ O módulo `Modules.Tenancy` gerencia as identidades dos usuários, organizaçõe
   - `ProductiveProfile`: `Corte`, `Leite`, `Misto`, `Cria`, `Recria`, `Engorda`, `Confinamento`
   - `ChurnRisk`: `None`, `Low`, `Medium`, `High`, `Critical`
   - `CreatedAtUtc` / `UpdatedAtUtc`
+
+- **TenantSubscribedModule** (`tenancy.TenantSubscribedModules`): Representa cada módulo ativo na assinatura do tenant.
+  - `Id`: `Guid`
+  - `TenantId`: `Guid` (FK para `Tenants`, índice único composto `(TenantId, ModuleKey)`)
+  - `ModuleKey`: `string` (`Cows`, `Breeding`, `Calving`, `Growth`, `Sanitary`, `Nutrition`, `Analytics`)
+  - `StripeSubscriptionItemId`: `string?` (ID do `SubscriptionItem` correspondente no Stripe)
+  - `ActivatedAtUtc`: `DateTime`
+  - `MonthlyPriceSnapshot`: `decimal(18,2)` (valor mensal vigente no momento da ativação)
 
 - **OperationalTag**: Catálogo de etiquetas operacionais (`Slug` único, `Category`: `Support` | `CustomerSuccess` | `Retention`).
 - **TenantOperationalTag**: Vínculo N:N entre `Tenant` e `OperationalTag`.
@@ -89,6 +99,7 @@ O módulo `Modules.Tenancy` gerencia as identidades dos usuários, organizaçõe
 | `POST` | `/api/v1/auth/refresh-token` | Renovação de claims e token JWT para o tenant ativo | Sim | `200 OK` (`RefreshTokenResult`) |
 | `POST` | `/api/v1/tenancy/farms` | Onboarding de fazenda e associação automática de tenant | Não | `201 Created` (`AuthResponse`) |
 | `GET` | `/api/v1/tenancy/plans` | Consulta de planos de assinatura comercial | Não | `200 OK` (`List<SubscriptionPlanDto>`) |
+| `GET` | `/api/v1/tenancy/catalog` | Consulta do catálogo modular self-service (faixas de cabeças + módulos e preços por faixa) | Não | `200 OK` (`ModularSubscriptionCatalogDto`) |
 
 ### Endpoints Backoffice (`/api/v1/backoffice/tenants`)
 
@@ -150,9 +161,9 @@ Erros: `Tenant.InvalidTransition`, `Tenant.JustificationRequired`, `Tenant.Prote
 - **Regra de Negócio:** Se o e-mail já estiver cadastrado, retorna `Result.Failure(Error.Conflict("User.EmailAlreadyExists", ...))`.
 
 ### 3.2 `CreateTenantCommand`
-- **Contrato:** `CreateTenantCommand(Guid? UserId, string Name, string CNPJ, string State, string City, string StateRegistration, decimal AreaInHectares, string SubscribedPlan = "Starter", int Capacity = 500, string? UserEmail = null)`
-- **Validações (`CreateTenantCommandValidator`):** Nome da fazenda obrigatório (3-150 caracteres), UF com exatamente 2 caracteres, capacidade restrita à faixa de teste de 1 a 500 cabeças (`PlanCapacityLimits.StarterLimit`) e plano restrito exclusivamente ao plano padrão de trial (`Starter`). Tentativas de passar outros planos (`Pro`, `Enterprise`) ou capacidades acima de 500 no onboarding gratuito são rejeitadas preventivamente.
-- **Regra de Negócio:** Cria o `Tenant` forçando o plano padrão de testes (`Starter`), capacidade limitada a até 500 cabeças, status inicial `Trial` (30 dias) e aplica a segmentação padrão via `tenant.ApplyDefaultSegmentation()`. Associa o usuário em `UserTenant` e retorna `AuthResponse` com JWT válido assinado para a fazenda recém-criada.
+- **Contrato:** `CreateTenantCommand(Guid? UserId, string Name, string CNPJ, string State, string City, string StateRegistration, decimal AreaInHectares, string SubscribedPlan = "Starter", int Capacity = 500, string? UserEmail = null, string? ReferralCode = null, string? OriginIpAddress = null, string? UserAgent = null, string HeadTierCode = "TIER_500", IReadOnlyList<string>? SelectedModules = null)`
+- **Validações (`CreateTenantCommandValidator`):** Nome da fazenda obrigatório (3-150 caracteres), UF com exatamente 2 caracteres, capacidade restrita à faixa de teste de 1 a 500 cabeças (`PlanCapacityLimits.StarterLimit`), faixa inicial `TIER_500` e validação dos módulos selecionados contra `PlanCapacityLimits.AllCommercialModules`.
+- **Regra de Negócio:** Cria o `Tenant` com `Status = "Trial"` (30 dias), `HeadTierCode = "TIER_500"` (`Capacity` até 500 cabeças), habilita em degustação todos os 7 módulos comerciais (ou os módulos escolhidos em `SelectedModules`, incluindo obrigatoriamente o módulo base `"Cows"`) na coleção `TenantSubscribedModules` e aplica a segmentação padrão via `tenant.ApplyDefaultSegmentation()`. Associa o usuário em `UserTenant` e retorna `AuthResponse` com JWT válido assinado para a fazenda recém-criada.
 
 ### 3.3 `ForgotPasswordCommand`
 - **Contrato:** `ForgotPasswordCommand(string Email)`
