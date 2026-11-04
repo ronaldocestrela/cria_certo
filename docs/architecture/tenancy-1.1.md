@@ -27,9 +27,26 @@ Establish the core identity models, database-per-tenant connection resolution, a
    |<-- 200 OK (RequiresTenantSelection: true) -----------|-- Retrieve mapped tenants
    |                                                      |
    |--- POST /api/auth/select-tenant (UserId, TenantId) ->|
-   |                                                      |-- Generate JWT with claims
-   |<-- 200 OK (Token: JWT) ------------------------------|   (TenantId, Plan, Name)
+   |                                                      |-- Generate JWT with claims:
+   |<-- 200 OK (Token: JWT) ------------------------------|   (TenantId, TenantName, head_tier,
+                                                               head_capacity, subscribed_module[],
+                                                               subscribed_modules, SubscribedPlan)
 ```
+
+### 1.1. `ITenantContext` & JWT Claims (Modular Self-Service 2.1)
+- **Claims emitidas por `JwtService.GenerateToken`:**
+  - `TenantId`, `TenantName`, `Role`
+  - `head_tier`: código da faixa contratada (`TIER_500`, `TIER_1500`, `TIER_3000`, `TIER_5000_PLUS`)
+  - `head_capacity`: capacidade máxima de cabeças (`500`, `1500`, `3000`, `10000`)
+  - `subscribed_module`: múltiplas claims (uma por módulo ativo na assinatura do tenant, sempre incluindo `"Cows"`)
+  - `subscribed_modules`: lista compacta em CSV dos módulos ativos (ex.: `"Cows,Breeding,Sanitary"`)
+  - `SubscribedPlan`: mantido para retrocompatibilidade durante a transição modular
+- **Resolução via `HttpContextTenantContext` (`ITenantContext`):**
+  - `Guid? TenantId { get; }`
+  - `string? HeadTier { get; }`
+  - `int HeadCapacity { get; }`
+  - `IReadOnlySet<string> SubscribedModules { get; }` (conjunto `OrdinalIgnoreCase` resolvido a partir de `subscribed_module` e `subscribed_modules`)
+  - `string? SubscribedPlan { get; }`
 
 ### 2. User Sign-Up & Password Recovery Flow (Sub-phase 1.2)
 ```

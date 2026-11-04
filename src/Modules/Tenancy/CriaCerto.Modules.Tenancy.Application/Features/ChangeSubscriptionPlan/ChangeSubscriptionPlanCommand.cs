@@ -38,6 +38,7 @@ public class ChangeSubscriptionPlanCommandHandler : IRequestHandler<ChangeSubscr
     public async Task<Result<ChangeSubscriptionPlanResult>> Handle(ChangeSubscriptionPlanCommand request, CancellationToken cancellationToken)
     {
         var tenant = await _dbContext.Tenants
+            .Include(t => t.SubscribedModules)
             .FirstOrDefaultAsync(t => t.Id == request.TenantId, cancellationToken);
 
         if (tenant is null)

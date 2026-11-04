@@ -146,6 +146,59 @@ public class LoginCommandHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task Handle_WhenSingleTenantHasSubscribedModules_ShouldLoadModulesBeforeGeneratingToken()
+    {
+        var userId = Guid.NewGuid();
+        var tenantId = Guid.NewGuid();
+        var user = new User
+        {
+            Id = userId,
+            FullName = "Produtor Modular",
+            Email = "modular@test.com",
+            PasswordHash = PasswordHasher.Hash("Password123!"),
+            IsEmailConfirmed = true
+        };
+        var tenant = new Tenant
+        {
+            Id = tenantId,
+            Name = "Fazenda Modular",
+            CNPJ = "11.222.333/0001-81",
+            CnpjNormalized = "11222333000181",
+            Status = TenantLifecycle.ToStatusString(TenantStatus.Active),
+            SubscribedPlan = "Starter",
+            State = "MT",
+            City = "Cuiabá",
+            Type = "Corte",
+            CreatedAtUtc = DateTime.UtcNow,
+            UpdatedAtUtc = DateTime.UtcNow
+        };
+        tenant.SetHeadTier(PlanCapacityLimits.Tier1500);
+        tenant.SetSubscribedModules(["Cows", "Breeding", "Sanitary"]);
+
+        _dbContext.Users.Add(user);
+        _dbContext.Tenants.Add(tenant);
+        _dbContext.UserTenants.Add(new UserTenant
+        {
+            UserId = userId,
+            TenantId = tenantId,
+            Role = UserRole.Admin,
+            JoinedAt = DateTime.UtcNow
+        });
+        await _dbContext.SaveChangesAsync();
+        _dbContext.ChangeTracker.Clear();
+
+        var fakeJwt = new CapturingJwtService();
+        var handler = new LoginCommandHandler(_dbContext, fakeJwt);
+
+        var result = await handler.Handle(new LoginCommand("modular@test.com", "Password123!"), CancellationToken.None);
+
+        result.IsSuccess.Should().BeTrue();
+        fakeJwt.LastGeneratedTenantModules.Should().BeEquivalentTo(["Cows", "Breeding", "Sanitary"]);
+        fakeJwt.LastGeneratedHeadTier.Should().Be(PlanCapacityLimits.Tier1500);
+        fakeJwt.LastGeneratedCapacity.Should().Be(1500);
+    }
+
+    [Fact]
     public async Task Handle_Should_Allow_CommercialPartner_Without_Tenants()
     {
         var userId = Guid.NewGuid();
@@ -202,6 +255,23 @@ public class LoginCommandHandlerTests : IDisposable
     private sealed class FakeJwtService : IJwtService
     {
         public string GenerateToken(User user, Tenant tenant, UserRole role) => "token";
+        public string GeneratePartnerToken(User user) => "partner-token";
+    }
+
+    private sealed class CapturingJwtService : IJwtService
+    {
+        public IReadOnlyList<string> LastGeneratedTenantModules { get; private set; } = [];
+        public string? LastGeneratedHeadTier { get; private set; }
+        public int LastGeneratedCapacity { get; private set; }
+
+        public string GenerateToken(User user, Tenant tenant, UserRole role = UserRole.Admin)
+        {
+            LastGeneratedTenantModules = tenant.GetSubscribedModuleKeys();
+            LastGeneratedHeadTier = tenant.HeadTierCode;
+            LastGeneratedCapacity = tenant.Capacity;
+            return "token";
+        }
+
         public string GeneratePartnerToken(User user) => "partner-token";
     }
 

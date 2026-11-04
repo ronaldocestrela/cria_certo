@@ -50,6 +50,8 @@ public class RefreshTokenCommandHandlerTests : IDisposable
             Status = "Active",
             SubscribedPlan = "Enterprise"
         };
+        tenant.SetHeadTier(PlanCapacityLimits.Tier3000);
+        tenant.SetSubscribedModules(["Cows", "Breeding", "Sanitary", "Analytics"]);
 
         var user = new User
         {
@@ -71,6 +73,7 @@ public class RefreshTokenCommandHandlerTests : IDisposable
         _dbContext.Users.Add(user);
         _dbContext.UserTenants.Add(userTenant);
         await _dbContext.SaveChangesAsync();
+        _dbContext.ChangeTracker.Clear();
 
         var handler = new RefreshTokenCommandHandler(_dbContext, _jwtService);
         var command = new RefreshTokenCommand(user.Id, tenant.Id);
@@ -85,6 +88,7 @@ public class RefreshTokenCommandHandlerTests : IDisposable
         result.Value.TenantId.Should().Be(tenant.Id);
         result.Value.SubscribedPlan.Should().Be("Enterprise");
         result.Value.Role.Should().Be(UserRole.Admin.ToString());
+        _jwtService.LastSubscribedModules.Should().BeEquivalentTo(["Cows", "Breeding", "Sanitary", "Analytics"]);
     }
 
     [Fact]
@@ -188,8 +192,11 @@ public class RefreshTokenCommandHandlerTests : IDisposable
 
     private sealed class FakeJwtService : IJwtService
     {
+        public IReadOnlyList<string> LastSubscribedModules { get; private set; } = [];
+
         public string GenerateToken(User user, Tenant tenant, UserRole role = UserRole.Admin)
         {
+            LastSubscribedModules = tenant.GetSubscribedModuleKeys();
             return $"refreshed-jwt-token-{tenant.SubscribedPlan}";
         }
 

@@ -44,6 +44,7 @@ Commands and queries requiring subscription validation are decorated with the `[
 ```
 
 - **Functional Results**: To avoid control-flow exceptions, blocked queries/commands return a standard failed `Result` or `Result<T>` with code `License.AccessDenied`.
+- **Modular Self-Service Context (`ITenantContext` - 2.1)**: `ITenantContext` exposes `IReadOnlySet<string> SubscribedModules`, `int HeadCapacity`, and `string? HeadTier`, resolved by `HttpContextTenantContext` from the JWT claims `subscribed_module` / `subscribed_modules`, `head_capacity`, and `head_tier`.
 
 ---
 

@@ -11,7 +11,10 @@ public record RefreshTokenResult(
     string Token,
     Guid TenantId,
     string SubscribedPlan,
-    string Role
+    string Role,
+    string HeadTierCode = PlanCapacityLimits.Tier500,
+    int HeadCapacity = PlanCapacityLimits.Tier500MaxHeads,
+    IReadOnlyList<string>? SubscribedModules = null
 );
 
 public record RefreshTokenRequest(
@@ -39,6 +42,7 @@ public sealed class RefreshTokenCommandHandler : IRequestHandler<RefreshTokenCom
         var user = await _dbContext.Users
             .Include(u => u.UserTenants)
             .ThenInclude(ut => ut.Tenant)
+            .ThenInclude(t => t!.SubscribedModules)
             .FirstOrDefaultAsync(u => u.Id == request.UserId, cancellationToken);
 
         if (user is null)
@@ -62,11 +66,21 @@ public sealed class RefreshTokenCommandHandler : IRequestHandler<RefreshTokenCom
 
         var newToken = _jwtService.GenerateToken(user, tenant, userTenant.Role);
 
+        var headTier = PlanCapacityLimits.IsValidHeadTierCode(tenant.HeadTierCode)
+            ? PlanCapacityLimits.NormalizeHeadTierCode(tenant.HeadTierCode)
+            : PlanCapacityLimits.Tier500;
+        var headCapacity = tenant.Capacity > 0
+            ? tenant.Capacity
+            : PlanCapacityLimits.GetMaxHeadsForTier(headTier);
+
         return Result.Success(new RefreshTokenResult(
             Token: newToken,
             TenantId: tenant.Id,
             SubscribedPlan: tenant.SubscribedPlan,
-            Role: userTenant.Role.ToString()
+            Role: userTenant.Role.ToString(),
+            HeadTierCode: headTier,
+            HeadCapacity: headCapacity,
+            SubscribedModules: tenant.GetSubscribedModuleKeys()
         ));
     }
 }

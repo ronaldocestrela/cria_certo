@@ -96,7 +96,7 @@ O módulo `Modules.Tenancy` gerencia as identidades dos usuários, organizaçõe
 | `POST` | `/api/auth/register` | Auto-cadastro de novo usuário (Sign-Up) | Não | `201 Created` (`UserDto`) |
 | `POST` | `/api/auth/forgot-password` | Solicitação de código/token para redefinição de senha | Não | `200 OK` (token) |
 | `POST` | `/api/auth/reset-password` | Redefinição de senha com token de verificação | Não | `200 OK` |
-| `POST` | `/api/v1/auth/refresh-token` | Renovação de claims e token JWT para o tenant ativo | Sim | `200 OK` (`RefreshTokenResult`) |
+| `POST` | `/api/v1/auth/refresh-token` | Renovação de claims e token JWT para o tenant ativo (`head_tier`, `head_capacity`, `subscribed_module`, `subscribed_modules`) | Sim | `200 OK` (`RefreshTokenResult`) |
 | `POST` | `/api/v1/tenancy/farms` | Onboarding de fazenda e associação automática de tenant | Não | `201 Created` (`AuthResponse`) |
 | `GET` | `/api/v1/tenancy/plans` | Consulta de planos de assinatura comercial | Não | `200 OK` (`List<SubscriptionPlanDto>`) |
 | `GET` | `/api/v1/tenancy/catalog` | Consulta do catálogo modular self-service (faixas de cabeças + módulos e preços por faixa) | Não | `200 OK` (`ModularSubscriptionCatalogDto`) |
@@ -204,6 +204,7 @@ Erros: `Tenant.InvalidTransition`, `Tenant.JustificationRequired`, `Tenant.Prote
 - `RegisterUserCommandHandlerTests`: Testes de criação bem-sucedida e rejeição de e-mail duplicado (`Error.Conflict`).
 - `RegisterUserCommandValidatorTests`: Testes de regras de validação cliente/servidor.
 - `CreateTenantCommandHandlerTests`: Testes de criação de fazenda, associação em `UserTenant` e geração de JWT.
+- `JwtServiceTests`: Testes unitários da emissão de claims modulares (`head_tier`, `head_capacity`, `subscribed_module` e `subscribed_modules`) e fallbacks para o módulo base `"Cows"` e faixa `TIER_500`.
 - `CreateTenantCommandValidatorTests`: Testes de validação de dados da fazenda e plano.
 - `ForgotPasswordCommandHandlerTests`: Testes de geração de token e expiração.
 - `ResetPasswordCommandHandlerTests`: Testes de alteração de senha e rejeição de tokens expirados/inválidos.

@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using CriaCerto.BuildingBlocks.Abstractions.Results;
 using CriaCerto.BuildingBlocks.Abstractions.Tenancy;
 using CriaCerto.BuildingBlocks.Infrastructure.Tenancy;
@@ -7,6 +8,7 @@ using CriaCerto.Modules.Tenancy.Application.Features.Login;
 using CriaCerto.Modules.Tenancy.Application.Features.SelectTenant;
 using CriaCerto.Modules.Tenancy.Infrastructure.Persistence;
 using FluentAssertions;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Data.SqlClient;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -253,5 +255,114 @@ public class TenancyTests : IDisposable
         // Assert
         result.IsFailure.Should().BeTrue();
         result.Error.Type.Should().Be(ErrorType.Unauthorized);
+    }
+
+    [Fact]
+    public async Task SelectTenant_ShouldLoadSubscribedModulesBeforeGeneratingJwt()
+    {
+        // Arrange
+        var user = new User
+        {
+            Id = Guid.NewGuid(),
+            Email = "modular@criacerto.com",
+            FullName = "Produtor Modular",
+            PasswordHash = PasswordHasher.Hash("Pass123!"),
+            IsEmailConfirmed = true
+        };
+        var tenant = new Tenant
+        {
+            Id = Guid.NewGuid(),
+            Name = "Fazenda Modular",
+            CNPJ = "12345678000195",
+            CnpjNormalized = "12345678000195",
+            State = "MT",
+            Type = "Corte"
+        };
+        tenant.SetHeadTier(PlanCapacityLimits.Tier3000);
+        tenant.SetSubscribedModules(["Cows", "Breeding", "Nutrition"]);
+
+        var userTenant = new UserTenant { UserId = user.Id, TenantId = tenant.Id, Role = UserRole.Admin };
+
+        _dbContext.Users.Add(user);
+        _dbContext.Tenants.Add(tenant);
+        _dbContext.UserTenants.Add(userTenant);
+        await _dbContext.SaveChangesAsync();
+        _dbContext.ChangeTracker.Clear();
+
+        IReadOnlyList<string>? capturedModules = null;
+        _jwtService
+            .GenerateToken(Arg.Any<User>(), Arg.Do<Tenant>(t => capturedModules = t.GetSubscribedModuleKeys()), Arg.Any<UserRole>())
+            .Returns("modular-jwt");
+
+        var handler = new SelectTenantCommandHandler(_dbContext, _jwtService);
+
+        // Act
+        var result = await handler.Handle(new SelectTenantCommand(user.Id, tenant.Id), CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.Should().BeTrue();
+        capturedModules.Should().NotBeNull();
+        capturedModules.Should().BeEquivalentTo(["Cows", "Breeding", "Nutrition"]);
+    }
+
+    [Fact]
+    public void HttpContextTenantContext_ShouldResolveSubscribedModulesAndHeadCapacityFromMultipleClaims()
+    {
+        // Arrange
+        var tenantId = Guid.NewGuid();
+        var claims = new[]
+        {
+            new Claim("TenantId", tenantId.ToString()),
+            new Claim("SubscribedPlan", "Pro"),
+            new Claim("head_tier", "TIER_1500"),
+            new Claim("head_capacity", "1500"),
+            new Claim("subscribed_module", "Cows"),
+            new Claim("subscribed_module", "Breeding"),
+            new Claim("subscribed_module", "Sanitary")
+        };
+
+        var httpContext = new DefaultHttpContext
+        {
+            User = new ClaimsPrincipal(new ClaimsIdentity(claims, "jwt"))
+        };
+        var accessor = Substitute.For<IHttpContextAccessor>();
+        accessor.HttpContext.Returns(httpContext);
+
+        var context = new HttpContextTenantContext(accessor);
+
+        // Act & Assert
+        context.TenantId.Should().Be(tenantId);
+        context.HeadTier.Should().Be("TIER_1500");
+        context.HeadCapacity.Should().Be(1500);
+        context.SubscribedModules.Should().BeEquivalentTo(["Cows", "Breeding", "Sanitary"]);
+        context.SubscribedModules.Contains("breeding").Should().BeTrue("SubscribedModules deve ser case-insensitive");
+    }
+
+    [Fact]
+    public void HttpContextTenantContext_ShouldResolveSubscribedModulesFromCompactCsvClaim()
+    {
+        // Arrange
+        var tenantId = Guid.NewGuid();
+        var claims = new[]
+        {
+            new Claim("TenantId", tenantId.ToString()),
+            new Claim("head_tier", "TIER_3000"),
+            new Claim("head_capacity", "3000"),
+            new Claim("subscribed_modules", "Cows,Growth,Nutrition")
+        };
+
+        var httpContext = new DefaultHttpContext
+        {
+            User = new ClaimsPrincipal(new ClaimsIdentity(claims, "jwt"))
+        };
+        var accessor = Substitute.For<IHttpContextAccessor>();
+        accessor.HttpContext.Returns(httpContext);
+
+        var context = new HttpContextTenantContext(accessor);
+
+        // Act & Assert
+        context.HeadTier.Should().Be("TIER_3000");
+        context.HeadCapacity.Should().Be(3000);
+        context.SubscribedModules.Should().BeEquivalentTo(["Cows", "Growth", "Nutrition"]);
     }
 }

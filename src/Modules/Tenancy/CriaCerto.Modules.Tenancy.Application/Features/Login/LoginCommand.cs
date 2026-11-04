@@ -32,6 +32,7 @@ public sealed class LoginCommandHandler : IRequestHandler<LoginCommand, Result<A
         var user = await _dbContext.Users
             .Include(u => u.UserTenants)
             .ThenInclude(ut => ut.Tenant)
+            .ThenInclude(t => t!.SubscribedModules)
             .FirstOrDefaultAsync(u => u.Email == normalizedEmail, cancellationToken);
 
         if (user == null || !PasswordHasher.Verify(request.Password, user.PasswordHash))

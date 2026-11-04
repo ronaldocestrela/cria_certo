@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
@@ -26,17 +27,35 @@ public sealed class JwtService : IJwtService
 
     public string GenerateToken(User user, Tenant tenant, UserRole role = UserRole.Admin)
     {
-        var claims = new[]
+        var headTier = PlanCapacityLimits.IsValidHeadTierCode(tenant.HeadTierCode)
+            ? PlanCapacityLimits.NormalizeHeadTierCode(tenant.HeadTierCode)
+            : PlanCapacityLimits.Tier500;
+
+        var headCapacity = tenant.Capacity > 0
+            ? tenant.Capacity
+            : PlanCapacityLimits.GetMaxHeadsForTier(headTier);
+
+        var subscribedModules = tenant.GetSubscribedModuleKeys();
+
+        var claims = new List<Claim>
         {
-            new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
-            new Claim(JwtRegisteredClaimNames.Email, user.Email),
-            new Claim("FullName", user.FullName),
-            new Claim("TenantId", tenant.Id.ToString()),
-            new Claim("TenantName", tenant.Name),
-            new Claim("SubscribedPlan", tenant.SubscribedPlan),
-            new Claim(ClaimTypes.Role, role.ToString()),
-            new Claim("Role", role.ToString())
+            new(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
+            new(JwtRegisteredClaimNames.Email, user.Email),
+            new("FullName", user.FullName),
+            new("TenantId", tenant.Id.ToString()),
+            new("TenantName", tenant.Name),
+            new("SubscribedPlan", tenant.SubscribedPlan),
+            new("head_tier", headTier),
+            new("head_capacity", headCapacity.ToString(CultureInfo.InvariantCulture)),
+            new("subscribed_modules", string.Join(",", subscribedModules)),
+            new(ClaimTypes.Role, role.ToString()),
+            new("Role", role.ToString())
         };
+
+        foreach (var moduleKey in subscribedModules)
+        {
+            claims.Add(new Claim("subscribed_module", moduleKey));
+        }
 
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_secretKey));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
