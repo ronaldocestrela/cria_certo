@@ -32,8 +32,43 @@ public class PlanCapacityLimitsTests
     [InlineData("Starter", 501, false)]
     [InlineData("Pro", 2500, true)]
     [InlineData("Enterprise", int.MaxValue, true)]
-    public void IsCapacityWithinPlan_Should_Use_Catalog_Limits(string plan, int capacity, bool expected)
+    [InlineData("TIER_500", 500, true)]
+    [InlineData("TIER_500", 501, false)]
+    [InlineData("TIER_1500", 1500, true)]
+    [InlineData("TIER_1500", 1501, false)]
+    [InlineData("TIER_3000", 3000, true)]
+    [InlineData("TIER_3000", 3001, false)]
+    [InlineData("TIER_5000_PLUS", 10000, true)]
+    public void IsCapacityWithinPlan_Should_Use_Catalog_Limits(string planOrTier, int capacity, bool expected)
     {
-        PlanCapacityLimits.IsCapacityWithinPlan(plan, capacity).Should().Be(expected);
+        PlanCapacityLimits.IsCapacityWithinPlan(planOrTier, capacity).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(HeadTierCapacityLimits.Tier500, 500, true)]
+    [InlineData(HeadTierCapacityLimits.Tier500, 501, false)]
+    [InlineData(HeadTierCapacityLimits.Tier1500, 1500, true)]
+    [InlineData(HeadTierCapacityLimits.Tier1500, 1501, false)]
+    [InlineData(HeadTierCapacityLimits.Tier3000, 3000, true)]
+    [InlineData(HeadTierCapacityLimits.Tier3000, 3001, false)]
+    [InlineData(HeadTierCapacityLimits.Tier5000Plus, 10000, true)]
+    [InlineData(HeadTierCapacityLimits.Tier5000Plus, 10001, false)]
+    public void HeadTierCapacityLimits_IsCapacityWithinTier_Should_Validate_Against_Tier_MaxHeads(
+        string tierCode,
+        int capacity,
+        bool expected)
+    {
+        HeadTierCapacityLimits.IsCapacityWithinTier(tierCode, capacity).Should().Be(expected);
+    }
+
+    [Fact]
+    public void HeadTierCapacityLimits_IsWithinTenantCapacity_Should_Consult_Tenant_Capacity_Directly()
+    {
+        var tenant = new Tenant { Id = Guid.NewGuid() };
+        tenant.SetHeadTier(HeadTierCapacityLimits.Tier1500).IsSuccess.Should().BeTrue();
+
+        HeadTierCapacityLimits.ResolveTenantCapacityLimit(tenant).Should().Be(1500);
+        HeadTierCapacityLimits.IsWithinTenantCapacity(tenant, 1500).Should().BeTrue();
+        HeadTierCapacityLimits.IsWithinTenantCapacity(tenant, 1501).Should().BeFalse();
     }
 }

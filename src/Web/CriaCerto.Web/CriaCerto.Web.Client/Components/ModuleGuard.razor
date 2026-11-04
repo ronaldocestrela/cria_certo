@@ -117,7 +117,8 @@ else
                 _subscribedPlan = planClaim;
             }
 
-            _hasAccess = ModuleLicenseChecker.HasAccess(_subscribedPlan, Module);
+            var subscribedModules = ExtractSubscribedModules(user);
+            _hasAccess = ModuleLicenseChecker.HasModuleAccess(subscribedModules, Module);
         }
         else
         {
@@ -125,6 +126,40 @@ else
         }
 
         _isChecking = false;
+    }
+
+    private static HashSet<string> ExtractSubscribedModules(ClaimsPrincipal user)
+    {
+        var modules = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Cows" };
+
+        foreach (var claim in user.FindAll("subscribed_module"))
+        {
+            var normalized = ModuleLicenseChecker.NormalizeModule(claim.Value);
+            if (!string.IsNullOrWhiteSpace(normalized))
+            {
+                modules.Add(normalized);
+            }
+        }
+
+        foreach (var csvClaim in user.FindAll("subscribed_modules"))
+        {
+            if (string.IsNullOrWhiteSpace(csvClaim.Value))
+            {
+                continue;
+            }
+
+            var parts = csvClaim.Value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            foreach (var part in parts)
+            {
+                var normalized = ModuleLicenseChecker.NormalizeModule(part);
+                if (!string.IsNullOrWhiteSpace(normalized))
+                {
+                    modules.Add(normalized);
+                }
+            }
+        }
+
+        return modules;
     }
 
     private void GoToSubscription()

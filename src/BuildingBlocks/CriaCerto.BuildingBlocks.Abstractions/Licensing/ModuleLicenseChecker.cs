@@ -23,13 +23,6 @@ public static class ModuleLicenseChecker
         { "Plano Enterprise", EnterprisePlan }
     };
 
-    private static readonly Dictionary<string, HashSet<string>> PlanAccess = new(StringComparer.OrdinalIgnoreCase)
-    {
-        { StarterPlan, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Breeding", "Calving", "Tenancy", "Cows" } },
-        { ProPlan, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Breeding", "Calving", "Tenancy", "Nutrition", "Growth", "Cows" } },
-        { EnterprisePlan, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Breeding", "Calving", "Tenancy", "Nutrition", "Sanitary", "Growth", "Feedlot", "Analytics", "Cows" } }
-    };
-
     public static string NormalizeModule(string? module)
     {
         if (string.IsNullOrWhiteSpace(module))
@@ -51,6 +44,11 @@ public static class ModuleLicenseChecker
             return "Cows";
         }
 
+        if (string.Equals(trimmed, "tenancy", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Tenancy";
+        }
+
         return trimmed;
     }
 
@@ -68,7 +66,6 @@ public static class ModuleLicenseChecker
             return canonical;
         }
 
-        // Heurística resiliente para variações de nomenclatura e versões de Backoffice (ex.: "Pro 2026.1")
         if (trimmed.Contains("Enterprise", StringComparison.OrdinalIgnoreCase))
         {
             return EnterprisePlan;
@@ -88,39 +85,33 @@ public static class ModuleLicenseChecker
         return trimmed;
     }
 
-    public static bool HasAccess(string? plan, string? module)
+    public static bool HasModuleAccess(IEnumerable<string>? subscribedModules, string? requiredModule)
     {
-        if (string.IsNullOrWhiteSpace(module))
+        var normalizedRequired = NormalizeModule(requiredModule);
+        if (string.IsNullOrWhiteSpace(normalizedRequired))
         {
             return false;
         }
 
-        var canonicalPlan = NormalizePlan(plan);
-
-        if (string.Equals(canonicalPlan, EnterprisePlan, StringComparison.OrdinalIgnoreCase))
+        // O módulo "Cows" (Plantel Base) e "Tenancy" são sempre permitidos para qualquer tenant ativo/em trial
+        if (string.Equals(normalizedRequired, "Cows", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(normalizedRequired, "Tenancy", StringComparison.OrdinalIgnoreCase))
         {
             return true;
         }
 
-        var normalizedModule = NormalizeModule(module);
-
-        if (!PlanAccess.TryGetValue(canonicalPlan, out var allowedModules))
+        if (subscribedModules is null)
         {
-            // Fallback resiliente para planos ou revisões não canônicas: garante acesso aos módulos base (Starter)
-            allowedModules = PlanAccess[StarterPlan];
+            return false;
         }
 
-        if (allowedModules.Contains(module) || allowedModules.Contains(normalizedModule))
+        foreach (var module in subscribedModules)
         {
-            return true;
-        }
-
-        // Módulo de Matrizes / Plantel (Cows) e Reprodução (Breeding) compartilham reciprocidade de acesso
-        if ((string.Equals(normalizedModule, "Cows", StringComparison.OrdinalIgnoreCase) ||
-             string.Equals(normalizedModule, "Breeding", StringComparison.OrdinalIgnoreCase)) &&
-            (allowedModules.Contains("Breeding") || allowedModules.Contains("Cows")))
-        {
-            return true;
+            var normalizedSubscribed = NormalizeModule(module);
+            if (string.Equals(normalizedSubscribed, normalizedRequired, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
         }
 
         return false;

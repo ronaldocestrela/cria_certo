@@ -43,7 +43,7 @@ public sealed class UpdateTenantProfileCommandValidator : AbstractValidator<Upda
 
                 if (tenant is null) return true;
 
-                var maxAllowed = PlanCapacityLimits.GetHeadCapacityLimit(tenant.SubscribedPlan);
+                var maxAllowed = HeadTierCapacityLimits.ResolveTenantCapacityLimit(tenant);
 
                 return cmd.Capacity <= maxAllowed;
             })

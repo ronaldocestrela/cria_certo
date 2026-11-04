@@ -27,14 +27,14 @@ public sealed class ModuleAccessBehavior<TRequest, TResponse> : IPipelineBehavio
             return await next();
         }
 
-        var plan = _tenantContext.SubscribedPlan ?? "Starter";
-        var module = requiresModuleAttr.ModuleName;
+        var requiredModule = ModuleLicenseChecker.NormalizeModule(requiresModuleAttr.ModuleName);
+        var subscribedModules = _tenantContext.SubscribedModules;
 
-        if (!ModuleLicenseChecker.HasAccess(plan, module))
+        if (!ModuleLicenseChecker.HasModuleAccess(subscribedModules, requiredModule))
         {
             var error = Error.Unauthorized(
-                "License.AccessDenied",
-                $"O módulo '{module}' não está disponível para o plano atual '{plan}' do tenant.");
+                "License.ModuleNotSubscribed",
+                $"O módulo '{requiredModule}' não está ativo na assinatura atual da fazenda. Adicione o módulo '{requiredModule}' à sua assinatura para acessar este recurso.");
 
             if (typeof(Result).IsAssignableFrom(typeof(TResponse)) && typeof(TResponse).IsClass)
             {
@@ -55,7 +55,7 @@ public sealed class ModuleAccessBehavior<TRequest, TResponse> : IPipelineBehavio
                 return (TResponse)failureNonGenericMethod.Invoke(null, new object[] { error })!;
             }
 
-            throw new System.UnauthorizedAccessException($"Acesso negado ao módulo '{module}'.");
+            throw new System.UnauthorizedAccessException($"Acesso negado ao módulo '{requiredModule}'.");
         }
 
         return await next();
