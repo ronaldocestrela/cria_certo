@@ -17,6 +17,12 @@ public sealed record StripeModularLineItem(
     string? PriceId = null
 );
 
+public sealed record StripeModularSubscriptionUpdateResult(
+    string SubscriptionId,
+    string Status,
+    IReadOnlyDictionary<string, string> SubscriptionItemIdsByModule
+);
+
 public interface IStripePaymentService
 {
     Task<string> GetOrCreateCustomerAsync(Tenant tenant, User user, CancellationToken cancellationToken = default);
@@ -60,5 +66,14 @@ public interface IStripePaymentService
     Task<Result> UpdateSubscriptionBillingDateAsync(
         string subscriptionId,
         DateTime newBillingDateUtc,
+        CancellationToken cancellationToken = default);
+
+    Task<Result<StripeModularSubscriptionUpdateResult>> UpdateModularSubscriptionAsync(
+        Tenant tenant,
+        string headTierCode,
+        int maxHeads,
+        IReadOnlyList<string> subscribedModules,
+        string billingCycle,
+        IReadOnlyList<StripeModularLineItem> lineItems,
         CancellationToken cancellationToken = default);
 }

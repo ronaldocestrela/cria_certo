@@ -1054,6 +1054,189 @@ public sealed class StripePaymentService : IStripePaymentService
         }
     }
 
+    public async Task<Result<StripeModularSubscriptionUpdateResult>> UpdateModularSubscriptionAsync(
+        Tenant tenant,
+        string headTierCode,
+        int maxHeads,
+        IReadOnlyList<string> subscribedModules,
+        string billingCycle,
+        IReadOnlyList<StripeModularLineItem> lineItems,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(tenant.StripeSubscriptionId))
+        {
+            return Result.Failure<StripeModularSubscriptionUpdateResult>(
+                Error.Validation("Stripe.SubscriptionRequired", "Tenant não possui assinatura Stripe ativa."));
+        }
+
+        var modulesCsv = string.Join(",", subscribedModules);
+        var metadata = new Dictionary<string, string>
+        {
+            { "TenantId", tenant.Id.ToString() },
+            { "tenant_id", tenant.Id.ToString() },
+            { "HeadTierCode", headTierCode },
+            { "head_tier", headTierCode },
+            { "max_heads", maxHeads.ToString() },
+            { "subscribed_modules", modulesCsv },
+            { "BillingCycle", billingCycle },
+            { "PlanId", headTierCode },
+            { "PlanName", headTierCode }
+        };
+
+        if (string.IsNullOrWhiteSpace(_options.ApiKey) && string.IsNullOrWhiteSpace(StripeConfiguration.ApiKey))
+        {
+            _logger.LogWarning("Chave Stripe não configurada. Simulando atualização modular da assinatura {SubscriptionId}.", tenant.StripeSubscriptionId);
+            var mockItemIds = lineItems.ToDictionary(
+                i => i.ModuleKey,
+                i => string.IsNullOrWhiteSpace(i.PriceId) ? $"si_mock_{i.ModuleKey.ToLowerInvariant()}" : $"si_{i.PriceId}",
+                StringComparer.OrdinalIgnoreCase);
+
+            return Result.Success(new StripeModularSubscriptionUpdateResult(
+                tenant.StripeSubscriptionId,
+                "active",
+                mockItemIds));
+        }
+
+        EnsureApiKeyConfigured();
+
+        try
+        {
+            var subscriptionService = new SubscriptionService();
+            var currentSub = await subscriptionService.GetAsync(tenant.StripeSubscriptionId, cancellationToken: cancellationToken);
+
+            var existingItems = currentSub.Items?.Data ?? new List<SubscriptionItem>();
+            var updateItems = new List<SubscriptionItemOptions>();
+            var targetModules = new HashSet<string>(subscribedModules, StringComparer.OrdinalIgnoreCase);
+
+            var localModulesByItemId = tenant.SubscribedModules
+                .Where(m => !string.IsNullOrWhiteSpace(m.StripeSubscriptionItemId))
+                .ToDictionary(m => m.StripeSubscriptionItemId!, m => m.ModuleKey, StringComparer.OrdinalIgnoreCase);
+
+            var matchedExistingItemIds = new HashSet<string>();
+            var resultItemIds = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var item in existingItems)
+            {
+                string? moduleKey = null;
+                if (localModulesByItemId.TryGetValue(item.Id, out var keyFromDb))
+                {
+                    moduleKey = keyFromDb;
+                }
+                else
+                {
+                    var lineMatch = lineItems.FirstOrDefault(li => string.Equals(li.PriceId, item.Price?.Id, StringComparison.OrdinalIgnoreCase));
+                    if (lineMatch != null)
+                    {
+                        moduleKey = lineMatch.ModuleKey;
+                    }
+                }
+
+                if (moduleKey != null && targetModules.Contains(moduleKey))
+                {
+                    matchedExistingItemIds.Add(item.Id);
+                    resultItemIds[moduleKey] = item.Id;
+
+                    var lineItem = lineItems.FirstOrDefault(li => string.Equals(li.ModuleKey, moduleKey, StringComparison.OrdinalIgnoreCase));
+                    var targetPriceId = lineItem?.PriceId;
+
+                    if (!string.IsNullOrWhiteSpace(targetPriceId) && !string.Equals(item.Price?.Id, targetPriceId, StringComparison.OrdinalIgnoreCase))
+                    {
+                        updateItems.Add(new SubscriptionItemOptions
+                        {
+                            Id = item.Id,
+                            Price = targetPriceId
+                        });
+                    }
+                }
+                else
+                {
+                    updateItems.Add(new SubscriptionItemOptions
+                    {
+                        Id = item.Id,
+                        Deleted = true
+                    });
+                }
+            }
+
+            foreach (var lineItem in lineItems)
+            {
+                if (resultItemIds.ContainsKey(lineItem.ModuleKey))
+                {
+                    continue;
+                }
+
+                var newItemOption = new SubscriptionItemOptions
+                {
+                    Quantity = 1
+                };
+
+                if (!string.IsNullOrWhiteSpace(lineItem.PriceId))
+                {
+                    newItemOption.Price = lineItem.PriceId;
+                }
+                else
+                {
+                    newItemOption.PriceData = new SubscriptionItemPriceDataOptions
+                    {
+                        Currency = "brl",
+                        UnitAmount = (long)(lineItem.UnitAmount * 100),
+                        Recurring = new SubscriptionItemPriceDataRecurringOptions
+                        {
+                            Interval = lineItem.Interval
+                        }
+                    };
+                }
+
+                updateItems.Add(newItemOption);
+            }
+
+            var updateOptions = new SubscriptionUpdateOptions
+            {
+                ProrationBehavior = "create_prorations",
+                Items = updateItems,
+                Metadata = metadata
+            };
+
+            var updatedSubscription = await subscriptionService.UpdateAsync(
+                tenant.StripeSubscriptionId,
+                updateOptions,
+                cancellationToken: cancellationToken);
+
+            if (updatedSubscription.Items?.Data != null)
+            {
+                foreach (var updatedItem in updatedSubscription.Items.Data)
+                {
+                    var lineMatch = lineItems.FirstOrDefault(li => string.Equals(li.PriceId, updatedItem.Price?.Id, StringComparison.OrdinalIgnoreCase));
+                    if (lineMatch != null)
+                    {
+                        resultItemIds[lineMatch.ModuleKey] = updatedItem.Id;
+                    }
+                }
+            }
+
+            _logger.LogInformation(
+                "Assinatura Stripe {SubscriptionId} atualizada com sucesso para tenant {TenantId}. Faixa: {TierCode}, Módulos: {Modules}",
+                tenant.StripeSubscriptionId, tenant.Id, headTierCode, modulesCsv);
+
+            return Result.Success(new StripeModularSubscriptionUpdateResult(
+                updatedSubscription.Id,
+                updatedSubscription.Status,
+                resultItemIds));
+        }
+        catch (StripeException ex)
+        {
+            _logger.LogError(ex, "Erro da API Stripe ao atualizar assinatura modular {SubscriptionId}: {Message}", tenant.StripeSubscriptionId, ex.Message);
+            return Result.Failure<StripeModularSubscriptionUpdateResult>(
+                Error.Failure("Stripe.UpdateFailed", $"Falha ao atualizar assinatura no Stripe: {ex.Message}"));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Erro inesperado ao atualizar assinatura modular {SubscriptionId}.", tenant.StripeSubscriptionId);
+            return Result.Failure<StripeModularSubscriptionUpdateResult>(
+                Error.Failure("Stripe.UnexpectedError", $"Erro inesperado ao sincronizar com Stripe: {ex.Message}"));
+        }
+    }
+
     private async Task HandleChargeRefundedAsync(
         Stripe.Charge charge,
         CancellationToken cancellationToken)

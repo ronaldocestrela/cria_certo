@@ -144,8 +144,18 @@ public sealed class Tenant
             }
         }
 
-        SubscribedModules.Clear();
-        SubscribedModules.AddRange(updatedList);
+        // Remove módulos que não estão mais presentes no conjunto alvo
+        SubscribedModules.RemoveAll(m => !normalizedSet.Contains(m.ModuleKey));
+
+        // Adiciona apenas os novos módulos criados à coleção rastreada
+        foreach (var item in updatedList)
+        {
+            if (!existingByKey.ContainsKey(item.ModuleKey))
+            {
+                SubscribedModules.Add(item);
+            }
+        }
+
         UpdatedAtUtc = DateTime.UtcNow;
         return Result.Success();
     }

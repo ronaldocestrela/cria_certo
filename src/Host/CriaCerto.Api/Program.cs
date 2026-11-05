@@ -70,6 +70,7 @@ using CriaCerto.Modules.Tenancy.Application.Features.GetSubscriptionPlans;
 using CriaCerto.Modules.Tenancy.Application.Features.GetTenantProfile;
 using CriaCerto.Modules.Tenancy.Application.Features.UpdateTenantProfile;
 using CriaCerto.Modules.Tenancy.Application.Features.SubscriptionCheckout;
+using CriaCerto.Modules.Tenancy.Application.Features.UpdateModularSubscription;
 using CriaCerto.Modules.Tenancy.Application.Features.SubscriptionPortal;
 using CriaCerto.Modules.Tenancy.Application.Features.ProcessStripeWebhook;
 using CriaCerto.Modules.Tenancy.Application.Features.GetProductionUnits;
@@ -2361,6 +2362,30 @@ app.MapPost("/api/v1/tenancy/subscription/portal", async (CreatePortalSessionReq
     }
 
     var command = new CreatePortalSessionCommand(request.TenantId, userId, request.ReturnUrl);
+    var result = await sender.Send(command);
+    return ToHttpResult(result);
+}).RequireAuthorization().WithTags("Tenancy Subscription");
+
+app.MapPost("/api/v1/tenancy/subscription/update-modular", async (UpdateModularSubscriptionRequest request, System.Security.Claims.ClaimsPrincipal userClaims, ISender sender) =>
+{
+    var sub = userClaims.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value 
+           ?? userClaims.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value 
+           ?? userClaims.FindFirst("sub")?.Value
+           ?? userClaims.FindFirst("UserId")?.Value;
+
+    if (!Guid.TryParse(sub, out var userId))
+    {
+        return Results.Unauthorized();
+    }
+
+    var command = new UpdateModularSubscriptionCommand(
+        request.TenantId,
+        userId,
+        request.HeadTierCode,
+        request.SelectedModules,
+        request.BillingCycle ?? "monthly",
+        request.AllowGracePeriod);
+
     var result = await sender.Send(command);
     return ToHttpResult(result);
 }).RequireAuthorization().WithTags("Tenancy Subscription");

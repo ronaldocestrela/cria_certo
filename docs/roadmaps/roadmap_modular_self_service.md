@@ -211,12 +211,19 @@ Adaptar o serviço de pagamentos para criar e atualizar assinaturas compostas po
   - Suporte a multi-item e metadata canônica no `IStripePaymentService.CreateModularCheckoutSessionAsync` e `StripePaymentService`.
   - Bateria de testes de unidade cobrindo inclusão compulsória de `"Cows"`, teto de cabeças por faixa, montagem de itens, precificação anual e rejeição de faixas/módulos inválidos em `SubscriptionBillingAuthorizationTests` e `SubscriptionCommandValidatorsTests`.
 
-#### 3.2. Adição/Remoção Self-Service de Módulos e Mudança de Faixa (`UpdateModularSubscriptionCommand`)
+#### 3.2. Adição/Remoção Self-Service de Módulos e Mudança de Faixa (`UpdateModularSubscriptionCommand`) [x]
 * Para clientes que **já possuem** assinatura ativa no Stripe (`StripeSubscriptionId != null`):
   * Permitir adicionar um módulo novo, remover um módulo ou alterar a faixa de cabeças sem precisar digitar cartão novamente.
   * Utilizar `SubscriptionService.UpdateAsync` do Stripe atualizando os `SubscriptionItems` com `ProrationBehavior = "create_prorations"`.
   * **Regra de Downgrade (Remoção de Módulo ou Redução de Faixa):**
-    * Se o cliente tentar reduzir para uma faixa menor que seu rebanho atual, aplicar a regra de bloqueio preventivo ou *Grace Period* de 14 dias já existente em `TenantSubscription`.
+    * Se o cliente tentar reduzir para uma faixa menor que seu rebanho atual, aplicar a regra de bloqueio preventivo (`License.HeadCapacityExceeded`) ou iniciar o *Grace Period* de 14 dias (`SubscriptionActionType.DowngradeGracePeriodStarted`) caso o parâmetro `AllowGracePeriod = true` seja informado.
+* **Implementação Concluída:**
+  - Criação do comando `UpdateModularSubscriptionCommand` e validador `UpdateModularSubscriptionCommandValidator` em `Tenancy.Application.Features.UpdateModularSubscription`.
+  - Abstração e implementação de gateway em `IStripePaymentService.UpdateModularSubscriptionAsync` e `StripePaymentService` com rateio proporcional via `create_prorations`, exclusão de itens órfãos e mapeamento multi-item no Stripe.
+  - Regra de negócio de downgrade com salvaguarda de capacidade e suporte a Grace Period de 14 dias (`GracePeriodActive`).
+  - Atualização atômica das tabelas `Tenants`, `TenantSubscribedModules` e `TenantSubscriptionHistories`, com emissão de novo token JWT atualizado.
+  - Endpoint seguro publicado no Host API: `POST /api/v1/tenancy/subscription/update-modular`.
+  - Bateria exaustiva de testes de unidade cobrindo RBAC, pré-condição de subscrição ativa, preservação de `"Cows"`, upgrade e downgrade, bloqueio de capacidade e ativação de Grace Period em `SubscriptionBillingAuthorizationTests` e `SubscriptionCommandValidatorsTests`.
 
 #### 3.3. Processamento de Webhooks (`ProcessStripeWebhookCommand`)
 * **`checkout.session.completed` / `invoice.paid` / `customer.subscription.updated`:**
