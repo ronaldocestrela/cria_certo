@@ -184,7 +184,7 @@ Desacoplar a autorização de módulos da antiga string `SubscribedPlan` e passa
 
 Adaptar o serviço de pagamentos para criar e atualizar assinaturas compostas por múltiplos itens (1 item para o Plantel na faixa X + N itens para os módulos adicionais na faixa X).
 
-#### 3.1. Checkout de Nova Assinatura (`CreateCheckoutSessionCommand`)
+#### 3.1. Checkout de Nova Assinatura (`CreateCheckoutSessionCommand`) [x]
 * **Novo Contrato de Request:**
   ```csharp
   public sealed record CreateCheckoutSessionRequest(
@@ -198,13 +198,18 @@ Adaptar o serviço de pagamentos para criar e atualizar assinaturas compostas po
   ```
 * **Regras de Negócio no Handler:**
   * Garantir que o módulo `"Cows"` (Plantel) esteja sempre incluído na lista.
-  * Validar se a quantidade atual de cabeças ativas da fazenda (`currentHeadCount`) é menor ou igual ao `MaxHeads` da `HeadTierCode` escolhida. Se a fazenda tiver 700 cabeças, impedir a contratação da `TIER_500`.
+  * Validar se a quantidade atual de cabeças ativas da fazenda (`currentHeadCount`) é menor ou igual ao `MaxHeads` da `HeadTierCode` escolhida via `ITenantActiveHerdCounter`. Se a fazenda tiver 700 cabeças, impedir a contratação da `TIER_500` retornando `License.HeadCapacityExceeded`.
   * Montar a lista de `SessionLineItemOptions` no Stripe (cada módulo selecionado entra como um item da assinatura com o preço correspondente àquela faixa e ciclo).
   * Gravar nos `Metadata` da Subscription e da Session:
     * `tenant_id`: `tenant.Id`
     * `head_tier`: `TIER_1500`
     * `max_heads`: `1500`
     * `subscribed_modules`: `"Cows,Breeding,Sanitary"`
+    * `PlanId` e `BillingCycle` para retrocompatibilidade.
+* **Implementação Concluída:**
+  - Abstração desacoplada `ITenantActiveHerdCounter` em `Tenancy.Application.Abstractions`, com implementação base `DefaultTenantActiveHerdCounter` e implementação composta no Host `CompositeActiveHerdCounter`.
+  - Suporte a multi-item e metadata canônica no `IStripePaymentService.CreateModularCheckoutSessionAsync` e `StripePaymentService`.
+  - Bateria de testes de unidade cobrindo inclusão compulsória de `"Cows"`, teto de cabeças por faixa, montagem de itens, precificação anual e rejeição de faixas/módulos inválidos em `SubscriptionBillingAuthorizationTests` e `SubscriptionCommandValidatorsTests`.
 
 #### 3.2. Adição/Remoção Self-Service de Módulos e Mudança de Faixa (`UpdateModularSubscriptionCommand`)
 * Para clientes que **já possuem** assinatura ativa no Stripe (`StripeSubscriptionId != null`):

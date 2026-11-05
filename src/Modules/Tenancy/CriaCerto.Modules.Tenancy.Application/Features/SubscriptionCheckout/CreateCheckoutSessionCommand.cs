@@ -4,6 +4,7 @@ using CriaCerto.Modules.Tenancy.Application.Abstractions;
 using CriaCerto.Modules.Tenancy.Application.Domain;
 using CriaCerto.Modules.Tenancy.Application.Domain.Errors;
 using CriaCerto.Modules.Tenancy.Application.Features.GetSubscriptionPlans;
+using CriaCerto.Modules.Tenancy.Application.Services;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -11,20 +12,64 @@ namespace CriaCerto.Modules.Tenancy.Application.Features.SubscriptionCheckout;
 
 public sealed record CreateCheckoutSessionRequest(
     Guid TenantId,
-    string PlanId,
+    string HeadTierCode = "",
+    List<string>? SelectedModules = null,
     string BillingCycle = "monthly",
     string? SuccessUrl = null,
-    string? CancelUrl = null
+    string? CancelUrl = null,
+    string? PlanId = null
 );
 
-public sealed record CreateCheckoutSessionCommand(
-    Guid TenantId,
-    Guid UserId,
-    string PlanId,
-    string BillingCycle = "monthly",
-    string? SuccessUrl = null,
-    string? CancelUrl = null
-) : IRequest<Result<CheckoutSessionResult>>;
+public sealed record CreateCheckoutSessionCommand : IRequest<Result<CheckoutSessionResult>>
+{
+    public Guid TenantId { get; init; }
+    public Guid UserId { get; init; }
+    public string HeadTierCode { get; init; } = string.Empty;
+    public IReadOnlyList<string>? SelectedModules { get; init; }
+    public string BillingCycle { get; init; } = "monthly";
+    public string? SuccessUrl { get; init; }
+    public string? CancelUrl { get; init; }
+    public string? PlanId { get; init; }
+
+    public CreateCheckoutSessionCommand() { }
+
+    public CreateCheckoutSessionCommand(
+        Guid TenantId,
+        Guid UserId,
+        string HeadTierCode,
+        IReadOnlyList<string>? SelectedModules,
+        string BillingCycle = "monthly",
+        string? SuccessUrl = null,
+        string? CancelUrl = null,
+        string? PlanId = null)
+    {
+        this.TenantId = TenantId;
+        this.UserId = UserId;
+        this.HeadTierCode = HeadTierCode;
+        this.SelectedModules = SelectedModules;
+        this.BillingCycle = BillingCycle;
+        this.SuccessUrl = SuccessUrl;
+        this.CancelUrl = CancelUrl;
+        this.PlanId = PlanId ?? HeadTierCode;
+    }
+
+    public CreateCheckoutSessionCommand(
+        Guid TenantId,
+        Guid UserId,
+        string PlanId,
+        string BillingCycle = "monthly",
+        string? SuccessUrl = null,
+        string? CancelUrl = null)
+    {
+        this.TenantId = TenantId;
+        this.UserId = UserId;
+        this.HeadTierCode = PlanId;
+        this.PlanId = PlanId;
+        this.BillingCycle = BillingCycle;
+        this.SuccessUrl = SuccessUrl;
+        this.CancelUrl = CancelUrl;
+    }
+}
 
 public sealed class CreateCheckoutSessionCommandHandler : IRequestHandler<CreateCheckoutSessionCommand, Result<CheckoutSessionResult>>
 {
@@ -32,17 +77,20 @@ public sealed class CreateCheckoutSessionCommandHandler : IRequestHandler<Create
     private readonly IStripePaymentService _stripePaymentService;
     private readonly ISender _sender;
     private readonly ISubscriptionUrlValidator _urlValidator;
+    private readonly ITenantActiveHerdCounter _activeHerdCounter;
 
     public CreateCheckoutSessionCommandHandler(
         ITenancyDbContext dbContext,
         IStripePaymentService stripePaymentService,
         ISender sender,
-        ISubscriptionUrlValidator urlValidator)
+        ISubscriptionUrlValidator urlValidator,
+        ITenantActiveHerdCounter? activeHerdCounter = null)
     {
         _dbContext = dbContext;
         _stripePaymentService = stripePaymentService;
         _sender = sender;
         _urlValidator = urlValidator;
+        _activeHerdCounter = activeHerdCounter ?? new DefaultTenantActiveHerdCounter(dbContext);
     }
 
     public async Task<Result<CheckoutSessionResult>> Handle(CreateCheckoutSessionCommand request, CancellationToken cancellationToken)
@@ -85,34 +133,136 @@ public sealed class CreateCheckoutSessionCommandHandler : IRequestHandler<Create
             return Result.Failure<CheckoutSessionResult>(TenancyErrors.ActiveSubscriptionExists);
         }
 
-        // Consultar catálogo de planos para obter valores e identificadores de preço
-        var plansResult = await _sender.Send(new GetSubscriptionPlansQuery(), cancellationToken);
-        var plans = plansResult.IsSuccess ? plansResult.Value : new List<SubscriptionPlanDto>();
+        // 1. Resolução da Faixa de Cabeças (HeadTierCode) e Tradução de Planos Legados
+        string rawTierOrPlan = !string.IsNullOrWhiteSpace(request.HeadTierCode)
+            ? request.HeadTierCode
+            : request.PlanId ?? string.Empty;
 
-        var canonicalPlan = ModuleLicenseChecker.NormalizePlan(request.PlanId);
+        string headTierCode;
+        string? canonicalPlanId = null;
+        string? planName = null;
+        IReadOnlyList<string>? defaultModules = null;
 
-        var selectedPlan = plans.FirstOrDefault(p =>
-            string.Equals(p.PlanId, request.PlanId, StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(p.Name, request.PlanId, StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(p.PlanId, canonicalPlan, StringComparison.OrdinalIgnoreCase));
+        if (HeadTierCapacityLimits.IsValidHeadTierCode(rawTierOrPlan))
+        {
+            headTierCode = HeadTierCapacityLimits.NormalizeHeadTierCode(rawTierOrPlan);
+            canonicalPlanId = headTierCode;
+            planName = headTierCode;
+        }
+        else
+        {
+            var canonicalPlan = ModuleLicenseChecker.NormalizePlan(rawTierOrPlan);
+            canonicalPlanId = canonicalPlan;
+            switch (canonicalPlan.ToUpperInvariant())
+            {
+                case "STARTER":
+                    headTierCode = HeadTierCapacityLimits.Tier500;
+                    planName = "Plano Starter";
+                    defaultModules = ["Cows", "Breeding", "Calving"];
+                    break;
+                case "PRO":
+                    headTierCode = HeadTierCapacityLimits.Tier3000;
+                    planName = "Plano Pro";
+                    defaultModules = ["Cows", "Breeding", "Calving", "Growth", "Nutrition", "Sanitary"];
+                    break;
+                case "ENTERPRISE":
+                    headTierCode = HeadTierCapacityLimits.Tier5000Plus;
+                    planName = "Plano Enterprise";
+                    defaultModules = ["Cows", "Breeding", "Calving", "Growth", "Nutrition", "Sanitary", "Analytics"];
+                    break;
+                default:
+                    if (HeadTierCapacityLimits.IsValidHeadTierCode(canonicalPlan))
+                    {
+                        headTierCode = HeadTierCapacityLimits.NormalizeHeadTierCode(canonicalPlan);
+                        canonicalPlanId = headTierCode;
+                        planName = headTierCode;
+                    }
+                    else
+                    {
+                        return Result.Failure<CheckoutSessionResult>(TenancyErrors.InvalidHeadTierCode);
+                    }
+                    break;
+            }
+        }
 
-        string canonicalPlanId = selectedPlan?.PlanId ?? canonicalPlan;
-        string planName = selectedPlan?.Name ?? canonicalPlanId;
+        // 2. Normalização dos Módulos Selecionados e Garantia de Inclusão Compulsória de "Cows"
+        var normalizedModules = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            HeadTierCapacityLimits.CoreModuleKey // Módulo "Cows" (Plantel) é SEMPRE obrigatório
+        };
+
+        var requestedModules = request.SelectedModules is { Count: > 0 }
+            ? request.SelectedModules
+            : (defaultModules ?? [HeadTierCapacityLimits.CoreModuleKey]);
+
+        foreach (var rawModule in requestedModules)
+        {
+            if (string.IsNullOrWhiteSpace(rawModule))
+            {
+                continue;
+            }
+
+            var canonicalModule = HeadTierCapacityLimits.NormalizeCommercialModuleKey(rawModule);
+            if (canonicalModule is null)
+            {
+                return Result.Failure<CheckoutSessionResult>(TenancyErrors.InvalidModuleKey);
+            }
+
+            normalizedModules.Add(canonicalModule);
+        }
+
+        // 3. Validação de Capacidade Ativa do Rebanho (currentHeadCount <= MaxHeads da Faixa)
+        int maxHeads = HeadTierCapacityLimits.GetMaxHeadsForTier(headTierCode);
+        int currentHeadCount = await _activeHerdCounter.GetActiveHeadCountAsync(tenant.Id, cancellationToken);
+
+        if (currentHeadCount > maxHeads)
+        {
+            return Result.Failure<CheckoutSessionResult>(
+                Error.Validation(
+                    "License.HeadCapacityExceeded",
+                    $"A quantidade atual de {currentHeadCount} cabeças ativas excede a capacidade máxima de {maxHeads} cabeças da faixa {headTierCode}. Selecione uma faixa de cabeças compatível com o rebanho da fazenda."));
+        }
+
+        // 4. Consulta do Catálogo Modular para Obtenção de Preços e Stripe Price IDs
+        var catalogResult = await _sender.Send(new GetModularSubscriptionCatalogQuery(), cancellationToken);
+        var catalog = catalogResult.IsSuccess ? catalogResult.Value : GetSubscriptionPlansQueryHandler.GetDefaultModularCatalog();
 
         bool isAnnual = string.Equals(request.BillingCycle, "annual", StringComparison.OrdinalIgnoreCase) ||
                         string.Equals(request.BillingCycle, "anual", StringComparison.OrdinalIgnoreCase);
 
-        decimal amount = selectedPlan != null
-            ? (isAnnual ? selectedPlan.AnnualPriceMonthly * 12 : selectedPlan.MonthlyPrice)
-            : (isAnnual ? 119m * 12 : 149m);
+        string interval = isAnnual ? "year" : "month";
+        string billingCycleCanonical = isAnnual ? "annual" : "monthly";
 
-        string? stripePriceId = isAnnual
-            ? selectedPlan?.StripePriceIdAnnual
-            : selectedPlan?.StripePriceIdMonthly;
+        var lineItems = new List<StripeModularLineItem>();
+        var orderedModules = PlanCapacityLimits.AllCommercialModules
+            .Where(normalizedModules.Contains)
+            .ToList();
 
-        string cycle = isAnnual ? "year" : "month";
+        foreach (var moduleKey in orderedModules)
+        {
+            var moduleOption = catalog.Modules.FirstOrDefault(m => string.Equals(m.ModuleKey, moduleKey, StringComparison.OrdinalIgnoreCase));
+            var priceOption = moduleOption?.PricesByTier.FirstOrDefault(p => string.Equals(p.TierCode, headTierCode, StringComparison.OrdinalIgnoreCase));
 
-        // Validação estrita e sanitização contra ataques de Open Redirect (CWE-601)
+            string moduleName = moduleOption?.Name ?? moduleKey;
+            decimal unitAmount = 0m;
+            string? priceId = null;
+
+            if (priceOption is not null)
+            {
+                unitAmount = isAnnual ? priceOption.AnnualPriceMonthly * 12 : priceOption.MonthlyPrice;
+                priceId = isAnnual ? priceOption.StripePriceIdAnnual : priceOption.StripePriceIdMonthly;
+            }
+
+            lineItems.Add(new StripeModularLineItem(
+                ModuleKey: moduleKey,
+                ModuleName: moduleName,
+                UnitAmount: unitAmount,
+                Interval: interval,
+                PriceId: priceId
+            ));
+        }
+
+        // 5. Validação Estrita e Sanitização contra Ataques de Open Redirect (CWE-601)
         var safeSuccessUrlResult = _urlValidator.ResolveSafeUrl(
             request.SuccessUrl,
             $"{_urlValidator.DefaultOrigin}/settings/subscription?success=true");
@@ -129,16 +279,19 @@ public sealed class CreateCheckoutSessionCommandHandler : IRequestHandler<Create
             return Result.Failure<CheckoutSessionResult>(safeCancelUrlResult.Error);
         }
 
-        var sessionResult = await _stripePaymentService.CreateCheckoutSessionAsync(
+        // 6. Criação da Sessão Multi-Item no Stripe
+        var sessionResult = await _stripePaymentService.CreateModularCheckoutSessionAsync(
             tenant,
             user,
-            canonicalPlanId,
-            planName,
-            cycle,
-            amount,
+            headTierCode,
+            maxHeads,
+            orderedModules,
+            billingCycleCanonical,
+            lineItems,
             safeSuccessUrlResult.Value,
             safeCancelUrlResult.Value,
-            stripePriceId,
+            canonicalPlanId,
+            planName,
             cancellationToken);
 
         return Result.Success(sessionResult);

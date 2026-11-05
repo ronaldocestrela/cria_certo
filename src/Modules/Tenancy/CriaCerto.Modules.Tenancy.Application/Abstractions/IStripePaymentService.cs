@@ -9,6 +9,14 @@ public sealed record CustomerPortalSessionResult(string Url);
 
 public sealed record StripeWebhookResult(bool Success, string? EventType, string? Message);
 
+public sealed record StripeModularLineItem(
+    string ModuleKey,
+    string ModuleName,
+    decimal UnitAmount,
+    string Interval,
+    string? PriceId = null
+);
+
 public interface IStripePaymentService
 {
     Task<string> GetOrCreateCustomerAsync(Tenant tenant, User user, CancellationToken cancellationToken = default);
@@ -23,6 +31,20 @@ public interface IStripePaymentService
         string successUrl,
         string cancelUrl,
         string? priceId = null,
+        CancellationToken cancellationToken = default);
+
+    Task<CheckoutSessionResult> CreateModularCheckoutSessionAsync(
+        Tenant tenant,
+        User user,
+        string headTierCode,
+        int maxHeads,
+        IReadOnlyList<string> subscribedModules,
+        string billingCycle,
+        IReadOnlyList<StripeModularLineItem> lineItems,
+        string successUrl,
+        string cancelUrl,
+        string? planId = null,
+        string? planName = null,
         CancellationToken cancellationToken = default);
 
     Task<CustomerPortalSessionResult> CreateCustomerPortalSessionAsync(

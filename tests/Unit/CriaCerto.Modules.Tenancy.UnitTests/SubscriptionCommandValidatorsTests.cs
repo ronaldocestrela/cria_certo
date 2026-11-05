@@ -36,6 +36,53 @@ public class SubscriptionCommandValidatorsTests
     }
 
     [Fact]
+    public void CheckoutValidator_Should_Pass_For_Valid_Modular_Command()
+    {
+        var command = new CreateCheckoutSessionCommand(
+            TenantId: Guid.NewGuid(),
+            UserId: Guid.NewGuid(),
+            HeadTierCode: "TIER_1500",
+            SelectedModules: ["Cows", "Breeding", "Sanitary"],
+            BillingCycle: "monthly"
+        );
+
+        var result = _checkoutValidator.Validate(command);
+        result.IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public void CheckoutValidator_Should_Fail_For_Invalid_Selected_Module()
+    {
+        var command = new CreateCheckoutSessionCommand(
+            TenantId: Guid.NewGuid(),
+            UserId: Guid.NewGuid(),
+            HeadTierCode: "TIER_1500",
+            SelectedModules: ["Cows", "ModuloInvalido"],
+            BillingCycle: "monthly"
+        );
+
+        var result = _checkoutValidator.Validate(command);
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e => e.PropertyName == nameof(CreateCheckoutSessionCommand.SelectedModules));
+    }
+
+    [Fact]
+    public void CheckoutValidator_Should_Fail_When_Both_HeadTierCode_And_PlanId_Are_Empty()
+    {
+        var command = new CreateCheckoutSessionCommand(
+            TenantId: Guid.NewGuid(),
+            UserId: Guid.NewGuid(),
+            HeadTierCode: "",
+            SelectedModules: ["Cows"],
+            BillingCycle: "monthly",
+            PlanId: null
+        );
+
+        var result = _checkoutValidator.Validate(command);
+        result.IsValid.Should().BeFalse();
+    }
+
+    [Fact]
     public void CheckoutValidator_Should_Pass_When_Urls_Are_Null_Or_Relative()
     {
         var command = new CreateCheckoutSessionCommand(
@@ -50,6 +97,7 @@ public class SubscriptionCommandValidatorsTests
         var result = _checkoutValidator.Validate(command);
         result.IsValid.Should().BeTrue();
     }
+
 
     [Theory]
     [InlineData("https://phishing.com/login", null)]

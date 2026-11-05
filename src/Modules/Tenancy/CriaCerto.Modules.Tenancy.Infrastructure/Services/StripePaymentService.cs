@@ -187,6 +187,98 @@ public sealed class StripePaymentService : IStripePaymentService
         return new CheckoutSessionResult(session.Id, session.Url);
     }
 
+    public async Task<CheckoutSessionResult> CreateModularCheckoutSessionAsync(
+        Tenant tenant,
+        User user,
+        string headTierCode,
+        int maxHeads,
+        IReadOnlyList<string> subscribedModules,
+        string billingCycle,
+        IReadOnlyList<StripeModularLineItem> lineItems,
+        string successUrl,
+        string cancelUrl,
+        string? planId = null,
+        string? planName = null,
+        CancellationToken cancellationToken = default)
+    {
+        var customerId = await GetOrCreateCustomerAsync(tenant, user, cancellationToken);
+
+        var finalSuccessUrl = !string.IsNullOrWhiteSpace(successUrl)
+            ? successUrl
+            : _options.SuccessUrl;
+
+        var finalCancelUrl = !string.IsNullOrWhiteSpace(cancelUrl)
+            ? cancelUrl
+            : _options.CancelUrl;
+
+        var modulesCsv = string.Join(",", subscribedModules);
+
+        var metadata = new Dictionary<string, string>
+        {
+            { "TenantId", tenant.Id.ToString() },
+            { "tenant_id", tenant.Id.ToString() },
+            { "HeadTierCode", headTierCode },
+            { "head_tier", headTierCode },
+            { "max_heads", maxHeads.ToString() },
+            { "subscribed_modules", modulesCsv },
+            { "BillingCycle", billingCycle },
+            { "PlanId", planId ?? headTierCode },
+            { "PlanName", planName ?? headTierCode }
+        };
+
+        var sessionOptions = new Stripe.Checkout.SessionCreateOptions
+        {
+            Customer = customerId,
+            Mode = "subscription",
+            SuccessUrl = finalSuccessUrl,
+            CancelUrl = finalCancelUrl,
+            Metadata = metadata,
+            SubscriptionData = new Stripe.Checkout.SessionSubscriptionDataOptions
+            {
+                Metadata = metadata
+            },
+            LineItems = lineItems.Select(item =>
+            {
+                if (!string.IsNullOrWhiteSpace(item.PriceId))
+                {
+                    return new SessionLineItemOptions
+                    {
+                        Price = item.PriceId,
+                        Quantity = 1
+                    };
+                }
+
+                return new SessionLineItemOptions
+                {
+                    PriceData = new SessionLineItemPriceDataOptions
+                    {
+                        Currency = "brl",
+                        UnitAmount = (long)(item.UnitAmount * 100),
+                        Recurring = new SessionLineItemPriceDataRecurringOptions
+                        {
+                            Interval = item.Interval
+                        },
+                        ProductData = new SessionLineItemPriceDataProductDataOptions
+                        {
+                            Name = $"CriaCerto {item.ModuleName} ({headTierCode})",
+                            Description = $"Módulo {item.ModuleName} na faixa {headTierCode} (até {maxHeads} cabeças)."
+                        }
+                    },
+                    Quantity = 1
+                };
+            }).ToList()
+        };
+
+        var sessionService = new Stripe.Checkout.SessionService();
+        var session = await sessionService.CreateAsync(sessionOptions, cancellationToken: cancellationToken);
+
+        _logger.LogInformation(
+            "Checkout Session modular criada no Stripe: {SessionId} para Tenant {TenantId} (Faixa {TierCode}, Módulos {Modules})",
+            session.Id, tenant.Id, headTierCode, modulesCsv);
+
+        return new CheckoutSessionResult(session.Id, session.Url);
+    }
+
     public async Task<CustomerPortalSessionResult> CreateCustomerPortalSessionAsync(
         Tenant tenant,
         string returnUrl,

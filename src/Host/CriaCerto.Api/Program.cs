@@ -210,6 +210,7 @@ builder.Services.AddReferralInfrastructure(builder.Configuration);
 builder.Services.AddScoped<IPartnerAccountProvisioner, PartnerAccountProvisioner>();
 builder.Services.AddScoped<IPlanCatalogLookupService, PlanCatalogLookupService>();
 builder.Services.AddScoped<ITenantInfoLookupService, TenantInfoLookupService>();
+builder.Services.AddScoped<CriaCerto.Modules.Tenancy.Application.Abstractions.ITenantActiveHerdCounter, CompositeActiveHerdCounter>();
 builder.Services.AddScoped<CriaCerto.Modules.Tenancy.Application.Abstractions.IPartnerRoleLookupService, PartnerRoleLookupService>();
 builder.Services.AddScoped<IReferralPaymentVerificationService, StripePaymentVerificationService>();
 builder.Services.AddScoped<IReferralAuditSink, ReferralBackofficeAuditSink>();
@@ -2336,10 +2337,12 @@ app.MapPost("/api/v1/tenancy/subscription/checkout", async (CreateCheckoutSessio
     var command = new CreateCheckoutSessionCommand(
         request.TenantId,
         userId,
-        request.PlanId,
+        string.IsNullOrWhiteSpace(request.HeadTierCode) ? (request.PlanId ?? "") : request.HeadTierCode,
+        request.SelectedModules,
         request.BillingCycle,
         request.SuccessUrl,
-        request.CancelUrl);
+        request.CancelUrl,
+        request.PlanId);
 
     var result = await sender.Send(command);
     return ToHttpResult(result);

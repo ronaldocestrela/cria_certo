@@ -119,4 +119,8 @@ public static class TenancyErrors
     public static readonly Error InvalidSubscribedModuleData = Error.Validation(
         "Tenant.InvalidSubscribedModuleData",
         "Os dados de ativação do módulo contratado são inválidos.");
+
+    public static readonly Error HeadCapacityExceededForTier = Error.Validation(
+        "Tenant.HeadCapacityExceededForTier",
+        "A quantidade de cabeças ativas da fazenda excede o limite máximo permitido para a faixa de cabeças selecionada.");
 }

@@ -294,6 +294,15 @@ public class UpdateTenantForAdminCommandHandlerTests : IDisposable
             CancellationToken cancellationToken = default) =>
             Task.FromResult(new CheckoutSessionResult("cs_test", "https://checkout.stripe.com/test"));
 
+        public Task<CheckoutSessionResult> CreateModularCheckoutSessionAsync(
+            Tenant tenant, User user, string headTierCode, int maxHeads,
+            IReadOnlyList<string> subscribedModules, string billingCycle,
+            IReadOnlyList<StripeModularLineItem> lineItems,
+            string successUrl, string cancelUrl,
+            string? planId = null, string? planName = null,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new CheckoutSessionResult("cs_test", "https://checkout.stripe.com/test"));
+
         public Task<CustomerPortalSessionResult> CreateCustomerPortalSessionAsync(
             Tenant tenant, string returnUrl, CancellationToken cancellationToken = default) =>
             Task.FromResult(new CustomerPortalSessionResult("https://billing.stripe.com/portal"));
