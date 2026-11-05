@@ -224,4 +224,137 @@ public class TenancyApiClientTests
         result.Success.Should().BeFalse();
         result.ErrorMessage.Should().Contain("único Administrador");
     }
+
+    [Fact]
+    public async Task GetModularCatalogAsync_WhenApiReturnsCatalog_ShouldReturnTiersAndModules()
+    {
+        // Arrange
+        string? requestedUri = null;
+        var mockCatalog = TenancyApiClient.GetDefaultModularCatalog();
+        var handler = new TestHttpMessageHandler(req =>
+        {
+            requestedUri = req.RequestUri!.PathAndQuery;
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = JsonContent.Create(mockCatalog)
+            };
+        });
+
+        var client = new HttpClient(handler) { BaseAddress = new Uri("https://api.criacerto.com.br/") };
+        var apiClient = new TenancyApiClient(client, _jsRuntime);
+
+        // Act
+        var catalog = await apiClient.GetModularCatalogAsync();
+
+        // Assert
+        requestedUri.Should().Be("/api/v1/tenancy/catalog");
+        catalog.Should().NotBeNull();
+        catalog.HeadTiers.Should().HaveCount(4);
+        catalog.Modules.Should().HaveCount(7);
+        catalog.Modules.Should().Contain(m => m.ModuleKey == "Cows" && m.IsCore);
+    }
+
+    [Fact]
+    public async Task CreateModularCheckoutAsync_WhenValid_ShouldPostToSubscriptionCheckout()
+    {
+        // Arrange
+        string? requestedUri = null;
+        string? requestBody = null;
+        var handler = new TestHttpMessageHandler(req =>
+        {
+            requestedUri = req.RequestUri!.PathAndQuery;
+            requestBody = req.Content!.ReadAsStringAsync().Result;
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = JsonContent.Create(new StripeCheckoutSessionResponse("cs_test_123", "https://checkout.stripe.com/pay/cs_test_123"))
+            };
+        });
+
+        var client = new HttpClient(handler) { BaseAddress = new Uri("https://api.criacerto.com.br/") };
+        var apiClient = new TenancyApiClient(client, _jsRuntime);
+        var tenantId = Guid.NewGuid();
+
+        // Act
+        var result = await apiClient.CreateModularCheckoutAsync(
+            tenantId,
+            "TIER_1500",
+            new List<string> { "Cows", "Breeding" },
+            "annual",
+            "https://app.criacerto.com.br/success",
+            "https://app.criacerto.com.br/cancel");
+
+        // Assert
+        requestedUri.Should().Be("/api/v1/tenancy/subscription/checkout");
+        result.Should().NotBeNull();
+        result!.SessionId.Should().Be("cs_test_123");
+        result.Url.Should().Be("https://checkout.stripe.com/pay/cs_test_123");
+        requestBody.Should().Contain("TIER_1500");
+        requestBody.Should().Contain("annual");
+        requestBody.Should().Contain("Cows");
+        requestBody.Should().Contain("Breeding");
+    }
+
+    [Fact]
+    public async Task UpdateModularSubscriptionAsync_WhenValid_ShouldCallEndpointAndReturnUpdatedProfile()
+    {
+        // Arrange
+        string? requestedUri = null;
+        var tenantId = Guid.NewGuid();
+        var profile = new TenantProfileModel(
+            tenantId,
+            "Fazenda Esperança",
+            "12.345.678/0001-90",
+            "Active",
+            "TIER_3000",
+            3000,
+            "MG",
+            "Uberaba",
+            "123456",
+            500m,
+            "Beef",
+            HeadTierCode: "TIER_3000",
+            SubscribedModules: new[] { "Cows", "Sanitary", "Nutrition" }
+        );
+
+        var updateResult = new UpdateModularSubscriptionResultModel(
+            tenantId,
+            "TIER_3000",
+            3000,
+            new[] { "Cows", "Sanitary", "Nutrition" },
+            "Active",
+            null,
+            null,
+            "token_jwt_atualizado",
+            profile
+        );
+
+        var handler = new TestHttpMessageHandler(req =>
+        {
+            requestedUri = req.RequestUri!.PathAndQuery;
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = JsonContent.Create(updateResult)
+            };
+        });
+
+        var client = new HttpClient(handler) { BaseAddress = new Uri("https://api.criacerto.com.br/") };
+        var apiClient = new TenancyApiClient(client, _jsRuntime);
+
+        var request = new UpdateModularSubscriptionRequestModel(
+            tenantId,
+            "TIER_3000",
+            new List<string> { "Cows", "Sanitary", "Nutrition" },
+            "monthly",
+            false);
+
+        // Act
+        var result = await apiClient.UpdateModularSubscriptionAsync(request);
+
+        // Assert
+        requestedUri.Should().Be("/api/v1/tenancy/subscription/update-modular");
+        result.Should().NotBeNull();
+        result!.HeadTierCode.Should().Be("TIER_3000");
+        result.SubscribedModules.Should().BeEquivalentTo(new[] { "Cows", "Sanitary", "Nutrition" });
+        result.Token.Should().Be("token_jwt_atualizado");
+    }
 }

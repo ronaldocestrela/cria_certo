@@ -1,0 +1,151 @@
+@using CriaCerto.Web.Client.Services
+
+<section style="background-color: white; border: 1px solid var(--cc-border); border-radius: 12px; padding: 1.5rem; margin-bottom: 2.5rem; box-shadow: var(--cc-shadow);">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.5rem;">
+        <div>
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+                <span class="material-symbols-outlined" style="color: var(--cc-primary); font-size: 22px;">dashboard_customize</span>
+                <h3 class="font-headline" style="margin: 0; font-size: 18px; font-weight: 700; color: var(--cc-ink);">
+                    2. Seleção de Módulos À La Carte
+                </h3>
+            </div>
+            <p style="margin: 0; font-size: 13px; color: var(--cc-ink-muted);">
+                Monte a combinação ideal para as operações da sua propriedade. Adicione ou remova módulos a qualquer momento.
+            </p>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span class="font-mono" style="font-size: 12px; font-weight: 700; color: var(--cc-primary); background: #dcfce7; padding: 0.3rem 0.75rem; border-radius: 99px; border: 1px solid #86efac;">
+                @(SelectedModuleKeys.Count) MÓDULOS SELECIONADOS
+            </span>
+        </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.25rem;">
+        @foreach (var module in Modules.OrderBy(m => m.SortOrder))
+        {
+            var isCore = module.IsCore;
+            var isSelected = isCore || SelectedModuleKeys.Contains(module.ModuleKey);
+            var isCurrentlyActive = ActiveTenantModules != null && ActiveTenantModules.Any(m => string.Equals(m, module.ModuleKey, StringComparison.OrdinalIgnoreCase));
+            var price = GetModulePrice(module);
+
+            <div @onclick="() => ToggleModule(module.ModuleKey, isCore)"
+                 style="position: relative; border-radius: 12px; padding: 1.25rem; transition: all 0.2s ease;
+                        background-color: @(isSelected ? (isCore ? "#f8fafc" : "#f0fdf4") : "white");
+                        border: @(isSelected ? (isCore ? "1.5px solid var(--cc-border)" : "2px solid var(--cc-primary)") : "1px solid var(--cc-border)");
+                        cursor: @(isCore || !IsAdmin ? "default" : "pointer");
+                        box-shadow: @(isSelected && !isCore ? "0 4px 14px rgba(0, 101, 44, 0.08)" : "none");
+                        display: flex; flex-direction: column; justify-content: space-between;">
+
+                <div>
+                    <!-- Header with badges -->
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem;">
+                        <div style="width: 42px; height: 42px; border-radius: 10px; display: flex; align-items: center; justify-content: center;
+                                    background-color: @(isSelected ? "var(--cc-primary)" : "#f1f5f9");
+                                    color: @(isSelected ? "white" : "var(--cc-secondary)");">
+                            <span class="material-symbols-outlined" style="font-size: 24px;">@module.Icon</span>
+                        </div>
+
+                        <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 0.35rem;">
+                            @if (isCore)
+                            {
+                                <span class="font-mono" style="font-size: 10px; font-weight: 700; background: #e2e8f0; color: #334155; padding: 0.2rem 0.5rem; border-radius: 4px; text-transform: uppercase;">
+                                    BASE OBRIGATÓRIO
+                                </span>
+                            }
+                            else if (isSelected)
+                            {
+                                <span class="font-mono" style="font-size: 10px; font-weight: 700; background: var(--cc-primary); color: white; padding: 0.2rem 0.5rem; border-radius: 4px; text-transform: uppercase;">
+                                    INCLUÍDO
+                                </span>
+                            }
+
+                            @if (isCurrentlyActive)
+                            {
+                                <span class="font-mono" style="font-size: 9px; font-weight: 700; background: #e0f2fe; color: #0369a1; padding: 0.15rem 0.45rem; border-radius: 4px; text-transform: uppercase;">
+                                    ATIVO NA ASSINATURA
+                                </span>
+                            }
+                        </div>
+                    </div>
+
+                    <!-- Title & Description -->
+                    <h4 style="margin: 0 0 0.35rem 0; font-size: 16px; font-weight: 700; color: var(--cc-ink);">
+                        @module.Name
+                    </h4>
+                    <p style="margin: 0 0 1rem 0; font-size: 13px; color: var(--cc-ink-muted); line-height: 1.4;">
+                        @module.Description
+                    </p>
+                </div>
+
+                <!-- Footer with Price and Checkbox Toggle -->
+                <div style="border-top: 1px solid #f1f5f9; padding-top: 0.75rem; display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <span style="font-size: 18px; font-weight: 700; color: var(--cc-ink);" class="font-mono">
+                            R$ @price.ToString("N2")
+                        </span>
+                        <span style="font-size: 12px; color: var(--cc-ink-muted);" class="font-mono">/mês</span>
+                    </div>
+
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        @if (isCore)
+                        {
+                            <span class="material-symbols-outlined" style="color: var(--cc-secondary); font-size: 20px;" title="Módulo base incluído permanentemente">
+                                lock
+                            </span>
+                        }
+                        else
+                        {
+                            <div style="width: 22px; height: 22px; border-radius: 6px; border: 2px solid @(isSelected ? "var(--cc-primary)" : "#cbd5e1");
+                                        display: flex; align-items: center; justify-content: center; background-color: @(isSelected ? "var(--cc-primary)" : "white");">
+                                @if (isSelected)
+                                {
+                                    <span class="material-symbols-outlined" style="color: white; font-size: 16px; font-weight: bold;">check</span>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</section>
+
+@code {
+    [Parameter]
+    public IReadOnlyList<CommercialModuleOptionModel> Modules { get; set; } = Array.Empty<CommercialModuleOptionModel>();
+
+    [Parameter]
+    public string SelectedTierCode { get; set; } = "TIER_500";
+
+    [Parameter]
+    public bool IsAnnual { get; set; } = false;
+
+    [Parameter]
+    public HashSet<string> SelectedModuleKeys { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    [Parameter]
+    public IReadOnlyList<string>? ActiveTenantModules { get; set; }
+
+    [Parameter]
+    public bool IsAdmin { get; set; } = true;
+
+    [Parameter]
+    public EventCallback<string> OnToggleModule { get; set; }
+
+    private decimal GetModulePrice(CommercialModuleOptionModel module)
+    {
+        var priceOption = module.PricesByTier.FirstOrDefault(p => string.Equals(p.TierCode, SelectedTierCode, StringComparison.OrdinalIgnoreCase))
+            ?? module.PricesByTier.FirstOrDefault();
+
+        if (priceOption == null) return 0m;
+        return IsAnnual ? priceOption.AnnualPriceMonthly : priceOption.MonthlyPrice;
+    }
+
+    private async Task ToggleModule(string moduleKey, bool isCore)
+    {
+        if (isCore || !IsAdmin) return;
+        await OnToggleModule.InvokeAsync(moduleKey);
+    }
+}
+

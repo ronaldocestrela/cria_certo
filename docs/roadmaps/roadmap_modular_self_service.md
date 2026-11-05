@@ -255,6 +255,13 @@ Reformular a experiência do produtor para tornar a montagem da assinatura intui
   * Lista os módulos selecionados + faixa de cabeças + chave Mensal/Anual (com destaque de economia anual).
   * Exibe o valor total e o custo médio por cabeça/mês (ex.: *"Apenas R$ 0,18 por cabeça/mês"* — excelente gatilho comercial para pecuaristas).
   * Botão de ação principal: **"Contratar Assinatura"** (redireciona ao Stripe Checkout) ou **"Atualizar Meus Módulos"** (atualiza a assinatura ativa com cálculo de *proration*).
+* **Implementação Concluída:**
+  - `HeadTierSelector.razor`: Seletor interativo por cards com cálculo em tempo real de ocupação do rebanho ativo e desabilitação preventiva de faixas menores que a lotação cadastrada.
+  - `ModuleSelectionGrid.razor`: Grid reativo com card base obrigatório (`Cows`) travado e cards add-on com recálculo instantâneo de preços por faixa e periodicidade (mensal/anual).
+  - `ModularCartStickyBar.razor`: Barra fixa no rodapé com resumo da configuração, chave de desconto anual (-15%), indicador comercial de ROI ($R\$/\text{cabeça/mês}$) e botões adaptativos ("Contratar Assinatura" via Stripe Checkout multi-item ou "Atualizar Meus Módulos" com proration imediato e renovação de JWT).
+  - `SubscriptionManagement.razor`: Integração orquestrada das 3 seções, tabela sanfonada de comparativo de escopo dos 7 módulos, salvaguarda de indisponibilidade e governança RBAC.
+  - `TenancyApiClient.cs`: Suporte a `GetModularCatalogAsync`, `GetDefaultModularCatalog()`, `CreateModularCheckoutAsync` e `UpdateModularSubscriptionAsync`.
+  - Suíte de testes unitários em `SubscriptionCalculatorTests.cs` e `TenancyApiClientTests.cs` cobrindo cálculo de carrinho, R$/cabeça/mês, bloqueio de faixas e inviolabilidade do módulo core.
 
 #### 4.2. Evolução do `ModuleGuard.razor` (Upsell Contextual de 1-Clique)
 * Quando o usuário clicar no menu em um módulo não contratado (ex.: *Nutrição*):

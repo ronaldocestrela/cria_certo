@@ -37,7 +37,60 @@ public sealed record TenantProfileModel(
     string? StripeCustomerId = null,
     string? StripeSubscriptionId = null,
     DateTime? CurrentPeriodEndUtc = null,
-    bool CancelAtPeriodEnd = false
+    bool CancelAtPeriodEnd = false,
+    string HeadTierCode = "TIER_500",
+    IReadOnlyList<string>? SubscribedModules = null
+);
+
+public sealed record HeadTierOptionModel(
+    string TierCode,
+    string DisplayName,
+    int MinHeads,
+    int MaxHeads,
+    int SortOrder
+);
+
+public sealed record ModuleTierPriceOptionModel(
+    string TierCode,
+    decimal MonthlyPrice,
+    decimal AnnualPriceMonthly,
+    string? StripePriceIdMonthly = null,
+    string? StripePriceIdAnnual = null
+);
+
+public sealed record CommercialModuleOptionModel(
+    string ModuleKey,
+    string Name,
+    string Description,
+    string Icon,
+    bool IsCore,
+    int SortOrder,
+    IReadOnlyList<ModuleTierPriceOptionModel> PricesByTier
+);
+
+public sealed record ModularSubscriptionCatalogModel(
+    IReadOnlyList<HeadTierOptionModel> HeadTiers,
+    IReadOnlyList<CommercialModuleOptionModel> Modules
+);
+
+public sealed record UpdateModularSubscriptionRequestModel(
+    Guid TenantId,
+    string? HeadTierCode = null,
+    List<string>? SelectedModules = null,
+    string? BillingCycle = "monthly",
+    bool AllowGracePeriod = false
+);
+
+public sealed record UpdateModularSubscriptionResultModel(
+    Guid TenantId,
+    string HeadTierCode,
+    int HeadCapacity,
+    IReadOnlyList<string> SubscribedModules,
+    string Status,
+    DateTime? GracePeriodEndsAtUtc,
+    string? PendingHeadTierCode,
+    string Token,
+    TenantProfileModel Profile
 );
 
 public sealed record StripeCheckoutSessionResponse(string SessionId, string Url);
@@ -202,6 +255,25 @@ public sealed class TenancyApiClient
         return GetFallbackPlans();
     }
 
+    public async Task<ModularSubscriptionCatalogModel> GetModularCatalogAsync(CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        try
+        {
+            var catalog = await _httpClient.GetFromJsonAsync<ModularSubscriptionCatalogModel>("/api/v1/tenancy/catalog", cancellationToken);
+            if (catalog is { HeadTiers.Count: > 0, Modules.Count: > 0 })
+            {
+                return catalog;
+            }
+        }
+        catch
+        {
+            // Fallback for offline or client render preview
+        }
+
+        return GetDefaultModularCatalog();
+    }
+
     public async Task<TenantProfileModel?> GetTenantProfileAsync(Guid tenantId, CancellationToken cancellationToken = default)
     {
         await AttachTokenAsync();
@@ -292,6 +364,72 @@ public sealed class TenancyApiClient
         }
 
         return null;
+    }
+
+    public async Task<StripeCheckoutSessionResponse?> CreateModularCheckoutAsync(
+        Guid tenantId,
+        string headTierCode,
+        List<string> selectedModules,
+        string billingCycle = "monthly",
+        string? successUrl = null,
+        string? cancelUrl = null,
+        CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        try
+        {
+            var payload = new
+            {
+                tenantId,
+                headTierCode,
+                selectedModules,
+                billingCycle,
+                successUrl,
+                cancelUrl
+            };
+            var response = await _httpClient.PostAsJsonAsync("/api/v1/tenancy/subscription/checkout", payload, cancellationToken);
+            if (response.IsSuccessStatusCode)
+            {
+                return await response.Content.ReadFromJsonAsync<StripeCheckoutSessionResponse>(cancellationToken: cancellationToken);
+            }
+
+            if (response.StatusCode == System.Net.HttpStatusCode.Conflict)
+            {
+                var errorObj = await response.Content.ReadFromJsonAsync<ApiErrorDto>(cancellationToken: cancellationToken);
+                throw new InvalidOperationException(errorObj?.Message ?? "A fazenda já possui uma assinatura ativa no Stripe. Alterações de módulos devem ser realizadas através do botão de atualização modular.");
+            }
+
+            var err = await response.Content.ReadFromJsonAsync<ApiErrorDto>(cancellationToken: cancellationToken);
+            if (!string.IsNullOrWhiteSpace(err?.Message))
+            {
+                throw new InvalidOperationException(err.Message);
+            }
+        }
+        catch (InvalidOperationException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException($"Falha de comunicação ao gerar checkout: {ex.Message}", ex);
+        }
+
+        return null;
+    }
+
+    public async Task<UpdateModularSubscriptionResultModel?> UpdateModularSubscriptionAsync(
+        UpdateModularSubscriptionRequestModel request,
+        CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.PostAsJsonAsync("/api/v1/tenancy/subscription/update-modular", request, cancellationToken);
+        if (response.IsSuccessStatusCode)
+        {
+            return await response.Content.ReadFromJsonAsync<UpdateModularSubscriptionResultModel>(cancellationToken: cancellationToken);
+        }
+
+        var errorObj = await response.Content.ReadFromJsonAsync<ApiErrorDto>(cancellationToken: cancellationToken);
+        throw new InvalidOperationException(errorObj?.Message ?? $"Erro ao atualizar assinatura modular (Código: {response.StatusCode}).");
     }
 
     public async Task<StripePortalSessionResponse?> CreateSubscriptionPortalAsync(
@@ -702,5 +840,71 @@ public sealed class TenancyApiClient
                 }
             )
         };
+    }
+
+    public static ModularSubscriptionCatalogModel GetDefaultModularCatalog()
+    {
+        var tiers = new List<HeadTierOptionModel>
+        {
+            new("TIER_500", "Até 500 cabeças", 1, 500, 1),
+            new("TIER_1500", "501 a 1.500 cabeças", 501, 1500, 2),
+            new("TIER_3000", "1.501 a 3.000 cabeças", 1501, 3000, 3),
+            new("TIER_5000_PLUS", "+3.000 cabeças", 3001, 10000, 4)
+        };
+
+        var modules = new List<CommercialModuleOptionModel>
+        {
+            new("Cows", "Gestão do Plantel", "Cadastro zootécnico individual, genealogia, rastreabilidade e histórico produtivo.", "pets", true, 1, new List<ModuleTierPriceOptionModel>
+            {
+                new("TIER_500", 149.00m, 126.65m),
+                new("TIER_1500", 229.00m, 194.65m),
+                new("TIER_3000", 349.00m, 296.65m),
+                new("TIER_5000_PLUS", 499.00m, 424.15m)
+            }),
+            new("Breeding", "Reprodução & IATF", "Protocolos de IATF, diagnóstico gestacional, touros e índices reprodutivos.", "favorite", false, 2, new List<ModuleTierPriceOptionModel>
+            {
+                new("TIER_500", 79.00m, 67.15m),
+                new("TIER_1500", 119.00m, 101.15m),
+                new("TIER_3000", 169.00m, 143.65m),
+                new("TIER_5000_PLUS", 239.00m, 203.15m)
+            }),
+            new("Calving", "Maternidade & Bezerreiro", "Nascimentos, desmama ajustada (P205), mortalidade pré-desmama e lotes de cria.", "child_care", false, 3, new List<ModuleTierPriceOptionModel>
+            {
+                new("TIER_500", 49.00m, 41.65m),
+                new("TIER_1500", 79.00m, 67.15m),
+                new("TIER_3000", 119.00m, 101.15m),
+                new("TIER_5000_PLUS", 169.00m, 143.65m)
+            }),
+            new("Growth", "Recria & Engorda", "Pesagens periódicas, Ganho de Peso Diário (GPD), UA/ha e taxa de lotação.", "trending_up", false, 4, new List<ModuleTierPriceOptionModel>
+            {
+                new("TIER_500", 69.00m, 58.65m),
+                new("TIER_1500", 99.00m, 84.15m),
+                new("TIER_3000", 149.00m, 126.65m),
+                new("TIER_5000_PLUS", 209.00m, 177.65m)
+            }),
+            new("Sanitary", "Sanitário & Carência", "Campanhas de vacinação, histórico sanitário e bloqueio por carência de abate.", "vaccines", false, 5, new List<ModuleTierPriceOptionModel>
+            {
+                new("TIER_500", 49.00m, 41.65m),
+                new("TIER_1500", 69.00m, 58.65m),
+                new("TIER_3000", 99.00m, 84.15m),
+                new("TIER_5000_PLUS", 139.00m, 118.15m)
+            }),
+            new("Nutrition", "Nutrição & Confinamento", "Trato diário, conversão alimentar, sal mineral, silagem e custo de ração.", "restaurant", false, 6, new List<ModuleTierPriceOptionModel>
+            {
+                new("TIER_500", 59.00m, 50.15m),
+                new("TIER_1500", 89.00m, 75.65m),
+                new("TIER_3000", 129.00m, 109.65m),
+                new("TIER_5000_PLUS", 179.00m, 152.15m)
+            }),
+            new("Analytics", "Zootecnia & Analytics", "Métricas avançadas, benchmarking zootécnico, custo da @ produzida e relatórios.", "insights", false, 7, new List<ModuleTierPriceOptionModel>
+            {
+                new("TIER_500", 69.00m, 58.65m),
+                new("TIER_1500", 99.00m, 84.15m),
+                new("TIER_3000", 149.00m, 126.65m),
+                new("TIER_5000_PLUS", 209.00m, 177.65m)
+            })
+        };
+
+        return new ModularSubscriptionCatalogModel(tiers, modules);
     }
 }

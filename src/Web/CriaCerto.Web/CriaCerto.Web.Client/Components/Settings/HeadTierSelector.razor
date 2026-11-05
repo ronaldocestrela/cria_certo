@@ -1,0 +1,142 @@
+@using CriaCerto.Web.Client.Services
+
+<section style="background-color: white; border: 1px solid var(--cc-border); border-radius: 12px; padding: 1.5rem; margin-bottom: 2rem; box-shadow: var(--cc-shadow);">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.25rem;">
+        <div>
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+                <span class="material-symbols-outlined" style="color: var(--cc-primary); font-size: 22px;">format_list_numbered</span>
+                <h3 class="font-headline" style="margin: 0; font-size: 18px; font-weight: 700; color: var(--cc-ink);">
+                    1. Faixa de Cabeças do Rebanho
+                </h3>
+            </div>
+            <p style="margin: 0; font-size: 13px; color: var(--cc-ink-muted);">
+                Selecione a capacidade compatível com seu plantel. Os valores dos módulos se ajustam dinamicamente à faixa escolhida.
+            </p>
+        </div>
+
+        <div style="background-color: var(--cc-canvas); border: 1px solid var(--cc-border); border-radius: 8px; padding: 0.6rem 1rem; display: flex; align-items: center; gap: 0.75rem;">
+            <div style="width: 34px; height: 34px; border-radius: 8px; background: #e0f2fe; color: #0284c7; display: flex; align-items: center; justify-content: center;">
+                <span class="material-symbols-outlined" style="font-size: 20px;">pets</span>
+            </div>
+            <div>
+                <div style="font-size: 11px; text-transform: uppercase; color: var(--cc-ink-muted); font-weight: 700;" class="font-mono">
+                    Rebanho Ativo Cadastrado
+                </div>
+                <div style="font-size: 15px; font-weight: 700; color: var(--cc-ink);" class="font-mono">
+                    @CurrentHeadCount.ToString("N0") cabeças
+                    @if (SelectedTier != null && SelectedTier.MaxHeads > 0)
+                    {
+                        var pct = Math.Min(100, (CurrentHeadCount * 100) / SelectedTier.MaxHeads);
+                        <span style="font-size: 12px; font-weight: 600; color: @(pct > 90 ? "#dc2626" : "var(--cc-primary)"); margin-left: 0.25rem;">
+                            (@pct% da cota)
+                        </span>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (SelectedTier != null && SelectedTier.MaxHeads > 0)
+    {
+        var pct = Math.Min(100, (CurrentHeadCount * 100) / SelectedTier.MaxHeads);
+        <div style="margin-bottom: 1.5rem;">
+            <div style="width: 100%; background-color: var(--cc-canvas); height: 8px; border-radius: 99px; overflow: hidden; display: flex; border: 1px solid var(--cc-border);">
+                <div style="width: @pct%; height: 100%; background-color: @(pct > 90 ? "#ba1a1a" : (pct > 75 ? "#ca8a04" : "var(--cc-primary)")); border-radius: 99px; transition: width 0.3s ease;"></div>
+            </div>
+        </div>
+    }
+
+    <!-- Segmented Cards Grid -->
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem;">
+        @foreach (var tier in Tiers.OrderBy(t => t.SortOrder))
+        {
+            var isSelected = string.Equals(SelectedTierCode, tier.TierCode, StringComparison.OrdinalIgnoreCase);
+            var isBlocked = CurrentHeadCount > 0 && tier.MaxHeads < CurrentHeadCount;
+
+            <div @onclick="() => SelectTier(tier.TierCode, isBlocked)"
+                 class="tier-card @(isSelected ? "selected" : "") @(isBlocked ? "blocked" : "")"
+                 style="position: relative; border-radius: 10px; padding: 1.25rem; transition: all 0.2s ease; cursor: @(isBlocked ? "not-allowed" : "pointer");
+                        background-color: @(isBlocked ? "#f8fafc" : (isSelected ? "#f0fdf4" : "white"));
+                        border: @(isSelected ? "2px solid var(--cc-primary)" : "1px solid var(--cc-border)");
+                        opacity: @(isBlocked ? "0.65" : "1");
+                        box-shadow: @(isSelected ? "0 4px 12px rgba(0, 101, 44, 0.12)" : "none");">
+
+                @if (isSelected)
+                {
+                    <span class="font-mono" style="position: absolute; top: -10px; right: 12px; background: var(--cc-primary); color: white; font-size: 10px; font-weight: 700; padding: 0.15rem 0.6rem; border-radius: 99px; text-transform: uppercase;">
+                        SELECIONADO
+                    </span>
+                }
+
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+                    <div style="width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center;
+                                background-color: @(isSelected ? "var(--cc-primary)" : "#f1f5f9");
+                                color: @(isSelected ? "white" : "var(--cc-secondary)");">
+                        <span class="material-symbols-outlined" style="font-size: 20px;">@GetTierIcon(tier.TierCode)</span>
+                    </div>
+
+                    <div style="width: 20px; height: 20px; border-radius: 50%; border: 2px solid @(isSelected ? "var(--cc-primary)" : "#cbd5e1");
+                                display: flex; align-items: center; justify-content: center; background-color: @(isSelected ? "var(--cc-primary)" : "white");">
+                        @if (isSelected)
+                        {
+                            <span class="material-symbols-outlined" style="color: white; font-size: 14px; font-weight: bold;">check</span>
+                        }
+                    </div>
+                </div>
+
+                <h4 style="margin: 0 0 0.25rem 0; font-size: 15px; font-weight: 700; color: var(--cc-ink);">
+                    @tier.DisplayName
+                </h4>
+
+                <p style="margin: 0; font-size: 12px; color: var(--cc-ink-muted);" class="font-mono">
+                    @(tier.MaxHeads >= 10000 ? "Plantel Ilimitado (+3.000)" : $"Até {tier.MaxHeads:N0} cabeças")
+                </p>
+
+                @if (isBlocked)
+                {
+                    <div style="margin-top: 0.75rem; padding: 0.4rem 0.5rem; border-radius: 6px; background-color: #fef2f2; border: 1px solid #fee2e2; display: flex; align-items: center; gap: 0.35rem; color: #b91c1c; font-size: 11px;">
+                        <span class="material-symbols-outlined" style="font-size: 14px;">block</span>
+                        <span>Rebanho atual (@CurrentHeadCount) excede esta faixa</span>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+</section>
+
+@code {
+    [Parameter]
+    public IReadOnlyList<HeadTierOptionModel> Tiers { get; set; } = Array.Empty<HeadTierOptionModel>();
+
+    [Parameter]
+    public string SelectedTierCode { get; set; } = "TIER_500";
+
+    [Parameter]
+    public int CurrentHeadCount { get; set; } = 0;
+
+    [Parameter]
+    public bool IsAdmin { get; set; } = true;
+
+    [Parameter]
+    public EventCallback<string> OnTierSelected { get; set; }
+
+    private HeadTierOptionModel? SelectedTier =>
+        Tiers.FirstOrDefault(t => string.Equals(t.TierCode, SelectedTierCode, StringComparison.OrdinalIgnoreCase))
+        ?? Tiers.FirstOrDefault();
+
+    private async Task SelectTier(string tierCode, bool isBlocked)
+    {
+        if (isBlocked || !IsAdmin) return;
+        await OnTierSelected.InvokeAsync(tierCode);
+    }
+
+    private static string GetTierIcon(string tierCode) => tierCode.ToUpperInvariant() switch
+    {
+        "TIER_500" => "cottage",
+        "TIER_1500" => "agriculture",
+        "TIER_3000" => "domain",
+        "TIER_5000_PLUS" => "landscape",
+        _ => "domain"
+    };
+}
+
