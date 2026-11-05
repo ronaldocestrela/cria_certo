@@ -12,7 +12,10 @@ public sealed record PlanDiscountPolicyDto(
     decimal MaxDiscountCapPercentage,
     bool IsActive,
     bool HasConfiguredPolicy,
-    DateTime? CreatedAtUtc);
+    DateTime? CreatedAtUtc,
+    string? HeadTierCode = null,
+    DiscountPolicyScope Scope = DiscountPolicyScope.HeadTier,
+    string Category = "HeadTier");
 
 public sealed record ConfigurePlanDiscountPolicyRequest(
     DiscountType DiscountType,

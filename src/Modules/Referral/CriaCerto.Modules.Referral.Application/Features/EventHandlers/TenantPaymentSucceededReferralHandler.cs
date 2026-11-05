@@ -2,6 +2,7 @@ using System.Text.Json;
 using CriaCerto.Modules.Referral.Application.Abstractions;
 using CriaCerto.Modules.Referral.Application.Domain;
 using CriaCerto.Modules.Referral.Application.Domain.Enums;
+using CriaCerto.Modules.Referral.Application.Domain.Services;
 using CriaCerto.Modules.Tenancy.Application.Events;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -15,6 +16,7 @@ public sealed class TenantPaymentSucceededReferralHandler : INotificationHandler
     private readonly IReferralPaymentVerificationService? _paymentVerificationService;
     private readonly ITenantInfoLookupService? _tenantLookupService;
     private readonly IReferralAuditSink? _auditSink;
+    private readonly IReferralDiscountPolicyResolver _policyResolver;
     private readonly ILogger<TenantPaymentSucceededReferralHandler>? _logger;
 
     public TenantPaymentSucceededReferralHandler(
@@ -22,12 +24,14 @@ public sealed class TenantPaymentSucceededReferralHandler : INotificationHandler
         IReferralPaymentVerificationService? paymentVerificationService = null,
         ITenantInfoLookupService? tenantLookupService = null,
         IReferralAuditSink? auditSink = null,
+        IReferralDiscountPolicyResolver? policyResolver = null,
         ILogger<TenantPaymentSucceededReferralHandler>? logger = null)
     {
         _dbContext = dbContext;
         _paymentVerificationService = paymentVerificationService;
         _tenantLookupService = tenantLookupService;
         _auditSink = auditSink;
+        _policyResolver = policyResolver ?? new Domain.Services.ReferralDiscountPolicyResolver();
         _logger = logger;
     }
 
@@ -197,14 +201,17 @@ public sealed class TenantPaymentSucceededReferralHandler : INotificationHandler
                     ? await _tenantLookupService.GetTenantSummaryAsync(participant.TenantId.Value, cancellationToken)
                     : null;
 
-                if (referrerTenant != null && !string.IsNullOrWhiteSpace(referrerTenant.PlanCode))
+                if (referrerTenant != null)
                 {
-                    var policy = await _dbContext.PlanDiscountPolicies
-                        .FirstOrDefaultAsync(p => p.PlanCode.ToUpper() == referrerTenant.PlanCode.ToUpper() && p.IsActive, cancellationToken);
+                    var policies = await _dbContext.PlanDiscountPolicies
+                        .Where(p => p.IsActive)
+                        .ToListAsync(cancellationToken);
+
+                    var policy = _policyResolver.Resolve(policies, referrerTenant.HeadTierCode, referrerTenant.PlanCode);
 
                     if (policy != null)
                     {
-                        var basePrice = referrerTenant.PlanBasePrice ?? notification.AmountPaid;
+                        var basePrice = referrerTenant.MonthlyTotalAmount ?? referrerTenant.PlanBasePrice ?? notification.AmountPaid;
                         var discountAmount = policy.CalculateDiscount(basePrice);
 
                         if (discountAmount > 0)
@@ -220,8 +227,8 @@ public sealed class TenantPaymentSucceededReferralHandler : INotificationHandler
                             {
                                 _dbContext.RewardLedger.Add(creditResult.Value);
                                 Referral.Application.Telemetry.ReferralTelemetry.RecordReward("InvoiceDiscountCredit", (double)creditResult.Value.GrossAmount, notification.Currency);
-                                _logger?.LogInformation("Crédito de desconto de R$ {Amount} gerado para Produtor {ParticipantId} (Atribuição {AttributionId}).",
-                                    discountAmount, participant.Id, attribution.Id);
+                                _logger?.LogInformation("Crédito de desconto de R$ {Amount} gerado para Produtor {ParticipantId} (Atribuição {AttributionId}, Faixa {HeadTierCode}, Escopo {Scope}).",
+                                    discountAmount, participant.Id, attribution.Id, referrerTenant.HeadTierCode, policy.DiscountScope);
                             }
                         }
                     }

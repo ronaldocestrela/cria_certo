@@ -22,6 +22,7 @@ public sealed class TenantInfoLookupService : ITenantInfoLookupService
     {
         var tenant = await _tenancyDbContext.Tenants
             .AsNoTracking()
+            .Include(t => t.SubscribedModules)
             .FirstOrDefaultAsync(t => t.Id == tenantId, cancellationToken);
 
         if (tenant == null)
@@ -43,6 +44,13 @@ public sealed class TenantInfoLookupService : ITenantInfoLookupService
                 .FirstOrDefault();
         }
 
+        var subscribedModuleKeys = tenant.SubscribedModules?.Select(m => m.ModuleKey).ToList() ?? new List<string>();
+        decimal? monthlyTotal = tenant.SubscribedModules?.Sum(m => m.MonthlyPriceSnapshot);
+        if (monthlyTotal == 0m || !monthlyTotal.HasValue)
+        {
+            monthlyTotal = planBasePrice;
+        }
+
         return new TenantSummaryDto(
             TenantId: tenant.Id,
             Name: tenant.Name,
@@ -54,7 +62,11 @@ public sealed class TenantInfoLookupService : ITenantInfoLookupService
             TechnicalOwnerEmail: tenant.TechnicalOwnerEmail,
             CommercialOwnerEmail: tenant.CommercialOwnerEmail,
             StripeCustomerId: tenant.StripeCustomerId,
-            PlanBasePrice: planBasePrice);
+            PlanBasePrice: planBasePrice,
+            HeadTierCode: tenant.HeadTierCode,
+            Capacity: tenant.Capacity,
+            SubscribedModules: subscribedModuleKeys,
+            MonthlyTotalAmount: monthlyTotal);
     }
 
     public async Task<IReadOnlyDictionary<Guid, TenantSummaryDto>> GetTenantSummariesAsync(
@@ -69,12 +81,16 @@ public sealed class TenantInfoLookupService : ITenantInfoLookupService
 
         var tenants = await _tenancyDbContext.Tenants
             .AsNoTracking()
+            .Include(t => t.SubscribedModules)
             .Where(t => idList.Contains(t.Id))
             .ToListAsync(cancellationToken);
 
         var result = new Dictionary<Guid, TenantSummaryDto>();
         foreach (var t in tenants)
         {
+            var moduleKeys = t.SubscribedModules?.Select(m => m.ModuleKey).ToList() ?? new List<string>();
+            var monthlySnapshot = t.SubscribedModules?.Sum(m => m.MonthlyPriceSnapshot);
+
             result[t.Id] = new TenantSummaryDto(
                 TenantId: t.Id,
                 Name: t.Name,
@@ -85,7 +101,11 @@ public sealed class TenantInfoLookupService : ITenantInfoLookupService
                 CnpjNormalized: t.CnpjNormalized,
                 TechnicalOwnerEmail: t.TechnicalOwnerEmail,
                 CommercialOwnerEmail: t.CommercialOwnerEmail,
-                StripeCustomerId: t.StripeCustomerId);
+                StripeCustomerId: t.StripeCustomerId,
+                HeadTierCode: t.HeadTierCode,
+                Capacity: t.Capacity,
+                SubscribedModules: moduleKeys,
+                MonthlyTotalAmount: monthlySnapshot > 0 ? monthlySnapshot : null);
         }
 
         return result;

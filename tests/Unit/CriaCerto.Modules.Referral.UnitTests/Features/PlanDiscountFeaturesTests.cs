@@ -229,4 +229,61 @@ public sealed class PlanDiscountFeaturesTests : IDisposable
         item2.PlanCode.Should().Be("PRO");
         item2.PlanName.Should().Be("Plano Pro");
     }
+
+    [Fact]
+    public async Task ConfigurePlanDiscountPolicy_ForHeadTier_ShouldSetScopeAndHeadTierCode()
+    {
+        // Arrange
+        var tierId = Guid.NewGuid();
+        var tierPlan = new PlanLookupDto(tierId, "TIER_500", "Faixa: Até 500 cabeças", false, Category: "HeadTier");
+        _planCatalogLookup.Plans = new List<PlanLookupDto> { tierPlan };
+
+        var handler = new ConfigurePlanDiscountPolicyCommandHandler(_dbContext, _planCatalogLookup);
+        var command = new ConfigurePlanDiscountPolicyCommand(
+            tierId,
+            DiscountType.Percentage,
+            12.5m,
+            90m);
+
+        // Act
+        var result = await handler.Handle(command, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.Should().BeTrue();
+        result.Value.PlanCode.Should().Be("TIER_500");
+        result.Value.HeadTierCode.Should().Be("TIER_500");
+        result.Value.Scope.Should().Be(DiscountPolicyScope.HeadTier);
+        result.Value.DiscountValue.Should().Be(12.5m);
+        result.Value.MaxDiscountCapPercentage.Should().Be(90m);
+    }
+
+    [Fact]
+    public async Task ConfigurePlanDiscountPolicy_ForGlobalDefault_ShouldSetGlobalDefaultScope()
+    {
+        // Arrange
+        var globalPlan = new PlanLookupDto(
+            PlanReferralDiscountPolicy.GlobalDefaultCatalogId,
+            PlanReferralDiscountPolicy.GlobalDefaultCode,
+            "Padrão Global (Todas as Faixas)",
+            false,
+            Category: "GlobalDefault");
+
+        _planCatalogLookup.Plans = new List<PlanLookupDto> { globalPlan };
+
+        var handler = new ConfigurePlanDiscountPolicyCommandHandler(_dbContext, _planCatalogLookup);
+        var command = new ConfigurePlanDiscountPolicyCommand(
+            PlanReferralDiscountPolicy.GlobalDefaultCatalogId,
+            DiscountType.Percentage,
+            10m,
+            100m);
+
+        // Act
+        var result = await handler.Handle(command, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.Should().BeTrue();
+        result.Value.PlanCode.Should().Be(PlanReferralDiscountPolicy.GlobalDefaultCode);
+        result.Value.Scope.Should().Be(DiscountPolicyScope.GlobalDefault);
+        result.Value.DiscountValue.Should().Be(10m);
+    }
 }

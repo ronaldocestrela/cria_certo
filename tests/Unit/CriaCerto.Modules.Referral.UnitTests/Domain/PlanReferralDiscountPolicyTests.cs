@@ -212,4 +212,97 @@ public class PlanReferralDiscountPolicyTests
         // Assert: Cap de 50% de R$ 300 = R$ 150
         discount.Should().Be(150m);
     }
+
+    [Fact]
+    public void CreateForHeadTier_ValidParameters_ShouldSucceed()
+    {
+        // Arrange
+        var headTierId = Guid.NewGuid();
+
+        // Act
+        var result = PlanReferralDiscountPolicy.CreateForHeadTier(
+            headTierId,
+            headTierCode: "TIER_500",
+            discountType: DiscountType.Percentage,
+            discountValue: 15m,
+            maxDiscountCapPercentage: 100m);
+
+        // Assert
+        result.IsSuccess.Should().BeTrue();
+        var policy = result.Value;
+        policy.HeadTierCatalogId.Should().Be(headTierId);
+        policy.HeadTierCode.Should().Be("TIER_500");
+        policy.PlanCode.Should().Be("TIER_500");
+        policy.DiscountScope.Should().Be(DiscountPolicyScope.HeadTier);
+        policy.DiscountType.Should().Be(DiscountType.Percentage);
+        policy.DiscountValue.Should().Be(15m);
+        policy.IsActive.Should().BeTrue();
+    }
+
+    [Fact]
+    public void CreateForHeadTier_InvalidHeadTierCode_ShouldFail()
+    {
+        // Arrange
+        var headTierId = Guid.NewGuid();
+
+        // Act
+        var result = PlanReferralDiscountPolicy.CreateForHeadTier(
+            headTierId,
+            headTierCode: "INVALID_TIER",
+            discountType: DiscountType.Percentage,
+            discountValue: 10m);
+
+        // Assert
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be(ReferralErrors.Policy.InvalidHeadTierCode.Code);
+    }
+
+    [Fact]
+    public void CreateForHeadTier_EmptyCatalogId_ShouldFail()
+    {
+        // Act
+        var result = PlanReferralDiscountPolicy.CreateForHeadTier(
+            Guid.Empty,
+            headTierCode: "TIER_500",
+            discountType: DiscountType.Percentage,
+            discountValue: 10m);
+
+        // Assert
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be(ReferralErrors.Policy.HeadTierCatalogRequired.Code);
+    }
+
+    [Fact]
+    public void CreateGlobalDefault_ValidParameters_ShouldSucceed()
+    {
+        // Act
+        var result = PlanReferralDiscountPolicy.CreateGlobalDefault(
+            DiscountType.Percentage,
+            discountValue: 10m,
+            maxDiscountCapPercentage: 100m);
+
+        // Assert
+        result.IsSuccess.Should().BeTrue();
+        var policy = result.Value;
+        policy.PlanCode.Should().Be(PlanReferralDiscountPolicy.GlobalDefaultCode);
+        policy.DiscountScope.Should().Be(DiscountPolicyScope.GlobalDefault);
+        policy.HeadTierCode.Should().BeNull();
+        policy.DiscountValue.Should().Be(10m);
+        policy.IsActive.Should().BeTrue();
+    }
+
+    [Fact]
+    public void CalculateDiscount_ModularInvoiceWithMultipleAddons_ShouldCalculateCorrectly()
+    {
+        // Arrange: Produtor na faixa TIER_500 (R$ 190 base) + Breeding (R$ 100) + Calving (R$ 90) = Total R$ 380
+        var modularInvoiceAmount = 380m;
+        var policy = PlanReferralDiscountPolicy.CreateForHeadTier(
+            Guid.NewGuid(), "TIER_500", DiscountType.Percentage, 10m, 100m).Value;
+
+        // Act: 2 amigos ativos = 20% de R$ 380 = R$ 76
+        var discount = policy.CalculateDiscount(modularInvoiceAmount, activeReferralsCount: 2);
+
+        // Assert
+        discount.Should().Be(76m);
+    }
 }

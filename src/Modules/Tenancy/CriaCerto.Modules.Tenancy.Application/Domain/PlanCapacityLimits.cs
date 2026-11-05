@@ -52,6 +52,18 @@ public static class HeadTierCapacityLimits
         return tierCode.Trim().ToUpperInvariant();
     }
 
+    public static string GetTierDisplayName(string? tierCode)
+    {
+        return tierCode?.Trim().ToUpperInvariant() switch
+        {
+            Tier500 => "Até 500 cabeças",
+            Tier1500 => "501 a 1.500 cabeças",
+            Tier3000 => "1.501 a 3.000 cabeças",
+            Tier5000Plus => "Acima de 3.000 cabeças",
+            _ => tierCode ?? string.Empty
+        };
+    }
+
     public static int GetMaxHeadsForTier(string? tierCode)
     {
         return tierCode?.Trim().ToUpperInvariant() switch
@@ -151,6 +163,9 @@ public static class PlanCapacityLimits
 
     public static string NormalizeHeadTierCode(string tierCode) =>
         HeadTierCapacityLimits.NormalizeHeadTierCode(tierCode);
+
+    public static string GetTierDisplayName(string? tierCode) =>
+        HeadTierCapacityLimits.GetTierDisplayName(tierCode);
 
     public static int GetMaxHeadsForTier(string? tierCode) =>
         HeadTierCapacityLimits.GetMaxHeadsForTier(tierCode);

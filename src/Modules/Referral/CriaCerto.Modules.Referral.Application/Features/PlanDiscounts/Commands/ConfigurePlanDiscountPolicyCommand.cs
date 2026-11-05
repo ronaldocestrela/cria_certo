@@ -116,7 +116,10 @@ public sealed class ConfigurePlanDiscountPolicyCommandHandler
             policy.MaxDiscountCapPercentage,
             policy.IsActive,
             HasConfiguredPolicy: true,
-            policy.CreatedAtUtc);
+            policy.CreatedAtUtc,
+            HeadTierCode: policy.HeadTierCode,
+            Scope: policy.DiscountScope,
+            Category: plan.Category);
 
         return Result.Success(dto);
     }

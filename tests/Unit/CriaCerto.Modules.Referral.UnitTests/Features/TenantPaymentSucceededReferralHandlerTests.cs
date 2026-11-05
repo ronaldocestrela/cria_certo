@@ -178,4 +178,75 @@ public sealed class TenantPaymentSucceededReferralHandlerTests : IDisposable
 
         rewards.Should().BeEmpty();
     }
+
+    [Fact]
+    public async Task Handle_WhenReferrerIsModularTenant_ShouldApplyDiscountBasedOnHeadTierAndMonthlyTotalAmount()
+    {
+        // Arrange
+        var referrerTenantId = Guid.NewGuid();
+        var referrerParticipant = ReferralProgramParticipant.CreateCustomer(referrerTenantId).Value;
+        var referralCode = ReferralCode.Create(referrerParticipant.Id, "FAZENDA-MODULAR").Value;
+        var payingTenantId = Guid.NewGuid();
+
+        var attribution = ReferralAttribution.Create(referralCode.Id, referrerParticipant.Id, payingTenantId).Value;
+
+        // Política específica para a faixa TIER_500: 15% de desconto por indicação
+        var tierPolicy = PlanReferralDiscountPolicy.CreateForHeadTier(
+            Guid.NewGuid(), "TIER_500", DiscountType.Percentage, 15m, 100m).Value;
+
+        _dbContext.Participants.Add(referrerParticipant);
+        _dbContext.ReferralCodes.Add(referralCode);
+        _dbContext.Attributions.Add(attribution);
+        _dbContext.PlanDiscountPolicies.Add(tierPolicy);
+        await _dbContext.SaveChangesAsync();
+
+        var tenantLookupMock = Substitute.For<ITenantInfoLookupService>();
+
+        // Tenant modular: faixa TIER_500, valor mensal total R$ 380,00 (módulos contratados)
+        tenantLookupMock.GetTenantSummaryAsync(referrerTenantId, Arg.Any<CancellationToken>())
+            .Returns(new TenantSummaryDto(
+                TenantId: referrerTenantId,
+                Name: "Fazenda Santa Fé",
+                TradeName: "Santa Fé Agro",
+                Status: "Active",
+                PlanCode: "TIER_500",
+                PlanName: "Faixa Até 500 cabeças",
+                StripeCustomerId: "cus_referrer_modular",
+                HeadTierCode: "TIER_500",
+                Capacity: 500,
+                SubscribedModules: new List<string> { "Cows", "Breeding", "Calving" },
+                MonthlyTotalAmount: 380m));
+
+        var handler = new TenantPaymentSucceededReferralHandler(
+            _dbContext,
+            tenantLookupService: tenantLookupMock);
+
+        var notification = new TenantPaymentSucceededIntegrationEvent(
+            TenantId: payingTenantId,
+            StripeCustomerId: "cus_paying_modular",
+            StripeInvoiceId: "in_mod_123",
+            StripePaymentMethodId: "pm_mod_123",
+            StripeCardFingerprint: "card_fp_mod",
+            AmountPaid: 250m,
+            Currency: "BRL",
+            PaymentDateUtc: DateTime.UtcNow
+        );
+
+        // Act
+        await handler.Handle(notification, CancellationToken.None);
+
+        // Assert
+        var reloadedAttr = await _dbContext.Attributions.FindAsync(attribution.Id);
+        reloadedAttr.Should().NotBeNull();
+        reloadedAttr!.Status.Should().Be(AttributionStatus.Converted);
+
+        var rewards = await _dbContext.RewardLedger
+            .Where(r => r.ReferralAttributionId == attribution.Id)
+            .ToListAsync();
+
+        rewards.Should().HaveCount(1);
+        // 15% de R$ 380,00 = R$ 57,00
+        rewards[0].GrossAmount.Should().Be(57.00m);
+        rewards[0].RewardType.Should().Be(RewardType.InvoiceDiscountCredit);
+    }
 }

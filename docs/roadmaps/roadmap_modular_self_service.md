@@ -288,9 +288,18 @@ Reformular a experiência do produtor para tornar a montagem da assinatura intui
 
 Ajustar os módulos satélites que antes dependiam dos códigos fixos `Starter`, `Pro` e `Enterprise`.
 
-#### 5.1. Programa de Indicação (`Modules.Referral`)
+#### 5.1. Programa de Indicação (`Modules.Referral`) - [CONCLUÍDO]
 * Antes, a política de descontos (`PlanReferralDiscountPolicy`) era vinculada ao `PlanCode` (`Starter/Pro/Enterprise`).
-* **Nova Regra:** Vincular a política de descontos de indicação à **Faixa de Cabeças (`HeadTierCode`)** ou a um percentual padrão sobre o valor total da fatura modular do cliente indicador (respeitando o teto configurado no Backoffice).
+* **Nova Regra Implementada:**
+  - Desacoplamento integral de `PlanReferralDiscountPolicy` com suporte a `DiscountPolicyScope` (`HeadTier`, `GlobalDefault`, `LegacyPlan`), `HeadTierCode` (`TIER_500`, `TIER_1500`, `TIER_3000`, `TIER_5000_PLUS`) e `HeadTierCatalogId`.
+  - Mecanismo de resolução hierárquica via `IReferralDiscountPolicyResolver` / `ReferralDiscountPolicyResolver`:
+    1. Faixa de Cabeças Específica (`HeadTierCode`).
+    2. Padrão Global (`GLOBAL_DEFAULT`) aplicando percentual sobre a fatura modular total.
+    3. Plano Legado (`PlanCode`).
+  - Base de cálculo do desconto atualizada para a fatura modular ativa (`MonthlyTotalAmount = sum(MonthlyPriceSnapshot)` de `TenantSubscribedModules`) do produtor indicador com teto estrito de 100% da assinatura.
+  - Abstração `TenantSummaryDto` enriquecida com `HeadTierCode`, `Capacity`, `SubscribedModules` e `MonthlyTotalAmount`.
+  - Console do Backoffice `/backoffice/referral/discount-policies` (`DiscountPoliciesManagement.razor`) atualizado com filtro categorizado (`HeadTier`, `GlobalDefault`, `LegacyPlan`) e badges visuais de escopo.
+  - Migration EF Core `20261105210000_Add_HeadTier_To_PlanDiscountPolicies` e suíte de testes com 213 testes unitários no módulo Referral.
 
 #### 5.2. Gestão de Tenants e Catálogo no Backoffice (`Modules.Backoffice`)
 * Atualizar `PlanCatalogManagement.razor` para gerenciar a **Matriz de Módulos x Faixas de Cabeças**.

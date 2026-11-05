@@ -200,4 +200,47 @@ public sealed class ReferralDbContextModelTests : IDisposable
             saved.PayoutRegisteredAtUtc.Should().NotBeNull();
         }
     }
+
+    [Fact]
+    public async Task CanPersistAndQuery_HeadTierPlanDiscountPolicy()
+    {
+        var tierId = Guid.NewGuid();
+        using (var context = new ReferralDbContext(_options))
+        {
+            await context.Database.EnsureCreatedAsync();
+
+            var tierPolicy = PlanReferralDiscountPolicy.CreateForHeadTier(
+                tierId,
+                headTierCode: "TIER_500",
+                discountType: DiscountType.Percentage,
+                discountValue: 12.5m,
+                maxDiscountCapPercentage: 90m).Value;
+
+            var globalPolicy = PlanReferralDiscountPolicy.CreateGlobalDefault(
+                discountType: DiscountType.Percentage,
+                discountValue: 10m).Value;
+
+            context.PlanDiscountPolicies.AddRange(tierPolicy, globalPolicy);
+            await context.SaveChangesAsync();
+        }
+
+        using (var context = new ReferralDbContext(_options))
+        {
+            var savedTier = await context.PlanDiscountPolicies
+                .FirstOrDefaultAsync(p => p.HeadTierCode == "TIER_500");
+
+            savedTier.Should().NotBeNull();
+            savedTier!.DiscountScope.Should().Be(DiscountPolicyScope.HeadTier);
+            savedTier.HeadTierCatalogId.Should().Be(tierId);
+            savedTier.DiscountValue.Should().Be(12.5m);
+            savedTier.MaxDiscountCapPercentage.Should().Be(90m);
+
+            var savedGlobal = await context.PlanDiscountPolicies
+                .FirstOrDefaultAsync(p => p.DiscountScope == DiscountPolicyScope.GlobalDefault);
+
+            savedGlobal.Should().NotBeNull();
+            savedGlobal!.PlanCode.Should().Be(PlanReferralDiscountPolicy.GlobalDefaultCode);
+            savedGlobal.DiscountValue.Should().Be(10m);
+        }
+    }
 }

@@ -50,21 +50,33 @@ public sealed class GetPlanDiscountPoliciesQueryHandler
                     policy.MaxDiscountCapPercentage,
                     policy.IsActive,
                     HasConfiguredPolicy: true,
-                    policy.CreatedAtUtc));
+                    policy.CreatedAtUtc,
+                    HeadTierCode: policy.HeadTierCode,
+                    Scope: policy.DiscountScope,
+                    Category: plan.Category));
             }
             else
             {
+                var defaultScope = plan.Category == "GlobalDefault"
+                    ? DiscountPolicyScope.GlobalDefault
+                    : plan.Category == "HeadTier"
+                        ? DiscountPolicyScope.HeadTier
+                        : DiscountPolicyScope.LegacyPlan;
+
                 result.Add(new PlanDiscountPolicyDto(
                     null,
                     plan.Id,
                     plan.Code,
                     plan.Name,
-                    DiscountType.FixedValue,
+                    DiscountType.Percentage,
                     DiscountValue: 0m,
                     MaxDiscountCapPercentage: 100m,
                     IsActive: false,
                     HasConfiguredPolicy: false,
-                    CreatedAtUtc: null));
+                    CreatedAtUtc: null,
+                    HeadTierCode: defaultScope == DiscountPolicyScope.HeadTier ? plan.Code : null,
+                    Scope: defaultScope,
+                    Category: plan.Category));
             }
         }
 
@@ -81,9 +93,12 @@ public sealed class GetPlanDiscountPoliciesQueryHandler
                 policy.MaxDiscountCapPercentage,
                 policy.IsActive,
                 HasConfiguredPolicy: true,
-                policy.CreatedAtUtc));
+                policy.CreatedAtUtc,
+                HeadTierCode: policy.HeadTierCode,
+                Scope: policy.DiscountScope,
+                Category: policy.DiscountScope.ToString()));
         }
 
-        return Result.Success<IReadOnlyList<PlanDiscountPolicyDto>>(result.OrderBy(p => p.PlanCode).ToList());
+        return Result.Success<IReadOnlyList<PlanDiscountPolicyDto>>(result.OrderBy(p => p.Category == "GlobalDefault" ? 0 : p.Category == "HeadTier" ? 1 : 2).ThenBy(p => p.PlanCode).ToList());
     }
 }
