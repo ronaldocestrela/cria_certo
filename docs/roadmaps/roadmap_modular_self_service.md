@@ -263,11 +263,16 @@ Reformular a experiência do produtor para tornar a montagem da assinatura intui
   - `TenancyApiClient.cs`: Suporte a `GetModularCatalogAsync`, `GetDefaultModularCatalog()`, `CreateModularCheckoutAsync` e `UpdateModularSubscriptionAsync`.
   - Suíte de testes unitários em `SubscriptionCalculatorTests.cs` e `TenancyApiClientTests.cs` cobrindo cálculo de carrinho, R$/cabeça/mês, bloqueio de faixas e inviolabilidade do módulo core.
 
-#### 4.2. Evolução do `ModuleGuard.razor` (Upsell Contextual de 1-Clique)
+#### 4.2. Evolução do `ModuleGuard.razor` (Upsell Contextual de 1-Clique) [CONCLUÍDO]
 * Quando o usuário clicar no menu em um módulo não contratado (ex.: *Nutrição*):
-  * Remover a menção aos antigos planos `Starter/Pro/Enterprise`.
-  * Exibir: **"Adicione o Módulo de Nutrição & Confinamento por + R$ XX,XX/mês (para sua faixa atual de até X cabeças)"**.
-  * Botão direto **"Adicionar Módulo à Minha Assinatura"** que abre o checkout/confirmação já com o módulo pré-selecionado.
+  * **Remoção de referências legadas:** Menções aos antigos planos `Starter/Pro/Enterprise` foram eliminadas das mensagens e badges do guard.
+  * **Upsell Contextual Dinâmico:** Exibe *"Adicione o Módulo de {Nome} por + R$ XX,XX/mês (para sua faixa atual de até X cabeças)"* calculado em tempo de execução via `ModuleGuardUpsellCalculator` a partir do catálogo modular e das claims `head_tier` e `head_capacity`.
+  * **Ativação Imediata de 1-Clique com Proration:**
+    - Para **Admin com Stripe Ativo:** Abre modal de confirmação transparente exibindo o proration no cartão cadastrado, invoca `UpdateModularSubscriptionAsync`, renova o JWT no cliente e destrava a tela na hora sem recarregar a página.
+    - Para **Admin em Trial / Sem Cartão:** Redireciona para `/settings/subscription?addModule={ModuleKey}` com o módulo pré-selecionado automaticamente no carrinho modular interativo.
+    - Para **Não-Admin:** Exibe banner informativo de governança RBAC.
+  * **Cobertura Protetora Integral:** Páginas satélites de Nutrição (`DailyTroughLog`, `PastureSupplementationLog`, `SiloStockManagement`), Sanidade (`SanitaryCampaigns`), Analytics (`ExecutiveDashboard`) e Manejo (`CurralWeighingFastInput`) protegidas com `<ModuleGuard Module="...">`.
+  * **Living Documentation & TDD:** Suíte com 25 testes unitários em `ModuleGuardUpsellTests.cs` garantindo precisão de precificação por faixa, textos do roadmap e inviolabilidade do módulo core `Cows`.
 
 #### 4.3. Atualização do `OnboardingWizard.razor` (`/onboarding`)
 * No passo de configuração da fazenda, permitir que o produtor informe sua faixa estimada de cabeças e marque quais áreas da pecuária ele deseja testar no período gratuito.

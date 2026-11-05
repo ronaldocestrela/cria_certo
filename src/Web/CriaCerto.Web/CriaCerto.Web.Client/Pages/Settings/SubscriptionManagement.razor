@@ -278,6 +278,9 @@
     [SupplyParameterFromQuery(Name = "canceled")]
     public bool? StripeCanceled { get; set; }
 
+    [SupplyParameterFromQuery(Name = "addModule")]
+    public string? AddModule { get; set; }
+
     private bool _stripeProcessed = false;
 
     private bool HasActiveStripeSubscription => _profile != null &&
@@ -351,6 +354,21 @@
                         _selectedModuleKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Cows", "Breeding" };
                     }
                     _selectedModuleKeys.Add("Cows");
+
+                    if (!string.IsNullOrWhiteSpace(AddModule))
+                    {
+                        var canonical = ModuleGuardUpsellCalculator.ResolveCommercialModuleKey(AddModule);
+                        if (!string.IsNullOrWhiteSpace(canonical))
+                        {
+                            _selectedModuleKeys.Add(canonical);
+                            if (string.IsNullOrEmpty(_message))
+                            {
+                                var readableName = ModuleGuardUpsellCalculator.GetReadableModuleName(canonical);
+                                _message = $"Módulo '{readableName}' pré-selecionado no seu carrinho modular.";
+                                _isSuccessMessage = true;
+                            }
+                        }
+                    }
                 }
 
                 // 2. Carrega Catálogo Modular
