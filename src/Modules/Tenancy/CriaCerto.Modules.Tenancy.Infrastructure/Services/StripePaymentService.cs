@@ -4,6 +4,7 @@ using CriaCerto.BuildingBlocks.Abstractions.Results;
 using CriaCerto.Modules.Tenancy.Application.Abstractions;
 using CriaCerto.Modules.Tenancy.Application.Domain;
 using CriaCerto.Modules.Tenancy.Application.Events;
+using CriaCerto.Modules.Tenancy.Application.Features.GetSubscriptionPlans;
 using CriaCerto.Modules.Tenancy.Application.Telemetry;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -21,17 +22,20 @@ public sealed class StripePaymentService : IStripePaymentService
     private readonly StripeOptions _options;
     private readonly ILogger<StripePaymentService> _logger;
     private readonly IPublisher? _publisher;
+    private readonly ISubscriptionPlansProvider? _plansProvider;
 
     public StripePaymentService(
         ITenancyDbContext dbContext,
         IOptions<StripeOptions> options,
         ILogger<StripePaymentService> logger,
-        IPublisher? publisher = null)
+        IPublisher? publisher = null,
+        ISubscriptionPlansProvider? plansProvider = null)
     {
         _dbContext = dbContext;
         _options = options.Value;
         _logger = logger;
         _publisher = publisher;
+        _plansProvider = plansProvider;
 
         if (!string.IsNullOrWhiteSpace(_options.ApiKey))
         {
@@ -517,12 +521,16 @@ public sealed class StripePaymentService : IStripePaymentService
         Tenant? tenant = null;
         if (Guid.TryParse(tenantIdStr, out var tenantId))
         {
-            tenant = await _dbContext.Tenants.FirstOrDefaultAsync(t => t.Id == tenantId, cancellationToken);
+            tenant = await _dbContext.Tenants
+                .Include(t => t.SubscribedModules)
+                .FirstOrDefaultAsync(t => t.Id == tenantId, cancellationToken);
         }
 
         if (tenant == null && !string.IsNullOrWhiteSpace(session.CustomerId))
         {
-            tenant = await _dbContext.Tenants.FirstOrDefaultAsync(t => t.StripeCustomerId == session.CustomerId, cancellationToken);
+            tenant = await _dbContext.Tenants
+                .Include(t => t.SubscribedModules)
+                .FirstOrDefaultAsync(t => t.StripeCustomerId == session.CustomerId, cancellationToken);
         }
 
         if (tenant == null)
@@ -559,20 +567,10 @@ public sealed class StripePaymentService : IStripePaymentService
 
         if (isPaymentConfirmed)
         {
-            if (!string.IsNullOrWhiteSpace(rawPlan))
-            {
-                var canonicalPlan = ModuleLicenseChecker.NormalizePlan(rawPlan);
-                tenant.SubscribedPlan = canonicalPlan;
-                AdjustTenantCapacityForPlan(tenant, canonicalPlan);
-            }
-
-            tenant.Status = "Active";
-            tenant.StatusReason = null;
-            tenant.StatusChangedAtUtc = DateTime.UtcNow;
-            tenant.UpdatedAtUtc = DateTime.UtcNow;
-
             // Sincronizar o período de vigência (CurrentPeriodEndUtc) da assinatura contratada
             DateTime? resolvedPeriodEndUtc = null;
+            List<SubscriptionItem>? subscriptionItems = null;
+
             if (!string.IsNullOrWhiteSpace(session.SubscriptionId))
             {
                 try
@@ -581,7 +579,8 @@ public sealed class StripePaymentService : IStripePaymentService
                     {
                         var subscriptionService = new SubscriptionService();
                         var stripeSubscription = await subscriptionService.GetAsync(session.SubscriptionId, cancellationToken: cancellationToken);
-                        var subItem = stripeSubscription?.Items?.Data?.FirstOrDefault();
+                        subscriptionItems = stripeSubscription?.Items?.Data;
+                        var subItem = subscriptionItems?.FirstOrDefault();
                         if (subItem?.CurrentPeriodEnd != null)
                         {
                             resolvedPeriodEndUtc = subItem.CurrentPeriodEnd;
@@ -609,13 +608,51 @@ public sealed class StripePaymentService : IStripePaymentService
                 tenant.CurrentPeriodEndUtc = isAnnual ? DateTime.UtcNow.AddYears(1) : DateTime.UtcNow.AddMonths(1);
             }
 
-            var history = TenantSubscriptionHistory.CreateFromStripeWebhook(
-                tenantId: tenant.Id,
-                actionType: SubscriptionActionType.NewSubscription,
-                justification: $"Assinatura ativada via Stripe Checkout (Sessão: {session.Id}, Plano: {tenant.SubscribedPlan}, Status: {session.PaymentStatus}, Período até {tenant.CurrentPeriodEndUtc:yyyy-MM-dd HH:mm:ss} UTC).",
-                snapshotHeadCount: tenant.Capacity
-            );
-            _dbContext.SubscriptionHistories.Add(history);
+            var modularInfo = await ResolveModularSubscriptionInfoAsync(session.Metadata, subscriptionItems, cancellationToken);
+
+            if (modularInfo.HeadTierCode != null || modularInfo.Modules != null)
+            {
+                var headTier = modularInfo.HeadTierCode ?? tenant.HeadTierCode ?? PlanCapacityLimits.Tier500;
+                var maxHeads = modularInfo.MaxHeads ?? PlanCapacityLimits.GetMaxHeadsForTier(headTier);
+                var modules = modularInfo.Modules ?? [PlanCapacityLimits.CoreModuleKey];
+
+                ApplyModularSubscription(tenant, headTier, maxHeads, modules, modularInfo.Prices, modularInfo.StripeItemIds);
+
+                tenant.Status = "Active";
+                tenant.StatusReason = null;
+                tenant.StatusChangedAtUtc = DateTime.UtcNow;
+                tenant.UpdatedAtUtc = DateTime.UtcNow;
+
+                var history = TenantSubscriptionHistory.CreateFromStripeWebhook(
+                    tenantId: tenant.Id,
+                    actionType: SubscriptionActionType.NewSubscription,
+                    justification: $"Assinatura modular ativada via Stripe Checkout (Faixa: {tenant.HeadTierCode}, Capacidade: {tenant.Capacity}, Módulos: [{string.Join(", ", tenant.GetSubscribedModuleKeys())}], Sessão: {session.Id}, Status: {session.PaymentStatus}, Período até {tenant.CurrentPeriodEndUtc:yyyy-MM-dd HH:mm:ss} UTC).",
+                    snapshotHeadCount: tenant.Capacity
+                );
+                _dbContext.SubscriptionHistories.Add(history);
+            }
+            else
+            {
+                if (!string.IsNullOrWhiteSpace(rawPlan))
+                {
+                    var canonicalPlan = ModuleLicenseChecker.NormalizePlan(rawPlan);
+                    tenant.SubscribedPlan = canonicalPlan;
+                    AdjustTenantCapacityForPlan(tenant, canonicalPlan);
+                }
+
+                tenant.Status = "Active";
+                tenant.StatusReason = null;
+                tenant.StatusChangedAtUtc = DateTime.UtcNow;
+                tenant.UpdatedAtUtc = DateTime.UtcNow;
+
+                var history = TenantSubscriptionHistory.CreateFromStripeWebhook(
+                    tenantId: tenant.Id,
+                    actionType: SubscriptionActionType.NewSubscription,
+                    justification: $"Assinatura ativada via Stripe Checkout (Sessão: {session.Id}, Plano: {tenant.SubscribedPlan}, Status: {session.PaymentStatus}, Período até {tenant.CurrentPeriodEndUtc:yyyy-MM-dd HH:mm:ss} UTC).",
+                    snapshotHeadCount: tenant.Capacity
+                );
+                _dbContext.SubscriptionHistories.Add(history);
+            }
 
             _logger.LogInformation("Tenant {TenantId} ativado após Checkout com pagamento confirmado ({PaymentStatus}) no Stripe. Período estendido até {PeriodEndUtc}.", tenant.Id, session.PaymentStatus, tenant.CurrentPeriodEndUtc);
 
@@ -656,9 +693,11 @@ public sealed class StripePaymentService : IStripePaymentService
             return;
         }
 
-        var tenant = await _dbContext.Tenants.FirstOrDefaultAsync(
-            t => t.StripeCustomerId == invoice.CustomerId,
-            cancellationToken);
+        var tenant = await _dbContext.Tenants
+            .Include(t => t.SubscribedModules)
+            .FirstOrDefaultAsync(
+                t => t.StripeCustomerId == invoice.CustomerId,
+                cancellationToken);
 
         if (tenant == null)
         {
@@ -689,7 +728,7 @@ public sealed class StripePaymentService : IStripePaymentService
         var history = TenantSubscriptionHistory.CreateFromStripeWebhook(
             tenantId: tenant.Id,
             actionType: SubscriptionActionType.Renewal,
-            justification: $"Fatura {invoice.Id} quitada via Stripe. Renovação até {tenant.CurrentPeriodEndUtc:yyyy-MM-dd HH:mm:ss} UTC.",
+            justification: $"Fatura {invoice.Id} quitada via Stripe na faixa {tenant.HeadTierCode}. Renovação até {tenant.CurrentPeriodEndUtc:yyyy-MM-dd HH:mm:ss} UTC (Módulos: [{string.Join(", ", tenant.GetSubscribedModuleKeys())}]).",
             snapshotHeadCount: tenant.Capacity
         );
         _dbContext.SubscriptionHistories.Add(history);
@@ -785,10 +824,12 @@ public sealed class StripePaymentService : IStripePaymentService
             return;
         }
 
-        var tenant = await _dbContext.Tenants.FirstOrDefaultAsync(
-            t => (hasSubId && t.StripeSubscriptionId == subscription.Id) ||
-                 (hasCustId && t.StripeCustomerId == subscription.CustomerId),
-            cancellationToken);
+        var tenant = await _dbContext.Tenants
+            .Include(t => t.SubscribedModules)
+            .FirstOrDefaultAsync(
+                t => (hasSubId && t.StripeSubscriptionId == subscription.Id) ||
+                     (hasCustId && t.StripeCustomerId == subscription.CustomerId),
+                cancellationToken);
 
         if (tenant == null) return;
 
@@ -799,94 +840,211 @@ public sealed class StripePaymentService : IStripePaymentService
             tenant.StripePriceId = firstItem.Price.Id;
         }
 
-        string? rawUpdatedPlan = null;
-        if (subscription.Metadata != null)
-        {
-            if (subscription.Metadata.TryGetValue("PlanId", out var pid) && !string.IsNullOrWhiteSpace(pid))
-            {
-                rawUpdatedPlan = pid;
-            }
-            else if (subscription.Metadata.TryGetValue("PlanName", out var pname) && !string.IsNullOrWhiteSpace(pname))
-            {
-                rawUpdatedPlan = pname;
-            }
-        }
-
-        if (string.IsNullOrWhiteSpace(rawUpdatedPlan) && !string.IsNullOrWhiteSpace(tenant.StripePriceId))
-        {
-            rawUpdatedPlan = ResolvePlanFromPriceId(tenant.StripePriceId);
-        }
-
-        bool planChanged = false;
-        if (!string.IsNullOrWhiteSpace(rawUpdatedPlan))
-        {
-            var canonicalPlan = ModuleLicenseChecker.NormalizePlan(rawUpdatedPlan);
-            if (!string.Equals(tenant.SubscribedPlan, canonicalPlan, StringComparison.OrdinalIgnoreCase))
-            {
-                planChanged = true;
-            }
-
-            tenant.SubscribedPlan = canonicalPlan;
-            AdjustTenantCapacityForPlan(tenant, canonicalPlan);
-        }
-
         if (firstItem?.CurrentPeriodEnd != null)
         {
             tenant.CurrentPeriodEndUtc = firstItem.CurrentPeriodEnd;
         }
 
-        switch (subscription.Status)
+        // 1. Tentar resolver informações modulares
+        var modularInfo = await ResolveModularSubscriptionInfoAsync(subscription.Metadata, subscription.Items?.Data, cancellationToken);
+
+        if (modularInfo.HeadTierCode != null || modularInfo.Modules != null)
         {
-            case "active":
-                tenant.Status = "Active";
-                if (planChanged)
-                {
-                    var planHistory = TenantSubscriptionHistory.CreateFromStripeWebhook(
+            var previousTierCode = tenant.HeadTierCode;
+            var previousCapacity = tenant.Capacity;
+            var previousModules = tenant.GetSubscribedModuleKeys().ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            var targetTierCode = modularInfo.HeadTierCode ?? tenant.HeadTierCode ?? PlanCapacityLimits.Tier500;
+            var targetMaxHeads = modularInfo.MaxHeads ?? PlanCapacityLimits.GetMaxHeadsForTier(targetTierCode);
+            var targetModules = modularInfo.Modules ?? [PlanCapacityLimits.CoreModuleKey];
+
+            var targetModulesSet = new HashSet<string>(targetModules, StringComparer.OrdinalIgnoreCase)
+            {
+                PlanCapacityLimits.CoreModuleKey
+            };
+
+            var addedModules = targetModulesSet.Except(previousModules).ToList();
+            var removedModules = previousModules.Except(targetModulesSet).ToList();
+            var tierChanged = !string.Equals(previousTierCode, targetTierCode, StringComparison.OrdinalIgnoreCase);
+            var capacityChanged = targetMaxHeads != previousCapacity;
+
+            ApplyModularSubscription(tenant, targetTierCode, targetMaxHeads, targetModulesSet.ToList(), modularInfo.Prices, modularInfo.StripeItemIds);
+
+            SubscriptionActionType actionType;
+            string justification;
+
+            if (capacityChanged && targetMaxHeads > previousCapacity)
+            {
+                actionType = SubscriptionActionType.Upgrade;
+                justification = $"Upgrade de faixa de {previousTierCode} para {targetTierCode} via Stripe Webhook (Capacidade: {targetMaxHeads}, Módulos: [{string.Join(", ", tenant.GetSubscribedModuleKeys())}]).";
+            }
+            else if (capacityChanged && targetMaxHeads < previousCapacity)
+            {
+                actionType = SubscriptionActionType.DowngradeImmediate;
+                justification = $"Downgrade de faixa de {previousTierCode} para {targetTierCode} via Stripe Webhook (Capacidade: {targetMaxHeads}, Módulos: [{string.Join(", ", tenant.GetSubscribedModuleKeys())}]).";
+            }
+            else if (addedModules.Count > 0 && removedModules.Count == 0)
+            {
+                actionType = SubscriptionActionType.PlanChanged;
+                justification = $"Adicionado módulo {string.Join(", ", addedModules)} na faixa {targetTierCode} via Stripe Webhook (Subscrição: {subscription.Id}).";
+            }
+            else if (removedModules.Count > 0 && addedModules.Count == 0)
+            {
+                actionType = SubscriptionActionType.PlanChanged;
+                justification = $"Removido módulo {string.Join(", ", removedModules)} na faixa {targetTierCode} via Stripe Webhook (Subscrição: {subscription.Id}).";
+            }
+            else if (addedModules.Count > 0 || removedModules.Count > 0 || tierChanged)
+            {
+                actionType = SubscriptionActionType.PlanChanged;
+                justification = $"Atualização modular de assinatura via Stripe: Faixa {targetTierCode}, Módulos: [{string.Join(", ", tenant.GetSubscribedModuleKeys())}].";
+            }
+            else
+            {
+                actionType = SubscriptionActionType.PlanChanged;
+                justification = $"Sincronização de assinatura modular via Stripe: Faixa {targetTierCode}, Status: {subscription.Status}.";
+            }
+
+            switch (subscription.Status)
+            {
+                case "active":
+                    tenant.Status = "Active";
+                    tenant.StatusReason = null;
+                    if (addedModules.Count > 0 || removedModules.Count > 0 || tierChanged || capacityChanged)
+                    {
+                        var planHistory = TenantSubscriptionHistory.CreateFromStripeWebhook(
+                            tenantId: tenant.Id,
+                            actionType: actionType,
+                            justification: justification,
+                            snapshotHeadCount: tenant.Capacity
+                        );
+                        _dbContext.SubscriptionHistories.Add(planHistory);
+                    }
+                    break;
+                case "past_due":
+                    tenant.Status = "PastDue";
+                    tenant.StatusReason = "Assinatura Stripe está com pendência de pagamento (past_due).";
+                    var pastDueHistory = TenantSubscriptionHistory.CreateFromStripeWebhook(
                         tenantId: tenant.Id,
-                        actionType: SubscriptionActionType.PlanChanged,
-                        justification: $"Plano atualizado via Stripe para {tenant.SubscribedPlan} (Capacidade: {tenant.Capacity}, Preço: {tenant.StripePriceId}).",
+                        actionType: SubscriptionActionType.PaymentFailed,
+                        justification: $"Assinatura Stripe {subscription.Id} com pendência de pagamento (past_due).",
                         snapshotHeadCount: tenant.Capacity
                     );
-                    _dbContext.SubscriptionHistories.Add(planHistory);
-                }
-                break;
-            case "past_due":
-                tenant.Status = "PastDue";
-                tenant.StatusReason = "Assinatura Stripe está com pendência de pagamento (past_due).";
-                var pastDueHistory = TenantSubscriptionHistory.CreateFromStripeWebhook(
-                    tenantId: tenant.Id,
-                    actionType: SubscriptionActionType.PaymentFailed,
-                    justification: $"Assinatura Stripe {subscription.Id} com pendência de pagamento (past_due).",
-                    snapshotHeadCount: tenant.Capacity
-                );
-                _dbContext.SubscriptionHistories.Add(pastDueHistory);
-                break;
-            case "canceled":
-            case "unpaid":
-                if (tenant.IsProtected)
+                    _dbContext.SubscriptionHistories.Add(pastDueHistory);
+                    break;
+                case "canceled":
+                case "unpaid":
+                    if (tenant.IsProtected)
+                    {
+                        _logger.LogWarning("Tentativa de suspender tenant protegido {TenantId} via Stripe Webhook ignorada (IsProtected=true).", tenant.Id);
+                        var protHistory = TenantSubscriptionHistory.CreateFromStripeWebhook(
+                            tenantId: tenant.Id,
+                            actionType: SubscriptionActionType.Suspended,
+                            justification: $"Tentativa de suspensão via Stripe ({subscription.Status}) ignorada devido a IsProtected=true.",
+                            snapshotHeadCount: tenant.Capacity
+                        );
+                        _dbContext.SubscriptionHistories.Add(protHistory);
+                    }
+                    else
+                    {
+                        tenant.Status = "Suspended";
+                        tenant.StatusReason = $"Assinatura Stripe suspensa ({subscription.Status}).";
+                        var suspHistory = TenantSubscriptionHistory.CreateFromStripeWebhook(
+                            tenantId: tenant.Id,
+                            actionType: SubscriptionActionType.Suspended,
+                            justification: $"Assinatura suspensa via Stripe ({subscription.Status}). Subscrição: {subscription.Id}.",
+                            snapshotHeadCount: tenant.Capacity
+                        );
+                        _dbContext.SubscriptionHistories.Add(suspHistory);
+                    }
+                    break;
+            }
+        }
+        else
+        {
+            string? rawUpdatedPlan = null;
+            if (subscription.Metadata != null)
+            {
+                if (subscription.Metadata.TryGetValue("PlanId", out var pid) && !string.IsNullOrWhiteSpace(pid))
                 {
-                    _logger.LogWarning("Tentativa de suspender tenant protegido {TenantId} via Stripe Webhook ignorada (IsProtected=true).", tenant.Id);
-                    var protHistory = TenantSubscriptionHistory.CreateFromStripeWebhook(
+                    rawUpdatedPlan = pid;
+                }
+                else if (subscription.Metadata.TryGetValue("PlanName", out var pname) && !string.IsNullOrWhiteSpace(pname))
+                {
+                    rawUpdatedPlan = pname;
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(rawUpdatedPlan) && !string.IsNullOrWhiteSpace(tenant.StripePriceId))
+            {
+                rawUpdatedPlan = ResolvePlanFromPriceId(tenant.StripePriceId);
+            }
+
+            bool planChanged = false;
+            if (!string.IsNullOrWhiteSpace(rawUpdatedPlan))
+            {
+                var canonicalPlan = ModuleLicenseChecker.NormalizePlan(rawUpdatedPlan);
+                if (!string.Equals(tenant.SubscribedPlan, canonicalPlan, StringComparison.OrdinalIgnoreCase))
+                {
+                    planChanged = true;
+                }
+
+                tenant.SubscribedPlan = canonicalPlan;
+                AdjustTenantCapacityForPlan(tenant, canonicalPlan);
+            }
+
+            switch (subscription.Status)
+            {
+                case "active":
+                    tenant.Status = "Active";
+                    if (planChanged)
+                    {
+                        var planHistory = TenantSubscriptionHistory.CreateFromStripeWebhook(
+                            tenantId: tenant.Id,
+                            actionType: SubscriptionActionType.PlanChanged,
+                            justification: $"Plano atualizado via Stripe para {tenant.SubscribedPlan} (Capacidade: {tenant.Capacity}, Preço: {tenant.StripePriceId}).",
+                            snapshotHeadCount: tenant.Capacity
+                        );
+                        _dbContext.SubscriptionHistories.Add(planHistory);
+                    }
+                    break;
+                case "past_due":
+                    tenant.Status = "PastDue";
+                    tenant.StatusReason = "Assinatura Stripe está com pendência de pagamento (past_due).";
+                    var pastDueHistory = TenantSubscriptionHistory.CreateFromStripeWebhook(
                         tenantId: tenant.Id,
-                        actionType: SubscriptionActionType.Suspended,
-                        justification: $"Tentativa de suspensão via Stripe ({subscription.Status}) ignorada devido a IsProtected=true.",
+                        actionType: SubscriptionActionType.PaymentFailed,
+                        justification: $"Assinatura Stripe {subscription.Id} com pendência de pagamento (past_due).",
                         snapshotHeadCount: tenant.Capacity
                     );
-                    _dbContext.SubscriptionHistories.Add(protHistory);
-                }
-                else
-                {
-                    tenant.Status = "Suspended";
-                    tenant.StatusReason = $"Assinatura Stripe suspensa ({subscription.Status}).";
-                    var suspHistory = TenantSubscriptionHistory.CreateFromStripeWebhook(
-                        tenantId: tenant.Id,
-                        actionType: SubscriptionActionType.Suspended,
-                        justification: $"Assinatura suspensa via Stripe ({subscription.Status}). Subscrição: {subscription.Id}.",
-                        snapshotHeadCount: tenant.Capacity
-                    );
-                    _dbContext.SubscriptionHistories.Add(suspHistory);
-                }
-                break;
+                    _dbContext.SubscriptionHistories.Add(pastDueHistory);
+                    break;
+                case "canceled":
+                case "unpaid":
+                    if (tenant.IsProtected)
+                    {
+                        _logger.LogWarning("Tentativa de suspender tenant protegido {TenantId} via Stripe Webhook ignorada (IsProtected=true).", tenant.Id);
+                        var protHistory = TenantSubscriptionHistory.CreateFromStripeWebhook(
+                            tenantId: tenant.Id,
+                            actionType: SubscriptionActionType.Suspended,
+                            justification: $"Tentativa de suspensão via Stripe ({subscription.Status}) ignorada devido a IsProtected=true.",
+                            snapshotHeadCount: tenant.Capacity
+                        );
+                        _dbContext.SubscriptionHistories.Add(protHistory);
+                    }
+                    else
+                    {
+                        tenant.Status = "Suspended";
+                        tenant.StatusReason = $"Assinatura Stripe suspensa ({subscription.Status}).";
+                        var suspHistory = TenantSubscriptionHistory.CreateFromStripeWebhook(
+                            tenantId: tenant.Id,
+                            actionType: SubscriptionActionType.Suspended,
+                            justification: $"Assinatura suspensa via Stripe ({subscription.Status}). Subscrição: {subscription.Id}.",
+                            snapshotHeadCount: tenant.Capacity
+                        );
+                        _dbContext.SubscriptionHistories.Add(suspHistory);
+                    }
+                    break;
+            }
         }
 
         tenant.UpdatedAtUtc = DateTime.UtcNow;
@@ -906,10 +1064,12 @@ public sealed class StripePaymentService : IStripePaymentService
             return;
         }
 
-        var tenant = await _dbContext.Tenants.FirstOrDefaultAsync(
-            t => (hasSubId && t.StripeSubscriptionId == subscription.Id) ||
-                 (hasCustId && t.StripeCustomerId == subscription.CustomerId),
-            cancellationToken);
+        var tenant = await _dbContext.Tenants
+            .Include(t => t.SubscribedModules)
+            .FirstOrDefaultAsync(
+                t => (hasSubId && t.StripeSubscriptionId == subscription.Id) ||
+                     (hasCustId && t.StripeCustomerId == subscription.CustomerId),
+                cancellationToken);
 
         if (tenant == null) return;
 
@@ -947,6 +1107,207 @@ public sealed class StripePaymentService : IStripePaymentService
 
         await _dbContext.SaveChangesAsync(cancellationToken);
         _logger.LogInformation("Assinatura do Tenant {TenantId} foi cancelada.", tenant.Id);
+    }
+
+    private async Task<(string? HeadTierCode, int? MaxHeads, List<string>? Modules, Dictionary<string, string?>? StripeItemIds, Dictionary<string, decimal>? Prices)> ResolveModularSubscriptionInfoAsync(
+        Dictionary<string, string>? metadata,
+        List<SubscriptionItem>? items,
+        CancellationToken cancellationToken)
+    {
+        string? headTierCode = null;
+        int? maxHeads = null;
+        List<string>? modules = null;
+        var itemIds = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        var prices = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
+
+        // 1. Extrair de Metadata se presente
+        if (metadata != null)
+        {
+            if (metadata.TryGetValue("head_tier", out var ht) || metadata.TryGetValue("HeadTierCode", out ht))
+            {
+                if (!string.IsNullOrWhiteSpace(ht))
+                {
+                    headTierCode = PlanCapacityLimits.NormalizeHeadTierCode(ht);
+                }
+            }
+
+            if (metadata.TryGetValue("max_heads", out var mhStr) && int.TryParse(mhStr, out var mh) && mh > 0)
+            {
+                maxHeads = mh;
+            }
+
+            if (metadata.TryGetValue("subscribed_modules", out var subMods) && !string.IsNullOrWhiteSpace(subMods))
+            {
+                var parsedMods = subMods.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    .Select(PlanCapacityLimits.NormalizeCommercialModuleKey)
+                    .Where(k => k != null)
+                    .Select(k => k!)
+                    .ToList();
+
+                if (parsedMods.Count > 0)
+                {
+                    modules = parsedMods;
+                }
+            }
+        }
+
+        // 2. Extrair ou complementar via items e catálogo de preços modulares
+        if (items != null && items.Count > 0)
+        {
+            ModularSubscriptionCatalogDto? catalog = null;
+            if (_plansProvider != null)
+            {
+                try
+                {
+                    catalog = await _plansProvider.GetModularCatalogAsync(cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Erro ao consultar catálogo modular do Backoffice. Utilizando catálogo padrão.");
+                }
+            }
+
+            catalog ??= GetSubscriptionPlansQueryHandler.GetDefaultModularCatalog();
+
+            // Mapeamento de Stripe Price ID -> (ModuleKey, TierCode, MonthlyPrice)
+            var priceMap = new Dictionary<string, (string ModuleKey, string TierCode, decimal MonthlyPrice)>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var mod in catalog.Modules)
+            {
+                foreach (var tp in mod.PricesByTier)
+                {
+                    if (!string.IsNullOrWhiteSpace(tp.StripePriceIdMonthly))
+                        priceMap[tp.StripePriceIdMonthly.Trim()] = (mod.ModuleKey, tp.TierCode, tp.MonthlyPrice);
+
+                    if (!string.IsNullOrWhiteSpace(tp.StripePriceIdAnnual))
+                        priceMap[tp.StripePriceIdAnnual.Trim()] = (mod.ModuleKey, tp.TierCode, tp.AnnualPriceMonthly);
+
+                    var k = mod.ModuleKey.ToLowerInvariant();
+                    var tierLower = tp.TierCode.ToLowerInvariant();
+                    priceMap[$"price_{k}_{tierLower}_monthly"] = (mod.ModuleKey, tp.TierCode, tp.MonthlyPrice);
+                    priceMap[$"price_{k}_{tierLower}_annual"] = (mod.ModuleKey, tp.TierCode, tp.AnnualPriceMonthly);
+
+                    var tierNum = tierLower.Replace("tier_", "");
+                    priceMap[$"price_{k}_{tierNum}_monthly"] = (mod.ModuleKey, tp.TierCode, tp.MonthlyPrice);
+                    priceMap[$"price_{k}_{tierNum}_annual"] = (mod.ModuleKey, tp.TierCode, tp.AnnualPriceMonthly);
+                }
+            }
+
+            var detectedModules = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            string? detectedTier = null;
+
+            foreach (var item in items)
+            {
+                var priceId = item.Price?.Id?.Trim();
+                if (!string.IsNullOrWhiteSpace(priceId) && priceMap.TryGetValue(priceId, out var mapping))
+                {
+                    detectedModules.Add(mapping.ModuleKey);
+                    detectedTier ??= mapping.TierCode;
+                    prices[mapping.ModuleKey] = mapping.MonthlyPrice;
+
+                    if (!string.IsNullOrWhiteSpace(item.Id))
+                    {
+                        itemIds[mapping.ModuleKey] = item.Id;
+                    }
+                }
+            }
+
+            if (detectedModules.Count > 0)
+            {
+                if (modules == null || modules.Count == 0)
+                {
+                    modules = detectedModules.ToList();
+                }
+                else
+                {
+                    foreach (var dm in detectedModules)
+                    {
+                        if (!modules.Contains(dm, StringComparer.OrdinalIgnoreCase))
+                        {
+                            modules.Add(dm);
+                        }
+                    }
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(headTierCode) && !string.IsNullOrWhiteSpace(detectedTier))
+            {
+                headTierCode = PlanCapacityLimits.NormalizeHeadTierCode(detectedTier);
+            }
+        }
+
+        // Se modules foi definido, assegurar "Cows" compulsoriamente
+        if (modules != null)
+        {
+            if (!modules.Contains(PlanCapacityLimits.CoreModuleKey, StringComparer.OrdinalIgnoreCase))
+            {
+                modules.Insert(0, PlanCapacityLimits.CoreModuleKey);
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(headTierCode))
+        {
+            maxHeads ??= PlanCapacityLimits.GetMaxHeadsForTier(headTierCode);
+        }
+
+        return (headTierCode, maxHeads, modules, itemIds, prices);
+    }
+
+    private void ApplyModularSubscription(
+        Tenant tenant,
+        string headTierCode,
+        int maxHeads,
+        IReadOnlyList<string> modules,
+        Dictionary<string, decimal>? prices,
+        Dictionary<string, string?>? stripeItemIds)
+    {
+        tenant.SetHeadTier(headTierCode);
+        tenant.Capacity = maxHeads;
+
+        var normalizedModules = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            PlanCapacityLimits.CoreModuleKey
+        };
+
+        foreach (var m in modules)
+        {
+            var norm = PlanCapacityLimits.NormalizeCommercialModuleKey(m);
+            if (norm != null)
+            {
+                normalizedModules.Add(norm);
+            }
+        }
+
+        var existingModuleKeys = tenant.SubscribedModules
+            .Select(m => m.ModuleKey)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var modulesToRemove = tenant.SubscribedModules
+            .Where(m => !normalizedModules.Contains(m.ModuleKey))
+            .ToList();
+
+        if (modulesToRemove.Count > 0)
+        {
+            _dbContext.TenantSubscribedModules.RemoveRange(modulesToRemove);
+        }
+
+        var orderedModules = PlanCapacityLimits.AllCommercialModules
+            .Where(normalizedModules.Contains)
+            .ToList();
+
+        tenant.SetSubscribedModules(
+            orderedModules,
+            prices,
+            stripeItemIds,
+            DateTime.UtcNow);
+
+        foreach (var mod in tenant.SubscribedModules)
+        {
+            if (!existingModuleKeys.Contains(mod.ModuleKey))
+            {
+                _dbContext.TenantSubscribedModules.Add(mod);
+            }
+        }
     }
 
 

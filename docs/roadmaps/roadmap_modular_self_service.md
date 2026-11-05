@@ -225,16 +225,17 @@ Adaptar o serviço de pagamentos para criar e atualizar assinaturas compostas po
   - Endpoint seguro publicado no Host API: `POST /api/v1/tenancy/subscription/update-modular`.
   - Bateria exaustiva de testes de unidade cobrindo RBAC, pré-condição de subscrição ativa, preservação de `"Cows"`, upgrade e downgrade, bloqueio de capacidade e ativação de Grace Period em `SubscriptionBillingAuthorizationTests` e `SubscriptionCommandValidatorsTests`.
 
-#### 3.3. Processamento de Webhooks (`ProcessStripeWebhookCommand`)
+#### 3.3. Processamento de Webhooks (`ProcessStripeWebhookCommand`) [x]
 * **`checkout.session.completed` / `invoice.paid` / `customer.subscription.updated`:**
   * Extrair `head_tier`, `max_heads` e `subscribed_modules` dos `Metadata` (ou mapear pelos `PriceIds` dos `Subscription.Items`).
   * Atualizar atomicamente `tenant.Capacity`, `tenant.HeadTierCode` e a tabela `TenantSubscribedModules`.
   * Gravar histórico detalhado em `TenantSubscriptionHistories` (ex.: *"Adicionado módulo Sanitary na faixa TIER_1500"*).
-* **Arquivos Impactados:**
-  - `src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Features/SubscriptionCheckout/CreateCheckoutSessionCommand.cs`
-  - `src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Features/UpdateModularSubscription/UpdateModularSubscriptionCommand.cs` *(Novo)*
-  - `src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Infrastructure/Services/StripePaymentService.cs`
-  - `src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Features/ProcessStripeWebhook/ProcessStripeWebhookCommand.cs`
+* **Implementação Concluída:**
+  - `StripePaymentService.cs`: Sincronização modular resiliente em `HandleCheckoutSessionCompletedAsync`, `HandleSubscriptionUpdatedAsync` e `HandleInvoicePaidAsync` carregando `.Include(t => t.SubscribedModules)`.
+  - Mecanismo de resolução híbrida `ResolveModularSubscriptionInfoAsync` extraindo metadados canônicos ou mapeando reversamente `PriceIds` via `ISubscriptionPlansProvider` / catálogo modular padrão.
+  - Sincronização atômica em `ApplyModularSubscription` preservando compulsoriamente o módulo core `"Cows"`, limpando módulos removidos e persistindo novos módulos com `StripeSubscriptionItemId`.
+  - Gravação granular em `TenantSubscriptionHistories` diferenciando semânticas de `NewSubscription`, `Upgrade`, `DowngradeImmediate`, `PlanChanged` e `Renewal`, com justificativas detalhadas.
+  - Suíte dedicada de testes unitários `StripeWebhookModularSubscriptionTests` cobrindo ativação no checkout, adição/remoção de módulos, upgrade/downgrade de faixa, resolução reversa por `PriceId`, renovação por fatura, idempotência e retrocompatibilidade com planos fixos legados.
 
 ---
 
