@@ -126,7 +126,7 @@
                 <a href="#recursos" class="nav-item">Recursos</a>
                 <a href="#modulos" class="nav-item">Módulos</a>
                 <a href="#diferenciais" class="nav-item">Diferenciais</a>
-                <a href="#planos" class="nav-item">Planos & Preços</a>
+                <a href="#planos" class="nav-item">Preços & Simulador</a>
                 <a href="#faq" class="nav-item">Dúvidas</a>
             </nav>
 
@@ -148,7 +148,7 @@
         <a href="#recursos" class="mobile-nav-link" @onclick="CloseMobileMenu">Recursos</a>
         <a href="#modulos" class="mobile-nav-link" @onclick="CloseMobileMenu">Módulos</a>
         <a href="#diferenciais" class="mobile-nav-link" @onclick="CloseMobileMenu">Diferenciais</a>
-        <a href="#planos" class="mobile-nav-link" @onclick="CloseMobileMenu">Planos & Preços</a>
+        <a href="#planos" class="mobile-nav-link" @onclick="CloseMobileMenu">Preços & Simulador</a>
         <a href="#faq" class="mobile-nav-link" @onclick="CloseMobileMenu">Dúvidas Frequentes</a>
         
         <div class="mobile-drawer-actions">
@@ -546,135 +546,285 @@
         </div>
     </section>
 
-    <!-- Pricing Section -->
+    <!-- Pricing / Modular Simulator Section -->
     <section id="planos" class="landing-pricing">
         <div class="pricing-header text-center">
-            <span class="section-tag font-mono">PLANOS E INVESTIMENTO</span>
-            <h2 class="section-title">Escolha o plano ideal para o tamanho da sua fazenda</h2>
-            <p class="section-subtitle">Sem surpresas. Escale de acordo com a capacidade do seu rebanho.</p>
+            <span class="section-tag font-mono">SIMULADOR & INVESTIMENTO</span>
+            <h2 class="section-title">Monte o plano ideal para a sua fazenda</h2>
+            <p class="section-subtitle">Sem pacotes engessados. Escolha a faixa do seu rebanho e selecione apenas os módulos que você realmente usa.</p>
 
             <div class="pricing-toggle-box">
-                <button class="toggle-btn @(!_isAnnual ? "active" : "")" @onclick="() => _isAnnual = false">Mensal</button>
-                <button class="toggle-btn @(_isAnnual ? "active" : "")" @onclick="() => _isAnnual = true">
+                <button type="button" class="toggle-btn @(!_isAnnual ? "active" : "")" @onclick="() => _isAnnual = false">Mensal</button>
+                <button type="button" class="toggle-btn @(_isAnnual ? "active" : "")" @onclick="() => _isAnnual = true">
                     <span>Anual</span>
                     <span class="discount-badge">20% OFF</span>
                 </button>
             </div>
         </div>
 
-        <div class="pricing-grid">
-            @if (_isLoadingPlans)
-            {
-                @for (int i = 0; i < 3; i++)
-                {
-                    <div class="pricing-skeleton-card">
-                        <div class="skeleton-line" style="width: 40%; height: 26px;"></div>
-                        <div class="skeleton-line" style="width: 70%; height: 16px;"></div>
-                        <div class="skeleton-line" style="width: 50%; height: 42px; margin: 1rem 0;"></div>
-                        <div class="skeleton-line" style="width: 90%;"></div>
-                        <div class="skeleton-line" style="width: 80%;"></div>
-                        <div class="skeleton-line" style="width: 85%;"></div>
+        <div class="modular-simulator">
+            <!-- Barra de Presets Rápidos -->
+            <div class="simulator-presets-bar">
+                <span class="simulator-presets-label font-mono">
+                    <span class="material-symbols-outlined icon-sm" style="vertical-align: middle; margin-right: 0.25rem;">auto_awesome</span>
+                    Perfis Rápidos:
+                </span>
+                <button type="button" class="simulator-preset-chip @(_activePreset == "plantel" ? "active" : "")" @onclick='() => ApplyPreset("plantel")'>
+                    Só Plantel & Manejo
+                </button>
+                <button type="button" class="simulator-preset-chip @(_activePreset == "cria" ? "active" : "")" @onclick='() => ApplyPreset("cria")'>
+                    Pecuária de Cria & IATF
+                </button>
+                <button type="button" class="simulator-preset-chip @(_activePreset == "engorda" ? "active" : "")" @onclick='() => ApplyPreset("engorda")'>
+                    Recria & Confinamento
+                </button>
+                <button type="button" class="simulator-preset-chip @(_activePreset == "completo" ? "active" : "")" @onclick='() => ApplyPreset("completo")'>
+                    Fazenda Completa 360°
+                </button>
+            </div>
+
+            <!-- Etapa 1: Faixas de Cabeças -->
+            <div class="simulator-tiers-header">
+                <div class="simulator-step-label font-mono">
+                    <span class="material-symbols-outlined" style="font-size: 16px;">tag</span>
+                    <span>1. Selecione a faixa do seu rebanho</span>
+                </div>
+                <div class="simulator-tier-grid">
+                    @foreach (var tier in _catalog.HeadTiers)
+                    {
+                        var isSelected = string.Equals(tier.TierCode, _selectedTierCode, StringComparison.OrdinalIgnoreCase);
+                        <div class="simulator-tier-card @(isSelected ? "active" : "")" @onclick="() => SelectTier(tier.TierCode)">
+                            <span class="material-symbols-outlined" style="font-size: 24px; color: @(isSelected ? "#005323" : "#64748b");">groups</span>
+                            <span class="tier-title">@tier.DisplayName</span>
+                            <span class="tier-sub font-mono">@(tier.MaxHeads >= 999999 || tier.MaxHeads >= 10000 ? "3.001+ cabeças" : $"Capacidade até {tier.MaxHeads:N0} cab.")</span>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Etapa 2 e Resumo -->
+            <div class="simulator-body">
+                <!-- Coluna da Esquerda: Módulos -->
+                <div class="simulator-modules-panel">
+                    <div class="simulator-step-label font-mono">
+                        <span class="material-symbols-outlined" style="font-size: 16px;">view_module</span>
+                        <span>2. Escolha os módulos que sua fazenda precisa</span>
                     </div>
-                }
-            }
-            else
-            {
-                @foreach (var plan in _plans)
-                {
-                    <div class="pricing-card @(plan.IsPopular ? "popular-card" : "")">
-                        @if (plan.IsPopular)
+
+                    <!-- Módulo Core Base (Plantel / Cows) -->
+                    @{
+                        var coreModule = _catalog.Modules.FirstOrDefault(m => m.IsCore || string.Equals(m.ModuleKey, "Cows", StringComparison.OrdinalIgnoreCase));
+                        var corePrice = coreModule?.PricesByTier.FirstOrDefault(p => string.Equals(p.TierCode, _selectedTierCode, StringComparison.OrdinalIgnoreCase))
+                                        ?? coreModule?.PricesByTier.FirstOrDefault();
+                    }
+                    @if (coreModule != null && corePrice != null)
+                    {
+                        <div class="simulator-core-card">
+                            <span class="core-badge font-mono">BASE OBRIGATÓRIA</span>
+                            <div class="core-header">
+                                <div class="core-title-group">
+                                    <div class="core-icon-box">
+                                        <span class="material-symbols-outlined">pets</span>
+                                    </div>
+                                    <div>
+                                        <h3 class="core-title">@coreModule.Name</h3>
+                                        <span class="font-mono text-xs" style="color: #005323; font-weight: 700;">Incluso para todas as fazendas</span>
+                                    </div>
+                                </div>
+                                <div class="core-price font-mono">
+                                    R$ @FormatPrice(_isAnnual ? corePrice.AnnualPriceMonthly : corePrice.MonthlyPrice)
+                                    <span style="font-size: 0.75rem; color: #64748b; font-weight: 500;">/mês</span>
+                                </div>
+                            </div>
+                            <p class="core-desc">@coreModule.Description</p>
+                            <div class="core-features-chips">
+                                <span class="core-chip">
+                                    <span class="material-symbols-outlined icon-sm">wifi_off</span>
+                                    100% Curral Off-line (PWA)
+                                </span>
+                                <span class="core-chip">
+                                    <span class="material-symbols-outlined icon-sm">badge</span>
+                                    Brinco & RFID SISBOV
+                                </span>
+                                <span class="core-chip">
+                                    <span class="material-symbols-outlined icon-sm">hub</span>
+                                    Lotes & Genealogia
+                                </span>
+                                <span class="core-chip">
+                                    <span class="material-symbols-outlined icon-sm">lock</span>
+                                    Módulo Core Travado
+                                </span>
+                            </div>
+                        </div>
+                    }
+
+                    <!-- Grid dos Módulos Opcionais -->
+                    <div class="simulator-addons-grid">
+                        @foreach (var mod in _catalog.Modules.Where(m => !m.IsCore && !string.Equals(m.ModuleKey, "Cows", StringComparison.OrdinalIgnoreCase)))
                         {
-                            <div class="popular-ribbon">MAIS ESCOLHIDO</div>
+                            var isChecked = IsModuleSelected(mod.ModuleKey);
+                            var priceOption = mod.PricesByTier.FirstOrDefault(p => string.Equals(p.TierCode, _selectedTierCode, StringComparison.OrdinalIgnoreCase))
+                                              ?? mod.PricesByTier.FirstOrDefault();
+                            var priceVal = priceOption != null
+                                ? (_isAnnual ? priceOption.AnnualPriceMonthly : priceOption.MonthlyPrice)
+                                : 0m;
+
+                            <div class="simulator-addon-card @(isChecked ? "selected" : "")" @onclick="() => ToggleModule(mod.ModuleKey)">
+                                <div class="addon-card-header">
+                                    <div class="addon-icon-title">
+                                        <div class="addon-icon-box">
+                                            <span class="material-symbols-outlined">@mod.IconName</span>
+                                        </div>
+                                        <h4 class="addon-title">@mod.Name</h4>
+                                    </div>
+                                    <div class="addon-checkbox">
+                                        @if (isChecked)
+                                        {
+                                            <span class="material-symbols-outlined" style="font-size: 16px;">check</span>
+                                        }
+                                    </div>
+                                </div>
+                                <p class="addon-desc">@mod.Description</p>
+                                <div class="addon-price-tag font-mono">
+                                    <span style="font-size: 0.75rem; color: #64748b; font-weight: 600;">Adicional na faixa:</span>
+                                    <span>+ R$ @FormatPrice(priceVal)<small style="font-size: 0.7rem; color: #64748b;">/mês</small></span>
+                                </div>
+                            </div>
                         }
+                    </div>
+                </div>
 
-                        <div class="card-plan-header">
-                            <h3 class="plan-name">@plan.Name</h3>
-                            <p class="plan-desc">@plan.Description</p>
-                        </div>
-
-                        <div class="card-plan-price">
-                            <span class="currency">R$</span>
-                            <span class="price-val">@FormatPrice(_isAnnual ? plan.AnnualPriceMonthly : plan.MonthlyPrice)</span>
-                            <span class="period">/mês</span>
-                        </div>
-
-                        <div class="capacity-pill font-mono">
-                            <span class="material-symbols-outlined icon-sm">groups</span>
-                            <span>@(plan.HeadCapacityLimit >= 999999 || plan.HeadCapacityLimit == int.MaxValue ? "Cabeças Ilimitadas" : $"Até {plan.HeadCapacityLimit:N0} cabeças")</span>
-                        </div>
-
-                        <ul class="plan-features-list">
-                            @if (plan.Features != null && plan.Features.Any(f => f.IsEnabled))
+                <!-- Coluna da Direita: Card de Resumo Flutuante -->
+                <div class="simulator-summary-card">
+                    <div class="summary-header">
+                        <span class="summary-badge-tier font-mono">
+                            <span class="material-symbols-outlined icon-sm">verified</span>
+                            <span>@SelectedTier?.DisplayName</span>
+                        </span>
+                        <div class="summary-price-box">
+                            <div class="summary-main-price font-headline">
+                                <span class="currency">R$</span>
+                                <span class="price-val">@FormatPrice(TotalPriceMonthly)</span>
+                                <span class="period">/mês</span>
+                            </div>
+                            @if (_isAnnual)
                             {
-                                @foreach (var feature in plan.Features.Where(f => f.IsEnabled))
-                                {
-                                    <li>
-                                        <span class="material-symbols-outlined check-icon">check_circle</span>
-                                        <span>@feature.Name</span>
-                                    </li>
-                                }
+                                <div class="font-mono text-xs" style="color: #16a34a; font-weight: 700; margin-top: 0.25rem;">
+                                    Faturado anualmente com 20% de economia
+                                </div>
                             }
                             else
                             {
-                                @if (plan.IncludedModules.Contains("CurralOffline") || plan.IncludedModules.Contains("PwaOfflineMode"))
-                                {
-                                    <li>
-                                        <span class="material-symbols-outlined check-icon">check_circle</span>
-                                        <span>Acesso PWA Curral 100% Off-line</span>
-                                    </li>
-                                }
-                                @if (plan.IncludedModules.Contains("Breeding"))
-                                {
-                                    <li>
-                                        <span class="material-symbols-outlined check-icon">check_circle</span>
-                                        <span>Módulo Reprodução & IATF</span>
-                                    </li>
-                                }
-                                @if (plan.IncludedModules.Contains("Calving"))
-                                {
-                                    <li>
-                                        <span class="material-symbols-outlined check-icon">check_circle</span>
-                                        <span>Módulo de Partos & Bezerreiro</span>
-                                    </li>
-                                }
-                                @if (plan.IncludedModules.Contains("Growth"))
-                                {
-                                    <li>
-                                        <span class="material-symbols-outlined check-icon">check_circle</span>
-                                        <span>Balança Eletrônica & Curva de GPD</span>
-                                    </li>
-                                }
-                                @if (plan.IncludedModules.Contains("Nutrition"))
-                                {
-                                    <li>
-                                        <span class="material-symbols-outlined check-icon">check_circle</span>
-                                        <span>Nutrição, TMR & Silos</span>
-                                    </li>
-                                }
-                                @if (plan.IncludedModules.Contains("Sanitary"))
-                                {
-                                    <li>
-                                        <span class="material-symbols-outlined check-icon">check_circle</span>
-                                        <span>Trava de Carência Medicamentosa</span>
-                                    </li>
-                                }
-                                @if (plan.IncludedModules.Contains("Analytics"))
-                                {
-                                    <li>
-                                        <span class="material-symbols-outlined check-icon">check_circle</span>
-                                        <span>Analytics Executivo & Custo por @@</span>
-                                    </li>
-                                }
+                                <div class="font-mono text-xs" style="color: #64748b; margin-top: 0.25rem;">
+                                    Cobrança mensal sem fidelidade
+                                </div>
                             }
-                        </ul>
+                        </div>
 
-                        <a href="@($"/register?plan={Uri.EscapeDataString(plan.Name)}")" class="cc-btn @(plan.IsPopular ? "cc-btn-primary" : "cc-btn-outline") plan-cta-btn">
-                            <span>Começar com @plan.Name</span>
-                            <span class="material-symbols-outlined">chevron_right</span>
-                        </a>
+                        <div class="summary-roi-pill font-mono">
+                            <span class="material-symbols-outlined icon-sm">calculate</span>
+                            <span>Apenas <strong>R$ @FormatPrice(CostPerHeadPerMonth)</strong> por cabeça/mês</span>
+                        </div>
+                    </div>
+
+                    <div style="font-size: 0.8rem; font-weight: 800; text-transform: uppercase; color: #475569;" class="font-mono">
+                        Módulos Ativos (@SelectedModuleCount de @_catalog.Modules.Count):
+                    </div>
+
+                    <div class="summary-modules-list">
+                        @foreach (var mod in _catalog.Modules)
+                        {
+                            if (IsModuleSelected(mod.ModuleKey))
+                            {
+                                var priceOption = mod.PricesByTier.FirstOrDefault(p => string.Equals(p.TierCode, _selectedTierCode, StringComparison.OrdinalIgnoreCase))
+                                                  ?? mod.PricesByTier.FirstOrDefault();
+                                var priceVal = priceOption != null
+                                    ? (_isAnnual ? priceOption.AnnualPriceMonthly : priceOption.MonthlyPrice)
+                                    : 0m;
+
+                                <div class="summary-mod-item">
+                                    <span class="mod-name">
+                                        <span class="material-symbols-outlined text-emerald-600 icon-sm">check_circle</span>
+                                        <span>@mod.Name</span>
+                                    </span>
+                                    <span class="mod-price">R$ @FormatPrice(priceVal)</span>
+                                </div>
+                            }
+                        }
+                    </div>
+
+                    <a href="/register" class="cc-btn cc-btn-primary plan-cta-btn" style="margin-top: 1.5rem; text-decoration: none;">
+                        <span>Iniciar Teste Grátis de 30 Dias</span>
+                        <span class="material-symbols-outlined icon-sm">arrow_forward</span>
+                    </a>
+
+                    <p class="summary-guarantee-note font-mono">
+                        <span class="material-symbols-outlined icon-sm" style="vertical-align: text-bottom; margin-right: 0.2rem; color: #16a34a;">check</span>
+                        30 dias grátis para até 500 cabeças • Sem cartão de crédito • Cancele ou altere a qualquer momento
+                    </p>
+                </div>
+            </div>
+
+            <!-- Botão Expansível: Matriz Completa de Preços -->
+            <div class="matrix-accordion-toggle">
+                <button type="button" class="matrix-toggle-btn font-mono" @onclick="ToggleMatrixView">
+                    <span class="material-symbols-outlined">@(_showFullMatrix ? "expand_less" : "table_chart")</span>
+                    <span>@(_showFullMatrix ? "Ocultar tabela completa de preços" : "Ver matriz completa de preços por módulo e faixa")</span>
+                </button>
+
+                @if (_showFullMatrix)
+                {
+                    <div class="full-matrix-table-wrap">
+                        <table class="full-matrix-table">
+                            <thead>
+                                <tr>
+                                    <th>Módulo</th>
+                                    <th>Tipo</th>
+                                    @foreach (var tier in _catalog.HeadTiers)
+                                    {
+                                        <th style="text-align: right;">@tier.DisplayName</th>
+                                    }
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var mod in _catalog.Modules)
+                                {
+                                    <tr>
+                                        <td>
+                                            <div style="font-weight: 700; color: #0f172a;">@mod.Name</div>
+                                            <div style="font-size: 0.75rem; color: #64748b;">@mod.Description</div>
+                                        </td>
+                                        <td>
+                                            @if (mod.IsCore || string.Equals(mod.ModuleKey, "Cows", StringComparison.OrdinalIgnoreCase))
+                                            {
+                                                <span class="font-mono text-xs" style="background: #f0fdf4; color: #166534; padding: 0.2rem 0.5rem; border-radius: 4px; font-weight: 700;">Base</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="font-mono text-xs" style="background: #f1f5f9; color: #475569; padding: 0.2rem 0.5rem; border-radius: 4px;">Opcional</span>
+                                            }
+                                        </td>
+                                        @foreach (var tier in _catalog.HeadTiers)
+                                        {
+                                            var p = mod.PricesByTier.FirstOrDefault(x => string.Equals(x.TierCode, tier.TierCode, StringComparison.OrdinalIgnoreCase));
+                                            <td style="text-align: right;" class="font-mono">
+                                                @if (p != null)
+                                                {
+                                                    <span>R$ @FormatPrice(_isAnnual ? p.AnnualPriceMonthly : p.MonthlyPrice)<small style="font-size: 0.7rem; color: #64748b;">/mês</small></span>
+                                                }
+                                                else
+                                                {
+                                                    <span>-</span>
+                                                }
+                                            </td>
+                                        }
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
                     </div>
                 }
-            }
+            </div>
         </div>
     </section>
 
@@ -722,7 +872,7 @@
                     @if (IsFaqOpen(2))
                     {
                         <div class="faq-answer">
-                            O período de teste é 100% gratuito e não exige cartão de crédito. Você cria sua conta em menos de 2 minutos, configura os dados da sua fazenda e tem acesso imediato a todas as funcionalidades do plano escolhido por 30 dias.
+                            O período de teste é 100% gratuito e não exige cartão de crédito. Você cria sua conta em menos de 2 minutos, configura os dados da sua fazenda e tem acesso imediato por 30 dias a todos os módulos na faixa de até 500 cabeças para experimentar livremente no curral e no escritório.
                         </div>
                     }
                 </div>
@@ -794,7 +944,7 @@
                     <a href="#recursos">Recursos</a>
                     <a href="#modulos">Módulos</a>
                     <a href="#diferenciais">Diferenciais</a>
-                    <a href="#planos">Planos & Preços</a>
+                    <a href="#planos">Preços & Simulador</a>
                     <a href="#faq">Dúvidas Frequentes</a>
                 </div>
                 <div class="link-col">
@@ -823,25 +973,140 @@
 @code {
     private bool _isAnnual = true;
     private bool _isMobileMenuOpen = false;
-    private bool _isLoadingPlans = true;
+    private bool _isLoadingCatalog = true;
+    private bool _showFullMatrix = false;
     private int _activeFaqIndex = 0;
-    private List<SubscriptionPlanModel> _plans = new();
+    private string _activePreset = "cria";
+    private string _selectedTierCode = "TIER_500";
+    private HashSet<string> _selectedModuleKeys = new(StringComparer.OrdinalIgnoreCase) { "Cows", "Breeding", "Calving" };
+    private ModularSubscriptionCatalogModel _catalog = TenancyApiClient.GetDefaultModularCatalog();
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
-            _isLoadingPlans = true;
-            _plans = await TenancyApiClient.GetSubscriptionPlansAsync();
+            _isLoadingCatalog = true;
+            _catalog = await TenancyApiClient.GetModularCatalogAsync();
         }
         catch
         {
-            _plans = TenancyApiClient.GetFallbackPlans();
+            _catalog = TenancyApiClient.GetDefaultModularCatalog();
         }
         finally
         {
-            _isLoadingPlans = false;
+            _isLoadingCatalog = false;
         }
+    }
+
+    private void SelectTier(string tierCode)
+    {
+        _selectedTierCode = tierCode;
+    }
+
+    private void ToggleModule(string moduleKey)
+    {
+        if (string.Equals(moduleKey, "Cows", StringComparison.OrdinalIgnoreCase))
+        {
+            return; // Cows é compulsório / fixo
+        }
+
+        if (_selectedModuleKeys.Contains(moduleKey))
+        {
+            _selectedModuleKeys.Remove(moduleKey);
+        }
+        else
+        {
+            _selectedModuleKeys.Add(moduleKey);
+        }
+
+        _activePreset = DetectActivePreset();
+    }
+
+    private void ApplyPreset(string preset)
+    {
+        _activePreset = preset;
+        _selectedModuleKeys.Clear();
+        _selectedModuleKeys.Add("Cows");
+
+        switch (preset)
+        {
+            case "plantel":
+                break;
+            case "cria":
+                _selectedModuleKeys.Add("Breeding");
+                _selectedModuleKeys.Add("Calving");
+                break;
+            case "engorda":
+                _selectedModuleKeys.Add("Growth");
+                _selectedModuleKeys.Add("Nutrition");
+                _selectedModuleKeys.Add("Sanitary");
+                break;
+            case "completo":
+                foreach (var mod in _catalog.Modules)
+                {
+                    _selectedModuleKeys.Add(mod.ModuleKey);
+                }
+                break;
+        }
+    }
+
+    private string DetectActivePreset()
+    {
+        var nonCore = _selectedModuleKeys.Where(k => !string.Equals(k, "Cows", StringComparison.OrdinalIgnoreCase)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        if (nonCore.Count == 0) return "plantel";
+        if (nonCore.SetEquals(new[] { "Breeding", "Calving" })) return "cria";
+        if (nonCore.SetEquals(new[] { "Growth", "Nutrition", "Sanitary" })) return "engorda";
+        if (nonCore.Count >= _catalog.Modules.Count - 1) return "completo";
+
+        return string.Empty;
+    }
+
+    private bool IsModuleSelected(string moduleKey)
+    {
+        return string.Equals(moduleKey, "Cows", StringComparison.OrdinalIgnoreCase)
+            || _selectedModuleKeys.Contains(moduleKey);
+    }
+
+    private HeadTierOptionModel? SelectedTier =>
+        _catalog.HeadTiers.FirstOrDefault(t => string.Equals(t.TierCode, _selectedTierCode, StringComparison.OrdinalIgnoreCase))
+        ?? _catalog.HeadTiers.FirstOrDefault();
+
+    private int SelectedModuleCount =>
+        _catalog.Modules.Count(m => IsModuleSelected(m.ModuleKey));
+
+    private decimal TotalPriceMonthly
+    {
+        get
+        {
+            decimal total = 0m;
+            foreach (var mod in _catalog.Modules.Where(m => IsModuleSelected(m.ModuleKey)))
+            {
+                var priceOption = mod.PricesByTier.FirstOrDefault(p => string.Equals(p.TierCode, _selectedTierCode, StringComparison.OrdinalIgnoreCase))
+                                  ?? mod.PricesByTier.FirstOrDefault();
+
+                if (priceOption != null)
+                {
+                    total += _isAnnual ? priceOption.AnnualPriceMonthly : priceOption.MonthlyPrice;
+                }
+            }
+            return total;
+        }
+    }
+
+    private decimal CostPerHeadPerMonth
+    {
+        get
+        {
+            var maxHeads = SelectedTier?.MaxHeads ?? 500;
+            var denominator = Math.Max(1, maxHeads);
+            return Math.Round(TotalPriceMonthly / denominator, 2);
+        }
+    }
+
+    private void ToggleMatrixView()
+    {
+        _showFullMatrix = !_showFullMatrix;
     }
 
     private void ToggleMobileMenu()

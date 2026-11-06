@@ -2063,6 +2063,497 @@ h1:focus {
     gap: 0.35rem;
 }
 
+/* Modular Self-Service Simulator (Landing Page) */
+.modular-simulator {
+    max-width: 1240px;
+    margin: 0 auto;
+}
+
+.simulator-tiers-header {
+    margin-bottom: 2rem;
+}
+
+.simulator-step-label {
+    font-size: 0.8rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #005323;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-bottom: 0.75rem;
+}
+
+.simulator-tier-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.simulator-tier-card {
+    background: white;
+    border: 2px solid #e2e8f0;
+    border-radius: 14px;
+    padding: 1.15rem 1rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.simulator-tier-card:hover {
+    border-color: #86efac;
+    transform: translateY(-2px);
+}
+
+.simulator-tier-card.active {
+    background: #f0fdf4;
+    border-color: #005323;
+    box-shadow: 0 4px 15px rgba(0, 83, 35, 0.12);
+}
+
+.simulator-tier-card .tier-title {
+    font-size: 1.05rem;
+    font-weight: 900;
+    color: #0f172a;
+}
+
+.simulator-tier-card .tier-sub {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #64748b;
+}
+
+.simulator-tier-card.active .tier-sub {
+    color: #005323;
+}
+
+.simulator-presets-bar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    margin-bottom: 2rem;
+    background: white;
+    padding: 0.75rem 1.25rem;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+}
+
+.simulator-presets-label {
+    font-size: 0.8rem;
+    font-weight: 800;
+    color: #475569;
+    text-transform: uppercase;
+}
+
+.simulator-preset-chip {
+    border: 1px solid #cbd5e1;
+    background: #f8fafc;
+    color: #334155;
+    padding: 0.4rem 0.85rem;
+    border-radius: 99px;
+    font-size: 0.82rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.simulator-preset-chip:hover {
+    background: #e2e8f0;
+    border-color: #94a3b8;
+}
+
+.simulator-preset-chip.active {
+    background: #005323;
+    color: white;
+    border-color: #005323;
+}
+
+.simulator-body {
+    display: grid;
+    grid-template-columns: 1.55fr 1fr;
+    gap: 2rem;
+    align-items: start;
+}
+
+.simulator-modules-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.simulator-core-card {
+    background: #ffffff;
+    border: 2px solid #005323;
+    border-radius: 16px;
+    padding: 1.35rem 1.5rem;
+    position: relative;
+    box-shadow: 0 4px 12px rgba(0, 83, 35, 0.08);
+}
+
+.core-badge {
+    position: absolute;
+    top: -12px;
+    right: 1.5rem;
+    background: #005323;
+    color: white;
+    font-size: 0.68rem;
+    font-weight: 900;
+    padding: 0.2rem 0.65rem;
+    border-radius: 99px;
+    letter-spacing: 0.05em;
+}
+
+.core-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.core-title-group {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.core-icon-box {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    background: #dcfce7;
+    color: #005323;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.core-title {
+    font-size: 1.15rem;
+    font-weight: 900;
+    color: #0f172a;
+    margin: 0;
+}
+
+.core-price {
+    font-size: 1.25rem;
+    font-weight: 900;
+    color: #005323;
+}
+
+.core-desc {
+    font-size: 0.88rem;
+    color: #64748b;
+    margin: 0 0 0.85rem 0;
+    line-height: 1.45;
+}
+
+.core-features-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.core-chip {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #005323;
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    padding: 0.2rem 0.6rem;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.simulator-addons-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+}
+
+.simulator-addon-card {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    padding: 1.15rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.simulator-addon-card:hover {
+    border-color: #cbd5e1;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.simulator-addon-card.selected {
+    border-color: #005323;
+    background: #fafffb;
+    box-shadow: 0 4px 15px rgba(0, 83, 35, 0.1);
+}
+
+.addon-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 0.5rem;
+}
+
+.addon-icon-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.addon-icon-box {
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    background: #f1f5f9;
+    color: #475569;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+}
+
+.simulator-addon-card.selected .addon-icon-box {
+    background: #dcfce7;
+    color: #005323;
+}
+
+.addon-title {
+    font-size: 0.95rem;
+    font-weight: 800;
+    color: #0f172a;
+    margin: 0;
+}
+
+.addon-checkbox {
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    border: 2px solid #cbd5e1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 14px;
+    transition: all 0.15s ease;
+}
+
+.simulator-addon-card.selected .addon-checkbox {
+    background: #005323;
+    border-color: #005323;
+}
+
+.addon-desc {
+    font-size: 0.8rem;
+    color: #64748b;
+    margin: 0 0 0.75rem 0;
+    line-height: 1.4;
+    flex-grow: 1;
+}
+
+.addon-price-tag {
+    font-size: 0.88rem;
+    font-weight: 800;
+    color: #005323;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-top: 1px dashed #e2e8f0;
+    padding-top: 0.5rem;
+    margin-top: auto;
+}
+
+.simulator-summary-card {
+    background: white;
+    border: 2px solid #e2e8f0;
+    border-radius: 20px;
+    padding: 1.85rem;
+    position: sticky;
+    top: 90px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.06);
+}
+
+.summary-header {
+    border-bottom: 1px solid #f1f5f9;
+    padding-bottom: 1.25rem;
+    margin-bottom: 1.25rem;
+}
+
+.summary-badge-tier {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    background: #f0fdf4;
+    color: #005323;
+    font-size: 0.8rem;
+    font-weight: 800;
+    padding: 0.35rem 0.75rem;
+    border-radius: 99px;
+    margin-bottom: 0.75rem;
+    border: 1px solid #bbf7d0;
+}
+
+.summary-price-box {
+    margin-bottom: 1.25rem;
+}
+
+.summary-main-price {
+    display: flex;
+    align-items: baseline;
+    gap: 0.3rem;
+}
+
+.summary-roi-pill {
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    color: #1d4ed8;
+    padding: 0.5rem 0.85rem;
+    border-radius: 8px;
+    font-size: 0.82rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-top: 0.75rem;
+}
+
+.summary-modules-list {
+    margin: 1.25rem 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.summary-mod-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.85rem;
+    color: #334155;
+    font-weight: 600;
+}
+
+.summary-mod-item .mod-name {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.summary-mod-item .mod-price {
+    font-family: monospace;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.summary-guarantee-note {
+    font-size: 0.78rem;
+    color: #64748b;
+    text-align: center;
+    margin-top: 1rem;
+    line-height: 1.4;
+}
+
+.matrix-accordion-toggle {
+    margin-top: 3rem;
+    text-align: center;
+}
+
+.matrix-toggle-btn {
+    background: white;
+    border: 1px solid #cbd5e1;
+    color: #334155;
+    padding: 0.65rem 1.5rem;
+    border-radius: 99px;
+    font-weight: 700;
+    font-size: 0.88rem;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 0.2s ease;
+}
+
+.matrix-toggle-btn:hover {
+    border-color: #005323;
+    color: #005323;
+}
+
+.full-matrix-table-wrap {
+    margin-top: 1.5rem;
+    background: white;
+    border-radius: 16px;
+    border: 1px solid #e2e8f0;
+    overflow-x: auto;
+    padding: 1.5rem;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+}
+
+.full-matrix-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88rem;
+}
+
+.full-matrix-table th,
+.full-matrix-table td {
+    padding: 0.85rem 1rem;
+    text-align: left;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.full-matrix-table th {
+    background: #f8fafc;
+    font-weight: 800;
+    color: #475569;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+}
+
+.full-matrix-table tr:hover td {
+    background: #f8fafc;
+}
+
+@media (max-width: 992px) {
+    .simulator-tier-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .simulator-body {
+        grid-template-columns: 1fr;
+    }
+
+    .simulator-summary-card {
+        position: static;
+        margin-top: 1.5rem;
+    }
+}
+
+@media (max-width: 600px) {
+    .simulator-tier-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .simulator-addons-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
 /* Landing Footer */
 .landing-footer {
     background: #022c15;

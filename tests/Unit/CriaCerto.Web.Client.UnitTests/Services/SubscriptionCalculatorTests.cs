@@ -50,6 +50,32 @@ public static class ModularSubscriptionCalculator
         result.Add("Cows");
         return result;
     }
+
+    public static HashSet<string> ResolveLandingPreset(string preset, ModularSubscriptionCatalogModel catalog)
+    {
+        var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Cows" };
+        switch (preset.ToLowerInvariant())
+        {
+            case "plantel":
+                break;
+            case "cria":
+                result.Add("Breeding");
+                result.Add("Calving");
+                break;
+            case "engorda":
+                result.Add("Growth");
+                result.Add("Nutrition");
+                result.Add("Sanitary");
+                break;
+            case "completo":
+                foreach (var mod in catalog.Modules)
+                {
+                    result.Add(mod.ModuleKey);
+                }
+                break;
+        }
+        return result;
+    }
 }
 
 public class SubscriptionCalculatorTests
@@ -132,6 +158,57 @@ public class SubscriptionCalculatorTests
         result.Should().Contain("Cows");
         result.Should().Contain("breeding");
         result.Should().Contain("growth");
+    }
+
+    [Theory]
+    [InlineData("plantel", 1)]
+    [InlineData("cria", 3)]
+    [InlineData("engorda", 4)]
+    [InlineData("completo", 7)]
+    public void ResolveLandingPreset_ShouldReturnExpectedModuleCounts(string preset, int expectedCount)
+    {
+        var modules = ModularSubscriptionCalculator.ResolveLandingPreset(preset, _catalog);
+
+        modules.Should().Contain("Cows");
+        modules.Count.Should().Be(expectedCount);
+    }
+
+    [Fact]
+    public void CalculateTotalPrice_WhenPresetCriaSelected_ShouldSumCorrectlyInMonthlyAndAnnual()
+    {
+        // Preset "cria": Cows + Breeding + Calving
+        var modules = ModularSubscriptionCalculator.ResolveLandingPreset("cria", _catalog);
+
+        // TIER_500: Cows (149.00 / 126.65) + Breeding (79.00 / 67.15) + Calving (49.00 / 41.65)
+        var monthly = ModularSubscriptionCalculator.CalculateTotalPrice(_catalog, "TIER_500", modules, isAnnual: false);
+        var annual = ModularSubscriptionCalculator.CalculateTotalPrice(_catalog, "TIER_500", modules, isAnnual: true);
+
+        monthly.Should().Be(277.00m);
+        annual.Should().Be(235.45m);
+    }
+
+    [Fact]
+    public void CalculateTotalPrice_WhenPresetCompletoSelected_ShouldSumAllSevenModules()
+    {
+        var modules = ModularSubscriptionCalculator.ResolveLandingPreset("completo", _catalog);
+        modules.Count.Should().Be(7);
+
+        // TIER_3000: Cows(349) + Breeding(169) + Calving(119) + Growth(149) + Sanitary(99) + Nutrition(129) + Analytics(149) = 1163.00m
+        var monthly = ModularSubscriptionCalculator.CalculateTotalPrice(_catalog, "TIER_3000", modules, isAnnual: false);
+        monthly.Should().Be(1163.00m);
+    }
+
+    [Fact]
+    public void CalculateCostPerHeadPerMonth_OnLandingPage_ShouldUseTierMaxHeadsWhenNoHerdProvided()
+    {
+        // Simulation on landing page uses activeHerdCount = 0 -> denominator is tierMaxHeads
+        // TIER_500: Total = 277.00m, maxHeads = 500 -> 277 / 500 = 0.55
+        var costPerHead = ModularSubscriptionCalculator.CalculateCostPerHeadPerMonth(277.00m, activeHerdCount: 0, tierMaxHeads: 500);
+        costPerHead.Should().Be(0.55m);
+
+        // TIER_1500: Total = 417.00m, maxHeads = 1500 -> 417 / 1500 = 0.28
+        var costPerHead1500 = ModularSubscriptionCalculator.CalculateCostPerHeadPerMonth(417.00m, activeHerdCount: 0, tierMaxHeads: 1500);
+        costPerHead1500.Should().Be(0.28m);
     }
 }
 
