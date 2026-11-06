@@ -399,6 +399,24 @@ Garantir transição suave dos dados existentes e validação completa de qualid
   - 12 testes de integração em Stripe Webhooks (100% de aprovação).
   - 117 testes unitários no Blazor Web Client (100% de aprovação).
 
-#### 6.3. Atualização de Documentação
-* Atualizar `docs/architecture/licensing-1.2.md`, `docs/modules/tenancy.md`, `docs/modules/backoffice_plans.md` e `docs/manual_de_uso.md` refletindo a nova contratação Self-Service por módulo e faixa de cabeças.
+#### 6.3. Atualização de Documentação [CONCLUÍDA]
+* **Arquitetura & Licenciamento (`docs/architecture/licensing-1.2.md`):**
+  - Documentação completa do fluxo ponta a ponta multi-item do Stripe (`SubscriptionItems`), governança desacoplada de capacidade via `ITenantActiveHerdCounter` / `CompositeActiveHerdCounter`, mecanismo de Grace Period de 14 dias para downgrades de capacidade e motor de upsell contextual de 1-clique (`ModuleGuardUpsellCalculator`).
+  - Diagrama Mermaid atualizado representando a sequência integrada: Blazor WASM $\rightarrow$ MediatR $\rightarrow$ Stripe API $\rightarrow$ Webhooks $\rightarrow$ DB $\rightarrow$ Claims JWT.
+* **Módulo Tenancy (`docs/modules/tenancy.md`):**
+  - Expurgo das referências legadas a limites fixos (`PlanCapacityLimits`) e substituição pelas faixas `HeadTierCapacityLimits`.
+  - Especificação dos novos comandos `UpdateModularSubscriptionCommand`, `CreateCheckoutSessionCommand` modular e catálogo público `GET /api/v1/tenancy/catalog`.
+  - Documentação da resolução híbrida de webhooks multi-item e do resolvedor canônico `LegacyPlanMigrationResolver`.
+* **Módulo Backoffice (`docs/modules/backoffice_plans.md`):**
+  - Gestão visual da Matriz Modular 7x4 em `PlanCatalogManagement.razor`, blindagem do módulo base (`IsCore = true`) e governança de 4-Eyes.
+  - Documentação da alteração de planos de tenants por administradores via `TenantPlanChangeModal.razor` (`ChangeTenantPlanCommand` / `PreviewTenantPlanChangeQuery`) com justificativa compulsória ($\ge 15$ caracteres) e auditoria forense SHA-256 encadeada em `AuditLog`.
+  - Desacoplamento do motor de políticas de desconto de indicação (`PlanReferralDiscountPolicy`) por `HeadTierCode` ou `GLOBAL_DEFAULT`.
+* **Manual do Usuário (`docs/manual_de_uso.md`):**
+  - Reformulação completa da seção 10.3 ("Monte seu Plano") na ótica do produtor rural: seleção de faixas de cabeças, módulo base obrigatório, add-ons opcionais, economia no ciclo anual, indicador de custo por cabeça/mês, rateio proporcional (*proration*), ativação contextual em 1-clique e tolerância de 14 dias de carência.
+  - Atualização do fluxo de boas-vindas (Trial de 30 dias na faixa até 500 cabeças) e expansão da seção de Perguntas Frequentes (FAQ).
+* **Architecture Decision Record (`docs/adrs/0027-modular-self-service-and-tiered-head-pricing.md`):**
+  - Formalização do ADR 0027 registrando o histórico de decisão técnica, trade-offs, mitigação de riscos e consequências da substituição de planos engessados pelo modelo modular self-service.
+* **Guia de Agentes (`agents.md`):**
+  - Sincronização dos princípios de arquitetura com referência canônica ao ADR 0027.
+
 

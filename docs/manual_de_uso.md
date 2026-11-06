@@ -84,7 +84,9 @@ No primeiro acesso após a ativação:
 3. **Primeira Unidade de Produção / Retiro:**
    * Informe o nome da sede principal ou retiro (ex.: *Retiro das Palmeiras*).
    * Capacidade estimada de cabeças e área total em hectares.
-4. **Finalização:** A plataforma cria automaticamente o seu ambiente isolado (*Tenant*) com você como **Administrador Geral**.
+4. **Degustação Modular Gratuita (Trial de 30 dias):**
+   * A fazenda inicia automaticamente com degustação de até 500 cabeças (`TIER_500`) e acesso irrestrito a todos os módulos da plataforma para você testar na prática com a sua equipe no curral.
+5. **Finalização:** A plataforma cria automaticamente o seu ambiente isolado (*Tenant*) com você como **Administrador Geral**.
 
 ### 2.3 Login Seguro e Recuperação de Senha
 * **Login (`/login`):** Insira seu e-mail e senha cadastrados. A sessão é protegida com tokens JWT criptografados.
@@ -312,9 +314,53 @@ Convide seus funcionários e parceiros técnicos atribuindo papéis com permiss�
 
 ### 10.3 Planos, Assinatura e Faturamento (Stripe)
 Acesse **Assinatura & Planos** (`/settings/subscription`):
-* Conheça os planos disponíveis (Starter, Profissional, Enterprise).
-* Upgrade ou downgrade direto via **Stripe Checkout** com pagamento seguro por cartão de crédito ou boleto bancário.
-* Gerenciamento de faturas, notas fiscais e alteração de cartão via **Portal do Cliente Stripe**.
+O CriaCerto opera com o modelo **Assinatura Modular Self-Service ("Monte seu Plano")**, garantindo que você pague exclusivamente pelos módulos que realmente agregam valor ao seu manejo diário e pela capacidade real do seu rebanho.
+
+#### 1. Escolha da Faixa de Cabeças (*Head Tiers*)
+Selecione a faixa correspondente ao volume de animais ativos na sua fazenda:
+* **Até 500 cabeças (`TIER_500`):** Ideal para rebanhos iniciais, cabanhas ou retiros de menor porte.
+* **De 501 a 1.500 cabeças (`TIER_1500`):** Para produtores de médio porte.
+* **De 1.501 a 3.000 cabeças (`TIER_3000`):** Para operações consolidadas de cria e recria.
+* **Acima de 3.000 cabeças (`TIER_5000_PLUS`):** Projetado para megaoperações, confinamentos e grandes projetos pecuários (capacidade para até 10.000+ cabeças).
+
+> [!NOTE]
+> **Proteção Preventiva de Capacidade:** O sistema calcula a ocupação zootécnica em tempo real. Se o seu número de animais cadastrados for superior ao limite de uma faixa (ex.: 720 cabeças ativas), o seletor desabilita preventivamente faixas inferiores (como até 500 cabeças), evitando inconsistências de licenciamento.
+
+#### 2. Módulo Base de Plantel (`Cows`) — Obrigatório
+Toda assinatura inclui compulsoriamente a base operacional da fazenda:
+* Ficha cadastral individual de fêmeas e machos (brinco, chip RFID, tatuagem, raça, pedigree).
+* Criação de lotes e movimentação de animais entre pastos/piquetes.
+* Gestão de retiros, unidades produtivas e filiais.
+* Dashboard executivo e indicadores zootécnicos essenciais.
+
+#### 3. Módulos Adicionais (Add-ons Self-Service)
+Personalize sua assinatura marcando ou desmarcando os módulos especializados:
+* **Reprodução & IATF (`Breeding`):** Protocolos IATF (D0/D8/D11), diagnóstico de gestação (DG) e indicadores de fertilidade.
+* **Maternidade & Bezerreiro (`Calving`):** Apontamento de partos, vigor do bezerro, linha de lactação e peso desmame ajustado aos 205 dias.
+* **Recria, Engorda & Pastagens (`Growth`):** Pesagens rápidas no curral, cálculo de Ganho de Peso Diário (GPD), taxa de lotação (UA/ha) e importação de balanças eletrônicas.
+* **Sanidade & Carência (`Sanitary`):** Campanhas de vacinação, tratamentos veterinários individuais e bloqueio compulsório de carência para abate.
+* **Nutrição & Confinamento (`Nutrition`):** Gestão de silos e estoque, controle de trato TMR, suplementação mineral/proteica e custo por arroba (@) produzida.
+* **Inteligência Zootécnica & BI (`Analytics`):** Relatórios estratégicos, cruzamento de índices produtivos e exportação consolidada.
+
+#### 4. Economia no Ciclo Anual & Indicador de Custo por Cabeça
+* **Chave Mensal / Anual:** Selecione a opção Anual para obter descontos exclusivos de até 20% sobre o pacote contratado.
+* **Custo por Cabeça/Mês:** A barra fixa inferior (`ModularCartStickyBar`) recalcula instantaneamente o custo unitário por animal ($R\$/cabeça/mês$), facilitando o planejamento orçamentário da fazenda.
+
+#### 5. Alteração Imediata com Rateio Proporcional (*Proration*)
+Para propriedades com assinatura ativa e cartão cadastrado no Stripe:
+* A inclusão ou exclusão de módulos entra em vigor no mesmo segundo.
+* O Stripe calcula o rateio proporcional (*proration*) com base nos dias restantes da mensalidade, debitando ou creditando a diferença na fatura seguinte.
+* O sistema renova o token JWT em segundo plano, liberando as telas imediatamente sem necessidade de sair e entrar novamente.
+
+#### 6. Desbloqueio Contextual de 1-Clique no Manejo (`ModuleGuard`)
+Caso um campeiro ou gerente tente acessar uma tela de um módulo não contratado (ex.: lançar uma inseminação sem o módulo de Reprodução ativo):
+* Uma janela contextual calcula na hora o acréscimo mensal correspondente à sua faixa de cabeças (ex.: `+ R$ 89,00/mês`).
+* Com um único clique em **Ativar Módulo Agora**, o módulo é contratado e a tela é liberada na hora, sem travar o manejo no mangueiro.
+
+#### 7. Downgrade de Faixa e Prazo de Tolerância (14 dias de Grace Period)
+Ao solicitar a redução para uma faixa de cabeças inferior ao seu rebanho ativo cadastrado:
+* A plataforma concede uma janela de carência de **14 dias** (*Grace Period*).
+* A fazenda permanece plenamente funcional durante esse prazo para que você possa efetuar o ajuste cadastral (baixa de animais vendidos, culling ou transferência entre retiros).
 
 ### 10.4 Privacidade, Dados e LGPD
 Acesse **Privacidade LGPD** (`/settings/privacy`):
@@ -338,11 +384,20 @@ Sim! A plataforma foi concebida especificamente para operar em áreas rurais rem
 Sim. O campo de identificação do animal aceita leitura de bastões ou leitores de brinco eletrônico conectados via Bluetooth ou teclado virtual.
 
 **3. O que acontece se o período de teste (trial) expirar?**  
-Ao término dos 14 dias de teste gratuito, o sistema direcionará para a tela de regularização de assinatura (`/trial-expired`). Todos os seus dados, cadastros e históricos permanecem intactos e protegidos; basta selecionar um plano para restabelecer o acesso imediato.
+Ao término dos 30 dias de degustação gratuita, o sistema direcionará para a tela de contratação (`/settings/subscription`). Todos os seus animais, cadastros e históricos lançados durante o teste permanecem 100% preservados; basta escolher a sua faixa de cabeças e os módulos desejados para continuar operando.
 
-**4. Como entrar em contato com o suporte técnico?**  
+**4. Posso contratar apenas o módulo de Sanidade e Nutrição sem contratar Reprodução?**  
+Com certeza! Essa é a essência do modelo modular. Você é obrigado a manter apenas o Módulo Base de Plantel (`Cows`); todos os demais módulos (como Sanidade, Nutrição, Recria, etc.) são opcionais e podem ser combinados livremente de acordo com a vocação da sua propriedade.
+
+**5. Se o meu rebanho crescer e ultrapassar o teto da minha faixa contratada?**  
+Ao tentar cadastrar novos animais além do teto da faixa (ex.: 501º animal na faixa até 500 cabeças), o sistema exibirá uma mensagem informando que a capacidade foi atingida e fornecerá um link rápido para migração imediata para a faixa seguinte (`TIER_1500`), com rateio proporcional automático.
+
+**6. Se eu adicionar um módulo no meio do mês, serei cobrado duas vezes?**  
+Não. O Stripe calcula rigorosamente o rateio diário proporcional (*proration*). Você paga apenas pela fração de dias restante entre a data de ativação do módulo e a virada da sua fatura mensal.
+
+**7. Como entrar em contato com o suporte técnico?**  
 * **E-mail:** `suporte@criacerto.agr.br`
-* **WhatsApp de Suporte:** Disponível no menu de ajuda dentro da plataforma para planos Profissional e Enterprise.
+* **WhatsApp de Suporte:** Disponível no menu de ajuda dentro da plataforma.
 * **Horário de Atendimento:** Segunda a Sexta das 07h às 18h e Sábados das 07h às 12h (horário de Brasília).
 
 ---
