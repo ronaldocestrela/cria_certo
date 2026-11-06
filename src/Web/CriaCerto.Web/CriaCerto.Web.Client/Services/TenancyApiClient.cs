@@ -66,7 +66,43 @@ public sealed record CommercialModuleOptionModel(
     bool IsCore,
     int SortOrder,
     IReadOnlyList<ModuleTierPriceOptionModel> PricesByTier
-);
+)
+{
+    public string IconName => ResolveIcon(Icon, ModuleKey);
+
+    public static string ResolveIcon(string? icon, string? moduleKey = null)
+    {
+        if (!string.IsNullOrWhiteSpace(icon) && !icon.StartsWith("bi-", StringComparison.OrdinalIgnoreCase) && !icon.StartsWith("bi ", StringComparison.OrdinalIgnoreCase))
+        {
+            return icon.Trim();
+        }
+
+        var normalizedIcon = icon?.Trim().ToLowerInvariant() ?? string.Empty;
+        var key = moduleKey?.Trim().ToLowerInvariant() ?? string.Empty;
+
+        return normalizedIcon switch
+        {
+            "bi-grid-1x2-fill" or "bi-grid" or "bi-cow" => "pets",
+            "bi-heart-pulse-fill" or "bi-heart-pulse" => "favorite",
+            "bi-stars" or "bi-star-fill" => "child_care",
+            "bi-graph-up-arrow" or "bi-graph-up" => "trending_up",
+            "bi-shield-fill-plus" or "bi-shield-plus" => "vaccines",
+            "bi-basket2-fill" or "bi-basket" => "restaurant",
+            "bi-bar-chart-line-fill" or "bi-bar-chart" => "insights",
+            _ => key switch
+            {
+                "cows" => "pets",
+                "breeding" => "favorite",
+                "calving" => "child_care",
+                "growth" => "trending_up",
+                "sanitary" => "vaccines",
+                "nutrition" => "restaurant",
+                "analytics" => "insights",
+                _ => "widgets"
+            }
+        };
+    }
+}
 
 public sealed record ModularSubscriptionCatalogModel(
     IReadOnlyList<HeadTierOptionModel> HeadTiers,

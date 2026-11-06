@@ -2327,6 +2327,9 @@ h1:focus {
     align-items: center;
     justify-content: center;
     font-size: 1.1rem;
+    overflow: hidden;
+    flex-shrink: 0;
+    line-height: 1;
 }
 
 .simulator-addon-card.selected .addon-icon-box {

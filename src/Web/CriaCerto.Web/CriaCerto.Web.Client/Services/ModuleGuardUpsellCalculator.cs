@@ -82,7 +82,7 @@ public static class ModuleGuardUpsellCalculator
             ModuleKey: moduleOption.ModuleKey,
             ModuleName: moduleOption.Name,
             Description: moduleOption.Description,
-            Icon: moduleOption.Icon,
+            Icon: moduleOption.IconName,
             TierCode: tier.TierCode,
             TierName: tier.DisplayName,
             MaxHeads: tier.MaxHeads,

@@ -148,12 +148,43 @@ public sealed class BackofficeSubscriptionPlansProvider : ISubscriptionPlansProv
                 ModuleKey: module.ModuleKey,
                 Name: module.Name,
                 Description: module.Description,
-                Icon: module.Icon,
+                Icon: NormalizeIcon(module.Icon, module.ModuleKey),
                 IsCore: module.IsCore,
                 SortOrder: module.SortOrder,
                 PricesByTier: pricesByTier));
         }
 
         return new ModularSubscriptionCatalogDto(tierDtos, moduleDtos);
+    }
+
+    private static string NormalizeIcon(string? icon, string moduleKey)
+    {
+        if (!string.IsNullOrWhiteSpace(icon) && !icon.StartsWith("bi-", StringComparison.OrdinalIgnoreCase) && !icon.StartsWith("bi ", StringComparison.OrdinalIgnoreCase))
+        {
+            return icon.Trim();
+        }
+
+        var normalized = icon?.Trim().ToLowerInvariant() ?? string.Empty;
+        return normalized switch
+        {
+            "bi-grid-1x2-fill" or "bi-grid" or "bi-cow" => "pets",
+            "bi-heart-pulse-fill" or "bi-heart-pulse" => "favorite",
+            "bi-stars" or "bi-star-fill" => "child_care",
+            "bi-graph-up-arrow" or "bi-graph-up" => "trending_up",
+            "bi-shield-fill-plus" or "bi-shield-plus" => "vaccines",
+            "bi-basket2-fill" or "bi-basket" => "restaurant",
+            "bi-bar-chart-line-fill" or "bi-bar-chart" => "insights",
+            _ => moduleKey.ToLowerInvariant() switch
+            {
+                "cows" => "pets",
+                "breeding" => "favorite",
+                "calving" => "child_care",
+                "growth" => "trending_up",
+                "sanitary" => "vaccines",
+                "nutrition" => "restaurant",
+                "analytics" => "insights",
+                _ => "widgets"
+            }
+        };
     }
 }

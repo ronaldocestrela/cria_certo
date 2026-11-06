@@ -56,13 +56,13 @@ public sealed class GetSubscriptionPlansQueryHandler :
 
         var modules = new List<CommercialModuleOptionDto>
         {
-            new("Cows", "Gestão do Plantel (Base)", "Gestão cadastral do rebanho, lotes básicos, unidades produtivas e dashboard executivo.", "bi-grid-1x2-fill", true, 1, BuildPrices("Cows", 79m, 139m, 219m, 349m)),
-            new("Breeding", "Reprodução & IATF", "Protocolos de IATF, inseminação artificial, monta natural e diagnóstico de gestação.", "bi-heart-pulse-fill", false, 2, BuildPrices("Breeding", 49m, 89m, 139m, 199m)),
-            new("Calving", "Maternidade & Bezerreiro", "Registro de partos, identificação de bezerros, desmama e peso ajustado aos 205 dias.", "bi-stars", false, 3, BuildPrices("Calving", 39m, 69m, 109m, 159m)),
-            new("Growth", "Recria, Engorda & Pastos", "Pesagens, cálculo de GPD/@, movimentação de lotes e taxa de lotação de pastos (UA/ha).", "bi-graph-up-arrow", false, 4, BuildPrices("Growth", 59m, 99m, 159m, 229m)),
-            new("Sanitary", "Sanitário & Carência", "Campanhas de vacinação, vermifugação, tratamentos veterinários e bloqueio de carência de abate.", "bi-shield-fill-plus", false, 5, BuildPrices("Sanitary", 49m, 89m, 139m, 199m)),
-            new("Nutrition", "Nutrição & Confinamento", "Suplementação a pasto, estoque de silos, carregamento de trato TMR e conversão alimentar.", "bi-basket2-fill", false, 6, BuildPrices("Nutrition", 79m, 149m, 239m, 349m)),
-            new("Analytics", "BI & Analytics Avançado", "Relatórios zootécnicos avançados, inteligência de rebanho e indicadores executivos.", "bi-bar-chart-line-fill", false, 7, BuildPrices("Analytics", 49m, 79m, 129m, 189m))
+            new("Cows", "Gestão do Plantel (Base)", "Gestão cadastral do rebanho, lotes básicos, unidades produtivas e dashboard executivo.", "pets", true, 1, BuildPrices("Cows", 79m, 139m, 219m, 349m)),
+            new("Breeding", "Reprodução & IATF", "Protocolos de IATF, inseminação artificial, monta natural e diagnóstico de gestação.", "favorite", false, 2, BuildPrices("Breeding", 49m, 89m, 139m, 199m)),
+            new("Calving", "Maternidade & Bezerreiro", "Registro de partos, identificação de bezerros, desmama e peso ajustado aos 205 dias.", "child_care", false, 3, BuildPrices("Calving", 39m, 69m, 109m, 159m)),
+            new("Growth", "Recria, Engorda & Pastos", "Pesagens, cálculo de GPD/@, movimentação de lotes e taxa de lotação de pastos (UA/ha).", "trending_up", false, 4, BuildPrices("Growth", 59m, 99m, 159m, 229m)),
+            new("Sanitary", "Sanitário & Carência", "Campanhas de vacinação, vermifugação, tratamentos veterinários e bloqueio de carência de abate.", "vaccines", false, 5, BuildPrices("Sanitary", 49m, 89m, 139m, 199m)),
+            new("Nutrition", "Nutrição & Confinamento", "Suplementação a pasto, estoque de silos, carregamento de trato TMR e conversão alimentar.", "restaurant", false, 6, BuildPrices("Nutrition", 79m, 149m, 239m, 349m)),
+            new("Analytics", "BI & Analytics Avançado", "Relatórios zootécnicos avançados, inteligência de rebanho e indicadores executivos.", "insights", false, 7, BuildPrices("Analytics", 49m, 79m, 129m, 189m))
         };
 
         return new ModularSubscriptionCatalogDto(tiers, modules);

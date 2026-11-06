@@ -546,7 +546,7 @@ public static class BackofficeDataSeeder
                 "Cows",
                 "Gestão do Plantel (Base)",
                 "Gestão cadastral do rebanho, lotes básicos, unidades produtivas e dashboard executivo.",
-                "bi-grid-1x2-fill",
+                "pets",
                 true,
                 1,
                 [
@@ -560,7 +560,7 @@ public static class BackofficeDataSeeder
                 "Breeding",
                 "Reprodução & IATF",
                 "Protocolos de IATF, inseminação artificial, monta natural e diagnóstico de gestação.",
-                "bi-heart-pulse-fill",
+                "favorite",
                 false,
                 2,
                 [
@@ -574,7 +574,7 @@ public static class BackofficeDataSeeder
                 "Calving",
                 "Maternidade & Bezerreiro",
                 "Registro de partos, identificação de bezerros, desmama e peso ajustado aos 205 dias.",
-                "bi-stars",
+                "child_care",
                 false,
                 3,
                 [
@@ -588,7 +588,7 @@ public static class BackofficeDataSeeder
                 "Growth",
                 "Recria, Engorda & Pastos",
                 "Pesagens, cálculo de GPD/@, movimentação de lotes e taxa de lotação de pastos (UA/ha).",
-                "bi-graph-up-arrow",
+                "trending_up",
                 false,
                 4,
                 [
@@ -602,7 +602,7 @@ public static class BackofficeDataSeeder
                 "Sanitary",
                 "Sanitário & Carência",
                 "Campanhas de vacinação, vermifugação, tratamentos veterinários e bloqueio de carência de abate.",
-                "bi-shield-fill-plus",
+                "vaccines",
                 false,
                 5,
                 [
@@ -616,7 +616,7 @@ public static class BackofficeDataSeeder
                 "Nutrition",
                 "Nutrição & Confinamento",
                 "Suplementação a pasto, estoque de silos, carregamento de trato TMR e conversão alimentar.",
-                "bi-basket2-fill",
+                "restaurant",
                 false,
                 6,
                 [
@@ -630,7 +630,7 @@ public static class BackofficeDataSeeder
                 "Analytics",
                 "BI & Analytics Avançado",
                 "Relatórios zootécnicos avançados, inteligência de rebanho e indicadores executivos.",
-                "bi-bar-chart-line-fill",
+                "insights",
                 false,
                 7,
                 [
@@ -660,6 +660,10 @@ public static class BackofficeDataSeeder
                 dbContext.ModuleCatalogs.Add(module);
                 modulesMap[moduleKey] = module;
                 modulesCreated++;
+            }
+            else if (module.Icon.StartsWith("bi-", StringComparison.OrdinalIgnoreCase))
+            {
+                module.UpdateDetails(module.Name, module.Description, icon, module.IsCore, module.SortOrder, module.IsActive);
             }
 
             foreach (var (tierCode, monthlyPrice) in prices)

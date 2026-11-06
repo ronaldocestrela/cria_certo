@@ -11,7 +11,7 @@ public class ModuleCatalog
     public string ModuleKey { get; private set; } = default!;
     public string Name { get; private set; } = default!;
     public string Description { get; private set; } = default!;
-    public string Icon { get; private set; } = "bi-box";
+    public string Icon { get; private set; } = "widgets";
     public bool IsCore { get; private set; }
     public bool IsActive { get; private set; } = true;
     public int SortOrder { get; private set; }
@@ -26,7 +26,7 @@ public class ModuleCatalog
         string moduleKey,
         string name,
         string description,
-        string icon = "bi-box",
+        string icon = "widgets",
         bool isCore = false,
         int sortOrder = 0,
         bool isActive = true)
@@ -49,7 +49,7 @@ public class ModuleCatalog
             ModuleKey = moduleKey.Trim(),
             Name = name.Trim(),
             Description = description.Trim(),
-            Icon = string.IsNullOrWhiteSpace(icon) ? "bi-box" : icon.Trim(),
+            Icon = string.IsNullOrWhiteSpace(icon) ? "widgets" : icon.Trim(),
             IsCore = isCore,
             IsActive = isActive,
             SortOrder = sortOrder,
@@ -78,7 +78,7 @@ public class ModuleCatalog
 
         Name = name.Trim();
         Description = description.Trim();
-        Icon = string.IsNullOrWhiteSpace(icon) ? "bi-box" : icon.Trim();
+        Icon = string.IsNullOrWhiteSpace(icon) ? "widgets" : icon.Trim();
         IsCore = isCore;
         SortOrder = sortOrder;
         IsActive = isActive;
