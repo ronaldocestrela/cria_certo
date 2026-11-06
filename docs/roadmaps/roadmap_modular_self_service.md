@@ -341,11 +341,29 @@ Ajustar os módulos satélites que antes dependiam dos códigos fixos `Starter`,
 
 Garantir transição suave dos dados existentes e validação completa de qualidade.
 
-#### 6.1. Script/Migration de Conversão de Tenants Existentes
-* Na migration do EF Core, converter automaticamente os tenants existentes no banco:
-  * Antigo `Starter` → `HeadTierCode = "TIER_500"` (`Capacity = 500`) + Módulos `["Cows", "Breeding", "Calving"]`.
-  * Antigo `Pro` → `HeadTierCode = "TIER_3000"` (`Capacity = 3000`) + Módulos `["Cows", "Breeding", "Calving", "Growth", "Nutrition"]`.
-  * Antigo `Enterprise` → `HeadTierCode = "TIER_5000_PLUS"` (`Capacity = 10000`) + Todos os Módulos `["Cows", "Breeding", "Calving", "Growth", "Sanitary", "Nutrition", "Analytics"]`.
+#### 6.1. Script/Migration de Conversão de Tenants Existentes - [CONCLUÍDO]
+* **Regras Canônicas de Migração e Resolução de Domínio:**
+  - Criação de `LegacyPlanMigrationResolver` e `LegacyPlanMigrationDefinition` em `CriaCerto.Modules.Tenancy.Application.Domain` como fonte única da verdade para a conversão de contratos legados:
+    - Antigo `Starter` (e aliases "Starter Pecuária", "Plano Starter") $\rightarrow$ `HeadTierCode = "TIER_500"`, `Capacity = 500`, `SizeSegment = "Medium"` (conforme catálogo pecuário) + Módulos `["Cows", "Breeding", "Calving"]`.
+    - Antigo `Pro` (e aliases "Pro Fazenda", "Profissional", "Plano Pro") $\rightarrow$ `HeadTierCode = "TIER_3000"`, `Capacity = 3000`, `SizeSegment = "Large"` + Módulos `["Cows", "Breeding", "Calving", "Growth", "Nutrition"]`.
+    - Antigo `Enterprise` (e aliases "Enterprise Confinamento", "Plano Enterprise") $\rightarrow$ `HeadTierCode = "TIER_5000_PLUS"`, `Capacity = 10000`, `SizeSegment = "Large"` + Todos os 7 Módulos `["Cows", "Breeding", "Calving", "Growth", "Sanitary", "Nutrition", "Analytics"]`.
+    - Fallback seguro para planos nulos, vazios ou desconhecidos garantindo alocação no pacote Starter e inviolabilidade do módulo core `"Cows"`.
+  - Método de domínio `Tenant.MigrateFromLegacyPlan(string? legacyPlanOverride = null, DateTime? migratedAtUtc = null)` em conformidade com o Result Pattern e auditabilidade.
+* **Migration EF Core e Script SQL Standalone:**
+  - Migration EF Core `20261105220000_MigrateExistingTenantsToModularCatalog` em `CriaCerto.Modules.Tenancy.Infrastructure` aplicando script T-SQL atômico e idempotente durante `Database.Migrate()`.
+  - Script SQL operacional standalone em `scripts/database/migrations/20261105_migrate_existing_tenants_to_modular.sql` com transação `BEGIN TRY / BEGIN CATCH`, logs informativos com `PRINT`, proteção `WHERE NOT EXISTS` contra duplicações em `TenantSubscribedModules` e registro compulsório de auditoria em `TenantSubscriptionHistories` com `ActionType = 'PlanChanged'`.
+* **Suíte de Testes Automatizados (TDD):**
+  - `LegacyPlanMigrationTests.cs` (13 testes) cobrindo resoluções de Starter, Pro, Enterprise, aliases comerciais, fallbacks de segurança, mutação do agregado `Tenant`, idempotência e priorização de overrides.
+  - `MigrationScriptConsistencyTests.cs` (3 testes) garantindo a existência e consistência estrita dos scripts SQL e classes de migração sem documentação defasada.
+  - 482 testes unitários homologados no módulo Tenancy com 100% de aprovação.
+* **Arquivos Impactados:**
+  - `src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Domain/LegacyPlanMigrationResolver.cs`
+  - `src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Domain/Tenant.cs`
+  - `src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Infrastructure/Persistence/Migrations/20261105220000_MigrateExistingTenantsToModularCatalog.cs`
+  - `src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Infrastructure/Persistence/Migrations/20261105220000_MigrateExistingTenantsToModularCatalog.Designer.cs`
+  - `scripts/database/migrations/20261105_migrate_existing_tenants_to_modular.sql`
+  - `tests/Unit/CriaCerto.Modules.Tenancy.UnitTests/Domain/LegacyPlanMigrationTests.cs`
+  - `tests/Unit/CriaCerto.Modules.Tenancy.UnitTests/Domain/MigrationScriptConsistencyTests.cs`
 
 #### 6.2. Suíte de Testes Automatizados
 * **Unit Tests (`CriaCerto.BuildingBlocks.UnitTests` & `CriaCerto.Modules.Tenancy.UnitTests`):**

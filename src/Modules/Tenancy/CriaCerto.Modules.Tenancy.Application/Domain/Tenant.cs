@@ -283,6 +283,28 @@ public sealed class Tenant
         return Result.Success();
     }
 
+    public Result MigrateFromLegacyPlan(string? legacyPlanOverride = null, DateTime? migratedAtUtc = null)
+    {
+        var planToMigrate = string.IsNullOrWhiteSpace(legacyPlanOverride) ? SubscribedPlan : legacyPlanOverride;
+        var planDefinition = LegacyPlanMigrationResolver.ResolveLegacyPlan(planToMigrate);
+
+        var tierResult = SetHeadTier(planDefinition.HeadTierCode, planDefinition.Capacity);
+        if (tierResult.IsFailure)
+        {
+            return tierResult;
+        }
+
+        var modulesResult = SetSubscribedModules(planDefinition.ModuleKeys, activatedAtUtc: migratedAtUtc);
+        if (modulesResult.IsFailure)
+        {
+            return modulesResult;
+        }
+
+        SubscribedPlan = planDefinition.CanonicalPlan;
+        UpdatedAtUtc = migratedAtUtc ?? DateTime.UtcNow;
+        return Result.Success();
+    }
+
     private static Result ValidateJustification(string? reason)
     {
         if (string.IsNullOrWhiteSpace(reason) || reason.Trim().Length < TenantLifecycle.MinJustificationLength)
