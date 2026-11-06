@@ -31,7 +31,9 @@ internal static class TenantBackofficeMapper
             tenant.IsProtected,
             tenant.CreatedAtUtc,
             tenant.CurrentPeriodEndUtc,
-            tenant.CancelAtPeriodEnd);
+            tenant.CancelAtPeriodEnd,
+            tenant.HeadTierCode,
+            tenant.GetSubscribedModuleKeys());
 
     public static TenantBackofficeDetailDto ToDetailDto(
         Tenant tenant,
@@ -73,7 +75,9 @@ internal static class TenantBackofficeMapper
             tenant.CreatedAtUtc,
             tenant.UpdatedAtUtc,
             tenant.CurrentPeriodEndUtc,
-            tenant.CancelAtPeriodEnd);
+            tenant.CancelAtPeriodEnd,
+            tenant.HeadTierCode,
+            tenant.GetSubscribedModuleKeys());
     }
 
     public static async Task<IReadOnlyDictionary<Guid, List<TenantOperationalTagDto>>> LoadTagsByTenantIdsAsync(

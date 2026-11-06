@@ -90,10 +90,27 @@ public interface IBackofficeApiClient
     Task<LifecycleActionResult> SetTenantProtectionAsync(Guid id, bool isProtected, string reason, CancellationToken cancellationToken = default);
 
     // Subscription Plan Methods
-    Task<TenantPlanPreviewDto?> PreviewPlanChangeAsync(Guid tenantId, Guid targetPlanVersionId, CancellationToken cancellationToken = default);
+    Task<TenantPlanPreviewDto?> PreviewPlanChangeAsync(
+        Guid tenantId,
+        Guid? targetPlanVersionId = null,
+        string? headTierCode = null,
+        IEnumerable<string>? selectedModules = null,
+        CancellationToken cancellationToken = default);
     Task<ChangeTenantPlanResponseDto?> ChangeTenantPlanAsync(Guid tenantId, ChangeTenantPlanRequestDto request, CancellationToken cancellationToken = default);
 
-    // Plan Catalog Methods
+    // Modular Catalog Methods
+    Task<IReadOnlyList<HeadTierCatalogDto>?> GetHeadTiersAsync(bool includeInactive = false, CancellationToken cancellationToken = default);
+    Task<HeadTierCatalogDto?> CreateHeadTierAsync(CreateHeadTierCatalogCommand command, CancellationToken cancellationToken = default);
+    Task<HeadTierCatalogDto?> UpdateHeadTierAsync(Guid tierId, UpdateHeadTierCatalogCommand command, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<ModuleCatalogDto>?> GetModuleCatalogsAsync(bool includeInactive = false, CancellationToken cancellationToken = default);
+    Task<ModuleCatalogDto?> GetModuleCatalogByIdAsync(Guid moduleId, CancellationToken cancellationToken = default);
+    Task<ModuleCatalogDto?> CreateModuleCatalogAsync(CreateModuleCatalogCommand command, CancellationToken cancellationToken = default);
+    Task<ModuleCatalogDto?> UpdateModuleCatalogAsync(Guid moduleId, UpdateModuleCatalogCommand command, CancellationToken cancellationToken = default);
+    Task<ModuleTierPriceDto?> CreateModuleTierPriceDraftAsync(Guid moduleId, CreateModuleTierPriceDraftCommand command, CancellationToken cancellationToken = default);
+    Task<ModuleTierPriceDto?> UpdateModuleTierPriceDraftAsync(Guid priceId, UpdateModuleTierPriceDraftCommand command, CancellationToken cancellationToken = default);
+    Task<ModuleTierPriceDto?> PublishModuleTierPriceAsync(Guid priceId, string? approvalNotes = null, CancellationToken cancellationToken = default);
+
+    // Plan Catalog Methods (Legacy)
     Task<IReadOnlyCollection<PlanCatalogDto>?> GetPlansAsync(bool includeArchived = false, CancellationToken cancellationToken = default);
     Task<PlanCatalogDto?> GetPlanByIdAsync(Guid id, CancellationToken cancellationToken = default);
     Task<PlanCatalogDto?> CreatePlanAsync(CreatePlanCatalogCommand command, CancellationToken cancellationToken = default);
@@ -677,10 +694,91 @@ public class BackofficeApiClient : IBackofficeApiClient
         return await _httpClient.GetFromJsonAsync<PlanVersionComparisonDto>($"api/v1/backoffice/plans/versions/compare?baseVersionId={baseVersionId}&targetVersionId={targetVersionId}", cancellationToken);
     }
 
-    public async Task<TenantPlanPreviewDto?> PreviewPlanChangeAsync(Guid tenantId, Guid targetPlanVersionId, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<HeadTierCatalogDto>?> GetHeadTiersAsync(bool includeInactive = false, CancellationToken cancellationToken = default)
     {
         await AttachTokenAsync();
-        return await _httpClient.GetFromJsonAsync<TenantPlanPreviewDto>($"api/v1/backoffice/tenants/{tenantId}/plan-preview?targetPlanVersionId={targetPlanVersionId}", cancellationToken);
+        return await _httpClient.GetFromJsonAsync<IReadOnlyList<HeadTierCatalogDto>>($"api/v1/backoffice/catalog/tiers?includeInactive={includeInactive}", cancellationToken);
+    }
+
+    public async Task<HeadTierCatalogDto?> CreateHeadTierAsync(CreateHeadTierCatalogCommand command, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.PostAsJsonAsync("api/v1/backoffice/catalog/tiers", command, cancellationToken);
+        return response.IsSuccessStatusCode ? await response.Content.ReadFromJsonAsync<HeadTierCatalogDto>(cancellationToken: cancellationToken) : null;
+    }
+
+    public async Task<HeadTierCatalogDto?> UpdateHeadTierAsync(Guid tierId, UpdateHeadTierCatalogCommand command, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.PutAsJsonAsync($"api/v1/backoffice/catalog/tiers/{tierId}", command, cancellationToken);
+        return response.IsSuccessStatusCode ? await response.Content.ReadFromJsonAsync<HeadTierCatalogDto>(cancellationToken: cancellationToken) : null;
+    }
+
+    public async Task<IReadOnlyList<ModuleCatalogDto>?> GetModuleCatalogsAsync(bool includeInactive = false, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        return await _httpClient.GetFromJsonAsync<IReadOnlyList<ModuleCatalogDto>>($"api/v1/backoffice/catalog/modules?includeInactive={includeInactive}", cancellationToken);
+    }
+
+    public async Task<ModuleCatalogDto?> GetModuleCatalogByIdAsync(Guid moduleId, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        return await _httpClient.GetFromJsonAsync<ModuleCatalogDto>($"api/v1/backoffice/catalog/modules/{moduleId}", cancellationToken);
+    }
+
+    public async Task<ModuleCatalogDto?> CreateModuleCatalogAsync(CreateModuleCatalogCommand command, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.PostAsJsonAsync("api/v1/backoffice/catalog/modules", command, cancellationToken);
+        return response.IsSuccessStatusCode ? await response.Content.ReadFromJsonAsync<ModuleCatalogDto>(cancellationToken: cancellationToken) : null;
+    }
+
+    public async Task<ModuleCatalogDto?> UpdateModuleCatalogAsync(Guid moduleId, UpdateModuleCatalogCommand command, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.PutAsJsonAsync($"api/v1/backoffice/catalog/modules/{moduleId}", command, cancellationToken);
+        return response.IsSuccessStatusCode ? await response.Content.ReadFromJsonAsync<ModuleCatalogDto>(cancellationToken: cancellationToken) : null;
+    }
+
+    public async Task<ModuleTierPriceDto?> CreateModuleTierPriceDraftAsync(Guid moduleId, CreateModuleTierPriceDraftCommand command, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.PostAsJsonAsync($"api/v1/backoffice/catalog/modules/{moduleId}/prices", command, cancellationToken);
+        return response.IsSuccessStatusCode ? await response.Content.ReadFromJsonAsync<ModuleTierPriceDto>(cancellationToken: cancellationToken) : null;
+    }
+
+    public async Task<ModuleTierPriceDto?> UpdateModuleTierPriceDraftAsync(Guid priceId, UpdateModuleTierPriceDraftCommand command, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.PutAsJsonAsync($"api/v1/backoffice/catalog/modules/prices/{priceId}", command, cancellationToken);
+        return response.IsSuccessStatusCode ? await response.Content.ReadFromJsonAsync<ModuleTierPriceDto>(cancellationToken: cancellationToken) : null;
+    }
+
+    public async Task<ModuleTierPriceDto?> PublishModuleTierPriceAsync(Guid priceId, string? approvalNotes = null, CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var response = await _httpClient.PostAsJsonAsync($"api/v1/backoffice/catalog/modules/prices/{priceId}/publish", new { ApprovalNotes = approvalNotes }, cancellationToken);
+        return response.IsSuccessStatusCode ? await response.Content.ReadFromJsonAsync<ModuleTierPriceDto>(cancellationToken: cancellationToken) : null;
+    }
+
+    public async Task<TenantPlanPreviewDto?> PreviewPlanChangeAsync(
+        Guid tenantId,
+        Guid? targetPlanVersionId = null,
+        string? headTierCode = null,
+        IEnumerable<string>? selectedModules = null,
+        CancellationToken cancellationToken = default)
+    {
+        await AttachTokenAsync();
+        var queryParams = new List<string>();
+        if (targetPlanVersionId.HasValue && targetPlanVersionId.Value != Guid.Empty)
+            queryParams.Add($"targetPlanVersionId={targetPlanVersionId.Value}");
+        if (!string.IsNullOrWhiteSpace(headTierCode))
+            queryParams.Add($"headTierCode={Uri.EscapeDataString(headTierCode)}");
+        if (selectedModules != null)
+            queryParams.Add($"selectedModules={Uri.EscapeDataString(string.Join(",", selectedModules))}");
+
+        var queryString = queryParams.Count > 0 ? "?" + string.Join("&", queryParams) : "";
+        return await _httpClient.GetFromJsonAsync<TenantPlanPreviewDto>($"api/v1/backoffice/tenants/{tenantId}/plan-preview{queryString}", cancellationToken);
     }
 
     public async Task<ChangeTenantPlanResponseDto?> ChangeTenantPlanAsync(Guid tenantId, ChangeTenantPlanRequestDto request, CancellationToken cancellationToken = default)

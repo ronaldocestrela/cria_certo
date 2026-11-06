@@ -301,13 +301,39 @@ Ajustar os módulos satélites que antes dependiam dos códigos fixos `Starter`,
   - Console do Backoffice `/backoffice/referral/discount-policies` (`DiscountPoliciesManagement.razor`) atualizado com filtro categorizado (`HeadTier`, `GlobalDefault`, `LegacyPlan`) e badges visuais de escopo.
   - Migration EF Core `20261105210000_Add_HeadTier_To_PlanDiscountPolicies` e suíte de testes com 213 testes unitários no módulo Referral.
 
-#### 5.2. Gestão de Tenants e Catálogo no Backoffice (`Modules.Backoffice`)
-* Atualizar `PlanCatalogManagement.razor` para gerenciar a **Matriz de Módulos x Faixas de Cabeças**.
-* Atualizar `TenantPlanChangeModal.razor` no Backoffice para permitir que administradores alterem a faixa de cabeças ou concedam/revoguem módulos individuais para um tenant específico (com justificativa de auditoria).
+#### 5.2. Gestão de Tenants e Catálogo no Backoffice (`Modules.Backoffice`) - [CONCLUÍDO]
+* **Matriz de Módulos x Faixas de Cabeças (`PlanCatalogManagement.razor`):**
+  - Implementada nova aba principal "Matriz Modular (Faixas x Módulos)" com visualização matricial completa de 7 Módulos × 4 Faixas de Cabeças.
+  - Modais para cadastro/edição de Faixas de Cabeças (`CreateHeadTierCatalogCommand` / `UpdateHeadTierCatalogCommand`) e Módulos (`CreateModuleCatalogCommand` / `UpdateModuleCatalogCommand`).
+  - Gestão de preços por célula com criação/edição de rascunhos (`CreateModuleTierPriceDraftCommand` / `UpdateModuleTierPriceDraftCommand`) e publicação versionada com justificativa imutável sob a permissão `plans.publish` e a feature flag `backoffice.feature.plan_publishing`.
+  - Preservação integral da aba "Planos Legados (Histórico & Versões)" para auditoria e retrocompatibilidade de contratos legados.
+* **Gestão Modular de Tenants (`TenantPlanChangeModal.razor`):**
+  - Redesenho do modal permitindo a seleção da Faixa de Cabeças (`HeadTierCode`) e concessão/revogação granular de Módulos (`SubscribedModules`), com módulo core `Cows` permanentemente bloqueado/inviolável.
+  - Pré-visualização reativa de impacto e cálculo de deltas via `PreviewTenantPlanChangeQuery`.
+  - Mecanismo de Grace Period (14 dias) automático para reduções de capacidade abaixo do rebanho atual, com opção de override imediato (`ForceImmediate`).
+  - Exigência estrita de justificativa administrativa (mínimo 15 caracteres) com registro compulsório no histórico e log forense SHA-256 no `AuditLog`.
+  - Exibição de `HeadTierCode` e badges de `SubscribedModules` na listagem e gaveta de detalhes em `TenantsManagement.razor`.
+* **Clientes e Endpoints de Integração:**
+  - Evolução de `ChangeTenantPlanCommand` e `PreviewTenantPlanChangeQuery` com suporte híbrido (Modular + Legado).
+  - Métodos modulares adicionados ao `IBackofficeApiClient` e `BackofficeApiClient`.
+  - Bateria de testes em `ChangeTenantPlanCommandHandlerTests.cs` (9 testes) e homologação de 384 testes no Backoffice.
 * **Arquivos Impactados:**
-  - `src/Modules/Referral/CriaCerto.Modules.Referral.Application/Domain/PlanReferralDiscountPolicy.cs`
+  - `src/Modules/Backoffice/CriaCerto.Modules.Backoffice.Application/Features/Tenants/Commands/ChangeTenantPlanCommand.cs`
+  - `src/Modules/Backoffice/CriaCerto.Modules.Backoffice.Application/Features/Tenants/Queries/PreviewTenantPlanChangeQuery.cs`
+  - `src/Modules/Backoffice/CriaCerto.Modules.Backoffice.Application/Features/Tenants/Dtos/TenantSubscriptionDtos.cs`
+  - `src/Modules/Backoffice/CriaCerto.Modules.Backoffice.Application/Features/Tenants/Dtos/TenantAdminDtos.cs`
+  - `src/Modules/Backoffice/CriaCerto.Modules.Backoffice.Application/Features/Tenants/TenantAdminMapper.cs`
+  - `src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Contracts/TenantBackofficeDtos.cs`
+  - `src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Features/BackofficeTenants/TenantBackofficeMapper.cs`
+  - `src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Features/BackofficeTenants/GetTenantsBackofficeQuery.cs`
+  - `src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Features/BackofficeTenants/GetTenantBackofficeDetailQuery.cs`
+  - `src/Host/CriaCerto.Api/Program.cs`
+  - `src/Web/CriaCerto.Web/CriaCerto.Web.Client/Services/BackofficeApiClient.cs`
   - `src/Web/CriaCerto.Web/CriaCerto.Web.Client/Pages/Backoffice/PlanCatalogManagement.razor`
   - `src/Web/CriaCerto.Web/CriaCerto.Web.Client/Pages/Backoffice/Components/TenantPlanChangeModal.razor`
+  - `src/Web/CriaCerto.Web/CriaCerto.Web.Client/Pages/Backoffice/TenantsManagement.razor`
+  - `tests/Unit/CriaCerto.Modules.Backoffice.UnitTests/Features/ChangeTenantPlanCommandHandlerTests.cs`
+  - `tests/Unit/CriaCerto.Modules.Backoffice.UnitTests/Security/ImpersonationSecurityTests.cs`
 
 ---
 

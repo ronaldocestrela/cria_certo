@@ -318,6 +318,17 @@
                                     }
                                 </dd>
                                 <dt>Capacidade</dt><dd>@SelectedTenant.Capacity.ToString("N0") cabeças</dd>
+                                <dt>Faixa de Cabeças</dt><dd><span class="badge bg-secondary">@(SelectedTenant.HeadTierCode ?? "Não definida")</span></dd>
+                                @if (SelectedTenant.SubscribedModules != null && SelectedTenant.SubscribedModules.Any())
+                                {
+                                    <dt>Módulos Ativos</dt>
+                                    <dd class="d-flex flex-wrap gap-1">
+                                        @foreach (var m in SelectedTenant.SubscribedModules)
+                                        {
+                                            <span class="badge bg-info bg-opacity-10 text-info border border-info" style="font-size: 0.75rem;">@m</span>
+                                        }
+                                    </dd>
+                                }
                                 <dt>Limite do Plano</dt><dd>@(SelectedTenant.PlanHeadCapacityLimit == int.MaxValue ? "Ilimitado" : SelectedTenant.PlanHeadCapacityLimit.ToString("N0"))</dd>
                                 <dt>Acima do Plano</dt><dd class="@(SelectedTenant.IsOverPlanLimit ? "text-warning" : "")">@(SelectedTenant.IsOverPlanLimit ? "Sim" : "Não")</dd>
                             </dl>
@@ -479,6 +490,9 @@
             IsOpen="IsPlanModalOpen"
             TenantId="@(SelectedTenant?.Id ?? Guid.Empty)"
             TenantName="@(SelectedTenant?.Name ?? string.Empty)"
+            CurrentHeadTierCode="@(SelectedTenant?.HeadTierCode)"
+            CurrentSubscribedModules="@(SelectedTenant?.SubscribedModules)"
+            CurrentCapacity="@(SelectedTenant?.Capacity ?? 0)"
             CurrentPeriodEndUtc="@(SelectedTenant?.CurrentPeriodEndUtc)"
             CancelAtPeriodEnd="@(SelectedTenant?.CancelAtPeriodEnd ?? false)"
             OnClosed="() => IsPlanModalOpen = false"

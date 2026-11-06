@@ -683,17 +683,29 @@ backoffice.MapDelete("/tenants/saved-filters/{filterId:guid}", async (Guid filte
     return result.IsSuccess ? Results.Ok() : Results.Json(result.Error, statusCode: ToStatusCode(result.Error.Type));
 }).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.TenantsRead)).WithTags("Backoffice Tenants");
 
-backoffice.MapGet("/tenants/{id:guid}/plan-preview", async (Guid id, Guid targetPlanVersionId, ISender sender) =>
+backoffice.MapGet("/tenants/{id:guid}/plan-preview", async (Guid id, Guid? targetPlanVersionId, string? headTierCode, string? selectedModules, ISender sender) =>
 {
-    var query = new PreviewTenantPlanChangeQuery(id, targetPlanVersionId);
+    var modules = !string.IsNullOrWhiteSpace(selectedModules)
+        ? selectedModules.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        : null;
+    var query = new PreviewTenantPlanChangeQuery(id, targetPlanVersionId, headTierCode, modules);
     var result = await sender.Send(query);
     return ToHttpResult(result);
 }).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.TenantsRead)).WithTags("Backoffice Subscriptions");
 
 backoffice.MapPost("/tenants/{id:guid}/plan", async (Guid id, ChangeTenantPlanRequestDto req, HttpContext ctx, ISender sender) =>
 {
-    var (callerId, _, _) = GetBackofficeActor(ctx);
-    var command = new ChangeTenantPlanCommand(id, req.TargetPlanVersionId, callerId, req.Justification, req.ForceImmediate);
+    var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var command = new ChangeTenantPlanCommand(
+        id,
+        req.TargetPlanVersionId,
+        callerId,
+        req.Justification,
+        req.ForceImmediate,
+        req.HeadTierCode,
+        req.SubscribedModules,
+        callerEmail,
+        ip);
     var result = await sender.Send(command);
     return ToHttpResult(result);
 }).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.TenantsWrite)).WithTags("Backoffice Subscriptions");

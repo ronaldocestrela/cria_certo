@@ -5,122 +5,235 @@
 
 @if (IsOpen)
 {
-    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,0.6);" role="dialog">
+    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);" role="dialog">
         <div class="modal-dialog modal-lg modal-dialog-centered">
-            <div class="modal-content shadow-lg border-0">
-                <div class="modal-header bg-primary text-white">
-                    <h5 class="modal-title fw-bold">
-                        <i class="bi bi-box-seam me-2"></i>Alterar Plano de Assinatura — @TenantName
-                    </h5>
+            <div class="modal-content shadow-lg border-0" style="background: #1e293b; color: #f8fafc; border: 1px solid #334155;">
+                <div class="modal-header" style="background: #0f172a; border-bottom: 1px solid #334155;">
+                    <div>
+                        <span class="badge" style="background: #38bdf8; color: #0f172a; font-size: 0.7rem; font-weight: 800; text-transform: uppercase;">Gestão de Assinatura</span>
+                        <h5 class="modal-title fw-bold mt-1" style="color: #f1f5f9;">
+                            <i class="bi bi-box-seam me-2"></i>Alterar Configuração Comercial — @TenantName
+                        </h5>
+                    </div>
                     <button type="button" class="btn-close btn-close-white" @onclick="Close"></button>
                 </div>
                 <div class="modal-body p-4">
-                    @if (isLoadingPlans)
+                    <!-- Mode Selector Tab -->
+                    <div class="d-flex gap-2 mb-3 border-bottom pb-2" style="border-color: #334155 !important;">
+                        <button type="button" class="btn btn-sm @(_isModularMode ? "btn-primary" : "btn-outline-secondary text-light")" @onclick="() => SetMode(true)">
+                            <i class="bi bi-sliders me-1"></i> Modelo Modular À La Carte (Recomendado)
+                        </button>
+                        <button type="button" class="btn btn-sm @(!_isModularMode ? "btn-primary" : "btn-outline-secondary text-light")" @onclick="() => SetMode(false)">
+                            <i class="bi bi-archive me-1"></i> Plano Legado (Histórico)
+                        </button>
+                    </div>
+
+                    @if (isLoadingCatalog)
                     {
                         <div class="text-center py-4">
-                            <div class="spinner-border text-primary" role="status"></div>
-                            <p class="text-muted mt-2">Carregando catálogo de planos diponíveis...</p>
+                            <div class="spinner-border text-info" role="status"></div>
+                            <p class="text-muted mt-2">Carregando catálogo e dados do tenant...</p>
                         </div>
                     }
-                    else
+                    else if (_isModularMode)
                     {
-                        <div class="mb-3">
-                            <label class="form-label fw-bold">Selecione o Novo Plano / Versão Publicada</label>
-                            <select class="form-select" @onchange="OnPlanSelected">
-                                <option value="">-- Selecione uma versão de plano publicada --</option>
-                                @if (availablePlans != null)
+                        <!-- MODULAR MODE -->
+                        <!-- 1. Head Tier Selector -->
+                        <div class="mb-4">
+                            <label class="form-label fw-bold d-flex justify-content-between">
+                                <span>1. Faixa de Cabeças (Capacidade Máxima)</span>
+                                <small class="text-info">Atual: @(CurrentHeadTierCode ?? "TIER_500") (@CurrentCapacity.ToString("N0") cab.)</small>
+                            </label>
+                            <div class="row g-2">
+                                @if (availableTiers != null)
                                 {
-                                    @foreach (var plan in availablePlans)
+                                    @foreach (var tier in availableTiers.OrderBy(t => t.SortOrder).ThenBy(t => t.MinHeads))
                                     {
-                                        @foreach (var version in plan.Versions.Where(v => v.Status == "Published"))
-                                        {
-                                            <option value="@version.Id">
-                                                @plan.Name — @version.VersionName (Limite: @version.HeadCapacityLimit cabeças | R$ @version.MonthlyPrice/mês)
-                                            </option>
-                                        }
+                                        var isSelected = _selectedHeadTierCode == tier.TierCode;
+                                        <div class="col-md-3 col-6">
+                                            <div class="p-2 rounded border text-center cursor-pointer @(isSelected ? "border-primary bg-primary bg-opacity-10 text-white" : "border-secondary bg-dark text-muted")"
+                                                 style="cursor: pointer; transition: all 0.2s;"
+                                                 @onclick="() => SelectTier(tier.TierCode)">
+                                                <div class="fw-bold fs-6 @(isSelected ? "text-primary" : "text-light")">@tier.TierCode</div>
+                                                <small class="d-block" style="font-size: 0.75rem;">@tier.DisplayName</small>
+                                                <span class="badge bg-secondary mt-1" style="font-size: 0.65rem;">Até @tier.MaxHeads.ToString("N0") cab.</span>
+                                            </div>
+                                        </div>
                                     }
                                 }
-                            </select>
+                            </div>
                         </div>
 
+                        <!-- 2. Subscribed Modules Selector -->
+                        <div class="mb-4">
+                            <label class="form-label fw-bold d-flex justify-content-between">
+                                <span>2. Módulos Adicionais Concedidos</span>
+                                <small class="text-muted">Módulo base 'Cows' é permanente</small>
+                            </label>
+                            <div class="row g-2">
+                                @if (availableModules != null)
+                                {
+                                    @foreach (var mod in availableModules.OrderBy(m => m.SortOrder).ThenBy(m => m.Name))
+                                    {
+                                        var isCore = mod.IsCore;
+                                        var isChecked = isCore || _selectedModules.Contains(mod.ModuleKey);
+                                        <div class="col-md-4 col-sm-6">
+                                            <div class="p-2 rounded border d-flex align-items-center justify-content-between @(isChecked ? "border-success bg-success bg-opacity-10 text-white" : "border-secondary bg-dark text-muted")"
+                                                 style="@(isCore ? "opacity: 0.9;" : "cursor: pointer;")"
+                                                 @onclick="() => ToggleModule(mod.ModuleKey, isCore)">
+                                                <div class="d-flex align-items-center gap-2">
+                                                    <span style="font-size: 1.1rem;">@mod.Icon</span>
+                                                    <div>
+                                                        <div class="fw-semibold text-light" style="font-size: 0.85rem;">@mod.Name</div>
+                                                        <small class="text-muted" style="font-size: 0.7rem;">@mod.ModuleKey</small>
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    @if (isCore)
+                                                    {
+                                                        <span class="badge bg-secondary" style="font-size: 0.65rem;">Core</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <input type="checkbox" checked="@isChecked" class="form-check-input"
+                                                               @onclick:stopPropagation="true"
+                                                               @onchange="() => ToggleModule(mod.ModuleKey, isCore)" />
+                                                    }
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
+                                }
+                            </div>
+                        </div>
+
+                        <!-- 3. Real-time Impact & Preview -->
                         @if (isLoadingPreview)
                         {
-                            <div class="alert alert-info py-2 text-center">
+                            <div class="alert alert-info py-2 text-center" style="background: rgba(14, 165, 233, 0.1); border-color: #0284c7; color: #bae6fd;">
                                 <span class="spinner-border spinner-border-sm me-2"></span> Calculando impacto e deltas de capacidade...
                             </div>
                         }
                         else if (preview != null)
                         {
-                            <div class="card bg-light border-0 mb-3">
-                                <div class="card-body">
-                                    <h6 class="fw-bold text-dark border-bottom pb-2">Impacto da Alteração</h6>
-                                    <div class="row text-center my-3">
-                                        <div class="col-md-4">
-                                            <small class="text-muted d-block">Plano Atual</small>
-                                            <span class="badge bg-secondary fs-6">@preview.CurrentPlanName (@preview.CurrentHeadCapacity cabeças)</span>
+                            <div class="card border-0 mb-3" style="background: #0f172a; border: 1px solid #334155;">
+                                <div class="card-body p-3">
+                                    <h6 class="fw-bold border-bottom pb-2 mb-3" style="color: #38bdf8; border-color: #334155 !important;">
+                                        <i class="bi bi-graph-up me-1"></i> Impacto da Alteração Modular
+                                    </h6>
+                                    <div class="row text-center mb-2">
+                                        <div class="col-4">
+                                            <small class="text-muted d-block">Faixa / Limite Atual</small>
+                                            <span class="badge bg-secondary fs-6">@preview.CurrentHeadCapacity.ToString("N0") cab.</span>
                                         </div>
-                                        <div class="col-md-4">
-                                            <small class="text-muted d-block">Novo Plano</small>
-                                            <span class="badge bg-success fs-6">@preview.TargetPlanName (@preview.TargetHeadCapacity cabeças)</span>
+                                        <div class="col-4">
+                                            <small class="text-muted d-block">Novo Limite Alvo</small>
+                                            <span class="badge bg-success fs-6">@preview.TargetHeadCapacity.ToString("N0") cab.</span>
                                         </div>
-                                        <div class="col-md-4">
-                                            <small class="text-muted d-block">Variação de Capacidade</small>
+                                        <div class="col-4">
+                                            <small class="text-muted d-block">Variação</small>
                                             <span class="badge @(preview.DeltaHeadCapacity >= 0 ? "bg-primary" : "bg-warning text-dark") fs-6">
-                                                @(preview.DeltaHeadCapacity >= 0 ? $"+{preview.DeltaHeadCapacity}" : preview.DeltaHeadCapacity.ToString())
+                                                @(preview.DeltaHeadCapacity >= 0 ? $"+{preview.DeltaHeadCapacity:N0}" : preview.DeltaHeadCapacity.ToString("N0"))
                                             </span>
                                         </div>
                                     </div>
 
                                     @if (preview.RequiresGracePeriod)
                                     {
-                                        <div class="alert alert-warning border-start border-4 border-warning my-2">
+                                        <div class="alert alert-warning border-start border-4 border-warning my-2" style="background: rgba(245, 158, 11, 0.1); color: #fef3c7;">
                                             <i class="bi bi-exclamation-triangle-fill me-2"></i>
-                                            <strong>Aviso de Grace Period (@preview.GracePeriodDays dias):</strong> O uso atual do tenant excede o limite do plano selecionado. A alteração ativará um Grace Period para adequação do rebanho/usuários.
-                                        </div>
-                                    }
-
-                                    @if (preview.AddedFeatures.Any())
-                                    {
-                                        <div class="mt-2">
-                                            <small class="fw-bold text-success"><i class="bi bi-plus-circle me-1"></i>Recursos Adicionados:</small>
-                                            <div class="d-flex flex-wrap gap-1 mt-1">
-                                                @foreach (var feat in preview.AddedFeatures)
-                                                {
-                                                    <span class="badge bg-success-subtle text-success border border-success">@feat</span>
-                                                }
+                                            <strong>Aviso de Grace Period (@preview.GracePeriodDays dias):</strong> O rebanho/capacidade atual excede o limite da nova faixa selecionada. Será ativado período de adequação de 14 dias.
+                                            <div class="form-check mt-2">
+                                                <input class="form-check-input" type="checkbox" id="forceImmediate" @bind="forceImmediate" />
+                                                <label class="form-check-label text-warning small fw-bold" for="forceImmediate">
+                                                    Forçar aplicação imediata sem carência (Ação Administrativa Direta)
+                                                </label>
                                             </div>
                                         </div>
                                     }
-                                    @if (CurrentPeriodEndUtc.HasValue)
-                                    {
-                                        <div class="mt-2 pt-2 border-top text-muted small">
-                                            <i class="bi bi-calendar-event me-1"></i>
-                                            @(CancelAtPeriodEnd ? "Assinatura cancela em: " : "Ciclo atual renova em: ")
-                                            <strong>@CurrentPeriodEndUtc.Value.ToLocalTime().ToString("dd/MM/yyyy")</strong>
-                                        </div>
-                                    }
+
+                                    <div class="d-flex flex-wrap gap-3 mt-3 pt-2 border-top" style="border-color: #334155 !important;">
+                                        @if (preview.AddedFeatures.Any())
+                                        {
+                                            <div>
+                                                <small class="fw-bold text-success d-block mb-1"><i class="bi bi-plus-circle me-1"></i>Módulos Concedidos:</small>
+                                                <div class="d-flex flex-wrap gap-1">
+                                                    @foreach (var feat in preview.AddedFeatures)
+                                                    {
+                                                        <span class="badge bg-success bg-opacity-25 text-success border border-success">@feat</span>
+                                                    }
+                                                </div>
+                                            </div>
+                                        }
+
+                                        @if (preview.RemovedFeatures.Any())
+                                        {
+                                            <div>
+                                                <small class="fw-bold text-danger d-block mb-1"><i class="bi bi-dash-circle me-1"></i>Módulos Revogados:</small>
+                                                <div class="d-flex flex-wrap gap-1">
+                                                    @foreach (var feat in preview.RemovedFeatures)
+                                                    {
+                                                        <span class="badge bg-danger bg-opacity-25 text-danger border border-danger">@feat</span>
+                                                    }
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
                                 </div>
                             </div>
                         }
-
+                    }
+                    else
+                    {
+                        <!-- LEGACY MODE -->
                         <div class="mb-3">
-                            <label class="form-label fw-bold">Justificativa Administrativa (Obrigatória, mín. 15 caracteres)</label>
-                            <textarea class="form-control" rows="3" placeholder="Informe a razão da alteração de plano para fins de auditoria..." @bind="justification"></textarea>
-                            @if (!string.IsNullOrEmpty(errorMessage))
-                            {
-                                <div class="text-danger small mt-1">@errorMessage</div>
-                            }
+                            <label class="form-label fw-bold">Selecione a Versão do Plano Legado</label>
+                            <select class="form-select bg-dark text-light border-secondary" @onchange="OnLegacyPlanSelected">
+                                <option value="">-- Selecione uma versão publicada --</option>
+                                @if (availableLegacyPlans != null)
+                                {
+                                    @foreach (var plan in availableLegacyPlans)
+                                    {
+                                        @foreach (var version in plan.Versions.Where(v => v.Status == "Published"))
+                                        {
+                                            <option value="@version.Id">
+                                                @plan.Name — @version.VersionName (Limite: @version.HeadCapacityLimit cab. | R$ @version.MonthlyPrice/mês)
+                                            </option>
+                                        }
+                                    }
+                                }
+                            </select>
                         </div>
                     }
+
+                    <!-- 4. Administrative Justification -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold d-flex justify-content-between">
+                            <span>Justificativa Administrativa (Obrigatória para Auditoria)</span>
+                            <small class="@(justification.Trim().Length >= 15 ? "text-success" : "text-muted")">
+                                @justification.Trim().Length / 15 caracteres mín.
+                            </small>
+                        </label>
+                        <textarea class="form-control bg-dark text-light border-secondary" rows="3"
+                                  placeholder="Informe detalhadamente a razão da alteração comercial para registro no log forense..."
+                                  @bind="justification"
+                                  @bind:event="oninput"></textarea>
+                        @if (!string.IsNullOrEmpty(errorMessage))
+                        {
+                            <div class="alert alert-danger py-2 mt-2" style="background: rgba(220, 38, 38, 0.2); border-color: #dc2626; color: #fca5a5;">
+                                ⚠️ @errorMessage
+                            </div>
+                        }
+                    </div>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-outline-secondary" @onclick="Close">Cancelar</button>
+                <div class="modal-footer" style="background: #0f172a; border-top: 1px solid #334155;">
+                    <button type="button" class="btn btn-outline-secondary text-light" @onclick="Close">Cancelar</button>
                     <button type="button" class="btn btn-primary" disabled="@(!CanSubmit || isSubmitting)" @onclick="Submit">
                         @if (isSubmitting)
                         {
                             <span class="spinner-border spinner-border-sm me-2"></span>
                         }
-                        Confirmar Alteração de Plano
+                        Confirmar Alteração Comercial
                     </button>
                 </div>
             </div>
@@ -132,45 +245,146 @@
     [Parameter] public bool IsOpen { get; set; }
     [Parameter] public Guid TenantId { get; set; }
     [Parameter] public string TenantName { get; set; } = string.Empty;
+    [Parameter] public string? CurrentHeadTierCode { get; set; }
+    [Parameter] public IReadOnlyCollection<string>? CurrentSubscribedModules { get; set; }
+    [Parameter] public int CurrentCapacity { get; set; }
     [Parameter] public DateTime? CurrentPeriodEndUtc { get; set; }
     [Parameter] public bool CancelAtPeriodEnd { get; set; }
     [Parameter] public EventCallback OnClosed { get; set; }
     [Parameter] public EventCallback<ChangeTenantPlanResponseDto> OnPlanChanged { get; set; }
 
-    private IReadOnlyCollection<PlanCatalogDto>? availablePlans;
+    private bool _isModularMode = true;
+    private IReadOnlyList<HeadTierCatalogDto>? availableTiers;
+    private IReadOnlyList<ModuleCatalogDto>? availableModules;
+    private IReadOnlyCollection<PlanCatalogDto>? availableLegacyPlans;
     private TenantPlanPreviewDto? preview;
-    private Guid selectedVersionId;
+
+    private string _selectedHeadTierCode = "TIER_500";
+    private HashSet<string> _selectedModules = new(StringComparer.OrdinalIgnoreCase) { "Cows" };
+    private Guid selectedLegacyVersionId = Guid.Empty;
+    private bool forceImmediate = false;
+
     private string justification = string.Empty;
     private string? errorMessage;
-    private bool isLoadingPlans;
+    private bool isLoadingCatalog;
     private bool isLoadingPreview;
     private bool isSubmitting;
 
-    private bool CanSubmit => selectedVersionId != Guid.Empty && justification.Trim().Length >= 15;
-
-    protected override async Task OnParametersSetAsync()
+    private bool CanSubmit
     {
-        if (IsOpen && availablePlans == null)
+        get
         {
-            isLoadingPlans = true;
-            availablePlans = await ApiClient.GetPlansAsync(includeArchived: false);
-            isLoadingPlans = false;
+            if (justification.Trim().Length < 15) return false;
+            if (_isModularMode) return !string.IsNullOrWhiteSpace(_selectedHeadTierCode);
+            return selectedLegacyVersionId != Guid.Empty;
         }
     }
 
-    private async Task OnPlanSelected(ChangeEventArgs e)
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsOpen && availableTiers == null)
+        {
+            await LoadCatalogAsync();
+        }
+    }
+
+    private async Task LoadCatalogAsync()
+    {
+        isLoadingCatalog = true;
+        try
+        {
+            availableTiers = await ApiClient.GetHeadTiersAsync(includeInactive: false);
+            availableModules = await ApiClient.GetModuleCatalogsAsync(includeInactive: false);
+            availableLegacyPlans = await ApiClient.GetPlansAsync(includeArchived: false);
+
+            _selectedHeadTierCode = !string.IsNullOrWhiteSpace(CurrentHeadTierCode)
+                ? CurrentHeadTierCode
+                : "TIER_500";
+
+            _selectedModules = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Cows" };
+            if (CurrentSubscribedModules != null)
+            {
+                foreach (var mod in CurrentSubscribedModules)
+                {
+                    _selectedModules.Add(mod);
+                }
+            }
+
+            await TriggerModularPreviewAsync();
+        }
+        finally
+        {
+            isLoadingCatalog = false;
+        }
+    }
+
+    private void SetMode(bool isModular)
+    {
+        _isModularMode = isModular;
+        errorMessage = null;
+        if (!_isModularMode)
+        {
+            preview = null;
+        }
+        else
+        {
+            _ = TriggerModularPreviewAsync();
+        }
+    }
+
+    private async Task SelectTier(string tierCode)
+    {
+        _selectedHeadTierCode = tierCode;
+        await TriggerModularPreviewAsync();
+    }
+
+    private async Task ToggleModule(string moduleKey, bool isCore)
+    {
+        if (isCore) return; // Core Cows module is immutable
+
+        if (_selectedModules.Contains(moduleKey))
+        {
+            _selectedModules.Remove(moduleKey);
+        }
+        else
+        {
+            _selectedModules.Add(moduleKey);
+        }
+
+        await TriggerModularPreviewAsync();
+    }
+
+    private async Task TriggerModularPreviewAsync()
+    {
+        if (TenantId == Guid.Empty) return;
+
+        isLoadingPreview = true;
+        try
+        {
+            preview = await ApiClient.PreviewPlanChangeAsync(
+                TenantId,
+                headTierCode: _selectedHeadTierCode,
+                selectedModules: _selectedModules.ToList());
+        }
+        finally
+        {
+            isLoadingPreview = false;
+        }
+    }
+
+    private async Task OnLegacyPlanSelected(ChangeEventArgs e)
     {
         errorMessage = null;
         if (Guid.TryParse(e.Value?.ToString(), out var versionId) && versionId != Guid.Empty)
         {
-            selectedVersionId = versionId;
+            selectedLegacyVersionId = versionId;
             isLoadingPreview = true;
-            preview = await ApiClient.PreviewPlanChangeAsync(TenantId, selectedVersionId);
+            preview = await ApiClient.PreviewPlanChangeAsync(TenantId, targetPlanVersionId: selectedLegacyVersionId);
             isLoadingPreview = false;
         }
         else
         {
-            selectedVersionId = Guid.Empty;
+            selectedLegacyVersionId = Guid.Empty;
             preview = null;
         }
     }
@@ -182,9 +396,27 @@
         isSubmitting = true;
         errorMessage = null;
 
-        var request = new ChangeTenantPlanRequestDto(selectedVersionId, justification.Trim());
-        var result = await ApiClient.ChangeTenantPlanAsync(TenantId, request);
+        ChangeTenantPlanRequestDto request;
+        if (_isModularMode)
+        {
+            request = new ChangeTenantPlanRequestDto(
+                TargetPlanVersionId: null,
+                Justification: justification.Trim(),
+                ForceImmediate: forceImmediate,
+                HeadTierCode: _selectedHeadTierCode,
+                SubscribedModules: _selectedModules.ToList()
+            );
+        }
+        else
+        {
+            request = new ChangeTenantPlanRequestDto(
+                TargetPlanVersionId: selectedLegacyVersionId,
+                Justification: justification.Trim(),
+                ForceImmediate: forceImmediate
+            );
+        }
 
+        var result = await ApiClient.ChangeTenantPlanAsync(TenantId, request);
         isSubmitting = false;
 
         if (result != null)
@@ -194,7 +426,7 @@
         }
         else
         {
-            errorMessage = "Falha ao alterar plano. Verifique as permissões e justificativa.";
+            errorMessage = "Falha ao alterar plano. Verifique suas permissões e as informações preenchidas.";
         }
     }
 
@@ -203,8 +435,9 @@
         IsOpen = false;
         justification = string.Empty;
         preview = null;
-        selectedVersionId = Guid.Empty;
+        selectedLegacyVersionId = Guid.Empty;
         errorMessage = null;
+        forceImmediate = false;
         await OnClosed.InvokeAsync();
     }
 }
