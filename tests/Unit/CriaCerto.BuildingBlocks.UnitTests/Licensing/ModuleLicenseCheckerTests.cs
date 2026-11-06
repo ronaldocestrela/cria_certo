@@ -130,6 +130,55 @@ public class ModuleLicenseCheckerTests
         ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Cows").Should().BeTrue();
         ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Breeding").Should().BeFalse();
         ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Calving").Should().BeFalse();
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Growth").Should().BeFalse();
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Sanitary").Should().BeFalse();
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Nutrition").Should().BeFalse();
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Analytics").Should().BeFalse();
+    }
+
+    [Fact]
+    public void HasModuleAccess_WithGrowthAndNutritionOnly_ShouldAllowThoseAndBlockRest()
+    {
+        var subscribedModules = new[] { "Cows", "Growth", "Nutrition" };
+
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Cows").Should().BeTrue();
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Tenancy").Should().BeTrue();
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Growth").Should().BeTrue();
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Nutrition").Should().BeTrue();
+
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Breeding").Should().BeFalse();
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Calving").Should().BeFalse();
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Sanitary").Should().BeFalse();
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Analytics").Should().BeFalse();
+    }
+
+    [Fact]
+    public void HasModuleAccess_WithAnalyticsOnly_ShouldAllowAnalyticsAndBlockOtherCommercialAddons()
+    {
+        var subscribedModules = new[] { "Cows", "Analytics" };
+
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Cows").Should().BeTrue();
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Analytics").Should().BeTrue();
+
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Breeding").Should().BeFalse();
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Calving").Should().BeFalse();
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Growth").Should().BeFalse();
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Sanitary").Should().BeFalse();
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Nutrition").Should().BeFalse();
+    }
+
+    [Fact]
+    public void HasModuleAccess_WithMixedCaseAndDuplicatesInSubscribedList_ShouldResolveCorrectly()
+    {
+        var subscribedModules = new[] { "cows", "COWS", "SaNiTaRy", "sanitary", "Modules.Calving" };
+
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Cows").Should().BeTrue();
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Sanitary").Should().BeTrue();
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "sanitary").Should().BeTrue();
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Calving").Should().BeTrue();
+
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Breeding").Should().BeFalse();
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Nutrition").Should().BeFalse();
     }
 
     [Theory]

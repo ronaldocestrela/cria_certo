@@ -365,13 +365,39 @@ Garantir transição suave dos dados existentes e validação completa de qualid
   - `tests/Unit/CriaCerto.Modules.Tenancy.UnitTests/Domain/LegacyPlanMigrationTests.cs`
   - `tests/Unit/CriaCerto.Modules.Tenancy.UnitTests/Domain/MigrationScriptConsistencyTests.cs`
 
-#### 6.2. Suíte de Testes Automatizados
-* **Unit Tests (`CriaCerto.BuildingBlocks.UnitTests` & `CriaCerto.Modules.Tenancy.UnitTests`):**
-  * Testes do `ModuleLicenseChecker` e `ModuleAccessBehavior` validando combinações arbitrárias de módulos (ex.: cliente com `Cows` + `Sanitary`, mas sem `Breeding`).
-  * Testes de validação de capacidade por faixa (`TIER_500`, `TIER_1500`, `TIER_3000`, `TIER_5000_PLUS`) bloqueando seleção de faixa menor que o rebanho ativo.
-  * Testes de cálculo do carrinho modular (soma do Plantel Base + Add-ons na faixa selecionada, mensal e anual).
-* **Integration Tests (`StripeWebhookIntegrationTests`):**
-  * Simulação de checkout multi-item e atualização de módulos via webhook `customer.subscription.updated`.
+#### 6.2. Suíte de Testes Automatizados - [CONCLUÍDO]
+* **Unit Tests de Licenciamento e Gating Modular (`CriaCerto.BuildingBlocks.UnitTests`):**
+  - `ModuleLicenseCheckerTests.cs`: cobertura de matriz de combinações arbitrárias de módulos (ex.: `["Cows", "Sanitary"]`, `["Cows", "Growth", "Nutrition"]`, `["Cows", "Analytics"]` e `["Cows"]` isolado), normalização case-insensitive (`"sAnItArY"`), dot-prefixes (`"Modules.Calving"`), desduplicação e acesso compulsório/irrevogável aos módulos base `Cows` e `Tenancy`.
+  - `GatingTests.cs`: testes do pipeline behavior `ModuleAccessBehavior<TRequest, TResponse>` para os 7 módulos comerciais (`Cows`, `Breeding`, `Calving`, `Growth`, `Sanitary`, `Nutrition`, `Analytics`), garantindo retorno de `Result.Failure` com `ErrorType.Unauthorized` e código `License.ModuleNotSubscribed` sem qualquer lançamento de exceção (100% aderente ao Result Pattern).
+* **Unit Tests de Capacidade por Faixa e Rebanho Ativo (`CriaCerto.Modules.Tenancy.UnitTests`):**
+  - `HeadTierCapacityValidationTests.cs`: testes de fronteira estrita para as 4 faixas pecuárias (`TIER_500` até 500, `TIER_1500` até 1.500, `TIER_3000` até 3.000, `TIER_5000_PLUS` até 10.000 cabeças), normalização, display names amigáveis e resolução contextual de capacidade em `ResolveTenantCapacityLimit` e `IsWithinTenantCapacity`.
+  - `ModularCheckoutAndCapacityTests.cs`:
+    - Validação de bloqueio em `CreateCheckoutSessionCommandHandler` quando o rebanho ativo excede o teto da faixa selecionada (`License.HeadCapacityExceeded`), garantindo auto-inclusão compulsória de `Cows` quando omitido.
+    - Validação em `UpdateModularSubscriptionCommandHandler` de downgrade com e sem Grace Period: bloqueio imediato com `License.HeadCapacityExceeded` quando `AllowGracePeriod = false`, e ativação de carência de 14 dias (`GracePeriodActive`, `DowngradeGracePeriodStarted`) mantendo capacidade anterior quando `AllowGracePeriod = true`.
+    - Homologação de transições imediatas de downgrade (`DowngradeImmediate`) e upgrade de faixa (`Upgrade`).
+* **Unit Tests de Cálculo do Carrinho Modular (`CriaCerto.Modules.Tenancy.UnitTests` & `CriaCerto.Modules.Tenancy.Application`):**
+  - Criação do serviço utilitário canônico `ModularCartCalculator.cs` em `CriaCerto.Modules.Tenancy.Application.Features.GetSubscriptionPlans`.
+  - `ModularCartCalculationTests.cs`: validação da precificação de Plantel Base + Add-ons em ciclo mensal e anual (com 20% de economia), auto-inclusão de `Cows`, recálculo de custo por cabeça/mês ($Custo / Denominador$) e desabilitação preventiva de faixa inferior ao rebanho ativo.
+* **Integration Tests de Webhooks Stripe Multi-Item (`CriaCerto.Architecture.IntegrationTests`):**
+  - `StripeWebhookIntegrationTests.cs`: 5 novos testes de integração ponta a ponta executados sobre SQLite em memória via `ProcessStripeWebhookCommandHandler`:
+    - `checkout.session.completed` multi-item com metadados modulares (`head_tier`, `max_heads`, `subscribed_modules`), ativando tenant e gravando `TenantSubscribedModules` e histórico `NewSubscription`.
+    - `customer.subscription.updated` com adição e remoção atômica de módulos, preservando compulsoriamente o módulo base `Cows` e registrando `PlanChanged`.
+    - `customer.subscription.updated` executando upgrade de faixa (`TIER_500` $\rightarrow$ `TIER_3000`) com histórico `Upgrade`.
+    - `customer.subscription.updated` executando downgrade de faixa (`TIER_3000` $\rightarrow$ `TIER_500`) com histórico `DowngradeImmediate`.
+    - `customer.subscription.updated` com múltiplos itens e resolução reversa via `PriceIds` do catálogo modular sem metadados explícitos.
+* **Arquivos Criados/Impactados:**
+  - `src/Modules/Tenancy/CriaCerto.Modules.Tenancy.Application/Features/GetSubscriptionPlans/ModularCartCalculator.cs`
+  - `tests/Unit/CriaCerto.BuildingBlocks.UnitTests/Licensing/ModuleLicenseCheckerTests.cs`
+  - `tests/Unit/CriaCerto.BuildingBlocks.UnitTests/Tenancy/GatingTests.cs`
+  - `tests/Unit/CriaCerto.Modules.Tenancy.UnitTests/Domain/HeadTierCapacityValidationTests.cs`
+  - `tests/Unit/CriaCerto.Modules.Tenancy.UnitTests/Features/SubscriptionCheckout/ModularCheckoutAndCapacityTests.cs`
+  - `tests/Unit/CriaCerto.Modules.Tenancy.UnitTests/Pricing/ModularCartCalculationTests.cs`
+  - `tests/Integration/CriaCerto.Architecture.IntegrationTests/StripeWebhookIntegrationTests.cs`
+* **Métricas de Homologação:**
+  - 115 testes unitários em BuildingBlocks (100% de aprovação).
+  - 541 testes unitários em Tenancy (100% de aprovação).
+  - 12 testes de integração em Stripe Webhooks (100% de aprovação).
+  - 117 testes unitários no Blazor Web Client (100% de aprovação).
 
 #### 6.3. Atualização de Documentação
 * Atualizar `docs/architecture/licensing-1.2.md`, `docs/modules/tenancy.md`, `docs/modules/backoffice_plans.md` e `docs/manual_de_uso.md` refletindo a nova contratação Self-Service por módulo e faixa de cabeças.
