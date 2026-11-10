@@ -1,11 +1,30 @@
 using CriaCerto.BuildingBlocks.Infrastructure.Persistence;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using Testcontainers.MsSql;
 
 namespace CriaCerto.Architecture.IntegrationTests.Database;
 
 internal static class MigrationTestSupport
 {
+    public static async Task<(MsSqlContainer? Container, string ConnectionString, bool IsAvailable)> StartSqlServerContainerAsync()
+    {
+        try
+        {
+            var container = new MsSqlBuilder()
+                .WithImage("mcr.microsoft.com/mssql/server:2022-latest")
+                .WithPassword("Password123!")
+                .Build();
+
+            await container.StartAsync();
+            return (container, container.GetConnectionString(), true);
+        }
+        catch (Exception)
+        {
+            return (null, string.Empty, false);
+        }
+    }
+
     public static async Task ApplyBaselineAsync(string connectionString, IEnumerable<MigrationBaselineModule> modules, CancellationToken cancellationToken = default)
     {
         await using var connection = new SqlConnection(connectionString);

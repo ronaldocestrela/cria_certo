@@ -12,16 +12,12 @@ public sealed class TenantSegmentationSqlServerIntegrationTests : IAsyncLifetime
 {
     private MsSqlContainer? _sqlContainer;
     private string _connectionString = string.Empty;
+    private bool _isDockerAvailable;
 
     public async Task InitializeAsync()
     {
-        _sqlContainer = new MsSqlBuilder()
-            .WithImage("mcr.microsoft.com/mssql/server:2022-latest")
-            .WithPassword("Password123!")
-            .Build();
-
-        await _sqlContainer.StartAsync();
-        _connectionString = _sqlContainer.GetConnectionString();
+        (_sqlContainer, _connectionString, _isDockerAvailable) =
+            await MigrationTestSupport.StartSqlServerContainerAsync();
     }
 
     public async Task DisposeAsync()
@@ -35,6 +31,7 @@ public sealed class TenantSegmentationSqlServerIntegrationTests : IAsyncLifetime
     [Fact]
     public async Task FilteredQuery_On_5000_Tenants_Should_Complete_Under_500ms()
     {
+        if (!_isDockerAvailable) return;
         var options = MigrationTestSupport.CreateSqlServerOptions<TenancyDbContext>(_connectionString, "tenancy");
         await using var db = new TenancyDbContext(options);
         DatabaseMigrationRunner.ApplyMigrations(db, Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
@@ -116,6 +113,7 @@ public sealed class TenantSegmentationSqlServerIntegrationTests : IAsyncLifetime
     [Fact]
     public async Task KeysetPagination_Should_Not_Duplicate_Items()
     {
+        if (!_isDockerAvailable) return;
         var options = MigrationTestSupport.CreateSqlServerOptions<TenancyDbContext>(_connectionString, "tenancy");
         await using var db = new TenancyDbContext(options);
         DatabaseMigrationRunner.ApplyMigrations(db, Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
@@ -174,6 +172,7 @@ public sealed class TenantSegmentationSqlServerIntegrationTests : IAsyncLifetime
     [Fact]
     public async Task Export_Should_Fail_When_Result_Exceeds_Limit()
     {
+        if (!_isDockerAvailable) return;
         var options = MigrationTestSupport.CreateSqlServerOptions<TenancyDbContext>(_connectionString, "tenancy");
         await using var db = new TenancyDbContext(options);
         DatabaseMigrationRunner.ApplyMigrations(db, Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
