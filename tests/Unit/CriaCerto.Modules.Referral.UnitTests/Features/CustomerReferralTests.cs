@@ -211,6 +211,63 @@ public sealed class CustomerReferralTests : IDisposable
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("ReferralCode.AlreadyExists");
     }
+
+    [Fact]
+    public async Task GetDashboard_ModularTenant_ShouldResolveTierPolicyAndCalculateDiscountOnModularAmount()
+    {
+        // Arrange
+        var tenantId = Guid.NewGuid();
+        var participant = ReferralProgramParticipant.CreateCustomer(tenantId).Value;
+        var code = ReferralCode.Create(participant.Id, "FAZENDA-MODULAR").Value;
+        _dbContext.Participants.Add(participant);
+        _dbContext.ReferralCodes.Add(code);
+
+        // Política específica para a faixa TIER_1500: 10% por indicação ativa
+        var tierPolicy = PlanReferralDiscountPolicy.CreateForHeadTier(
+            Guid.NewGuid(), "TIER_1500", DiscountType.Percentage, 10m, 100m).Value;
+        _dbContext.PlanDiscountPolicies.Add(tierPolicy);
+
+        // 2 indicações ativas
+        var farm1 = Guid.NewGuid();
+        var attr1 = ReferralAttribution.Create(code.Id, participant.Id, farm1).Value;
+        attr1.MarkConverted(DateTime.UtcNow.AddDays(-2));
+
+        var farm2 = Guid.NewGuid();
+        var attr2 = ReferralAttribution.Create(code.Id, participant.Id, farm2).Value;
+        attr2.MarkConverted(DateTime.UtcNow.AddDays(-1));
+
+        _dbContext.Attributions.AddRange(attr1, attr2);
+        await _dbContext.SaveChangesAsync();
+
+        // Tenant com fatura modular total de R$ 500,00
+        _tenantLookupService.AddTenant(new TenantSummaryDto(
+            TenantId: tenantId,
+            Name: "Fazenda Nova Esperança",
+            TradeName: null,
+            Status: "Active",
+            PlanCode: "TIER_1500",
+            PlanName: "Faixa 501 a 1.500 cabeças",
+            HeadTierCode: "TIER_1500",
+            Capacity: 1500,
+            MonthlyTotalAmount: 500m));
+
+        _tenantLookupService.AddTenant(new TenantSummaryDto(farm1, "Fazenda A", null, "Active", "TIER_500", "Tier 500"));
+        _tenantLookupService.AddTenant(new TenantSummaryDto(farm2, "Fazenda B", null, "Active", "TIER_500", "Tier 500"));
+
+        var handler = new GetCustomerReferralDashboardQueryHandler(_dbContext, _tenantLookupService);
+        var query = new GetCustomerReferralDashboardQuery(tenantId);
+
+        // Act
+        var result = await handler.Handle(query, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.Should().BeTrue();
+        result.Value.ActiveReferralsCount.Should().Be(2);
+        // 2 amigos * 10% = 20% de R$ 500,00 = R$ 100,00
+        result.Value.AccumulatedDiscountNextInvoice.Should().Be(100m);
+        result.Value.FormattedAccumulatedDiscount.Should().Contain("100,00");
+        result.Value.CurrentPlanName.Should().Contain("TIER_1500");
+    }
 }
 
 public sealed class FakeTenantInfoLookupService : ITenantInfoLookupService

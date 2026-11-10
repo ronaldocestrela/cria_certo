@@ -51,34 +51,34 @@ public class ImpersonationSecurityTests
         token.Issuer.Should().Be("CriaCerto");
         token.Audiences.Should().Contain("CriaCertoClient");
 
-        var claims = token.Claims.ToDictionary(c => c.Type, c => c.Value);
+        var claims = token.Claims.ToLookup(c => c.Type, c => c.Value);
 
-        claims.Should().ContainKey(JwtRegisteredClaimNames.Sub);
-        claims[JwtRegisteredClaimNames.Sub].Should().Be(targetUserId.ToString());
+        claims.Contains(JwtRegisteredClaimNames.Sub).Should().BeTrue();
+        claims[JwtRegisteredClaimNames.Sub].First().Should().Be(targetUserId.ToString());
 
-        claims.Should().ContainKey(JwtRegisteredClaimNames.Email);
-        claims[JwtRegisteredClaimNames.Email].Should().Be(targetEmail);
+        claims.Contains(JwtRegisteredClaimNames.Email).Should().BeTrue();
+        claims[JwtRegisteredClaimNames.Email].First().Should().Be(targetEmail);
 
-        claims.Should().ContainKey("TenantId");
-        claims["TenantId"].Should().Be(tenantId.ToString());
+        claims.Contains("TenantId").Should().BeTrue();
+        claims["TenantId"].First().Should().Be(tenantId.ToString());
 
-        claims.Should().ContainKey("TenantName");
-        claims["TenantName"].Should().Be(tenantName);
+        claims.Contains("TenantName").Should().BeTrue();
+        claims["TenantName"].First().Should().Be(tenantName);
 
-        claims.Should().ContainKey("is_impersonation");
-        claims["is_impersonation"].Should().Be("true");
+        claims.Contains("is_impersonation").Should().BeTrue();
+        claims["is_impersonation"].First().Should().Be("true");
 
-        claims.Should().ContainKey("impersonated_by_admin_id");
-        claims["impersonated_by_admin_id"].Should().Be(adminUserId.ToString());
+        claims.Contains("impersonated_by_admin_id").Should().BeTrue();
+        claims["impersonated_by_admin_id"].First().Should().Be(adminUserId.ToString());
 
-        claims.Should().ContainKey("impersonated_by_admin_email");
-        claims["impersonated_by_admin_email"].Should().Be(adminEmail);
+        claims.Contains("impersonated_by_admin_email").Should().BeTrue();
+        claims["impersonated_by_admin_email"].First().Should().Be(adminEmail);
 
-        claims.Should().ContainKey("impersonation_session_id");
-        claims["impersonation_session_id"].Should().Be(sessionId.ToString());
+        claims.Contains("impersonation_session_id").Should().BeTrue();
+        claims["impersonation_session_id"].First().Should().Be(sessionId.ToString());
 
-        claims.Should().ContainKey("impersonation_ticket");
-        claims["impersonation_ticket"].Should().Be(ticket);
+        claims.Contains("impersonation_ticket").Should().BeTrue();
+        claims["impersonation_ticket"].First().Should().Be(ticket);
 
         token.ValidTo.Should().BeCloseTo(DateTime.UtcNow.Add(duration), TimeSpan.FromSeconds(5));
     }

@@ -14,13 +14,19 @@ public sealed record TenantPlanPreviewDto(
     bool RequiresGracePeriod,
     int GracePeriodDays,
     IReadOnlyCollection<string> AddedFeatures,
-    IReadOnlyCollection<string> RemovedFeatures
+    IReadOnlyCollection<string> RemovedFeatures,
+    string? CurrentHeadTierCode = null,
+    string? TargetHeadTierCode = null,
+    IReadOnlyCollection<string>? CurrentSubscribedModules = null,
+    IReadOnlyCollection<string>? TargetSubscribedModules = null
 );
 
 public sealed record ChangeTenantPlanRequestDto(
-    Guid TargetPlanVersionId,
-    string Justification,
-    bool ForceImmediate = false
+    Guid? TargetPlanVersionId = null,
+    string Justification = "",
+    bool ForceImmediate = false,
+    string? HeadTierCode = null,
+    IReadOnlyCollection<string>? SubscribedModules = null
 );
 
 public sealed record ChangeTenantPlanResponseDto(
@@ -30,7 +36,10 @@ public sealed record ChangeTenantPlanResponseDto(
     string SubscriptionStatus,
     bool GracePeriodActivated,
     DateTime? GracePeriodEndsAtUtc,
-    string Message
+    string Message,
+    string? HeadTierCode = null,
+    IReadOnlyCollection<string>? SubscribedModules = null,
+    int? HeadCapacity = null
 );
 
 public sealed record ResolveGracePeriodRequestDto(

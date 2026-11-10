@@ -39,7 +39,9 @@ public sealed record TenantAdminSummaryDto(
     bool IsProtected,
     DateTime CreatedAtUtc,
     DateTime? CurrentPeriodEndUtc = null,
-    bool CancelAtPeriodEnd = false
+    bool CancelAtPeriodEnd = false,
+    string? HeadTierCode = null,
+    IReadOnlyCollection<string>? SubscribedModules = null
 );
 
 public sealed record TenantAdminDetailDto(
@@ -75,7 +77,9 @@ public sealed record TenantAdminDetailDto(
     DateTime CreatedAtUtc,
     DateTime UpdatedAtUtc,
     DateTime? CurrentPeriodEndUtc = null,
-    bool CancelAtPeriodEnd = false
+    bool CancelAtPeriodEnd = false,
+    string? HeadTierCode = null,
+    IReadOnlyCollection<string>? SubscribedModules = null
 );
 
 public sealed record PagedTenantAdminResult(

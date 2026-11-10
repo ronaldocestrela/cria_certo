@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Reflection;
 using CriaCerto.BuildingBlocks.Abstractions.Licensing;
 using FluentAssertions;
 using Xunit;
@@ -69,51 +71,13 @@ public class ModuleLicenseCheckerTests
     }
 
     [Theory]
-    [InlineData("Pro Fazenda", "Nutrition", true)]
-    [InlineData("Pro Fazenda", "Breeding", true)]
-    [InlineData("Pro Fazenda", "Calving", true)]
-    [InlineData("Pro Fazenda", "Growth", true)]
-    [InlineData("Pro Fazenda", "Cows", true)]
-    [InlineData("Pro Fazenda", "cows", true)]
-    [InlineData("Pro Fazenda", "Modules.Cows", true)]
-    [InlineData("Pro Fazenda", "Sanitary", false)]
-    [InlineData("Starter Pecuária", "Breeding", true)]
-    [InlineData("Starter Pecuária", "Calving", true)]
-    [InlineData("Starter Pecuária", "Cows", true)]
-    [InlineData("Starter Pecuária", "cows", true)]
-    [InlineData("Starter Pecuária", "Modules.Cows", true)]
-    [InlineData("Starter Pecuária", "Nutrition", false)]
-    [InlineData("Starter Pecuária", "Feedlot", false)]
-    [InlineData("Enterprise Confinamento", "Sanitary", true)]
-    [InlineData("Enterprise Confinamento", "Feedlot", true)]
-    [InlineData("Enterprise Confinamento", "Cows", true)]
-    [InlineData("Enterprise Confinamento", "QualquerModuloNovo", true)]
-    public void HasAccess_WithCommercialNames_ShouldEvaluatePermissionsCorrectly(string plan, string module, bool expected)
-    {
-        var result = ModuleLicenseChecker.HasAccess(plan, module);
-
-        result.Should().Be(expected);
-    }
-
-    [Theory]
-    [InlineData("v2.0 - Nova Revisão", "Cows", true)]
-    [InlineData("v2.0 - Nova Revisão", "cows", true)]
-    [InlineData("v2.0 - Nova Revisão", "Breeding", true)]
-    [InlineData("v2.0 - Nova Revisão", "Calving", true)]
-    [InlineData("v2.0 - Nova Revisão", "Feedlot", false)]
-    public void HasAccess_WithUnrecognizedVersionString_ShouldSafelyFallbackToStarterPlan(string plan, string module, bool expected)
-    {
-        var result = ModuleLicenseChecker.HasAccess(plan, module);
-
-        result.Should().Be(expected);
-    }
-
-    [Theory]
     [InlineData("Modules.Cows", "Cows")]
     [InlineData("cows", "Cows")]
+    [InlineData("cow", "Cows")]
     [InlineData("cattle", "Cows")]
     [InlineData("plantel", "Cows")]
     [InlineData("Modules.Breeding", "Breeding")]
+    [InlineData("Modules.Tenancy", "Tenancy")]
     [InlineData("Feedlot", "Feedlot")]
     public void NormalizeModule_ShouldNormalizeKeysCorrectly(string input, string expected)
     {
@@ -123,13 +87,118 @@ public class ModuleLicenseCheckerTests
     }
 
     [Theory]
-    [InlineData("Pro", null)]
-    [InlineData("Pro", "")]
-    [InlineData("Pro", "   ")]
-    public void HasAccess_WithNullOrWhitespaceModule_ShouldReturnFalse(string plan, string? module)
+    [InlineData("Cows")]
+    [InlineData("cows")]
+    [InlineData("plantel")]
+    [InlineData("cattle")]
+    [InlineData("Modules.Cows")]
+    [InlineData("Tenancy")]
+    [InlineData("tenancy")]
+    [InlineData("Modules.Tenancy")]
+    public void HasModuleAccess_ForCoreModules_ShouldAlwaysReturnTrueEvenWhenSubscribedSetIsEmpty(string coreModule)
     {
-        var result = ModuleLicenseChecker.HasAccess(plan, module);
+        var emptyModules = Array.Empty<string>();
 
-        result.Should().BeFalse();
+        ModuleLicenseChecker.HasModuleAccess(emptyModules, coreModule).Should().BeTrue();
+        ModuleLicenseChecker.HasModuleAccess(null!, coreModule).Should().BeTrue();
+    }
+
+    [Fact]
+    public void HasModuleAccess_WithArbitraryModuleCombination_ShouldAllowOnlySubscribedAndCoreModules()
+    {
+        var subscribedModules = new[] { "Cows", "Sanitary", "Nutrition" };
+
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Cows").Should().BeTrue();
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Tenancy").Should().BeTrue();
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Sanitary").Should().BeTrue();
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "sanitary").Should().BeTrue();
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Modules.Sanitary").Should().BeTrue();
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Nutrition").Should().BeTrue();
+
+        // Ter "Cows" (Plantel Base) NÃO concede acesso implícito a "Breeding" (IATF/DG)
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Breeding").Should().BeFalse();
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Calving").Should().BeFalse();
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Growth").Should().BeFalse();
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Analytics").Should().BeFalse();
+    }
+
+    [Fact]
+    public void HasModuleAccess_WhenOnlyCowsSubscribed_ShouldBlockBreedingAndOtherAddons()
+    {
+        var subscribedModules = new[] { "Cows" };
+
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Cows").Should().BeTrue();
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Breeding").Should().BeFalse();
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Calving").Should().BeFalse();
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Growth").Should().BeFalse();
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Sanitary").Should().BeFalse();
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Nutrition").Should().BeFalse();
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Analytics").Should().BeFalse();
+    }
+
+    [Fact]
+    public void HasModuleAccess_WithGrowthAndNutritionOnly_ShouldAllowThoseAndBlockRest()
+    {
+        var subscribedModules = new[] { "Cows", "Growth", "Nutrition" };
+
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Cows").Should().BeTrue();
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Tenancy").Should().BeTrue();
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Growth").Should().BeTrue();
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Nutrition").Should().BeTrue();
+
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Breeding").Should().BeFalse();
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Calving").Should().BeFalse();
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Sanitary").Should().BeFalse();
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Analytics").Should().BeFalse();
+    }
+
+    [Fact]
+    public void HasModuleAccess_WithAnalyticsOnly_ShouldAllowAnalyticsAndBlockOtherCommercialAddons()
+    {
+        var subscribedModules = new[] { "Cows", "Analytics" };
+
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Cows").Should().BeTrue();
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Analytics").Should().BeTrue();
+
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Breeding").Should().BeFalse();
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Calving").Should().BeFalse();
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Growth").Should().BeFalse();
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Sanitary").Should().BeFalse();
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Nutrition").Should().BeFalse();
+    }
+
+    [Fact]
+    public void HasModuleAccess_WithMixedCaseAndDuplicatesInSubscribedList_ShouldResolveCorrectly()
+    {
+        var subscribedModules = new[] { "cows", "COWS", "SaNiTaRy", "sanitary", "Modules.Calving" };
+
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Cows").Should().BeTrue();
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Sanitary").Should().BeTrue();
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "sanitary").Should().BeTrue();
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Calving").Should().BeTrue();
+
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Breeding").Should().BeFalse();
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, "Nutrition").Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void HasModuleAccess_WithNullOrWhitespaceRequiredModule_ShouldReturnFalse(string? requiredModule)
+    {
+        var subscribedModules = new[] { "Cows", "Breeding", "Sanitary" };
+
+        ModuleLicenseChecker.HasModuleAccess(subscribedModules, requiredModule!).Should().BeFalse();
+    }
+
+    [Fact]
+    public void ModuleLicenseChecker_ShouldNotContainStaticPlanAccessDictionary()
+    {
+        var planAccessField = typeof(ModuleLicenseChecker).GetField(
+            "PlanAccess",
+            BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public);
+
+        planAccessField.Should().BeNull("o dicionário estático PlanAccess deve ser removido no modelo modular Self-Service");
     }
 }

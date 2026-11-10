@@ -28,6 +28,14 @@ public sealed class CreateTenantCommandValidator : AbstractValidator<CreateTenan
             .Must(plan => string.Equals(plan, CreateTenantCommand.DefaultTrialPlan, StringComparison.OrdinalIgnoreCase))
             .WithMessage($"O plano inicial de onboarding deve ser {CreateTenantCommand.DefaultTrialPlan} (período de testes gratuito).");
 
+        RuleFor(x => x.HeadTierCode)
+            .Must(tier => string.Equals(tier, CreateTenantCommand.DefaultTrialHeadTier, StringComparison.OrdinalIgnoreCase))
+            .WithMessage($"A faixa de cabeças inicial no período de testes gratuito deve ser {CreateTenantCommand.DefaultTrialHeadTier}.");
+
+        RuleFor(x => x.SelectedModules)
+            .Must(modules => modules is null || modules.All(PlanCapacityLimits.IsValidCommercialModuleKey))
+            .WithMessage("Um ou mais módulos selecionados para o período de testes não pertencem ao catálogo comercial válido.");
+
         RuleFor(x => x.ReferralCode)
             .MaximumLength(50).WithMessage("O código de indicação deve ter no máximo 50 caracteres.")
             .When(x => !string.IsNullOrWhiteSpace(x.ReferralCode));

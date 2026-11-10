@@ -97,7 +97,7 @@ public class DataRetentionPurgingWorkerIntegrationTests : IDisposable
     public async Task ProcessDataPurgePassSafelyAsync_Should_Purge_Tenancy_And_Backoffice_Stale_Data()
     {
         // Arrange
-        var now = new DateTime(2026, 10, 26, 12, 0, 0, DateTimeKind.Utc);
+        var now = DateTime.UtcNow;
         var worker = _serviceProvider.GetRequiredService<DataRetentionPurgingBackgroundService>();
 
         // Arrange Tenancy
@@ -212,7 +212,7 @@ public class DataRetentionPurgingWorkerIntegrationTests : IDisposable
     public async Task ProcessDataPurgePassSafelyAsync_WhenDryRun_Should_Not_Mutate_Any_Database()
     {
         // Arrange
-        var now = new DateTime(2026, 10, 26, 12, 0, 0, DateTimeKind.Utc);
+        var now = DateTime.UtcNow;
         var worker = _serviceProvider.GetRequiredService<DataRetentionPurgingBackgroundService>();
 
         var tenant = new Tenant { Id = Guid.NewGuid(), Name = "Fazenda DryRun", CNPJ = "99887766000111" };

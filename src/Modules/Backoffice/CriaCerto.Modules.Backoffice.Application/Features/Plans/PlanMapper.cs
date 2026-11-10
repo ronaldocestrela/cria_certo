@@ -55,4 +55,73 @@ public static class PlanMapper
             versions
         );
     }
+
+    public static HeadTierCatalogDto ToDto(this HeadTierCatalog tier) =>
+        new(
+            tier.Id,
+            tier.TierCode,
+            tier.DisplayName,
+            tier.MinHeads,
+            tier.MaxHeads,
+            tier.SortOrder,
+            tier.IsActive,
+            tier.CreatedAtUtc,
+            tier.UpdatedAtUtc);
+
+    public static ModuleTierPriceDto ToDto(this ModuleTierPrice price, string tierCode = "") =>
+        new(
+            price.Id,
+            price.ModuleCatalogId,
+            price.HeadTierCatalogId,
+            tierCode,
+            price.VersionNumber,
+            price.Status.ToString(),
+            price.MonthlyPrice,
+            price.AnnualPriceMonthly,
+            price.StripePriceIdMonthly,
+            price.StripePriceIdAnnual,
+            price.PublishedAtUtc,
+            price.PublishedByAdminId,
+            price.ApprovalNotes,
+            price.CreatedAtUtc);
+
+    public static ModuleCatalogDto ToDto(
+        this ModuleCatalog module,
+        IReadOnlyDictionary<Guid, string>? tierCodesById = null)
+    {
+        var allPrices = module.TierPrices
+            .Select(p =>
+            {
+                var tierCode = tierCodesById is not null && tierCodesById.TryGetValue(p.HeadTierCatalogId, out var code)
+                    ? code
+                    : string.Empty;
+                return p.ToDto(tierCode);
+            })
+            .OrderBy(p => p.TierCode)
+            .ThenByDescending(p => p.VersionNumber)
+            .ToList();
+
+        var activePrices = allPrices
+            .Where(p => p.Status == PlanVersionStatus.Published.ToString())
+            .ToList();
+
+        var draftPrices = allPrices
+            .Where(p => p.Status == PlanVersionStatus.Draft.ToString())
+            .ToList();
+
+        return new ModuleCatalogDto(
+            module.Id,
+            module.ModuleKey,
+            module.Name,
+            module.Description,
+            module.Icon,
+            module.IsCore,
+            module.IsActive,
+            module.SortOrder,
+            module.CreatedAtUtc,
+            module.UpdatedAtUtc,
+            activePrices,
+            draftPrices,
+            allPrices);
+    }
 }

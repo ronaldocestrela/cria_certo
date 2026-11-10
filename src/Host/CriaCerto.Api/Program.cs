@@ -70,6 +70,7 @@ using CriaCerto.Modules.Tenancy.Application.Features.GetSubscriptionPlans;
 using CriaCerto.Modules.Tenancy.Application.Features.GetTenantProfile;
 using CriaCerto.Modules.Tenancy.Application.Features.UpdateTenantProfile;
 using CriaCerto.Modules.Tenancy.Application.Features.SubscriptionCheckout;
+using CriaCerto.Modules.Tenancy.Application.Features.UpdateModularSubscription;
 using CriaCerto.Modules.Tenancy.Application.Features.SubscriptionPortal;
 using CriaCerto.Modules.Tenancy.Application.Features.ProcessStripeWebhook;
 using CriaCerto.Modules.Tenancy.Application.Features.GetProductionUnits;
@@ -210,6 +211,7 @@ builder.Services.AddReferralInfrastructure(builder.Configuration);
 builder.Services.AddScoped<IPartnerAccountProvisioner, PartnerAccountProvisioner>();
 builder.Services.AddScoped<IPlanCatalogLookupService, PlanCatalogLookupService>();
 builder.Services.AddScoped<ITenantInfoLookupService, TenantInfoLookupService>();
+builder.Services.AddScoped<CriaCerto.Modules.Tenancy.Application.Abstractions.ITenantActiveHerdCounter, CompositeActiveHerdCounter>();
 builder.Services.AddScoped<CriaCerto.Modules.Tenancy.Application.Abstractions.IPartnerRoleLookupService, PartnerRoleLookupService>();
 builder.Services.AddScoped<IReferralPaymentVerificationService, StripePaymentVerificationService>();
 builder.Services.AddScoped<IReferralAuditSink, ReferralBackofficeAuditSink>();
@@ -681,17 +683,29 @@ backoffice.MapDelete("/tenants/saved-filters/{filterId:guid}", async (Guid filte
     return result.IsSuccess ? Results.Ok() : Results.Json(result.Error, statusCode: ToStatusCode(result.Error.Type));
 }).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.TenantsRead)).WithTags("Backoffice Tenants");
 
-backoffice.MapGet("/tenants/{id:guid}/plan-preview", async (Guid id, Guid targetPlanVersionId, ISender sender) =>
+backoffice.MapGet("/tenants/{id:guid}/plan-preview", async (Guid id, Guid? targetPlanVersionId, string? headTierCode, string? selectedModules, ISender sender) =>
 {
-    var query = new PreviewTenantPlanChangeQuery(id, targetPlanVersionId);
+    var modules = !string.IsNullOrWhiteSpace(selectedModules)
+        ? selectedModules.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        : null;
+    var query = new PreviewTenantPlanChangeQuery(id, targetPlanVersionId, headTierCode, modules);
     var result = await sender.Send(query);
     return ToHttpResult(result);
 }).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.TenantsRead)).WithTags("Backoffice Subscriptions");
 
 backoffice.MapPost("/tenants/{id:guid}/plan", async (Guid id, ChangeTenantPlanRequestDto req, HttpContext ctx, ISender sender) =>
 {
-    var (callerId, _, _) = GetBackofficeActor(ctx);
-    var command = new ChangeTenantPlanCommand(id, req.TargetPlanVersionId, callerId, req.Justification, req.ForceImmediate);
+    var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var command = new ChangeTenantPlanCommand(
+        id,
+        req.TargetPlanVersionId,
+        callerId,
+        req.Justification,
+        req.ForceImmediate,
+        req.HeadTierCode,
+        req.SubscribedModules,
+        callerEmail,
+        ip);
     var result = await sender.Send(command);
     return ToHttpResult(result);
 }).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.TenantsWrite)).WithTags("Backoffice Subscriptions");
@@ -747,6 +761,82 @@ backoffice.MapPost("/plans/versions/{versionId:guid}/publish", async (Guid versi
     var result = await sender.Send(command);
     return ToHttpResult(result);
 }).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.PlansPublish)).WithTags("Backoffice Plans");
+
+// --- BACKOFFICE MODULAR SELF-SERVICE CATALOG ENDPOINTS ---
+backoffice.MapGet("/catalog/tiers", async (bool? includeInactive, ISender sender) =>
+{
+    var result = await sender.Send(new GetHeadTierCatalogsQuery(includeInactive ?? false));
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.PlansRead)).WithTags("Backoffice Catalog");
+
+backoffice.MapPost("/catalog/tiers", async (CreateHeadTierCatalogCommand req, HttpContext ctx, ISender sender) =>
+{
+    var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var command = req with { PerformedByAdminUserId = callerId, PerformedByAdminEmail = callerEmail, IpAddress = ip };
+    var result = await sender.Send(command);
+    return ToHttpResult(result, StatusCodes.Status201Created);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.PlansWrite)).WithTags("Backoffice Catalog");
+
+backoffice.MapPut("/catalog/tiers/{tierId:guid}", async (Guid tierId, UpdateHeadTierCatalogCommand req, HttpContext ctx, ISender sender) =>
+{
+    var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var command = req with { TierId = tierId, PerformedByAdminUserId = callerId, PerformedByAdminEmail = callerEmail, IpAddress = ip };
+    var result = await sender.Send(command);
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.PlansWrite)).WithTags("Backoffice Catalog");
+
+backoffice.MapGet("/catalog/modules", async (bool? includeInactive, ISender sender) =>
+{
+    var result = await sender.Send(new GetModuleCatalogsQuery(includeInactive ?? false));
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.PlansRead)).WithTags("Backoffice Catalog");
+
+backoffice.MapGet("/catalog/modules/{moduleId:guid}", async (Guid moduleId, ISender sender) =>
+{
+    var result = await sender.Send(new GetModuleCatalogByIdQuery(moduleId));
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.PlansRead)).WithTags("Backoffice Catalog");
+
+backoffice.MapPost("/catalog/modules", async (CreateModuleCatalogCommand req, HttpContext ctx, ISender sender) =>
+{
+    var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var command = req with { PerformedByAdminUserId = callerId, PerformedByAdminEmail = callerEmail, IpAddress = ip };
+    var result = await sender.Send(command);
+    return ToHttpResult(result, StatusCodes.Status201Created);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.PlansWrite)).WithTags("Backoffice Catalog");
+
+backoffice.MapPut("/catalog/modules/{moduleId:guid}", async (Guid moduleId, UpdateModuleCatalogCommand req, HttpContext ctx, ISender sender) =>
+{
+    var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var command = req with { ModuleId = moduleId, PerformedByAdminUserId = callerId, PerformedByAdminEmail = callerEmail, IpAddress = ip };
+    var result = await sender.Send(command);
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.PlansWrite)).WithTags("Backoffice Catalog");
+
+backoffice.MapPost("/catalog/modules/{moduleId:guid}/prices", async (Guid moduleId, CreateModuleTierPriceDraftCommand req, HttpContext ctx, ISender sender) =>
+{
+    var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var command = req with { ModuleCatalogId = moduleId, PerformedByAdminUserId = callerId, PerformedByAdminEmail = callerEmail, IpAddress = ip };
+    var result = await sender.Send(command);
+    return ToHttpResult(result, StatusCodes.Status201Created);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.PlansWrite)).WithTags("Backoffice Catalog");
+
+backoffice.MapPut("/catalog/modules/prices/{priceId:guid}", async (Guid priceId, UpdateModuleTierPriceDraftCommand req, HttpContext ctx, ISender sender) =>
+{
+    var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var command = req with { PriceId = priceId, PerformedByAdminUserId = callerId, PerformedByAdminEmail = callerEmail, IpAddress = ip };
+    var result = await sender.Send(command);
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.PlansWrite)).WithTags("Backoffice Catalog");
+
+backoffice.MapPost("/catalog/modules/prices/{priceId:guid}/publish", async (Guid priceId, PublishPlanVersionRequest req, HttpContext ctx, ISender sender) =>
+{
+    var (callerId, callerEmail, ip) = GetBackofficeActor(ctx);
+    var role = GetBackofficeActorRole(ctx);
+    var command = new PublishModuleTierPriceCommand(priceId, req.ApprovalNotes, callerId, callerEmail, ip, role);
+    var result = await sender.Send(command);
+    return ToHttpResult(result);
+}).RequireAuthorization(p => p.RequireClaim("Permission", BackofficePermissions.PlansPublish)).WithTags("Backoffice Catalog");
 
 // --- BACKOFFICE IMPERSONATION ENDPOINTS ---
 backoffice.MapPost("/impersonation/start", async (StartImpersonationRequest req, HttpContext ctx, ISender sender) =>
@@ -2061,6 +2151,14 @@ app.MapGet("/api/v1/tenancy/plans", async (ISender sender) =>
         : Results.Json(result.Error, statusCode: 400);
 }).AllowAnonymous().WithTags("Tenancy");
 
+app.MapGet("/api/v1/tenancy/catalog", async (ISender sender) =>
+{
+    var result = await sender.Send(new GetModularSubscriptionCatalogQuery());
+    return result.IsSuccess
+        ? Results.Ok(result.Value)
+        : Results.Json(result.Error, statusCode: 400);
+}).AllowAnonymous().WithTags("Tenancy");
+
 app.MapPost("/api/v1/tenancy/farms", async (CreateTenantCommand command, HttpContext httpContext, ISender sender) =>
 {
     var ipAddress = httpContext.Connection.RemoteIpAddress?.ToString();
@@ -2252,10 +2350,12 @@ app.MapPost("/api/v1/tenancy/subscription/checkout", async (CreateCheckoutSessio
     var command = new CreateCheckoutSessionCommand(
         request.TenantId,
         userId,
-        request.PlanId,
+        string.IsNullOrWhiteSpace(request.HeadTierCode) ? (request.PlanId ?? "") : request.HeadTierCode,
+        request.SelectedModules,
         request.BillingCycle,
         request.SuccessUrl,
-        request.CancelUrl);
+        request.CancelUrl,
+        request.PlanId);
 
     var result = await sender.Send(command);
     return ToHttpResult(result);
@@ -2274,6 +2374,30 @@ app.MapPost("/api/v1/tenancy/subscription/portal", async (CreatePortalSessionReq
     }
 
     var command = new CreatePortalSessionCommand(request.TenantId, userId, request.ReturnUrl);
+    var result = await sender.Send(command);
+    return ToHttpResult(result);
+}).RequireAuthorization().WithTags("Tenancy Subscription");
+
+app.MapPost("/api/v1/tenancy/subscription/update-modular", async (UpdateModularSubscriptionRequest request, System.Security.Claims.ClaimsPrincipal userClaims, ISender sender) =>
+{
+    var sub = userClaims.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value 
+           ?? userClaims.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value 
+           ?? userClaims.FindFirst("sub")?.Value
+           ?? userClaims.FindFirst("UserId")?.Value;
+
+    if (!Guid.TryParse(sub, out var userId))
+    {
+        return Results.Unauthorized();
+    }
+
+    var command = new UpdateModularSubscriptionCommand(
+        request.TenantId,
+        userId,
+        request.HeadTierCode,
+        request.SelectedModules,
+        request.BillingCycle ?? "monthly",
+        request.AllowGracePeriod);
+
     var result = await sender.Send(command);
     return ToHttpResult(result);
 }).RequireAuthorization().WithTags("Tenancy Subscription");

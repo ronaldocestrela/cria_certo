@@ -245,6 +245,13 @@ namespace CriaCerto.Modules.Tenancy.Infrastructure.Persistence.Migrations
                         .HasMaxLength(80)
                         .HasColumnType("nvarchar(80)");
 
+                    b.Property<string>("HeadTierCode")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)")
+                        .HasDefaultValue("TIER_500");
+
                     b.Property<bool>("IsProtected")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("bit")
@@ -339,6 +346,8 @@ namespace CriaCerto.Modules.Tenancy.Infrastructure.Persistence.Migrations
                         .IsUnique()
                         .HasFilter("[ExternalIdentifier] IS NOT NULL");
 
+                    b.HasIndex("HeadTierCode");
+
                     b.HasIndex("ProductiveProfile");
 
                     b.HasIndex("SizeSegment");
@@ -370,6 +379,39 @@ namespace CriaCerto.Modules.Tenancy.Infrastructure.Persistence.Migrations
                     b.HasIndex("TagId");
 
                     b.ToTable("TenantOperationalTags", "tenancy");
+                });
+
+            modelBuilder.Entity("CriaCerto.Modules.Tenancy.Application.Domain.TenantSubscribedModule", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("ActivatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ModuleKey")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<decimal>("MonthlyPriceSnapshot")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("StripeSubscriptionItemId")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "ModuleKey")
+                        .IsUnique();
+
+                    b.ToTable("TenantSubscribedModules", "tenancy");
                 });
 
             modelBuilder.Entity("CriaCerto.Modules.Tenancy.Application.Domain.TenantSubscriptionHistory", b =>
@@ -571,6 +613,17 @@ namespace CriaCerto.Modules.Tenancy.Infrastructure.Persistence.Migrations
                     b.Navigation("Tenant");
                 });
 
+            modelBuilder.Entity("CriaCerto.Modules.Tenancy.Application.Domain.TenantSubscribedModule", b =>
+                {
+                    b.HasOne("CriaCerto.Modules.Tenancy.Application.Domain.Tenant", "Tenant")
+                        .WithMany("SubscribedModules")
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Tenant");
+                });
+
             modelBuilder.Entity("CriaCerto.Modules.Tenancy.Application.Domain.UserTenant", b =>
                 {
                     b.HasOne("CriaCerto.Modules.Tenancy.Application.Domain.Tenant", "Tenant")
@@ -600,6 +653,8 @@ namespace CriaCerto.Modules.Tenancy.Infrastructure.Persistence.Migrations
                     b.Navigation("OperationalTags");
 
                     b.Navigation("ProductionUnits");
+
+                    b.Navigation("SubscribedModules");
 
                     b.Navigation("UserTenants");
                 });

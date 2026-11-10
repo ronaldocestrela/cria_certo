@@ -11,149 +11,514 @@
 <div class="plans-management-container">
     <header class="page-header">
         <div>
-            <span class="badge-category">Gestão Comercial & Preços</span>
-            <h1 class="page-title">Catálogo de Planos Versionado</h1>
-            <p class="page-subtitle">Gerencie planos SaaS, crie rascunhos de versão e publique atualizações sem impacto retroativo nas assinaturas ativas.</p>
+            <span class="badge-category">Gestão Comercial & Catálogo</span>
+            <h1 class="page-title">Catálogo de Planos & Matriz Modular</h1>
+            <p class="page-subtitle">Gerencie o modelo Self-Service À La Carte por faixas de rebanho e módulos adicionais, além de versões e históricos legados.</p>
         </div>
 
-        <PermissionGuard Permission="@BackofficePermissions.PlansWrite">
-            <button class="btn btn-primary" @onclick="OpenCreatePlanModal">
-                <span class="icon">➕</span> Novo Plano
-            </button>
-        </PermissionGuard>
+        <div class="header-actions">
+            @if (_activeTab == "modular")
+            {
+                <PermissionGuard Permission="@BackofficePermissions.PlansWrite">
+                    <button class="btn btn-outline" @onclick="OpenCreateTierModal">
+                        <span class="icon">🏷️</span> Nova Faixa
+                    </button>
+                    <button class="btn btn-primary" @onclick="OpenCreateModuleModal">
+                        <span class="icon">➕</span> Novo Módulo
+                    </button>
+                </PermissionGuard>
+            }
+            else
+            {
+                <PermissionGuard Permission="@BackofficePermissions.PlansWrite">
+                    <button class="btn btn-primary" @onclick="OpenCreatePlanModal">
+                        <span class="icon">➕</span> Novo Plano Legado
+                    </button>
+                </PermissionGuard>
+            }
+        </div>
     </header>
 
-    @if (_isLoading)
+    <!-- Tab navigation -->
+    <div class="tabs-nav">
+        <button class="tab-btn @(_activeTab == "modular" ? "active" : "")" @onclick='() => SetTab("modular")'>
+            <span class="tab-icon">🎛️</span> Matriz Modular (Faixas x Módulos)
+            <span class="tab-badge">Novo</span>
+        </button>
+        <button class="tab-btn @(_activeTab == "legacy" ? "active" : "")" @onclick='() => SetTab("legacy")'>
+            <span class="tab-icon">📦</span> Planos Legados (Histórico & Versões)
+        </button>
+    </div>
+
+    @if (_activeTab == "modular")
     {
-        <div class="loading-state">
-            <div class="spinner"></div>
-            <p>Carregando catálogo de planos...</p>
-        </div>
-    }
-    else if (_plans is null || !_plans.Any())
-    {
-        <div class="empty-state">
-            <div class="empty-icon">💳</div>
-            <h3>Nenhum plano encontrado</h3>
-            <p>Comece criando seu primeiro plano de assinatura para os clientes da plataforma.</p>
+        <!-- MODULAR MATRIX TAB -->
+        <div class="modular-catalog-section">
+            <div class="kpis-grid">
+                <div class="kpi-card">
+                    <span class="kpi-label">Faixas de Cabeças</span>
+                    <span class="kpi-value">@(_headTiers?.Count(t => t.IsActive) ?? 0)</span>
+                    <span class="kpi-sub">Cadastradas e ativas</span>
+                </div>
+                <div class="kpi-card">
+                    <span class="kpi-label">Módulos no Catálogo</span>
+                    <span class="kpi-value">@(_modules?.Count(m => m.IsActive) ?? 0)</span>
+                    <span class="kpi-sub">@(_modules?.Count(m => m.IsCore) ?? 0) Core · @(_modules?.Count(m => !m.IsCore && m.IsActive) ?? 0) Add-ons</span>
+                </div>
+                <div class="kpi-card">
+                    <span class="kpi-label">Preços Publicados</span>
+                    <span class="kpi-value">@(_modules?.Sum(m => m.ActivePrices.Count) ?? 0)</span>
+                    <span class="kpi-sub">Matriz Módulo x Faixa</span>
+                </div>
+                <div class="kpi-card">
+                    <span class="kpi-label">Rascunhos Pendentes</span>
+                    <span class="kpi-value warning">@(_modules?.Sum(m => m.DraftPrices.Count) ?? 0)</span>
+                    <span class="kpi-sub">Aguardando publicação</span>
+                </div>
+            </div>
+
+            @if (_isLoadingModular)
+            {
+                <div class="loading-state">
+                    <div class="spinner"></div>
+                    <p>Carregando matriz de módulos e faixas de cabeças...</p>
+                </div>
+            }
+            else if (_headTiers is null || !_headTiers.Any() || _modules is null || !_modules.Any())
+            {
+                <div class="empty-state">
+                    <div class="empty-icon">🎛️</div>
+                    <h3>Matriz Modular não inicializada</h3>
+                    <p>Cadastre as faixas de cabeças e os módulos do catálogo para estruturar a matriz de preços.</p>
+                </div>
+            }
+            else
+            {
+                <div class="matrix-card">
+                    <div class="matrix-header">
+                        <div>
+                            <h3 class="matrix-title">Matriz de Preços: Módulos x Faixas de Capacidade</h3>
+                            <p class="matrix-subtitle">Os preços publicados são aplicados instantaneamente no checkout e na personalização de assinaturas modulares.</p>
+                        </div>
+                    </div>
+
+                    <div class="matrix-table-container">
+                        <table class="matrix-table">
+                            <thead>
+                                <tr>
+                                    <th class="col-module">Módulo do Sistema</th>
+                                    @foreach (var tier in _headTiers.OrderBy(t => t.SortOrder).ThenBy(t => t.MinHeads))
+                                    {
+                                        <th class="col-tier">
+                                            <div class="tier-th-content">
+                                                <div class="tier-th-top">
+                                                    <span class="tier-code">@tier.TierCode</span>
+                                                    <button class="btn-xs btn-ghost" title="Editar Faixa" @onclick="() => OpenEditTierModal(tier)">✏️</button>
+                                                </div>
+                                                <span class="tier-name">@tier.DisplayName</span>
+                                                <span class="tier-range">@tier.MinHeads.ToString("N0") a @tier.MaxHeads.ToString("N0") cab.</span>
+                                            </div>
+                                        </th>
+                                    }
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var module in _modules.OrderBy(m => m.SortOrder).ThenBy(m => m.Name))
+                                {
+                                    <tr class="@(!module.IsActive ? "row-inactive" : "")">
+                                        <td class="col-module-cell">
+                                            <div class="module-info-box">
+                                                <div class="module-title-row">
+                                                    <span class="module-icon">@module.Icon</span>
+                                                    <span class="module-name">@module.Name</span>
+                                                    @if (module.IsCore)
+                                                    {
+                                                        <span class="core-badge" title="Módulo base incluído compulsoriamente em todas as assinaturas">Core</span>
+                                                    }
+                                                    <button class="btn-xs btn-ghost" title="Editar Módulo" @onclick="() => OpenEditModuleModal(module)">✏️</button>
+                                                </div>
+                                                <span class="module-key">@module.ModuleKey</span>
+                                                <p class="module-desc">@module.Description</p>
+                                            </div>
+                                        </td>
+
+                                        @foreach (var tier in _headTiers.OrderBy(t => t.SortOrder).ThenBy(t => t.MinHeads))
+                                        {
+                                            var activePrice = module.ActivePrices.FirstOrDefault(p => p.HeadTierCatalogId == tier.Id);
+                                            var draftPrice = module.DraftPrices.FirstOrDefault(p => p.HeadTierCatalogId == tier.Id);
+
+                                            <td class="col-price-cell">
+                                                @if (draftPrice != null)
+                                                {
+                                                    <div class="price-cell-box draft">
+                                                        <div class="cell-status-bar">
+                                                            <span class="status-tag draft">✏️ Rascunho v@draftPrice.VersionNumber</span>
+                                                        </div>
+                                                        <div class="cell-prices">
+                                                            <span class="p-monthly">R$ @draftPrice.MonthlyPrice.ToString("N2")<small>/mês</small></span>
+                                                            <span class="p-annual">R$ @draftPrice.AnnualPriceMonthly.ToString("N2")<small>/mês anual</small></span>
+                                                        </div>
+                                                        <div class="cell-actions">
+                                                            <PermissionGuard Permission="@BackofficePermissions.PlansWrite">
+                                                                <button class="btn btn-xs btn-outline" @onclick="() => OpenEditTierPriceModal(module, tier, draftPrice)">Editar</button>
+                                                            </PermissionGuard>
+                                                            <PermissionGuard Permission="@BackofficePermissions.PlansPublish">
+                                                                <FeatureFlagGuard FlagKey="backoffice.feature.plan_publishing">
+                                                                    <ChildContent>
+                                                                        <button class="btn btn-xs btn-success" @onclick="() => OpenPublishTierPriceModal(module, tier, draftPrice)">Publicar</button>
+                                                                    </ChildContent>
+                                                                    <Disabled>
+                                                                        <button class="btn btn-xs btn-secondary opacity-50" disabled title="Publicação bloqueada por rollout">🔒</button>
+                                                                    </Disabled>
+                                                                </FeatureFlagGuard>
+                                                            </PermissionGuard>
+                                                        </div>
+                                                    </div>
+                                                }
+                                                else if (activePrice != null)
+                                                {
+                                                    <div class="price-cell-box published">
+                                                        <div class="cell-status-bar">
+                                                            <span class="status-tag published">● Publicado v@activePrice.VersionNumber</span>
+                                                        </div>
+                                                        <div class="cell-prices">
+                                                            <span class="p-monthly">R$ @activePrice.MonthlyPrice.ToString("N2")<small>/mês</small></span>
+                                                            <span class="p-annual">R$ @activePrice.AnnualPriceMonthly.ToString("N2")<small>/mês anual</small></span>
+                                                        </div>
+                                                        <div class="cell-actions">
+                                                            <PermissionGuard Permission="@BackofficePermissions.PlansWrite">
+                                                                <button class="btn btn-xs btn-ghost" @onclick="() => OpenCreateTierPriceModal(module, tier, activePrice)">➕ Novo Rascunho</button>
+                                                            </PermissionGuard>
+                                                        </div>
+                                                    </div>
+                                                }
+                                                else
+                                                {
+                                                    <div class="price-cell-box empty">
+                                                        <span class="text-subtle">Sem preço</span>
+                                                        <PermissionGuard Permission="@BackofficePermissions.PlansWrite">
+                                                            <button class="btn btn-xs btn-secondary" @onclick="() => OpenCreateTierPriceModal(module, tier)">+ Definir</button>
+                                                        </PermissionGuard>
+                                                    </div>
+                                                }
+                                            </td>
+                                        }
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            }
         </div>
     }
     else
     {
-        <div class="plans-grid">
-            @foreach (var plan in _plans)
+        <!-- LEGACY PLANS TAB -->
+        <div class="legacy-catalog-section">
+            @if (_isLoading)
             {
-                <div class="plan-card @(plan.IsArchived ? "archived" : "")">
-                    <div class="plan-card-header">
-                        <div class="plan-header-main">
-                            <span class="plan-code">@plan.Code</span>
-                            <span class="plan-category">@plan.Category</span>
-                        </div>
-                        <h2 class="plan-name">@plan.Name</h2>
-                        <p class="plan-description">@plan.Description</p>
-                    </div>
-
-                    <div class="plan-card-body">
-                        <!-- Active Version Summary -->
-                        @if (plan.ActiveVersion != null)
-                        {
-                            <div class="version-box active-version">
-                                <div class="version-box-header">
-                                    <span class="status-badge published">● Versão Ativa (@plan.ActiveVersion.VersionName)</span>
-                                    <span class="version-num">v@plan.ActiveVersion.VersionNumber.0</span>
+                <div class="loading-state">
+                    <div class="spinner"></div>
+                    <p>Carregando catálogo de planos legados...</p>
+                </div>
+            }
+            else if (_plans is null || !_plans.Any())
+            {
+                <div class="empty-state">
+                    <div class="empty-icon">💳</div>
+                    <h3>Nenhum plano legado encontrado</h3>
+                    <p>Os planos cadastrados nesta seção são mantidos apenas para histórico e retrocompatibilidade.</p>
+                </div>
+            }
+            else
+            {
+                <div class="plans-grid">
+                    @foreach (var plan in _plans)
+                    {
+                        <div class="plan-card @(plan.IsArchived ? "archived" : "")">
+                            <div class="plan-card-header">
+                                <div class="plan-header-main">
+                                    <span class="plan-code">@plan.Code</span>
+                                    <span class="plan-category">@plan.Category</span>
                                 </div>
-                                <div class="price-row">
-                                    <span class="price">R$ @plan.ActiveVersion.MonthlyPrice.ToString("N2")/mês</span>
-                                    <span class="price-sub">R$ @plan.ActiveVersion.AnnualPriceMonthly.ToString("N2")/mês no anual</span>
-                                </div>
-                                <div class="limits-row">
-                                    <span>Capacidade: <strong>@plan.ActiveVersion.HeadCapacityLimit.ToString("N0") cabeças</strong></span>
-                                </div>
-                                <div class="features-summary">
-                                    <span class="feature-count">@plan.ActiveVersion.Features.Count(f => f.IsEnabled) módulos inclusos</span>
-                                </div>
+                                <h2 class="plan-name">@plan.Name</h2>
+                                <p class="plan-description">@plan.Description</p>
                             </div>
-                        }
-                        else
-                        {
-                            <div class="version-box no-active">
-                                <span>Nenhuma versão publicada ativa</span>
-                            </div>
-                        }
 
-                        <!-- Draft Version Summary (If Exists) -->
-                        @if (plan.DraftVersion != null)
-                        {
-                            <div class="version-box draft-version">
-                                <div class="version-box-header">
-                                    <span class="status-badge draft">✏️ Rascunho em Edição (@plan.DraftVersion.VersionName)</span>
-                                    <span class="version-num">v@plan.DraftVersion.VersionNumber.0</span>
-                                </div>
-                                <div class="price-row">
-                                    <span class="price">R$ @plan.DraftVersion.MonthlyPrice.ToString("N2")/mês</span>
-                                </div>
-                                <div class="draft-actions">
-                                    <PermissionGuard Permission="@BackofficePermissions.PlansWrite">
-                                        <button class="btn btn-sm btn-outline" @onclick="() => OpenEditDraftModal(plan, plan.DraftVersion)">Editar Rascunho</button>
-                                    </PermissionGuard>
-                                    <PermissionGuard Permission="@BackofficePermissions.PlansPublish">
-                                        <FeatureFlagGuard FlagKey="backoffice.feature.plan_publishing">
-                                            <ChildContent>
-                                                <button class="btn btn-sm btn-success" @onclick="() => OpenPublishModal(plan, plan.DraftVersion)">Publicar Versão</button>
-                                            </ChildContent>
-                                            <Disabled>
-                                                <button class="btn btn-sm btn-secondary opacity-50" disabled title="Publicação de planos suspensa por governança de rollout/kill-switch">
-                                                    🔒 Publicação Bloqueada
-                                                </button>
-                                            </Disabled>
-                                        </FeatureFlagGuard>
-                                    </PermissionGuard>
-                                </div>
-                            </div>
-                        }
-                    </div>
-
-                    <div class="plan-card-footer">
-                        <div class="versions-history">
-                            <span class="history-label">Histórico de Versões (@plan.Versions.Count)</span>
-                            <div class="version-tags">
-                                @foreach (var v in plan.Versions)
+                            <div class="plan-card-body">
+                                @if (plan.ActiveVersion != null)
                                 {
-                                    <span class="v-tag @v.Status.ToLower()">v@v.VersionNumber (@v.Status)</span>
+                                    <div class="version-box active-version">
+                                        <div class="version-box-header">
+                                            <span class="status-badge published">● Versão Ativa (@plan.ActiveVersion.VersionName)</span>
+                                            <span class="version-num">v@plan.ActiveVersion.VersionNumber.0</span>
+                                        </div>
+                                        <div class="price-row">
+                                            <span class="price">R$ @plan.ActiveVersion.MonthlyPrice.ToString("N2")/mês</span>
+                                            <span class="price-sub">R$ @plan.ActiveVersion.AnnualPriceMonthly.ToString("N2")/mês no anual</span>
+                                        </div>
+                                        <div class="limits-row">
+                                            <span>Capacidade: <strong>@plan.ActiveVersion.HeadCapacityLimit.ToString("N0") cabeças</strong></span>
+                                        </div>
+                                        <div class="features-summary">
+                                            <span class="feature-count">@plan.ActiveVersion.Features.Count(f => f.IsEnabled) módulos inclusos</span>
+                                        </div>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="version-box no-active">
+                                        <span>Nenhuma versão publicada ativa</span>
+                                    </div>
+                                }
+
+                                @if (plan.DraftVersion != null)
+                                {
+                                    <div class="version-box draft-version">
+                                        <div class="version-box-header">
+                                            <span class="status-badge draft">✏️ Rascunho em Edição (@plan.DraftVersion.VersionName)</span>
+                                            <span class="version-num">v@plan.DraftVersion.VersionNumber.0</span>
+                                        </div>
+                                        <div class="price-row">
+                                            <span class="price">R$ @plan.DraftVersion.MonthlyPrice.ToString("N2")/mês</span>
+                                        </div>
+                                        <div class="draft-actions">
+                                            <PermissionGuard Permission="@BackofficePermissions.PlansWrite">
+                                                <button class="btn btn-sm btn-outline" @onclick="() => OpenEditDraftModal(plan, plan.DraftVersion)">Editar Rascunho</button>
+                                            </PermissionGuard>
+                                            <PermissionGuard Permission="@BackofficePermissions.PlansPublish">
+                                                <FeatureFlagGuard FlagKey="backoffice.feature.plan_publishing">
+                                                    <ChildContent>
+                                                        <button class="btn btn-sm btn-success" @onclick="() => OpenPublishModal(plan, plan.DraftVersion)">Publicar Versão</button>
+                                                    </ChildContent>
+                                                    <Disabled>
+                                                        <button class="btn btn-sm btn-secondary opacity-50" disabled title="Publicação suspensa por governança de rollout">
+                                                            🔒 Publicação Bloqueada
+                                                        </button>
+                                                    </Disabled>
+                                                </FeatureFlagGuard>
+                                            </PermissionGuard>
+                                        </div>
+                                    </div>
                                 }
                             </div>
-                        </div>
 
-                        <div class="card-footer-actions">
-                            @if (plan.DraftVersion == null)
-                            {
-                                <PermissionGuard Permission="@BackofficePermissions.PlansWrite">
-                                    <button class="btn btn-sm btn-secondary" @onclick="() => CreateNewVersionDraft(plan)">
-                                        ➕ Criar Rascunho
-                                    </button>
-                                </PermissionGuard>
-                            }
+                            <div class="plan-card-footer">
+                                <div class="versions-history">
+                                    <span class="history-label">Histórico de Versões (@plan.Versions.Count)</span>
+                                    <div class="version-tags">
+                                        @foreach (var v in plan.Versions)
+                                        {
+                                            <span class="v-tag @v.Status.ToLower()">v@v.VersionNumber (@v.Status)</span>
+                                        }
+                                    </div>
+                                </div>
 
-                            @if (plan.Versions.Count >= 2)
-                            {
-                                <button class="btn btn-sm btn-ghost" @onclick="() => OpenCompareModal(plan)">
-                                    🔍 Comparar
-                                </button>
-                            }
+                                <div class="card-footer-actions">
+                                    @if (plan.DraftVersion == null)
+                                    {
+                                        <PermissionGuard Permission="@BackofficePermissions.PlansWrite">
+                                            <button class="btn btn-sm btn-secondary" @onclick="() => CreateNewVersionDraft(plan)">
+                                                ➕ Criar Rascunho
+                                            </button>
+                                        </PermissionGuard>
+                                    }
+
+                                    @if (plan.Versions.Count >= 2)
+                                    {
+                                        <button class="btn btn-sm btn-ghost" @onclick="() => OpenCompareModal(plan)">
+                                            🔍 Comparar
+                                        </button>
+                                    }
+                                </div>
+                            </div>
                         </div>
-                    </div>
+                    }
                 </div>
             }
         </div>
     }
 </div>
 
+<!-- MODAL: Criar / Editar Faixa de Cabeças -->
+@if (_showTierModal)
+{
+    <div class="modal-backdrop">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3>@(_isEditingTier ? "Editar Faixa de Cabeças" : "Nova Faixa de Cabeças")</h3>
+                <button class="btn-close" @onclick="CloseModals">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Código da Faixa (Slug Único)</label>
+                    <input class="form-input" @bind="_tierCode" placeholder="ex: TIER_10000" disabled="@_isEditingTier" />
+                </div>
+                <div class="form-group">
+                    <label>Nome de Exibição Comercial</label>
+                    <input class="form-input" @bind="_tierDisplayName" placeholder="ex: Até 10.000 cabeças" />
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Mínimo de Cabeças</label>
+                        <input type="number" class="form-input" @bind="_tierMinHeads" step="100" />
+                    </div>
+                    <div class="form-group">
+                        <label>Máximo de Cabeças</label>
+                        <input type="number" class="form-input" @bind="_tierMaxHeads" step="100" />
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Ordem de Exibição</label>
+                        <input type="number" class="form-input" @bind="_tierSortOrder" />
+                    </div>
+                    <div class="form-group" style="display: flex; align-items: center; justify-content: flex-start; margin-top: 1.8rem;">
+                        <label style="cursor: pointer; display: flex; align-items: center; gap: 0.5rem;">
+                            <input type="checkbox" @bind="_tierIsActive" /> Faixa Ativa
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" @onclick="CloseModals">Cancelar</button>
+                <button class="btn btn-primary" @onclick="SubmitTier">Salvar Faixa</button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- MODAL: Criar / Editar Módulo -->
+@if (_showModuleModal)
+{
+    <div class="modal-backdrop">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3>@(_isEditingModule ? "Editar Módulo do Catálogo" : "Novo Módulo do Catálogo")</h3>
+                <button class="btn-close" @onclick="CloseModals">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Chave do Módulo (ModuleKey Único)</label>
+                    <input class="form-input" @bind="_moduleKey" placeholder="ex: Feedlot, Sanitary, Cows" disabled="@_isEditingModule" />
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Nome Comercial</label>
+                        <input class="form-input" @bind="_moduleName" placeholder="ex: Manejo de Confinamento" />
+                    </div>
+                    <div class="form-group">
+                        <label>Ícone / Emoji</label>
+                        <input class="form-input" @bind="_moduleIcon" placeholder="ex: 🌾, 💉, 🐂" />
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Descrição</label>
+                    <textarea class="form-input" rows="2" @bind="_moduleDescription" placeholder="Descrição do escopo do módulo..."></textarea>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Ordem de Exibição</label>
+                        <input type="number" class="form-input" @bind="_moduleSortOrder" />
+                    </div>
+                    <div class="form-group" style="margin-top: 1.5rem; display: flex; flex-direction: column; gap: 0.4rem;">
+                        <label style="cursor: pointer; display: flex; align-items: center; gap: 0.5rem;">
+                            <input type="checkbox" @bind="_moduleIsCore" /> Módulo Core (Obrigatório)
+                        </label>
+                        <label style="cursor: pointer; display: flex; align-items: center; gap: 0.5rem;">
+                            <input type="checkbox" @bind="_moduleIsActive" /> Módulo Ativo
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" @onclick="CloseModals">Cancelar</button>
+                <button class="btn btn-primary" @onclick="SubmitModule">Salvar Módulo</button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- MODAL: Criar / Editar Rascunho de Preço por Faixa -->
+@if (_showTierPriceModal)
+{
+    <div class="modal-backdrop">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3>Preço: @_targetPriceModule?.Name × @_targetPriceTier?.DisplayName</h3>
+                <button class="btn-close" @onclick="CloseModals">✕</button>
+            </div>
+            <div class="modal-body">
+                <p class="text-subtle mb-3">Defina os valores em reais para cobrança mensal e anual. A publicação posterior tornará esta versão imutável.</p>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Preço Mensal (R$)</label>
+                        <input type="number" step="0.01" class="form-input" @bind="_priceMonthly" />
+                    </div>
+                    <div class="form-group">
+                        <label>Preço Anual Mensalizado (R$)</label>
+                        <input type="number" step="0.01" class="form-input" @bind="_priceAnnualMonthly" />
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Stripe Price ID (Mensal) - Opcional</label>
+                        <input class="form-input" @bind="_stripePriceIdMonthly" placeholder="price_1xxxx_monthly" />
+                    </div>
+                    <div class="form-group">
+                        <label>Stripe Price ID (Anual) - Opcional</label>
+                        <input class="form-input" @bind="_stripePriceIdAnnual" placeholder="price_1xxxx_annual" />
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" @onclick="CloseModals">Cancelar</button>
+                <button class="btn btn-primary" @onclick="SubmitTierPriceDraft">Salvar Rascunho</button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- MODAL: Publicar Preço de Módulo por Faixa -->
+@if (_showPublishTierPriceModal && _targetPriceToPublish != null)
+{
+    <div class="modal-backdrop">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3>Publicar Preço v@_targetPriceToPublish.VersionNumber</h3>
+                <button class="btn-close" @onclick="CloseModals">✕</button>
+            </div>
+            <div class="modal-body">
+                @if (!string.IsNullOrWhiteSpace(_publishTierPriceErrorMessage))
+                {
+                    <div class="alert alert-danger mb-3">
+                        ⚠️ @_publishTierPriceErrorMessage
+                    </div>
+                }
+                <div class="alert-warning mb-3">
+                    ⚠️ <strong>Atenção:</strong> Ao publicar este preço (<strong>R$ @_targetPriceToPublish.MonthlyPrice.ToString("N2")/mês</strong> para <strong>@_targetPriceModule?.Name</strong> na faixa <strong>@_targetPriceTier?.DisplayName</strong>), ele passará a ser <strong>estritamente imutável</strong> para novos checkouts.
+                </div>
+                <div class="form-group">
+                    <label>Justificativa / Notas de Aprovação (Obrigatório)</label>
+                    <textarea class="form-input" rows="3" @bind="_approvalTierPriceNotes" placeholder="Descreva o motivo da aprovação ou do reajuste..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" @onclick="CloseModals">Cancelar</button>
+                <button class="btn btn-success" @onclick="ConfirmPublishTierPrice">Confirmar & Publicar</button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- LEGACY MODALS: Create Plan, Edit Draft, Publish Version, Compare -->
 @if (_showCreatePlanModal)
 {
     <div class="modal-backdrop">
         <div class="modal-card">
             <div class="modal-header">
-                <h3>Criar Novo Plano no Catálogo</h3>
+                <h3>Criar Novo Plano Legado</h3>
                 <button class="btn-close" @onclick="CloseModals">✕</button>
             </div>
             <div class="modal-body">
@@ -175,11 +540,8 @@
                 </div>
                 <div class="form-group">
                     <label>Descrição Curta</label>
-                    <textarea class="form-input" @bind="_newPlanDescription" rows="3" placeholder="Descrição do escopo do plano..."></textarea>
+                    <textarea class="form-input" @bind="_newPlanDescription" rows="2" placeholder="Descrição do escopo do plano..."></textarea>
                 </div>
-
-                <hr />
-                <h4>Parâmetros da Versão Inicial (v1.0)</h4>
                 <div class="form-row">
                     <div class="form-group">
                         <label>Preço Mensal (R$)</label>
@@ -210,12 +572,12 @@
             <div class="modal-body">
                 @if (!string.IsNullOrWhiteSpace(_publishErrorMessage))
                 {
-                    <div class="alert alert-danger" style="margin-bottom: 1rem;">
+                    <div class="alert alert-danger mb-3">
                         ⚠️ @_publishErrorMessage
                     </div>
                 }
-                <div class="alert alert-warning">
-                    ⚠️ <strong>Atenção:</strong> Ao publicar a versão v@_targetPublishVersion.VersionNumber do plano '<strong>@_targetPublishPlan?.Name</strong>', ela se tornará <strong>estritamente imutável</strong>. Qualquer versão publicada anterior passará a ser considerada obsoleta para novas assinaturas.
+                <div class="alert-warning mb-3">
+                    ⚠️ <strong>Atenção:</strong> Ao publicar a versão v@_targetPublishVersion.VersionNumber do plano '<strong>@_targetPublishPlan?.Name</strong>', ela se tornará <strong>estritamente imutável</strong>.
                 </div>
                 <div class="form-group">
                     <label>Justificativa / Notas de Aprovação (Obrigatório)</label>
@@ -241,7 +603,7 @@
             <div class="modal-body">
                 <div class="form-group">
                     <label>Nome da Versão Rascunho</label>
-                    <input class="form-input" @bind="_editVersionName" placeholder="ex: v2.0 - Reajuste Anual & Novos Módulos" />
+                    <input class="form-input" @bind="_editVersionName" placeholder="ex: v2.0 - Reajuste Anual" />
                 </div>
                 <div class="form-row">
                     <div class="form-group">
@@ -260,26 +622,27 @@
                     </div>
                     <div class="form-group">
                         <label>Máx. Usuários (Opcional)</label>
-                        <input type="number" class="form-input" @bind="_editMaxUsers" placeholder="Deixe em branco para ilimitado" />
+                        <input type="number" class="form-input" @bind="_editMaxUsers" />
                     </div>
                 </div>
 
-                <hr />
-                <h4>Módulos Inclusos na Versão</h4>
-                <div class="modules-toggle-grid">
-                    @foreach (var key in _availableFeatureKeys)
-                    {
-                        var isChecked = _editSelectedFeatures.ContainsKey(key.Key) && _editSelectedFeatures[key.Key];
-                        <label class="module-toggle-card @(isChecked ? "selected" : "")">
-                            <input type="checkbox" checked="@isChecked" @onchange="(e) => ToggleFeature(key.Key, e.Value)" />
-                            <span>@key.Value</span>
-                        </label>
-                    }
+                <div class="form-group">
+                    <label>Módulos do Sistema Habilitados Nesta Versão</label>
+                    <div class="modules-toggle-grid">
+                        @foreach (var feature in _availableFeatureKeys)
+                        {
+                            var isSelected = _editSelectedFeatures.TryGetValue(feature.Key, out var val) && val;
+                            <div class="module-toggle-card @(isSelected ? "selected" : "")" @onclick="() => ToggleFeature(feature.Key, !isSelected)">
+                                <input type="checkbox" checked="@isSelected" @onclick:stopPropagation="true" @onchange="(e) => ToggleFeature(feature.Key, e.Value)" />
+                                <span>@feature.Value</span>
+                            </div>
+                        }
+                    </div>
                 </div>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-outline" @onclick="CloseModals">Cancelar</button>
-                <button class="btn btn-primary" @onclick="SubmitUpdateDraftVersion">Salvar Alterações no Rascunho</button>
+                <button class="btn btn-primary" @onclick="SubmitUpdateDraftVersion">Salvar Rascunho</button>
             </div>
         </div>
     </div>
@@ -290,17 +653,17 @@
     <div class="modal-backdrop">
         <div class="modal-card modal-lg">
             <div class="modal-header">
-                <h3>🔍 Comparativo de Versões — @_targetComparePlan.Name</h3>
+                <h3>Comparativo de Versões — @_targetComparePlan.Name</h3>
                 <button class="btn-close" @onclick="CloseModals">✕</button>
             </div>
             <div class="modal-body">
-                <div class="form-row mb-3">
+                <div class="form-row">
                     <div class="form-group">
-                        <label>Versão Base (Original)</label>
+                        <label>Versão Base (Atual/Antiga)</label>
                         <select class="form-input" value="@_selectedBaseVersionId" @onchange="OnBaseVersionChanged">
                             @foreach (var v in _targetComparePlan.Versions)
                             {
-                                <option value="@v.Id">v@v.VersionNumber — @v.VersionName (@v.Status)</option>
+                                <option value="@v.Id">v@v.VersionNumber.0 - @v.VersionName (@v.Status)</option>
                             }
                         </select>
                     </div>
@@ -309,7 +672,7 @@
                         <select class="form-input" value="@_selectedTargetVersionId" @onchange="OnTargetVersionChanged">
                             @foreach (var v in _targetComparePlan.Versions)
                             {
-                                <option value="@v.Id">v@v.VersionNumber — @v.VersionName (@v.Status)</option>
+                                <option value="@v.Id">v@v.VersionNumber.0 - @v.VersionName (@v.Status)</option>
                             }
                         </select>
                     </div>
@@ -317,37 +680,23 @@
 
                 @if (_isComparing)
                 {
-                    <div class="text-center p-4">Carregando comparativo entre versões...</div>
+                    <div class="loading-state">
+                        <div class="spinner"></div>
+                        <p>Calculando comparativo estrutural...</p>
+                    </div>
                 }
                 else if (_comparisonDto != null)
                 {
                     <div class="diff-summary-card">
-                        <h4>Resumo Financeiro & Limites</h4>
                         <div class="diff-grid">
                             <div class="diff-item">
-                                <span class="diff-label">Preço Mensal</span>
+                                <span class="diff-label">Mensalidade</span>
                                 <div class="diff-values">
-                                    <span class="val-old">R$ @_comparisonDto.BaseVersion.MonthlyPrice.ToString("F2")</span>
+                                    <span class="val-old">R$ @_comparisonDto.BaseVersion.MonthlyPrice.ToString("N2")</span>
                                     <span class="arrow">➔</span>
-                                    <span class="val-new">R$ @_comparisonDto.TargetVersion.MonthlyPrice.ToString("F2")</span>
+                                    <span class="val-new">R$ @_comparisonDto.TargetVersion.MonthlyPrice.ToString("N2")</span>
                                 </div>
-                                <span class="diff-delta @(_comparisonDto.PriceDifferenceMonthly >= 0 ? "positive" : "negative")">
-                                    @(_comparisonDto.PriceDifferenceMonthly >= 0 ? "+" : "")R$ @_comparisonDto.PriceDifferenceMonthly.ToString("F2") / mês
-                                </span>
                             </div>
-
-                            <div class="diff-item">
-                                <span class="diff-label">Preço Anual (Mensalizado)</span>
-                                <div class="diff-values">
-                                    <span class="val-old">R$ @_comparisonDto.BaseVersion.AnnualPriceMonthly.ToString("F2")</span>
-                                    <span class="arrow">➔</span>
-                                    <span class="val-new">R$ @_comparisonDto.TargetVersion.AnnualPriceMonthly.ToString("F2")</span>
-                                </div>
-                                <span class="diff-delta @(_comparisonDto.PriceDifferenceAnnual >= 0 ? "positive" : "negative")">
-                                    @(_comparisonDto.PriceDifferenceAnnual >= 0 ? "+" : "")R$ @_comparisonDto.PriceDifferenceAnnual.ToString("F2") / mês
-                                </span>
-                            </div>
-
                             <div class="diff-item">
                                 <span class="diff-label">Capacidade (Cabeças)</span>
                                 <div class="diff-values">
@@ -357,55 +706,6 @@
                                 </div>
                             </div>
                         </div>
-
-                        <hr />
-                        <h4>Módulos Inclusos na Nova Versão</h4>
-                        @if (_comparisonDto.AddedFeatures.Count == 0 && _comparisonDto.RemovedFeatures.Count == 0)
-                        {
-                            <p class="text-subtle">Nenhuma alteração nos módulos acessíveis entre estas versões.</p>
-                        }
-                        else
-                        {
-                            <div class="features-diff-container">
-                                @if (_comparisonDto.AddedFeatures.Count > 0)
-                                {
-                                    <div class="diff-block added">
-                                        <h5>➕ Novas Funcionalidades Adicionadas</h5>
-                                        <div class="badge-list">
-                                            @foreach (var key in _comparisonDto.AddedFeatures)
-                                            {
-                                                <span class="badge badge-added">@GetFeatureDisplayName(key)</span>
-                                            }
-                                        </div>
-                                    </div>
-                                }
-
-                                @if (_comparisonDto.RemovedFeatures.Count > 0)
-                                {
-                                    <div class="diff-block removed">
-                                        <h5>➖ Funcionalidades Removidas</h5>
-                                        <div class="badge-list">
-                                            @foreach (var key in _comparisonDto.RemovedFeatures)
-                                            {
-                                                <span class="badge badge-removed">@GetFeatureDisplayName(key)</span>
-                                            }
-                                        </div>
-                                    </div>
-                                }
-                            </div>
-                        }
-
-                        @if (_comparisonDto.ChangedLimits.Count > 0)
-                        {
-                            <hr />
-                            <h4>Variações de Limites Operacionais</h4>
-                            <ul>
-                                @foreach (var limit in _comparisonDto.ChangedLimits)
-                                {
-                                    <li>@limit</li>
-                                }
-                            </ul>
-                        }
                     </div>
                 }
             </div>
@@ -417,10 +717,58 @@
 }
 
 @code {
+    private string _activeTab = "modular";
+
+    // Modular State
+    private IReadOnlyList<HeadTierCatalogDto>? _headTiers;
+    private IReadOnlyList<ModuleCatalogDto>? _modules;
+    private bool _isLoadingModular = true;
+
+    // Head Tier Modal State
+    private bool _showTierModal = false;
+    private bool _isEditingTier = false;
+    private Guid _editingTierId;
+    private string _tierCode = "";
+    private string _tierDisplayName = "";
+    private int _tierMinHeads = 0;
+    private int _tierMaxHeads = 500;
+    private int _tierSortOrder = 1;
+    private bool _tierIsActive = true;
+
+    // Module Modal State
+    private bool _showModuleModal = false;
+    private bool _isEditingModule = false;
+    private Guid _editingModuleId;
+    private string _moduleKey = "";
+    private string _moduleName = "";
+    private string _moduleDescription = "";
+    private string _moduleIcon = "📦";
+    private bool _moduleIsCore = false;
+    private int _moduleSortOrder = 1;
+    private bool _moduleIsActive = true;
+
+    // Tier Price Modal State
+    private bool _showTierPriceModal = false;
+    private bool _isEditingTierPrice = false;
+    private Guid _editingTierPriceId;
+    private ModuleCatalogDto? _targetPriceModule;
+    private HeadTierCatalogDto? _targetPriceTier;
+    private decimal _priceMonthly = 49.90m;
+    private decimal _priceAnnualMonthly = 42.40m;
+    private string? _stripePriceIdMonthly;
+    private string? _stripePriceIdAnnual;
+
+    // Publish Tier Price Modal State
+    private bool _showPublishTierPriceModal = false;
+    private ModuleTierPriceDto? _targetPriceToPublish;
+    private string _approvalTierPriceNotes = "";
+    private string? _publishTierPriceErrorMessage;
+
+    // Legacy State
     private IReadOnlyCollection<PlanCatalogDto>? _plans;
     private bool _isLoading = true;
 
-    // Create Plan Modal state
+    // Legacy Create Plan Modal state
     private bool _showCreatePlanModal = false;
     private string _newPlanCode = "";
     private string _newPlanName = "";
@@ -429,14 +777,14 @@
     private decimal _newPlanPrice = 199.90m;
     private int _newPlanCapacity = 1000;
 
-    // Publish Modal state
+    // Legacy Publish Modal state
     private bool _showPublishModal = false;
     private PlanCatalogDto? _targetPublishPlan;
     private PlanVersionDto? _targetPublishVersion;
     private string _approvalNotes = "";
     private string? _publishErrorMessage;
 
-    // Edit Draft Modal state
+    // Legacy Edit Draft Modal state
     private bool _showEditDraftModal = false;
     private PlanCatalogDto? _targetEditDraftPlan;
     private PlanVersionDto? _targetEditDraftVersion;
@@ -448,7 +796,7 @@
     private int? _editMaxProductionUnits;
     private Dictionary<string, bool> _editSelectedFeatures = new();
 
-    // Compare Modal State
+    // Legacy Compare Modal State
     private bool _showCompareModal = false;
     private PlanCatalogDto? _targetComparePlan;
     private Guid _selectedBaseVersionId;
@@ -471,7 +819,27 @@
 
     protected override async Task OnInitializedAsync()
     {
+        await LoadModularCatalogAsync();
         await LoadPlansAsync();
+    }
+
+    private void SetTab(string tab)
+    {
+        _activeTab = tab;
+    }
+
+    private async Task LoadModularCatalogAsync()
+    {
+        _isLoadingModular = true;
+        try
+        {
+            _headTiers = await ApiClient.GetHeadTiersAsync(includeInactive: true);
+            _modules = await ApiClient.GetModuleCatalogsAsync(includeInactive: true);
+        }
+        finally
+        {
+            _isLoadingModular = false;
+        }
     }
 
     private async Task LoadPlansAsync()
@@ -487,6 +855,207 @@
         }
     }
 
+    // --- Modular Tier Modals ---
+    private void OpenCreateTierModal()
+    {
+        _isEditingTier = false;
+        _editingTierId = Guid.Empty;
+        _tierCode = "";
+        _tierDisplayName = "";
+        _tierMinHeads = 0;
+        _tierMaxHeads = 1000;
+        _tierSortOrder = (_headTiers?.Count ?? 0) + 1;
+        _tierIsActive = true;
+        _showTierModal = true;
+    }
+
+    private void OpenEditTierModal(HeadTierCatalogDto tier)
+    {
+        _isEditingTier = true;
+        _editingTierId = tier.Id;
+        _tierCode = tier.TierCode;
+        _tierDisplayName = tier.DisplayName;
+        _tierMinHeads = tier.MinHeads;
+        _tierMaxHeads = tier.MaxHeads;
+        _tierSortOrder = tier.SortOrder;
+        _tierIsActive = tier.IsActive;
+        _showTierModal = true;
+    }
+
+    private async Task SubmitTier()
+    {
+        if (string.IsNullOrWhiteSpace(_tierCode) || string.IsNullOrWhiteSpace(_tierDisplayName)) return;
+
+        if (_isEditingTier)
+        {
+            var command = new UpdateHeadTierCatalogCommand(
+                _editingTierId, _tierDisplayName, _tierMinHeads, _tierMaxHeads, _tierSortOrder, _tierIsActive,
+                Guid.Empty, "", "");
+            var res = await ApiClient.UpdateHeadTierAsync(_editingTierId, command);
+            if (res != null)
+            {
+                CloseModals();
+                await LoadModularCatalogAsync();
+            }
+        }
+        else
+        {
+            var command = new CreateHeadTierCatalogCommand(
+                _tierCode, _tierDisplayName, _tierMinHeads, _tierMaxHeads, _tierSortOrder, _tierIsActive,
+                Guid.Empty, "", "");
+            var res = await ApiClient.CreateHeadTierAsync(command);
+            if (res != null)
+            {
+                CloseModals();
+                await LoadModularCatalogAsync();
+            }
+        }
+    }
+
+    // --- Modular Module Modals ---
+    private void OpenCreateModuleModal()
+    {
+        _isEditingModule = false;
+        _editingModuleId = Guid.Empty;
+        _moduleKey = "";
+        _moduleName = "";
+        _moduleDescription = "";
+        _moduleIcon = "📦";
+        _moduleIsCore = false;
+        _moduleSortOrder = (_modules?.Count ?? 0) + 1;
+        _moduleIsActive = true;
+        _showModuleModal = true;
+    }
+
+    private void OpenEditModuleModal(ModuleCatalogDto module)
+    {
+        _isEditingModule = true;
+        _editingModuleId = module.Id;
+        _moduleKey = module.ModuleKey;
+        _moduleName = module.Name;
+        _moduleDescription = module.Description;
+        _moduleIcon = module.Icon;
+        _moduleIsCore = module.IsCore;
+        _moduleSortOrder = module.SortOrder;
+        _moduleIsActive = module.IsActive;
+        _showModuleModal = true;
+    }
+
+    private async Task SubmitModule()
+    {
+        if (string.IsNullOrWhiteSpace(_moduleKey) || string.IsNullOrWhiteSpace(_moduleName)) return;
+
+        if (_isEditingModule)
+        {
+            var command = new UpdateModuleCatalogCommand(
+                _editingModuleId, _moduleName, _moduleDescription, _moduleIcon, _moduleIsCore, _moduleSortOrder, _moduleIsActive,
+                Guid.Empty, "", "");
+            var res = await ApiClient.UpdateModuleCatalogAsync(_editingModuleId, command);
+            if (res != null)
+            {
+                CloseModals();
+                await LoadModularCatalogAsync();
+            }
+        }
+        else
+        {
+            var command = new CreateModuleCatalogCommand(
+                _moduleKey, _moduleName, _moduleDescription, _moduleIcon, _moduleIsCore, _moduleSortOrder, _moduleIsActive,
+                null, Guid.Empty, "", "");
+            var res = await ApiClient.CreateModuleCatalogAsync(command);
+            if (res != null)
+            {
+                CloseModals();
+                await LoadModularCatalogAsync();
+            }
+        }
+    }
+
+    // --- Modular Price Modals ---
+    private void OpenCreateTierPriceModal(ModuleCatalogDto module, HeadTierCatalogDto tier, ModuleTierPriceDto? existing = null)
+    {
+        _isEditingTierPrice = false;
+        _editingTierPriceId = Guid.Empty;
+        _targetPriceModule = module;
+        _targetPriceTier = tier;
+        _priceMonthly = existing?.MonthlyPrice ?? 49.90m;
+        _priceAnnualMonthly = existing?.AnnualPriceMonthly ?? (_priceMonthly * 0.85m);
+        _stripePriceIdMonthly = existing?.StripePriceIdMonthly;
+        _stripePriceIdAnnual = existing?.StripePriceIdAnnual;
+        _showTierPriceModal = true;
+    }
+
+    private void OpenEditTierPriceModal(ModuleCatalogDto module, HeadTierCatalogDto tier, ModuleTierPriceDto draftPrice)
+    {
+        _isEditingTierPrice = true;
+        _editingTierPriceId = draftPrice.Id;
+        _targetPriceModule = module;
+        _targetPriceTier = tier;
+        _priceMonthly = draftPrice.MonthlyPrice;
+        _priceAnnualMonthly = draftPrice.AnnualPriceMonthly;
+        _stripePriceIdMonthly = draftPrice.StripePriceIdMonthly;
+        _stripePriceIdAnnual = draftPrice.StripePriceIdAnnual;
+        _showTierPriceModal = true;
+    }
+
+    private async Task SubmitTierPriceDraft()
+    {
+        if (_targetPriceModule is null || _targetPriceTier is null) return;
+
+        if (_isEditingTierPrice)
+        {
+            var command = new UpdateModuleTierPriceDraftCommand(
+                _editingTierPriceId, _priceMonthly, _priceAnnualMonthly, _stripePriceIdMonthly, _stripePriceIdAnnual,
+                Guid.Empty, "", "");
+            var res = await ApiClient.UpdateModuleTierPriceDraftAsync(_editingTierPriceId, command);
+            if (res != null)
+            {
+                CloseModals();
+                await LoadModularCatalogAsync();
+            }
+        }
+        else
+        {
+            var command = new CreateModuleTierPriceDraftCommand(
+                _targetPriceModule.Id, _targetPriceTier.Id, _priceMonthly, _priceAnnualMonthly, _stripePriceIdMonthly, _stripePriceIdAnnual,
+                Guid.Empty, "", "");
+            var res = await ApiClient.CreateModuleTierPriceDraftAsync(_targetPriceModule.Id, command);
+            if (res != null)
+            {
+                CloseModals();
+                await LoadModularCatalogAsync();
+            }
+        }
+    }
+
+    private void OpenPublishTierPriceModal(ModuleCatalogDto module, HeadTierCatalogDto tier, ModuleTierPriceDto draftPrice)
+    {
+        _targetPriceModule = module;
+        _targetPriceTier = tier;
+        _targetPriceToPublish = draftPrice;
+        _approvalTierPriceNotes = "";
+        _publishTierPriceErrorMessage = null;
+        _showPublishTierPriceModal = true;
+    }
+
+    private async Task ConfirmPublishTierPrice()
+    {
+        if (_targetPriceToPublish is null || string.IsNullOrWhiteSpace(_approvalTierPriceNotes)) return;
+
+        _publishTierPriceErrorMessage = null;
+        var res = await ApiClient.PublishModuleTierPriceAsync(_targetPriceToPublish.Id, _approvalTierPriceNotes);
+        if (res != null)
+        {
+            CloseModals();
+            await LoadModularCatalogAsync();
+        }
+        else
+        {
+            _publishTierPriceErrorMessage = "Falha ao publicar preço modular. Verifique as permissões 'plans.publish' e o estado das feature flags.";
+        }
+    }
+
+    // --- Legacy Plans Handlers ---
     private void OpenCreatePlanModal()
     {
         _newPlanCode = "";
@@ -504,6 +1073,10 @@
         _showPublishModal = false;
         _showEditDraftModal = false;
         _showCompareModal = false;
+        _showTierModal = false;
+        _showModuleModal = false;
+        _showTierPriceModal = false;
+        _showPublishTierPriceModal = false;
         _targetPublishPlan = null;
         _targetPublishVersion = null;
         _targetEditDraftPlan = null;
@@ -511,23 +1084,16 @@
         _targetComparePlan = null;
         _comparisonDto = null;
         _publishErrorMessage = null;
+        _publishTierPriceErrorMessage = null;
+        _targetPriceToPublish = null;
     }
 
     private async Task SubmitCreatePlan()
     {
-        if (string.IsNullOrWhiteSpace(_newPlanCode) || string.IsNullOrWhiteSpace(_newPlanName))
-        {
-            return;
-        }
+        if (string.IsNullOrWhiteSpace(_newPlanCode) || string.IsNullOrWhiteSpace(_newPlanName)) return;
 
         var command = new CreatePlanCatalogCommand(
-            _newPlanCode,
-            _newPlanName,
-            _newPlanDescription,
-            _newPlanCategory,
-            _newPlanPrice,
-            _newPlanPrice * 0.85m,
-            _newPlanCapacity,
+            _newPlanCode, _newPlanName, _newPlanDescription, _newPlanCategory, _newPlanPrice, _newPlanPrice * 0.85m, _newPlanCapacity,
             new List<PlanFeatureInputDto>
             {
                 new("Modules.Cows", "Módulo de Plantel Bovino & Matrizes (Cows)", true),
@@ -538,9 +1104,7 @@
             {
                 new("MaxCattleHeads", _newPlanCapacity, "cabeças")
             },
-            Guid.Empty,
-            "",
-            ""
+            Guid.Empty, "", ""
         );
 
         var result = await ApiClient.CreatePlanAsync(command);
@@ -558,18 +1122,10 @@
         var capacity = baseVersion?.HeadCapacityLimit ?? 1000;
 
         var command = new CreatePlanVersionCommand(
-            plan.Id,
-            $"{plan.Name} v{(plan.Versions.Count + 1)}.0",
-            price,
-            price * 0.85m,
-            capacity,
-            null,
-            null,
+            plan.Id, $"{plan.Name} v{(plan.Versions.Count + 1)}.0", price, price * 0.85m, capacity, null, null,
             baseVersion?.Features.Select(f => new PlanFeatureInputDto(f.FeatureKey, f.DisplayName, f.IsEnabled, f.FeatureType)).ToList(),
             baseVersion?.Limits.Select(l => new PlanLimitInputDto(l.LimitKey, l.LimitValue, l.Unit)).ToList(),
-            Guid.Empty,
-            "",
-            ""
+            Guid.Empty, "", ""
         );
 
         var result = await ApiClient.CreatePlanVersionAsync(plan.Id, command);
@@ -606,16 +1162,10 @@
 
     private async Task SubmitUpdateDraftVersion()
     {
-        if (_targetEditDraftVersion is null || string.IsNullOrWhiteSpace(_editVersionName))
-        {
-            return;
-        }
+        if (_targetEditDraftVersion is null || string.IsNullOrWhiteSpace(_editVersionName)) return;
 
         var featureInputs = _editSelectedFeatures.Select(kv => new PlanFeatureInputDto(
-            kv.Key,
-            _availableFeatureKeys.TryGetValue(kv.Key, out var name) ? name : kv.Key,
-            kv.Value,
-            "ModuleAccess"
+            kv.Key, _availableFeatureKeys.TryGetValue(kv.Key, out var name) ? name : kv.Key, kv.Value, "ModuleAccess"
         )).ToList();
 
         var limitInputs = new List<PlanLimitInputDto>
@@ -624,18 +1174,8 @@
         };
 
         var command = new UpdateDraftPlanVersionCommand(
-            _targetEditDraftVersion.Id,
-            _editVersionName,
-            _editMonthlyPrice,
-            _editAnnualPriceMonthly,
-            _editHeadCapacityLimit,
-            _editMaxUsers,
-            _editMaxProductionUnits,
-            featureInputs,
-            limitInputs,
-            Guid.Empty,
-            "",
-            ""
+            _targetEditDraftVersion.Id, _editVersionName, _editMonthlyPrice, _editAnnualPriceMonthly, _editHeadCapacityLimit,
+            _editMaxUsers, _editMaxProductionUnits, featureInputs, limitInputs, Guid.Empty, "", ""
         );
 
         var result = await ApiClient.UpdateDraftPlanVersionAsync(_targetEditDraftVersion.Id, command);
@@ -657,10 +1197,7 @@
 
     private async Task ConfirmPublishVersion()
     {
-        if (_targetPublishVersion is null || string.IsNullOrWhiteSpace(_approvalNotes))
-        {
-            return;
-        }
+        if (_targetPublishVersion is null || string.IsNullOrWhiteSpace(_approvalNotes)) return;
 
         _publishErrorMessage = null;
         var result = await ApiClient.PublishPlanVersionAsync(_targetPublishVersion.Id, _approvalNotes);
@@ -671,7 +1208,7 @@
         }
         else
         {
-            _publishErrorMessage = "Não foi possível publicar a versão do plano. Verifique suas permissões de publicação ou se sua conta atende aos requisitos de Rollout / Feature Flags.";
+            _publishErrorMessage = "Não foi possível publicar a versão do plano.";
         }
     }
 
@@ -724,17 +1261,12 @@
             _isComparing = false;
         }
     }
-
-    private string GetFeatureDisplayName(string featureKey)
-    {
-        return _availableFeatureKeys.TryGetValue(featureKey, out var name) ? name : featureKey;
-    }
 }
 
 <style>
     .plans-management-container {
         padding: 2rem;
-        max-width: 1400px;
+        max-width: 1450px;
         margin: 0 auto;
         color: #f8fafc;
     }
@@ -742,10 +1274,11 @@
         display: flex;
         justify-content: space-between;
         align-items: flex-start;
-        margin-bottom: 2rem;
-        padding-bottom: 1.5rem;
+        margin-bottom: 1.5rem;
+        padding-bottom: 1rem;
         border-bottom: 1px solid #1e293b;
     }
+    .header-actions { display: flex; gap: 0.6rem; align-items: center; }
     .badge-category {
         font-size: 0.75rem;
         font-weight: 700;
@@ -756,14 +1289,149 @@
     .page-title {
         font-size: 1.8rem;
         font-weight: 800;
-        margin: 0.4rem 0;
+        margin: 0.3rem 0;
         color: #f1f5f9;
     }
     .page-subtitle {
         color: #94a3b8;
         font-size: 0.95rem;
-        max-width: 700px;
+        max-width: 800px;
     }
+
+    /* Tabs */
+    .tabs-nav {
+        display: flex;
+        gap: 0.5rem;
+        margin-bottom: 1.5rem;
+        border-bottom: 1px solid #334155;
+    }
+    .tab-btn {
+        background: transparent;
+        border: none;
+        border-bottom: 2px solid transparent;
+        padding: 0.75rem 1.2rem;
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: #94a3b8;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        transition: all 0.2s ease;
+    }
+    .tab-btn:hover { color: #f8fafc; }
+    .tab-btn.active {
+        color: #38bdf8;
+        border-bottom-color: #38bdf8;
+        font-weight: 700;
+    }
+    .tab-badge {
+        font-size: 0.65rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        background: #38bdf8;
+        color: #0f172a;
+        padding: 0.15rem 0.4rem;
+        border-radius: 9999px;
+    }
+
+    /* KPIs */
+    .kpis-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+    .kpi-card {
+        background: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 0.75rem;
+        padding: 1rem 1.25rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.2rem;
+    }
+    .kpi-label { font-size: 0.75rem; font-weight: 700; color: #94a3b8; text-transform: uppercase; }
+    .kpi-value { font-size: 1.8rem; font-weight: 800; color: #f8fafc; }
+    .kpi-value.warning { color: #fbbf24; }
+    .kpi-sub { font-size: 0.75rem; color: #64748b; }
+
+    /* Matrix */
+    .matrix-card {
+        background: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 1rem;
+        overflow: hidden;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+    }
+    .matrix-header {
+        padding: 1.25rem 1.5rem;
+        border-bottom: 1px solid #334155;
+        background: #0f172a;
+    }
+    .matrix-title { font-size: 1.15rem; font-weight: 700; margin: 0 0 0.2rem 0; color: #f8fafc; }
+    .matrix-subtitle { font-size: 0.85rem; color: #94a3b8; margin: 0; }
+    .matrix-table-container { overflow-x: auto; }
+    .matrix-table { width: 100%; border-collapse: collapse; text-align: left; }
+    .matrix-table th {
+        background: #0f172a;
+        padding: 1rem;
+        border-bottom: 2px solid #334155;
+        border-right: 1px solid #1e293b;
+    }
+    .matrix-table td {
+        padding: 1rem;
+        border-bottom: 1px solid #334155;
+        border-right: 1px solid #1e293b;
+        vertical-align: top;
+    }
+    .matrix-table tr:hover td { background: rgba(56, 189, 248, 0.02); }
+    .row-inactive { opacity: 0.6; }
+
+    .col-module { width: 280px; min-width: 260px; }
+    .col-tier { min-width: 220px; text-align: center; }
+    .col-price-cell { text-align: center; }
+
+    .tier-th-content { display: flex; flex-direction: column; align-items: center; gap: 0.2rem; }
+    .tier-th-top { display: flex; align-items: center; gap: 0.4rem; }
+    .tier-code { font-family: monospace; font-size: 0.75rem; font-weight: 800; color: #38bdf8; background: #1e293b; padding: 0.15rem 0.4rem; border-radius: 0.3rem; }
+    .tier-name { font-size: 0.9rem; font-weight: 700; color: #f8fafc; }
+    .tier-range { font-size: 0.75rem; color: #94a3b8; }
+
+    .module-info-box { display: flex; flex-direction: column; gap: 0.25rem; }
+    .module-title-row { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+    .module-icon { font-size: 1.1rem; }
+    .module-name { font-size: 0.95rem; font-weight: 700; color: #f8fafc; }
+    .module-key { font-family: monospace; font-size: 0.75rem; color: #38bdf8; }
+    .module-desc { font-size: 0.75rem; color: #94a3b8; margin: 0; line-height: 1.3; }
+    .core-badge { font-size: 0.65rem; font-weight: 800; text-transform: uppercase; background: #064e3b; color: #6ee7b7; border: 1px solid #047857; padding: 0.1rem 0.4rem; border-radius: 9999px; }
+
+    .price-cell-box {
+        background: #0f172a;
+        border-radius: 0.6rem;
+        padding: 0.75rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+        border: 1px solid #1e293b;
+    }
+    .price-cell-box.published { border-left: 3px solid #10b981; }
+    .price-cell-box.draft { border-left: 3px solid #f59e0b; background: #18181b; }
+    .price-cell-box.empty { background: transparent; border: 1px dashed #334155; padding: 1.2rem 0.5rem; align-items: center; justify-content: center; }
+
+    .cell-status-bar { display: flex; justify-content: center; }
+    .status-tag { font-size: 0.7rem; font-weight: 700; border-radius: 0.25rem; padding: 0.1rem 0.35rem; }
+    .status-tag.published { color: #34d399; }
+    .status-tag.draft { color: #fbbf24; }
+
+    .cell-prices { display: flex; flex-direction: column; gap: 0.1rem; }
+    .p-monthly { font-size: 1rem; font-weight: 800; color: #f8fafc; }
+    .p-monthly small { font-size: 0.75rem; font-weight: 500; color: #94a3b8; }
+    .p-annual { font-size: 0.75rem; color: #94a3b8; }
+    .p-annual small { font-size: 0.65rem; color: #64748b; }
+    .cell-actions { display: flex; gap: 0.3rem; justify-content: center; margin-top: 0.2rem; }
+
+    /* Plans Grid (Legacy) */
     .plans-grid {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
@@ -778,149 +1446,37 @@
         flex-direction: column;
         justify-content: space-between;
         box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
-        transition: transform 0.2s ease, border-color 0.2s ease;
     }
-    .plan-card:hover {
-        transform: translateY(-2px);
-        border-color: #38bdf8;
-    }
-    .plan-header-main {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 0.5rem;
-    }
-    .plan-code {
-        font-family: monospace;
-        font-weight: 700;
-        color: #38bdf8;
-        background: #0f172a;
-        padding: 0.2rem 0.6rem;
-        border-radius: 0.4rem;
-        font-size: 0.8rem;
-    }
-    .plan-category {
-        font-size: 0.75rem;
-        color: #94a3b8;
-        background: #334155;
-        padding: 0.2rem 0.5rem;
-        border-radius: 0.3rem;
-    }
-    .plan-name {
-        font-size: 1.3rem;
-        font-weight: 700;
-        margin: 0.3rem 0;
-        color: #f8fafc;
-    }
-    .plan-description {
-        font-size: 0.85rem;
-        color: #94a3b8;
-        margin-bottom: 1rem;
-        min-height: 2.6rem;
-    }
-    .version-box {
-        background: #0f172a;
-        border-radius: 0.75rem;
-        padding: 1rem;
-        margin-bottom: 1rem;
-        border: 1px solid #1e293b;
-    }
-    .version-box.active-version {
-        border-left: 4px solid #10b981;
-    }
-    .version-box.draft-version {
-        border-left: 4px solid #f59e0b;
-        background: #18181b;
-    }
-    .version-box-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 0.5rem;
-    }
-    .status-badge.published {
-        color: #34d399;
-        font-weight: 600;
-        font-size: 0.8rem;
-    }
-    .status-badge.draft {
-        color: #fbbf24;
-        font-weight: 600;
-        font-size: 0.8rem;
-    }
-    .version-num {
-        font-size: 0.75rem;
-        color: #64748b;
-    }
-    .price-row {
-        margin: 0.5rem 0;
-    }
-    .price {
-        font-size: 1.2rem;
-        font-weight: 800;
-        color: #f8fafc;
-        display: block;
-    }
-    .price-sub {
-        font-size: 0.75rem;
-        color: #94a3b8;
-    }
-    .limits-row {
-        font-size: 0.85rem;
-        color: #cbd5e1;
-        margin-top: 0.4rem;
-    }
-    .draft-actions {
-        display: flex;
-        gap: 0.5rem;
-        margin-top: 0.75rem;
-    }
-    .versions-history {
-        margin-top: 1rem;
-        padding-top: 0.75rem;
-        border-top: 1px solid #334155;
-    }
-    .history-label {
-        font-size: 0.7rem;
-        font-weight: 700;
-        color: #64748b;
-        text-transform: uppercase;
-        display: block;
-        margin-bottom: 0.4rem;
-    }
-    .version-tags {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.3rem;
-    }
-    .v-tag {
-        font-size: 0.7rem;
-        padding: 0.15rem 0.4rem;
-        border-radius: 0.25rem;
-        background: #334155;
-        color: #94a3b8;
-    }
+    .plan-header-main { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
+    .plan-code { font-family: monospace; font-weight: 700; color: #38bdf8; background: #0f172a; padding: 0.2rem 0.6rem; border-radius: 0.4rem; font-size: 0.8rem; }
+    .plan-category { font-size: 0.75rem; color: #94a3b8; background: #334155; padding: 0.2rem 0.5rem; border-radius: 0.3rem; }
+    .plan-name { font-size: 1.3rem; font-weight: 700; margin: 0.3rem 0; color: #f8fafc; }
+    .plan-description { font-size: 0.85rem; color: #94a3b8; margin-bottom: 1rem; min-height: 2.6rem; }
+
+    .version-box { background: #0f172a; border-radius: 0.75rem; padding: 1rem; margin-bottom: 1rem; border: 1px solid #1e293b; }
+    .version-box.active-version { border-left: 4px solid #10b981; }
+    .version-box.draft-version { border-left: 4px solid #f59e0b; background: #18181b; }
+    .version-box-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
+    .status-badge.published { color: #34d399; font-weight: 600; font-size: 0.8rem; }
+    .status-badge.draft { color: #fbbf24; font-weight: 600; font-size: 0.8rem; }
+    .version-num { font-size: 0.75rem; color: #64748b; }
+    .price-row { margin: 0.5rem 0; }
+    .price { font-size: 1.2rem; font-weight: 800; color: #f8fafc; display: block; }
+    .price-sub { font-size: 0.75rem; color: #94a3b8; }
+    .limits-row { font-size: 0.85rem; color: #cbd5e1; margin-top: 0.4rem; }
+    .draft-actions { display: flex; gap: 0.5rem; margin-top: 0.75rem; }
+    .versions-history { margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid #334155; }
+    .history-label { font-size: 0.7rem; font-weight: 700; color: #64748b; text-transform: uppercase; display: block; margin-bottom: 0.4rem; }
+    .version-tags { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+    .v-tag { font-size: 0.7rem; padding: 0.15rem 0.4rem; border-radius: 0.25rem; background: #334155; color: #94a3b8; }
     .v-tag.published { background: #064e3b; color: #6ee7b7; }
     .v-tag.draft { background: #78350f; color: #fde68a; }
-    .v-tag.deprecated { background: #451a03; color: #fdba74; }
-    .card-footer-actions {
-        display: flex;
-        justify-content: space-between;
-        margin-top: 1rem;
-    }
-    .btn {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.4rem;
-        padding: 0.6rem 1.2rem;
-        border-radius: 0.5rem;
-        font-weight: 600;
-        font-size: 0.9rem;
-        cursor: pointer;
-        border: none;
-        transition: all 0.2s ease;
-    }
+    .card-footer-actions { display: flex; justify-content: space-between; margin-top: 1rem; }
+
+    /* Buttons */
+    .btn { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.6rem 1.2rem; border-radius: 0.5rem; font-weight: 600; font-size: 0.9rem; cursor: pointer; border: none; transition: all 0.2s ease; }
     .btn-sm { padding: 0.35rem 0.75rem; font-size: 0.8rem; }
+    .btn-xs { padding: 0.2rem 0.5rem; font-size: 0.75rem; border-radius: 0.3rem; }
     .btn-primary { background: #38bdf8; color: #0f172a; }
     .btn-primary:hover { background: #7dd3fc; }
     .btn-success { background: #10b981; color: #ffffff; }
@@ -928,44 +1484,24 @@
     .btn-outline { background: transparent; border: 1px solid #475569; color: #f1f5f9; }
     .btn-outline:hover { background: #334155; }
     .btn-secondary { background: #334155; color: #f8fafc; }
-    .btn-ghost { background: transparent; color: #94a3b8; }
+    .btn-ghost { background: transparent; border: none; color: #94a3b8; cursor: pointer; }
     .btn-ghost:hover { color: #f8fafc; }
 
-    .modal-backdrop {
-        position: fixed;
-        top: 0; left: 0; right: 0; bottom: 0;
-        background: rgba(0, 0, 0, 0.75);
-        backdrop-filter: blur(4px);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 1000;
-    }
-    .modal-card {
-        background: #1e293b;
-        border: 1px solid #334155;
-        border-radius: 1rem;
-        width: 100%;
-        max-width: 520px;
-        padding: 1.5rem;
-        box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
-    }
-    .modal-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 1rem;
-    }
+    /* Modals */
+    .modal-backdrop { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.75); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+    .modal-card { background: #1e293b; border: 1px solid #334155; border-radius: 1rem; width: 100%; max-width: 540px; padding: 1.5rem; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); }
+    .modal-card.modal-lg { max-width: 680px; }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
     .btn-close { background: none; border: none; color: #94a3b8; font-size: 1.2rem; cursor: pointer; }
     .form-group { margin-bottom: 1rem; display: flex; flex-direction: column; gap: 0.3rem; }
     .form-group label { font-size: 0.85rem; font-weight: 600; color: #cbd5e1; }
     .form-input { background: #0f172a; border: 1px solid #334155; border-radius: 0.5rem; padding: 0.6rem; color: #f8fafc; }
     .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
     .modal-footer { display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.5rem; }
-    .alert-warning { background: #451a03; border: 1px solid #b45309; color: #fef3c7; padding: 0.8rem; border-radius: 0.5rem; font-size: 0.85rem; margin-bottom: 1rem; }
-    .modal-card.modal-lg { max-width: 680px; }
+    .alert-warning { background: #451a03; border: 1px solid #b45309; color: #fef3c7; padding: 0.8rem; border-radius: 0.5rem; font-size: 0.85rem; }
+    .alert-danger { background: #450a0a; border: 1px solid #dc2626; color: #fecaca; padding: 0.8rem; border-radius: 0.5rem; font-size: 0.85rem; }
     .modules-toggle-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 0.6rem; margin-top: 0.5rem; }
-    .module-toggle-card { display: flex; align-items: center; gap: 0.6rem; padding: 0.6rem 0.8rem; background: #0f172a; border: 1px solid #334155; border-radius: 0.5rem; cursor: pointer; font-size: 0.85rem; color: #94a3b8; transition: all 0.2s ease; }
+    .module-toggle-card { display: flex; align-items: center; gap: 0.6rem; padding: 0.6rem 0.8rem; background: #0f172a; border: 1px solid #334155; border-radius: 0.5rem; cursor: pointer; font-size: 0.85rem; color: #94a3b8; }
     .module-toggle-card.selected { border-color: #38bdf8; background: #1e293b; color: #f8fafc; font-weight: 600; }
     .diff-summary-card { background: #0f172a; border: 1px solid #334155; border-radius: 0.75rem; padding: 1.2rem; margin-top: 0.5rem; }
     .diff-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-top: 0.8rem; }
@@ -975,18 +1511,9 @@
     .val-old { color: #94a3b8; text-decoration: line-through; }
     .val-new { color: #f8fafc; }
     .arrow { color: #38bdf8; font-size: 0.85rem; }
-    .diff-delta { font-size: 0.8rem; font-weight: 600; }
-    .diff-delta.positive { color: #34d399; }
-    .diff-delta.negative { color: #f87171; }
-    .features-diff-container { display: flex; flex-direction: column; gap: 1rem; margin-top: 0.8rem; }
-    .diff-block { padding: 0.8rem; border-radius: 0.5rem; }
-    .diff-block.added { background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); }
-    .diff-block.removed { background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); }
-    .diff-block h5 { margin: 0 0 0.5rem 0; font-size: 0.85rem; }
-    .badge-list { display: flex; flex-wrap: wrap; gap: 0.5rem; }
-    .badge { padding: 0.3rem 0.6rem; border-radius: 0.375rem; font-size: 0.8rem; font-weight: 600; }
-    .badge-added { background: #064e3b; color: #6ee7b7; border: 1px solid #047857; }
-    .badge-removed { background: #7f1d1d; color: #fca5a5; border: 1px solid #b91c1c; }
     .mb-3 { margin-bottom: 1rem; }
-    .text-subtle { color: #94a3b8; font-size: 0.85rem; font-style: italic; }
+    .text-subtle { color: #94a3b8; font-size: 0.85rem; }
+    .loading-state, .empty-state { text-align: center; padding: 3rem; color: #94a3b8; }
+    .spinner { width: 32px; height: 32px; border: 3px solid #334155; border-top-color: #38bdf8; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 1rem auto; }
+    @@keyframes spin { to { transform: rotate(360deg); } }
 </style>

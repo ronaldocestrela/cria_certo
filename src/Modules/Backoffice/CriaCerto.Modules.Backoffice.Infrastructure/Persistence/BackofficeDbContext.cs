@@ -15,6 +15,9 @@ public class BackofficeDbContext : DbContext
     public DbSet<PlanVersion> PlanVersions => Set<PlanVersion>();
     public DbSet<PlanFeature> PlanFeatures => Set<PlanFeature>();
     public DbSet<PlanLimit> PlanLimits => Set<PlanLimit>();
+    public DbSet<HeadTierCatalog> HeadTierCatalogs => Set<HeadTierCatalog>();
+    public DbSet<ModuleCatalog> ModuleCatalogs => Set<ModuleCatalog>();
+    public DbSet<ModuleTierPrice> ModuleTierPrices => Set<ModuleTierPrice>();
     public DbSet<ImpersonationSession> ImpersonationSessions => Set<ImpersonationSession>();
     public DbSet<AdminApprovalRequest> AdminApprovalRequests => Set<AdminApprovalRequest>();
     public DbSet<BackofficeAlert> Alerts => Set<BackofficeAlert>();
@@ -155,6 +158,63 @@ public class BackofficeDbContext : DbContext
             builder.Property(l => l.LimitKey).IsRequired().HasMaxLength(100);
             builder.Property(l => l.LimitValue).HasPrecision(18, 2);
             builder.Property(l => l.Unit).IsRequired().HasMaxLength(50);
+        });
+
+        modelBuilder.Entity<HeadTierCatalog>(builder =>
+        {
+            builder.ToTable("HeadTierCatalogs");
+            builder.HasKey(t => t.Id);
+            builder.Property(t => t.TierCode).IsRequired().HasMaxLength(50);
+            builder.Property(t => t.DisplayName).IsRequired().HasMaxLength(150);
+            builder.Property(t => t.MinHeads).IsRequired();
+            builder.Property(t => t.MaxHeads).IsRequired();
+            builder.Property(t => t.SortOrder).IsRequired();
+            builder.Property(t => t.IsActive).IsRequired();
+            builder.Property(t => t.CreatedAtUtc).IsRequired();
+            builder.Property(t => t.UpdatedAtUtc).IsRequired();
+            builder.HasIndex(t => t.TierCode).IsUnique();
+            builder.HasIndex(t => t.SortOrder);
+        });
+
+        modelBuilder.Entity<ModuleCatalog>(builder =>
+        {
+            builder.ToTable("ModuleCatalogs");
+            builder.HasKey(m => m.Id);
+            builder.Property(m => m.ModuleKey).IsRequired().HasMaxLength(50);
+            builder.Property(m => m.Name).IsRequired().HasMaxLength(150);
+            builder.Property(m => m.Description).IsRequired().HasMaxLength(500);
+            builder.Property(m => m.Icon).IsRequired().HasMaxLength(100);
+            builder.Property(m => m.IsCore).IsRequired();
+            builder.Property(m => m.IsActive).IsRequired();
+            builder.Property(m => m.SortOrder).IsRequired();
+            builder.Property(m => m.CreatedAtUtc).IsRequired();
+            builder.Property(m => m.UpdatedAtUtc).IsRequired();
+            builder.HasIndex(m => m.ModuleKey).IsUnique();
+            builder.HasIndex(m => m.SortOrder);
+            builder.HasMany(m => m.TierPrices)
+                .WithOne()
+                .HasForeignKey(p => p.ModuleCatalogId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ModuleTierPrice>(builder =>
+        {
+            builder.ToTable("ModuleTierPrices");
+            builder.HasKey(p => p.Id);
+            builder.Property(p => p.VersionNumber).IsRequired();
+            builder.Property(p => p.Status).HasConversion<string>().IsRequired().HasMaxLength(30);
+            builder.Property(p => p.MonthlyPrice).HasPrecision(18, 2).IsRequired();
+            builder.Property(p => p.AnnualPriceMonthly).HasPrecision(18, 2).IsRequired();
+            builder.Property(p => p.StripePriceIdMonthly).HasMaxLength(150);
+            builder.Property(p => p.StripePriceIdAnnual).HasMaxLength(150);
+            builder.Property(p => p.ApprovalNotes).HasMaxLength(1000);
+            builder.Property(p => p.CreatedAtUtc).IsRequired();
+            builder.HasOne<HeadTierCatalog>()
+                .WithMany()
+                .HasForeignKey(p => p.HeadTierCatalogId)
+                .OnDelete(DeleteBehavior.Restrict);
+            builder.HasIndex(p => new { p.ModuleCatalogId, p.HeadTierCatalogId, p.VersionNumber }).IsUnique();
+            builder.HasIndex(p => new { p.ModuleCatalogId, p.HeadTierCatalogId, p.Status });
         });
 
         modelBuilder.Entity<ImpersonationSession>(builder =>

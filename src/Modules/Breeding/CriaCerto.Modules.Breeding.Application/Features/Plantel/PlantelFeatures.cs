@@ -1,5 +1,6 @@
 using CriaCerto.BuildingBlocks.Abstractions.Licensing;
 using CriaCerto.BuildingBlocks.Abstractions.Results;
+using CriaCerto.BuildingBlocks.Abstractions.Tenancy;
 using CriaCerto.BuildingBlocks.Application.Abstractions.Messaging;
 using CriaCerto.Modules.Breeding.Application.Abstractions;
 using CriaCerto.Modules.Breeding.Application.Contracts;
@@ -11,7 +12,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace CriaCerto.Modules.Breeding.Application.Features.Plantel;
 
-[RequiresModule("Breeding")]
+[RequiresModule("Cows")]
 public sealed record CreateCowCommand(
     string EarTag,
     string Breed,
@@ -30,7 +31,7 @@ public sealed record CreateCowCommand(
     decimal? BodyConditionScore = null,
     string Category = "Matriz") : ICommand<CowDetailDto>;
 
-[RequiresModule("Breeding")]
+[RequiresModule("Cows")]
 public sealed record UpdateCowCommand(
     Guid Id,
     string EarTag,
@@ -49,13 +50,13 @@ public sealed record UpdateCowCommand(
     decimal? BodyConditionScore = null,
     string Category = "Matriz") : ICommand<CowDetailDto>;
 
-[RequiresModule("Breeding")]
+[RequiresModule("Cows")]
 public sealed record GetCowQuery(Guid Id) : IQuery<CowDetailDto>;
 
-[RequiresModule("Breeding")]
+[RequiresModule("Cows")]
 public sealed record ListCowsQuery(string? Search, ReproductiveStatus? Status, int Page = 1, int PageSize = 25) : IQuery<CattleListResponse<CowSummaryDto>>;
 
-[RequiresModule("Breeding")]
+[RequiresModule("Cows")]
 public sealed record ListBullsQuery(Guid TenantId) : IQuery<List<BullSummaryDto>>;
 
 public sealed class CreateCowCommandValidator : AbstractValidator<CreateCowCommand>
@@ -84,11 +85,37 @@ public sealed class UpdateCowCommandValidator : AbstractValidator<UpdateCowComma
 public sealed class CreateCowCommandHandler : IRequestHandler<CreateCowCommand, Result<CowDetailDto>>
 {
     private readonly IBreedingDbContext _dbContext;
+    private readonly ITenantContext? _tenantContext;
 
-    public CreateCowCommandHandler(IBreedingDbContext dbContext) => _dbContext = dbContext;
+    public CreateCowCommandHandler(IBreedingDbContext dbContext, ITenantContext? tenantContext = null)
+    {
+        _dbContext = dbContext;
+        _tenantContext = tenantContext;
+    }
 
     public async Task<Result<CowDetailDto>> Handle(CreateCowCommand request, CancellationToken cancellationToken)
     {
+        var effectiveTenantId = request.TenantId != Guid.Empty
+            ? request.TenantId
+            : (_tenantContext?.TenantId ?? Guid.Empty);
+
+        if (_tenantContext is { HeadCapacity: > 0 } && effectiveTenantId != Guid.Empty)
+        {
+            var activeCowCount = await _dbContext.Cows.CountAsync(
+                c => c.TenantId == effectiveTenantId &&
+                     c.Status != ReproductiveStatus.Sold &&
+                     c.Status != ReproductiveStatus.Culled,
+                cancellationToken);
+
+            if (activeCowCount >= _tenantContext.HeadCapacity)
+            {
+                return Result.Failure<CowDetailDto>(
+                    Error.Validation(
+                        "License.HeadCapacityExceeded",
+                        $"O limite de {_tenantContext.HeadCapacity} cabeças da faixa contratada foi atingido. Faça upgrade da faixa de cabeças da sua assinatura para cadastrar novos animais."));
+            }
+        }
+
         var normalizedEarTag = request.EarTag.Trim().ToUpperInvariant();
         if (await _dbContext.Cows.AnyAsync(c => c.TenantId == request.TenantId && c.EarTag.ToUpper() == normalizedEarTag, cancellationToken))
         {

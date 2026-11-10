@@ -15,6 +15,7 @@
 
 <PageTitle>Campanhas Sanitárias & Carência | CriaCerto</PageTitle>
 
+<ModuleGuard Module="Sanitary">
 <div class="container-fluid py-4">
     @if (!string.IsNullOrEmpty(_errorMessage))
     {
@@ -489,6 +490,7 @@
         </div>
     </div>
 }
+</ModuleGuard>
 
 @code {
     private List<VaccinationCampaignDto> campaigns = new();

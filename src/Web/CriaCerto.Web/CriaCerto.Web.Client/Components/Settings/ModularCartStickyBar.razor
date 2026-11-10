@@ -1,0 +1,194 @@
+@using CriaCerto.Web.Client.Services
+
+<div class="cart-sticky-bar"
+     style="position: sticky; bottom: 1rem; z-index: 100; background: white; border: 1.5px solid var(--cc-primary); border-radius: 16px;
+            padding: 1.25rem 1.5rem; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+            display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1.25rem;">
+
+    <!-- Left: Selected Configuration & Billing Cycle -->
+    <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+        <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+            <span class="font-mono" style="font-size: 11px; font-weight: 700; background: #e0f2fe; color: #0369a1; padding: 0.2rem 0.6rem; border-radius: 99px;">
+                @(SelectedTier?.DisplayName ?? SelectedTierCode)
+            </span>
+            <span class="font-mono" style="font-size: 11px; font-weight: 700; background: #dcfce7; color: #166534; padding: 0.2rem 0.6rem; border-radius: 99px;">
+                @AllSelectedKeys.Count Módulos Selecionados
+            </span>
+            @if (HasActiveStripeSubscription)
+            {
+                <span class="font-mono" style="font-size: 10px; font-weight: 700; background: #fef08a; color: #854d0e; padding: 0.15rem 0.5rem; border-radius: 99px;">
+                    RATEIO PROPORCIONAL AUTOMÁTICO
+                </span>
+            }
+        </div>
+
+        <!-- Monthly / Annual Toggle -->
+        <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+            <div style="background-color: var(--cc-canvas); border: 1px solid var(--cc-border); border-radius: 99px; padding: 0.2rem; display: inline-flex;">
+                <button type="button" class="font-mono" @onclick="() => ToggleAnnual(false)"
+                        style="border: none; cursor: pointer; padding: 0.35rem 1rem; border-radius: 99px; font-size: 12px; font-weight: bold; transition: all 0.2s;
+                               background-color: @(!IsAnnual ? "var(--cc-primary)" : "transparent");
+                               color: @(!IsAnnual ? "white" : "var(--cc-ink-muted)");">
+                    Mensal
+                </button>
+                <button type="button" class="font-mono" @onclick="() => ToggleAnnual(true)"
+                        style="border: none; cursor: pointer; padding: 0.35rem 1rem; border-radius: 99px; font-size: 12px; font-weight: bold; transition: all 0.2s;
+                               background-color: @(IsAnnual ? "var(--cc-primary)" : "transparent");
+                               color: @(IsAnnual ? "white" : "var(--cc-ink-muted)");">
+                    Anual (-15%)
+                </button>
+            </div>
+
+            @if (IsAnnual)
+            {
+                <span class="font-mono" style="font-size: 11px; color: #15803d; font-weight: 700; display: flex; align-items: center; gap: 0.25rem;">
+                    <span class="material-symbols-outlined" style="font-size: 14px;">savings</span>
+                    Economia de ~15% aplicada no plano anual
+                </span>
+            }
+        </div>
+    </div>
+
+    <!-- Center/Right: Pricing and Commercial ROI trigger -->
+    <div style="display: flex; align-items: center; gap: 2rem; flex-wrap: wrap;">
+        <div style="text-align: right;">
+            <div style="display: flex; align-items: baseline; justify-content: flex-end; gap: 0.35rem;">
+                <span style="font-size: 26px; font-weight: 800; color: var(--cc-ink); line-height: 1;" class="font-mono">
+                    R$ @TotalPrice.ToString("N2")
+                </span>
+                <span style="font-size: 13px; color: var(--cc-ink-muted);" class="font-mono">/mês</span>
+            </div>
+
+            <div style="margin-top: 0.2rem; font-size: 12px; font-weight: 700; color: var(--cc-primary); display: flex; align-items: center; justify-content: flex-end; gap: 0.25rem;" class="font-mono">
+                <span class="material-symbols-outlined" style="font-size: 14px;">verified</span>
+                <span>Apenas R$ @CostPerHead.ToString("N2") por cabeça/mês</span>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+            @if (HasActiveStripeSubscription)
+            {
+                <button type="button" class="cc-btn font-mono" @onclick="OnOpenBillingPortal" disabled="@IsSubmitting"
+                        style="border: 1px solid var(--cc-border); background: white; color: var(--cc-ink); padding: 0.65rem 1rem; border-radius: 8px; font-size: 12px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 0.35rem;">
+                    <span class="material-symbols-outlined" style="font-size: 16px;">credit_card</span>
+                    <span>Portal Stripe</span>
+                </button>
+
+                <button type="button" class="cc-btn pressed-effect font-mono" @onclick="OnPrimaryAction" disabled="@(IsSubmitting || !IsAdmin)"
+                        style="border: none; background: var(--cc-primary); color: white; padding: 0.75rem 1.5rem; border-radius: 8px; font-size: 13px; font-weight: bold; cursor: @(!IsAdmin ? "not-allowed" : "pointer"); display: flex; align-items: center; gap: 0.5rem; box-shadow: 0 4px 12px rgba(0, 101, 44, 0.2);">
+                    @if (IsSubmitting)
+                    {
+                        <div class="animate-spin" style="width: 16px; height: 16px; border: 2px solid white; border-top-color: transparent; border-radius: 50%;"></div>
+                        <span>Atualizando...</span>
+                    }
+                    else
+                    {
+                        <span class="material-symbols-outlined" style="font-size: 18px;">sync</span>
+                        <span>Atualizar Meus Módulos</span>
+                    }
+                </button>
+            }
+            else
+            {
+                <button type="button" class="cc-btn pressed-effect font-mono" @onclick="OnPrimaryAction" disabled="@(IsSubmitting || !IsAdmin)"
+                        style="border: none; background: var(--cc-primary); color: white; padding: 0.75rem 1.75rem; border-radius: 8px; font-size: 14px; font-weight: bold; cursor: @(!IsAdmin ? "not-allowed" : "pointer"); display: flex; align-items: center; gap: 0.5rem; box-shadow: 0 4px 12px rgba(0, 101, 44, 0.25);">
+                    @if (IsSubmitting)
+                    {
+                        <div class="animate-spin" style="width: 16px; height: 16px; border: 2px solid white; border-top-color: transparent; border-radius: 50%;"></div>
+                        <span>Iniciando Checkout...</span>
+                    }
+                    else
+                    {
+                        <span class="material-symbols-outlined" style="font-size: 18px;">shopping_cart_checkout</span>
+                        <span>Contratar Assinatura</span>
+                    }
+                </button>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public ModularSubscriptionCatalogModel Catalog { get; set; } = TenancyApiClient.GetDefaultModularCatalog();
+
+    [Parameter]
+    public string SelectedTierCode { get; set; } = "TIER_500";
+
+    [Parameter]
+    public HashSet<string> SelectedModuleKeys { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    [Parameter]
+    public bool IsAnnual { get; set; } = false;
+
+    [Parameter]
+    public int ActiveHerdCount { get; set; } = 0;
+
+    [Parameter]
+    public bool HasActiveStripeSubscription { get; set; } = false;
+
+    [Parameter]
+    public bool IsAdmin { get; set; } = true;
+
+    [Parameter]
+    public bool IsSubmitting { get; set; } = false;
+
+    [Parameter]
+    public EventCallback<bool> OnAnnualChanged { get; set; }
+
+    [Parameter]
+    public EventCallback OnPrimaryAction { get; set; }
+
+    [Parameter]
+    public EventCallback OnOpenBillingPortal { get; set; }
+
+    private HeadTierOptionModel? SelectedTier =>
+        Catalog.HeadTiers.FirstOrDefault(t => string.Equals(t.TierCode, SelectedTierCode, StringComparison.OrdinalIgnoreCase))
+        ?? Catalog.HeadTiers.FirstOrDefault();
+
+    private HashSet<string> AllSelectedKeys
+    {
+        get
+        {
+            var keys = new HashSet<string>(SelectedModuleKeys, StringComparer.OrdinalIgnoreCase);
+            keys.Add("Cows");
+            return keys;
+        }
+    }
+
+    private decimal TotalPrice
+    {
+        get
+        {
+            decimal total = 0m;
+            foreach (var mod in Catalog.Modules.Where(m => AllSelectedKeys.Contains(m.ModuleKey)))
+            {
+                var priceOption = mod.PricesByTier.FirstOrDefault(p => string.Equals(p.TierCode, SelectedTierCode, StringComparison.OrdinalIgnoreCase))
+                    ?? mod.PricesByTier.FirstOrDefault();
+
+                if (priceOption != null)
+                {
+                    total += IsAnnual ? priceOption.AnnualPriceMonthly : priceOption.MonthlyPrice;
+                }
+            }
+            return total;
+        }
+    }
+
+    private decimal CostPerHead
+    {
+        get
+        {
+            var maxHeads = SelectedTier?.MaxHeads ?? 500;
+            var denominator = ActiveHerdCount > 0 ? ActiveHerdCount : Math.Max(1, maxHeads);
+            return Math.Round(TotalPrice / denominator, 2);
+        }
+    }
+
+    private async Task ToggleAnnual(bool value)
+    {
+        await OnAnnualChanged.InvokeAsync(value);
+    }
+}
+

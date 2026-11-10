@@ -9,6 +9,20 @@ public sealed record CustomerPortalSessionResult(string Url);
 
 public sealed record StripeWebhookResult(bool Success, string? EventType, string? Message);
 
+public sealed record StripeModularLineItem(
+    string ModuleKey,
+    string ModuleName,
+    decimal UnitAmount,
+    string Interval,
+    string? PriceId = null
+);
+
+public sealed record StripeModularSubscriptionUpdateResult(
+    string SubscriptionId,
+    string Status,
+    IReadOnlyDictionary<string, string> SubscriptionItemIdsByModule
+);
+
 public interface IStripePaymentService
 {
     Task<string> GetOrCreateCustomerAsync(Tenant tenant, User user, CancellationToken cancellationToken = default);
@@ -25,6 +39,20 @@ public interface IStripePaymentService
         string? priceId = null,
         CancellationToken cancellationToken = default);
 
+    Task<CheckoutSessionResult> CreateModularCheckoutSessionAsync(
+        Tenant tenant,
+        User user,
+        string headTierCode,
+        int maxHeads,
+        IReadOnlyList<string> subscribedModules,
+        string billingCycle,
+        IReadOnlyList<StripeModularLineItem> lineItems,
+        string successUrl,
+        string cancelUrl,
+        string? planId = null,
+        string? planName = null,
+        CancellationToken cancellationToken = default);
+
     Task<CustomerPortalSessionResult> CreateCustomerPortalSessionAsync(
         Tenant tenant,
         string returnUrl,
@@ -38,5 +66,14 @@ public interface IStripePaymentService
     Task<Result> UpdateSubscriptionBillingDateAsync(
         string subscriptionId,
         DateTime newBillingDateUtc,
+        CancellationToken cancellationToken = default);
+
+    Task<Result<StripeModularSubscriptionUpdateResult>> UpdateModularSubscriptionAsync(
+        Tenant tenant,
+        string headTierCode,
+        int maxHeads,
+        IReadOnlyList<string> subscribedModules,
+        string billingCycle,
+        IReadOnlyList<StripeModularLineItem> lineItems,
         CancellationToken cancellationToken = default);
 }

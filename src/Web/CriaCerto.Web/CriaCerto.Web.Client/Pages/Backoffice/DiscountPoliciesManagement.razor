@@ -10,7 +10,7 @@
 @inject IToastService Toast
 @attribute [Authorize]
 
-<PageTitle>CriaCerto Backoffice - Descontos por Plano</PageTitle>
+<PageTitle>CriaCerto Backoffice - Descontos por Faixa de Cabeças & Planos</PageTitle>
 
 <PermissionGuard Permission="@BackofficePermissions.ReferralDiscountsRead">
     <Authorized>
@@ -18,9 +18,9 @@
             <header class="page-header">
                 <div>
                     <span class="badge-growth">Programa de Indicação & Incentivos</span>
-                    <h1 class="page-title">Configuração de Descontos por Plano</h1>
+                    <h1 class="page-title">Configuração de Descontos por Faixa & Planos</h1>
                     <p class="page-subtitle">
-                        Parametrize os descontos concedidos aos clientes na mensalidade para cada indicação ativa e defina tetos máximos de abatimento.
+                        Parametrize os descontos concedidos aos clientes na mensalidade para cada indicação ativa vinculados à Faixa de Cabeças (Modular) ou Padrão Global, respeitando os tetos máximos de abatimento.
                     </p>
                 </div>
                 <div class="header-actions">
@@ -59,14 +59,23 @@
                 <div class="search-box">
                     <span class="search-icon">🔍</span>
                     <input type="text"
-                           placeholder="Buscar por código ou nome do plano..."
+                           placeholder="Buscar por código, nome da faixa ou plano..."
                            @bind="_searchTerm"
                            @bind:event="oninput" />
                 </div>
                 <div class="filter-group">
+                    <label>Categoria:</label>
+                    <select @bind="_categoryFilter">
+                        <option value="All">Todas as Categorias</option>
+                        <option value="HeadTier">🐮 Faixas de Cabeças (Modular)</option>
+                        <option value="GlobalDefault">🌐 Padrão Global</option>
+                        <option value="LegacyPlan">📁 Planos Legados</option>
+                    </select>
+                </div>
+                <div class="filter-group">
                     <label>Status:</label>
                     <select @bind="_statusFilter">
-                        <option value="All">Todos</option>
+                        <option value="All">Todos os Status</option>
                         <option value="Active">Ativos</option>
                         <option value="Inactive">Inativos</option>
                         <option value="Unconfigured">Não Configurados</option>
@@ -79,15 +88,15 @@
             {
                 <div class="loading-state">
                     <div class="spinner"></div>
-                    <p>Carregando políticas de desconto por plano...</p>
+                    <p>Carregando políticas de desconto por faixa e plano...</p>
                 </div>
             }
             else if (!FilteredPolicies.Any())
             {
                 <div class="empty-state">
                     <span class="empty-icon">🏷️</span>
-                    <h3>Nenhum plano ou política encontrado</h3>
-                    <p>Tente ajustar os filtros de busca ou verifique se há planos cadastrados no catálogo.</p>
+                    <h3>Nenhum item ou política encontrado</h3>
+                    <p>Tente ajustar os filtros de busca ou verifique se há faixas/planos cadastrados no catálogo.</p>
                 </div>
             }
             else
@@ -96,8 +105,9 @@
                     <table class="policies-table">
                         <thead>
                             <tr>
-                                <th>Código do Plano</th>
-                                <th>Nome do Plano</th>
+                                <th>Código</th>
+                                <th>Nome / Abrangência</th>
+                                <th>Escopo</th>
                                 <th>Tipo de Desconto</th>
                                 <th>Desconto p/ Indicação Ativa</th>
                                 <th>Teto Máximo</th>
@@ -114,6 +124,20 @@
                                     </td>
                                     <td>
                                         <strong class="plan-name">@policy.PlanName</strong>
+                                    </td>
+                                    <td>
+                                        @if (policy.Category == "GlobalDefault" || policy.Scope == DiscountPolicyScope.GlobalDefault)
+                                        {
+                                            <span class="badge-scope global">🌐 Padrão Global</span>
+                                        }
+                                        else if (policy.Category == "HeadTier" || policy.Scope == DiscountPolicyScope.HeadTier)
+                                        {
+                                            <span class="badge-scope tier">🐮 Faixa de Cabeças</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge-scope legacy">📁 Plano Legado</span>
+                                        }
                                     </td>
                                     <td>
                                         @if (!policy.HasConfiguredPolicy)
@@ -328,6 +352,7 @@
     private List<PlanDiscountPolicyDto>? _policies;
     private string _searchTerm = string.Empty;
     private string _statusFilter = "All";
+    private string _categoryFilter = "All";
 
     // Modal state
     private bool _showModal = false;
@@ -373,6 +398,13 @@
                 list = list.Where(p =>
                     p.PlanCode.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase) ||
                     p.PlanName.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase));
+            }
+
+            if (_categoryFilter != "All")
+            {
+                list = list.Where(p =>
+                    p.Category.Equals(_categoryFilter, StringComparison.OrdinalIgnoreCase) ||
+                    p.Scope.ToString().Equals(_categoryFilter, StringComparison.OrdinalIgnoreCase));
             }
 
             list = _statusFilter switch
@@ -736,6 +768,34 @@
         display: flex;
         gap: 0.5rem;
         justify-content: flex-end;
+    }
+
+    .badge-scope {
+        font-size: 0.75rem;
+        font-weight: 700;
+        padding: 0.2rem 0.55rem;
+        border-radius: 6px;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+    }
+
+    .badge-scope.global {
+        background: rgba(16, 185, 129, 0.15);
+        color: #34d399;
+        border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    .badge-scope.tier {
+        background: rgba(59, 130, 246, 0.15);
+        color: #60a5fa;
+        border: 1px solid rgba(59, 130, 246, 0.3);
+    }
+
+    .badge-scope.legacy {
+        background: rgba(148, 163, 184, 0.15);
+        color: #94a3b8;
+        border: 1px solid rgba(148, 163, 184, 0.3);
     }
 
     /* Modal styles */

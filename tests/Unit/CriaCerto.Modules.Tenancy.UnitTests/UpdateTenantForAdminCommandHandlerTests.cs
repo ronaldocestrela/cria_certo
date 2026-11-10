@@ -294,6 +294,15 @@ public class UpdateTenantForAdminCommandHandlerTests : IDisposable
             CancellationToken cancellationToken = default) =>
             Task.FromResult(new CheckoutSessionResult("cs_test", "https://checkout.stripe.com/test"));
 
+        public Task<CheckoutSessionResult> CreateModularCheckoutSessionAsync(
+            Tenant tenant, User user, string headTierCode, int maxHeads,
+            IReadOnlyList<string> subscribedModules, string billingCycle,
+            IReadOnlyList<StripeModularLineItem> lineItems,
+            string successUrl, string cancelUrl,
+            string? planId = null, string? planName = null,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new CheckoutSessionResult("cs_test", "https://checkout.stripe.com/test"));
+
         public Task<CustomerPortalSessionResult> CreateCustomerPortalSessionAsync(
             Tenant tenant, string returnUrl, CancellationToken cancellationToken = default) =>
             Task.FromResult(new CustomerPortalSessionResult("https://billing.stripe.com/portal"));
@@ -314,6 +323,31 @@ public class UpdateTenantForAdminCommandHandlerTests : IDisposable
             }
 
             return Task.FromResult(Result.Success());
+        }
+
+        public Task<Result<StripeModularSubscriptionUpdateResult>> UpdateModularSubscriptionAsync(
+            Tenant tenant,
+            string headTierCode,
+            int maxHeads,
+            IReadOnlyList<string> subscribedModules,
+            string billingCycle,
+            IReadOnlyList<StripeModularLineItem> lineItems,
+            CancellationToken cancellationToken = default)
+        {
+            if (ReturnError != null)
+            {
+                return Task.FromResult(Result.Failure<StripeModularSubscriptionUpdateResult>(ReturnError));
+            }
+
+            var itemIds = lineItems.ToDictionary(
+                i => i.ModuleKey,
+                i => $"si_test_{i.ModuleKey.ToLowerInvariant()}",
+                StringComparer.OrdinalIgnoreCase);
+
+            return Task.FromResult(Result.Success(new StripeModularSubscriptionUpdateResult(
+                tenant.StripeSubscriptionId ?? "sub_test",
+                "active",
+                itemIds)));
         }
     }
 }

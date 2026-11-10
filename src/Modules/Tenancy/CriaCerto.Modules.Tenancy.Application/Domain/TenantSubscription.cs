@@ -35,6 +35,9 @@ public sealed class TenantSubscription
     public Guid PlanVersionId { get; set; }
     public string PlanCode { get; set; } = string.Empty;
     public string PlanName { get; set; } = string.Empty;
+    public string HeadTierCode { get; set; } = PlanCapacityLimits.Tier500;
+    public string? PendingHeadTierCode { get; set; }
+    public List<string> SubscribedModuleKeys { get; set; } = [PlanCapacityLimits.CoreModuleKey];
     public int VersionNumber { get; set; }
     public SubscriptionStatus Status { get; set; } = SubscriptionStatus.Active;
 
@@ -46,6 +49,143 @@ public sealed class TenantSubscription
     public DateTime? GracePeriodStartedAtUtc { get; set; }
     public DateTime? GracePeriodEndsAtUtc { get; set; }
     public Guid? PendingPlanVersionId { get; set; }
+
+    public static Result<TenantSubscription> CreateInitialModular(
+        Guid tenantId,
+        string headTierCode,
+        int maxHeadCapacity,
+        IEnumerable<string>? moduleKeys = null,
+        int maxUsers = 10,
+        int maxProductionUnits = 5)
+    {
+        if (!PlanCapacityLimits.IsValidHeadTierCode(headTierCode))
+        {
+            return Result.Failure<TenantSubscription>(TenancyErrors.InvalidHeadTierCode);
+        }
+
+        var normalizedModules = NormalizeAndEnsureCoreModules(moduleKeys);
+        if (normalizedModules.IsFailure)
+        {
+            return Result.Failure<TenantSubscription>(normalizedModules.Error);
+        }
+
+        var normalizedTier = PlanCapacityLimits.NormalizeHeadTierCode(headTierCode);
+        return Result.Success(new TenantSubscription
+        {
+            TenantId = tenantId,
+            HeadTierCode = normalizedTier,
+            PlanCode = normalizedTier,
+            PlanName = normalizedTier,
+            VersionNumber = 1,
+            Status = SubscriptionStatus.Active,
+            MaxHeadCapacity = maxHeadCapacity > 0 ? maxHeadCapacity : PlanCapacityLimits.GetMaxHeadsForTier(normalizedTier),
+            MaxUsers = maxUsers,
+            MaxProductionUnits = maxProductionUnits,
+            SubscribedModuleKeys = normalizedModules.Value,
+            StartedAtUtc = DateTime.UtcNow
+        });
+    }
+
+    public Result ApplyModularChange(
+        string targetHeadTierCode,
+        int targetMaxHeadCapacity,
+        IEnumerable<string> targetModuleKeys,
+        int currentHeadCount,
+        bool forceImmediate = false)
+    {
+        if (!PlanCapacityLimits.IsValidHeadTierCode(targetHeadTierCode))
+        {
+            return Result.Failure(TenancyErrors.InvalidHeadTierCode);
+        }
+
+        var normalizedModulesResult = NormalizeAndEnsureCoreModules(targetModuleKeys);
+        if (normalizedModulesResult.IsFailure)
+        {
+            return Result.Failure(normalizedModulesResult.Error);
+        }
+
+        var normalizedTier = PlanCapacityLimits.NormalizeHeadTierCode(targetHeadTierCode);
+        var effectiveTargetCapacity = targetMaxHeadCapacity > 0
+            ? targetMaxHeadCapacity
+            : PlanCapacityLimits.GetMaxHeadsForTier(normalizedTier);
+
+        if (currentHeadCount > effectiveTargetCapacity && !forceImmediate)
+        {
+            Status = SubscriptionStatus.GracePeriodActive;
+            GracePeriodStartedAtUtc = DateTime.UtcNow;
+            GracePeriodEndsAtUtc = DateTime.UtcNow.AddDays(14);
+            PendingHeadTierCode = normalizedTier;
+            return Result.Success();
+        }
+
+        HeadTierCode = normalizedTier;
+        PlanCode = normalizedTier;
+        PlanName = normalizedTier;
+        MaxHeadCapacity = effectiveTargetCapacity;
+        SubscribedModuleKeys = normalizedModulesResult.Value;
+        Status = SubscriptionStatus.Active;
+        GracePeriodStartedAtUtc = null;
+        GracePeriodEndsAtUtc = null;
+        PendingHeadTierCode = null;
+        PendingPlanVersionId = null;
+
+        return Result.Success();
+    }
+
+    public Result ResolveModularGracePeriod(int targetMaxHeadCapacity, int currentHeadCount)
+    {
+        if (Status != SubscriptionStatus.GracePeriodActive || string.IsNullOrWhiteSpace(PendingHeadTierCode))
+        {
+            return Result.Success();
+        }
+
+        var effectiveTargetCapacity = targetMaxHeadCapacity > 0
+            ? targetMaxHeadCapacity
+            : PlanCapacityLimits.GetMaxHeadsForTier(PendingHeadTierCode);
+
+        if (currentHeadCount <= effectiveTargetCapacity)
+        {
+            HeadTierCode = PendingHeadTierCode;
+            PlanCode = PendingHeadTierCode;
+            PlanName = PendingHeadTierCode;
+            MaxHeadCapacity = effectiveTargetCapacity;
+            Status = SubscriptionStatus.Active;
+            GracePeriodStartedAtUtc = null;
+            GracePeriodEndsAtUtc = null;
+            PendingHeadTierCode = null;
+            PendingPlanVersionId = null;
+        }
+
+        return Result.Success();
+    }
+
+    private static Result<List<string>> NormalizeAndEnsureCoreModules(IEnumerable<string>? moduleKeys)
+    {
+        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            PlanCapacityLimits.CoreModuleKey
+        };
+
+        if (moduleKeys is not null)
+        {
+            foreach (var raw in moduleKeys)
+            {
+                var normalized = PlanCapacityLimits.NormalizeCommercialModuleKey(raw);
+                if (normalized is null)
+                {
+                    return Result.Failure<List<string>>(TenancyErrors.InvalidModuleKey);
+                }
+
+                set.Add(normalized);
+            }
+        }
+
+        var ordered = PlanCapacityLimits.AllCommercialModules
+            .Where(m => set.Contains(m))
+            .ToList();
+
+        return Result.Success(ordered);
+    }
 
     public static TenantSubscription CreateInitial(
         Guid tenantId,

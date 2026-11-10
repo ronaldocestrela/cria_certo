@@ -2,6 +2,8 @@
 @rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
 @attribute [Authorize]
 @using CriaCerto.Web.Client.Auth
+@using CriaCerto.Web.Client.Components.Settings
+@using CriaCerto.Web.Client.Services
 @using CriaCerto.BuildingBlocks.Abstractions.Licensing
 @using System.Security.Claims
 @inject CustomAuthStateProvider AuthStateProvider
@@ -9,22 +11,22 @@
 @inject PlantelApiClient PlantelApiClient
 @inject NavigationManager Navigation
 
-<PageTitle>Cria Certo - Planos e Assinatura</PageTitle>
+<PageTitle>Cria Certo - Assinatura Modular Self-Service</PageTitle>
 
-<div class="subscription-container font-headline">
+<div class="subscription-container font-headline" style="max-width: 1280px; margin: 0 auto; padding-bottom: 5rem;">
 
     <!-- Page Header & Navigation Breadcrumb -->
     <div style="margin-bottom: 2rem;">
         <nav style="display: flex; align-items: center; gap: 0.5rem; color: var(--cc-secondary); font-size: 12px; margin-bottom: 0.5rem;" class="font-mono">
             <span style="text-transform: uppercase; tracking-wider: 0.05em; cursor: pointer;" @onclick="GoToSettings">CONFIGURAÇÕES</span>
             <span class="material-symbols-outlined" style="font-size: 14px;">chevron_right</span>
-            <span style="color: var(--cc-primary); text-transform: uppercase; tracking-wider: 0.05em;">ASSINATURA & PLANOS</span>
+            <span style="color: var(--cc-primary); text-transform: uppercase; tracking-wider: 0.05em;">ASSINATURA MODULAR</span>
         </nav>
         <h2 class="font-headline text-[32px] font-bold" style="color: var(--cc-ink); margin: 0; line-height: 40px; letter-spacing: -0.02em;">
-            Assinatura e Planos
+            Assinatura & Módulos Self-Service
         </h2>
         <p style="color: var(--cc-ink-muted); margin: 0.25rem 0 0 0; font-size: 16px;">
-            Gerencie o plano da sua granja, acompanhe o uso de cotas e mude de categoria a qualquer momento.
+            Configure seu plano sob medida por faixa de cabeças e escolha livremente os módulos que sua fazenda precisa.
         </p>
     </div>
 
@@ -33,7 +35,7 @@
         <div style="padding: 1rem 1.25rem; border-radius: 8px; margin-bottom: 1.5rem; background-color: #f8fafc; color: var(--cc-ink); border: 1px solid var(--cc-border); display: flex; align-items: center; gap: 0.75rem;">
             <span class="material-symbols-outlined" style="font-size: 22px; color: var(--cc-primary);">admin_panel_settings</span>
             <div style="font-size: 13px;">
-                <strong>Modo Somente Leitura (RBAC):</strong> Você está visualizando o catálogo e as cotas do plano. Apenas administradores da fazenda possuem permissão para contratar planos, solicitar upgrades ou gerenciar formas de pagamento.
+                <strong>Modo Somente Leitura (RBAC):</strong> Você está visualizando o catálogo modular e a configuração da fazenda. Apenas administradores possuem permissão para contratar ou alterar módulos e formas de pagamento.
             </div>
         </div>
     }
@@ -51,8 +53,8 @@
                     </strong>
                     <div style="font-size: 13px; color: #7c2d12;">
                         @(string.Equals(_profile.Status, "Trial", StringComparison.OrdinalIgnoreCase)
-                            ? "Seu período gratuito terminou. Selecione um dos planos abaixo para contratar via Stripe e reativar o acesso total aos módulos do Cria Certo."
-                            : "A vigência contratada da fazenda expirou. Selecione um plano abaixo ou acesse o Portal Stripe para regularizar a assinatura e manter o acesso operacional liberado.")
+                            ? "Seu período gratuito terminou. Selecione sua faixa de cabeças e os módulos desejados abaixo para reativar o acesso total aos recursos da plataforma."
+                            : "A vigência contratada da fazenda expirou. Selecione sua configuração abaixo para regularizar sua assinatura via Stripe.")
                     </div>
                 </div>
             </div>
@@ -76,13 +78,13 @@
                 </div>
                 <div>
                     <div style="display: flex; align-items: center; gap: 0.5rem;">
-                        <span style="font-weight: 700; color: var(--cc-ink); font-size: 15px;">Faturamento Seguro Stripe</span>
+                        <span style="font-weight: 700; color: var(--cc-ink); font-size: 15px;">Faturamento Ativo Stripe</span>
                         <span class="font-mono" style="font-size: 11px; padding: 0.15rem 0.5rem; border-radius: 99px; background: #dcfce7; color: #166534; font-weight: 700;">CONECTADO</span>
                     </div>
                     <p style="margin: 0.2rem 0 0 0; font-size: 13px; color: var(--cc-ink-muted);">
                         @if (_profile.CurrentPeriodEndUtc.HasValue)
                         {
-                            <span>Próxima renovação em <strong>@_profile.CurrentPeriodEndUtc.Value.ToLocalTime().ToString("dd/MM/yyyy")</strong>.</span>
+                            <span>Próxima renovação em <strong>@_profile.CurrentPeriodEndUtc.Value.ToLocalTime().ToString("dd/MM/yyyy")</strong> com rateio automático nas atualizações.</span>
                         }
                         else
                         {
@@ -100,411 +102,124 @@
                         <span>Gerenciar Cobrança & Cartões</span>
                     </button>
                 }
-                else
-                {
-                    <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; border-radius: 8px; background: #f1f5f9; color: var(--cc-ink-muted); font-size: 12px; font-weight: 600;" class="font-mono">
-                        <span class="material-symbols-outlined" style="font-size: 16px;">lock</span>
-                        <span>Faturamento Restrito a Administradores</span>
-                    </div>
-                }
-            </div>
-        </div>
-    }
-    else if (_profile != null && _profile.CurrentPeriodEndUtc.HasValue)
-    {
-        var isPeriodExpired = _profile.CurrentPeriodEndUtc.Value < DateTime.UtcNow;
-        var daysRemaining = (int)Math.Ceiling((_profile.CurrentPeriodEndUtc.Value - DateTime.UtcNow).TotalDays);
-
-        <div style="background: @(isPeriodExpired ? "#fff1f2" : "#fefce8"); border: 1px solid @(isPeriodExpired ? "#fecdd3" : "#fef08a"); border-radius: 12px; padding: 1.25rem 1.5rem; margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; box-shadow: var(--cc-shadow);">
-            <div style="display: flex; align-items: center; gap: 1rem;">
-                <div style="width: 44px; height: 44px; border-radius: 10px; background: @(isPeriodExpired ? "#e11d4815" : "#ca8a0415"); color: @(isPeriodExpired ? "#e11d48" : "#ca8a04"); display: flex; align-items: center; justify-content: center;">
-                    <span class="material-symbols-outlined" style="font-size: 26px;">@(isPeriodExpired ? "lock" : "credit_card_off")</span>
-                </div>
-                <div>
-                    <div style="display: flex; align-items: center; gap: 0.5rem;">
-                        <span style="font-weight: 700; color: var(--cc-ink); font-size: 15px;">
-                            @(isPeriodExpired ? "Vigência do Plano Vencida" : "Sem Forma de Pagamento Cadastrada")
-                        </span>
-                        <span class="font-mono" style="font-size: 11px; padding: 0.15rem 0.5rem; border-radius: 99px; background: @(isPeriodExpired ? "#ffe4e6" : "#fef9c3"); color: @(isPeriodExpired ? "#9f1239" : "#854d0e"); font-weight: 700;">
-                            @(isPeriodExpired ? "BLOQUEIO DE ACESSO" : "NENHUM CARTÃO SALVO")
-                        </span>
-                    </div>
-                    <p style="margin: 0.2rem 0 0 0; font-size: 13px; color: var(--cc-ink-muted);">
-                        @if (isPeriodExpired)
-                        {
-                            <span>A data limite de uso expirou em <strong>@_profile.CurrentPeriodEndUtc.Value.ToLocalTime().ToString("dd/MM/yyyy")</strong>. Para reativar o acesso total, selecione um plano abaixo e realize o pagamento seguro via Stripe.</span>
-                        }
-                        else
-                        {
-                            <span>Vencimento em <strong>@_profile.CurrentPeriodEndUtc.Value.ToLocalTime().ToString("dd/MM/yyyy")</strong> (@(daysRemaining > 0 ? $"{daysRemaining} dias restantes" : "último dia")). Não há cartão cadastrado para débito automático. Contrate um plano abaixo para manter seu acesso contínuo.</span>
-                        }
-                    </p>
-                </div>
             </div>
         </div>
     }
 
-    <!-- Usage Limit Indicators (Stitch Mobile component styling) -->
-    <section style="background-color: white; border: 1px solid var(--cc-border); border-radius: 12px; padding: 1.5rem; margin-bottom: 2.5rem; box-shadow: var(--cc-shadow);">
-        <h3 class="font-mono text-[12px] font-bold text-secondary" style="margin: 0 0 1rem 0; text-transform: uppercase; tracking-wider: 0.05em;">Uso Atual das Cotas do Plano</h3>
-        
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem;">
-            
-            <!-- Animals quota indicator -->
-            <div>
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                    <span style="font-size: 14px; font-weight: 600; color: var(--cc-ink);">Animais Cadastrados</span>
-                    <span class="font-mono" style="font-size: 14px; font-weight: bold; color: var(--cc-primary);">@_registeredAnimalsCount / @_maxAnimalsAllowed</span>
-                </div>
-                <div style="width: 100%; bg-color: var(--cc-canvas); background-color: var(--cc-canvas); height: 8px; border-radius: 99px; overflow: hidden; display: flex;">
-                    <div style="width: @(_animalsPercentage)%; height: 100%; background-color: @(_animalsPercentage > 90 ? "#ba1a1a" : "var(--cc-primary-container)"); border-radius: 99px;"></div>
-                </div>
-                @if (_animalsPercentage > 90)
-                {
-                    <p style="margin: 0.25rem 0 0 0; font-size: 11px; color: #ba1a1a; display: flex; align-items: center; gap: 0.25rem;" class="font-mono">
-                        <span class="material-symbols-outlined" style="font-size: 13px;">warning</span> Limite da cota quase atingido!
-                    </p>
-                }
-            </div>
-
-            <!-- Reports quota indicator -->
-            <div>
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                    <span style="font-size: 14px; font-weight: 600; color: var(--cc-ink);">Relatórios Mensais</span>
-                    <span class="font-mono" style="font-size: 14px; font-weight: bold; color: var(--cc-ink);">@_reportsCount / @_maxReportsAllowed</span>
-                </div>
-                <div style="width: 100%; background-color: var(--cc-canvas); height: 8px; border-radius: 99px; overflow: hidden; display: flex;">
-                    <div style="width: @(_reportsPercentage)%; height: 100%; background-color: var(--cc-secondary); border-radius: 99px;"></div>
-                </div>
-            </div>
-
-        </div>
-    </section>
-
-    <!-- Pricing Toggle Switch -->
-    <section style="display: flex; flex-direction: column; align-items: center; gap: 0.75rem; margin-bottom: 2.5rem;">
-        <div style="background-color: var(--cc-canvas); border: 1px solid var(--cc-border); border-radius: 99px; padding: 0.25rem; display: inline-flex;">
-            <button class="font-mono" @onclick="() => SetAnnual(false)"
-                    style="border: none; cursor: pointer; padding: 0.5rem 1.5rem; border-radius: 99px; font-size: 13px; font-weight: bold; transition: all 0.2s;
-                           background-color: @(!_isAnnual ? "var(--cc-primary)" : "transparent");
-                           color: @(!_isAnnual ? "white" : "var(--cc-ink-muted)");">
-                Mensal
-            </button>
-            <button class="font-mono" @onclick="() => SetAnnual(true)"
-                    style="border: none; cursor: pointer; padding: 0.5rem 1.5rem; border-radius: 99px; font-size: 13px; font-weight: bold; transition: all 0.2s;
-                           background-color: @(_isAnnual ? "var(--cc-primary)" : "transparent");
-                           color: @(_isAnnual ? "white" : "var(--cc-ink-muted)");">
-                Anual
-            </button>
-        </div>
-        <span style="background-color: #c5430f; color: white; font-size: 10px; font-weight: bold; padding: 0.25rem 0.75rem; border-radius: 99px; display: inline-flex; align-items: center; gap: 0.25rem;" class="font-mono">
-            <span class="material-symbols-outlined" style="font-size: 12px; font-variation-settings: 'FILL' 1;">auto_awesome</span>
-            ECONOMIZE 15% NO ANUAL
-        </span>
-    </section>
-
-    @if (_isLoadingPlans)
+    @if (_isLoading)
     {
-        <div class="flex items-center justify-center p-12 text-center" style="display: flex; justify-content: center; align-items: center; padding: 3rem; background-color: white; border-radius: 12px; border: 1px solid var(--cc-border); margin-bottom: 3.5rem;">
-            <div class="animate-spin rounded-full h-8 w-8 border-b-2" style="width: 32px; height: 32px; border: 3px solid #e5e7eb; border-top-color: var(--cc-primary); border-radius: 50%;"></div>
-            <span class="ml-3 font-mono text-sm font-semibold" style="margin-left: 0.75rem; color: var(--cc-ink-muted);">Carregando catálogo de planos atualizados do Backoffice...</span>
+        <div style="display: flex; justify-content: center; align-items: center; padding: 4rem 2rem; background-color: white; border-radius: 12px; border: 1px solid var(--cc-border); margin-bottom: 3.5rem;">
+            <div class="animate-spin" style="width: 32px; height: 32px; border: 3px solid #e5e7eb; border-top-color: var(--cc-primary); border-radius: 50%;"></div>
+            <span style="margin-left: 0.75rem; color: var(--cc-ink-muted);" class="font-mono text-sm font-semibold">
+                Carregando catálogo modular e métricas de rebanho...
+            </span>
         </div>
     }
     else
     {
-        <!-- Bento Pricing Cards Matrix (Stitch Desktop Style) -->
-        <section style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 2rem; margin-bottom: 3.5rem; align-items: stretch;">
-            @foreach (var plan in _availablePlans)
+        <!-- SEÇÃO 1: Seletor Interativo de Faixa de Cabeças -->
+        <HeadTierSelector Tiers="@_catalog.HeadTiers"
+                          SelectedTierCode="@_selectedTierCode"
+                          CurrentHeadCount="@_activeHerdCount"
+                          IsAdmin="@_isAdmin"
+                          OnTierSelected="HandleTierSelected" />
+
+        <!-- SEÇÃO 2: Grid de Seleção de Módulos (Self-Service) -->
+        <ModuleSelectionGrid Modules="@_catalog.Modules"
+                             SelectedTierCode="@_selectedTierCode"
+                             IsAnnual="@_isAnnual"
+                             SelectedModuleKeys="@_selectedModuleKeys"
+                             ActiveTenantModules="@_profile?.SubscribedModules"
+                             IsAdmin="@_isAdmin"
+                             OnToggleModule="HandleToggleModule" />
+
+        <!-- SEÇÃO 3: Resumo do Carrinho (Sticky Summary Bar) -->
+        <ModularCartStickyBar Catalog="@_catalog"
+                              SelectedTierCode="@_selectedTierCode"
+                              SelectedModuleKeys="@_selectedModuleKeys"
+                              IsAnnual="@_isAnnual"
+                              ActiveHerdCount="@_activeHerdCount"
+                              HasActiveStripeSubscription="@HasActiveStripeSubscription"
+                              IsAdmin="@_isAdmin"
+                              IsSubmitting="@_isSubmitting"
+                              OnAnnualChanged="HandleAnnualChanged"
+                              OnPrimaryAction="ExecutePrimaryAction"
+                              OnOpenBillingPortal="OpenBillingPortal" />
+
+        <!-- Accordion Comparativo de Funcionalidades dos Módulos -->
+        <section style="background-color: white; border: 1px solid var(--cc-border); border-radius: 12px; overflow: hidden; box-shadow: var(--cc-shadow); margin-top: 3rem; margin-bottom: 3rem;">
+            <button @onclick="ToggleAccordion"
+                    style="width: 100%; background: transparent; border: none; padding: 1.25rem 1.5rem; text-align: left; display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
+                <div>
+                    <h3 style="margin: 0; font-size: 18px; font-weight: bold; color: var(--cc-ink);">Comparativo Detalhado de Módulos</h3>
+                    <p style="margin: 0.2rem 0 0 0; font-size: 13px; color: var(--cc-ink-muted);">Conheça as capacidades específicas e o escopo funcional de cada módulo do catálogo.</p>
+                </div>
+                <span class="material-symbols-outlined text-outline transition-transform duration-300" 
+                      style="transform: rotate(@(_showAccordion ? "180deg" : "0deg"));">
+                    expand_more
+                </span>
+            </button>
+
+            @if (_showAccordion)
             {
-                var isActive = IsActivePlan(plan.PlanId);
-                var isProOrPopular = plan.IsPopular;
-                var currentPrice = GetPrice(plan);
-                var activePlanObj = _availablePlans.FirstOrDefault(p => IsActivePlan(p.PlanId));
-                var isUpgrade = activePlanObj != null && plan.MonthlyPrice > activePlanObj.MonthlyPrice;
-
-                <div style="background-color: white; border: @(isActive ? "2px solid var(--cc-primary)" : (isProOrPopular ? "2px solid var(--cc-primary-container)" : "1px solid var(--cc-border)")); border-radius: 12px; padding: 2rem 1.5rem; display: flex; flex-direction: column; position: relative; box-shadow: var(--cc-shadow); transform: @(isProOrPopular && !isActive ? "scale(1.02)" : "none"); z-index: @(isProOrPopular ? "10" : "1");">
-                    @if (isActive)
-                    {
-                        <div style="position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background-color: var(--cc-primary); color: white; padding: 0.25rem 1rem; border-radius: 99px; font-size: 10px; font-weight: bold; text-transform: uppercase;" class="font-mono">
-                            Plano Ativo
-                        </div>
-                    }
-                    else if (isProOrPopular)
-                    {
-                        <div style="position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background-color: var(--cc-primary-container); color: white; padding: 0.25rem 1rem; border-radius: 99px; font-size: 10px; font-weight: bold; text-transform: uppercase;" class="font-mono">
-                            Mais Popular
-                        </div>
-                    }
-
-                    <div style="margin-bottom: 1.5rem;">
-                        <h3 style="margin: 0 0 0.5rem 0; font-size: 22px; font-weight: bold; color: var(--cc-ink);">@plan.Name</h3>
-                        <p style="margin: 0; font-size: 13px; color: var(--cc-ink-muted); line-height: 1.4;">@plan.Description</p>
-                    </div>
-
-                    <div style="margin-bottom: 2rem;">
-                        @if (currentPrice > 0)
-                        {
-                            <span style="font-size: 32px; font-weight: bold; color: var(--cc-ink);">R$ @currentPrice.ToString("N2")</span>
-                            <span style="font-size: 14px; color: var(--cc-ink-muted);">/mês</span>
-                        }
-                        else
-                        {
-                            <span style="font-size: 32px; font-weight: bold; color: var(--cc-ink);">Consultar</span>
-                        }
-                    </div>
-
-                    <ul style="list-style: none; padding: 0; margin: 0 0 2rem 0; flex: 1; display: flex; flex-direction: column; gap: 0.85rem; font-size: 14px; color: var(--cc-ink);">
-                        <li style="display: flex; align-items: center; gap: 0.5rem; font-weight: 600;">
-                            <span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1; font-size: 18px;">check_circle</span>
-                            @if (plan.HeadCapacityLimit > 0 && plan.HeadCapacityLimit < 999999)
+                <div style="border-top: 1px solid var(--cc-border); overflow-x: auto;">
+                    <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 14px;">
+                        <thead>
+                            <tr style="background-color: var(--cc-canvas); color: var(--cc-ink-muted);" class="font-mono">
+                                <th style="padding: 1rem 1.5rem; font-size: 11px; font-weight: bold; text-transform: uppercase;">Módulo</th>
+                                <th style="padding: 1rem 1.5rem; font-size: 11px; font-weight: bold; text-transform: uppercase;">Tipo</th>
+                                <th style="padding: 1rem 1.5rem; font-size: 11px; font-weight: bold; text-transform: uppercase;">Recursos Incluídos</th>
+                                <th style="padding: 1rem 1.5rem; font-size: 11px; font-weight: bold; text-transform: uppercase; text-align: right;">Preço na Faixa Atual</th>
+                            </tr>
+                        </thead>
+                        <tbody style="color: var(--cc-ink);">
+                            @foreach (var mod in _catalog.Modules.OrderBy(m => m.SortOrder))
                             {
-                                <span>Até @plan.HeadCapacityLimit.ToString("N0") Matrizes / Cabeças</span>
-                            }
-                            else
-                            {
-                                <span>Matrizes Ilimitadas</span>
-                            }
-                        </li>
-                        @if (plan.Features != null && plan.Features.Any())
-                        {
-                            @foreach (var feature in plan.Features.Where(f => f.IsEnabled).Take(4))
-                            {
-                                <li style="display: flex; align-items: center; gap: 0.5rem;">
-                                    <span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1; font-size: 18px;">check_circle</span>
-                                    @feature.Name
-                                </li>
-                            }
-                        }
-                        else
-                        {
-                            @foreach (var module in plan.IncludedModules.Take(4))
-                            {
-                                <li style="display: flex; align-items: center; gap: 0.5rem;">
-                                    <span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1; font-size: 18px;">check_circle</span>
-                                    Módulo @module
-                                </li>
-                            }
-                        }
-                    </ul>
+                                var price = mod.PricesByTier.FirstOrDefault(p => string.Equals(p.TierCode, _selectedTierCode, StringComparison.OrdinalIgnoreCase))
+                                    ?? mod.PricesByTier.FirstOrDefault();
+                                var displayPrice = _isAnnual ? price?.AnnualPriceMonthly : price?.MonthlyPrice;
 
-                    @if (isActive)
-                    {
-                        <button class="cc-btn cc-btn-outline w-full pressed-effect" disabled
-                                style="width: 100%; border: 1px solid var(--cc-primary); border-radius: 8px; padding: 0.75rem; font-weight: bold; background: white; color: var(--cc-primary); cursor: default;">
-                            Plano Atual
-                        </button>
-                    }
-                    else if (!_isAdmin)
-                    {
-                        <button class="cc-btn cc-btn-outline w-full" disabled
-                                title="Apenas administradores da fazenda podem gerenciar planos"
-                                style="width: 100%; border: 1px solid var(--cc-border); border-radius: 8px; padding: 0.75rem; font-weight: bold; background: #f8fafc; color: var(--cc-ink-muted); cursor: not-allowed; display: flex; align-items: center; justify-content: center; gap: 0.4rem;">
-                            <span class="material-symbols-outlined" style="font-size: 16px;">lock</span>
-                            <span>Apenas Administradores</span>
-                        </button>
-                    }
-                    else if (currentPrice == 0)
-                    {
-                        <button class="cc-btn cc-btn-outline w-full pressed-effect" @onclick='() => ChangePlan(plan.PlanId)'
-                                style="width: 100%; border: 1px solid var(--cc-border); border-radius: 8px; padding: 0.75rem; font-weight: bold; background: white; color: var(--cc-ink-muted); cursor: pointer;">
-                            Falar com Consultor
-                        </button>
-                    }
-                    else if (isUpgrade)
-                    {
-                        <button class="cc-btn cc-btn-primary w-full pressed-effect" @onclick='() => ChangePlan(plan.PlanId)'
-                                style="width: 100%; border: none; background-color: var(--cc-primary-container); color: white; border-radius: 8px; padding: 0.75rem; font-weight: bold; cursor: pointer;">
-                            @(HasActiveStripeSubscription ? $"Alterar para {plan.Name} (Portal Stripe)" : $"Fazer Upgrade para {plan.Name}")
-                        </button>
-                    }
-                    else
-                    {
-                        <button class="cc-btn cc-btn-outline w-full pressed-effect" @onclick='() => ChangePlan(plan.PlanId)'
-                                style="width: 100%; border: 1px solid var(--cc-primary); border-radius: 8px; padding: 0.75rem; font-weight: bold; background: white; color: var(--cc-primary); cursor: pointer;">
-                            @(HasActiveStripeSubscription ? $"Alterar para {plan.Name} (Portal Stripe)" : $"Downgrade para {plan.Name}")
-                        </button>
-                    }
+                                <tr style="border-bottom: 1px solid #e2e8f0;">
+                                    <td style="padding: 1rem 1.5rem; font-weight: 700; display: flex; align-items: center; gap: 0.5rem;">
+                                        <span class="material-symbols-outlined" style="color: var(--cc-primary); font-size: 20px;">@mod.IconName</span>
+                                        <span>@mod.Name</span>
+                                    </td>
+                                    <td style="padding: 1rem 1.5rem;">
+                                        @if (mod.IsCore)
+                                        {
+                                            <span class="font-mono" style="font-size: 10px; font-weight: 700; background: #e2e8f0; color: #334155; padding: 0.2rem 0.5rem; border-radius: 4px;">OBRIGATÓRIO</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="font-mono" style="font-size: 10px; font-weight: 700; background: #dcfce7; color: #166534; padding: 0.2rem 0.5rem; border-radius: 4px;">OPCIONAL</span>
+                                        }
+                                    </td>
+                                    <td style="padding: 1rem 1.5rem; color: var(--cc-ink-muted); font-size: 13px;">
+                                        @mod.Description
+                                    </td>
+                                    <td style="padding: 1rem 1.5rem; text-align: right; font-weight: 700;" class="font-mono">
+                                        R$ @((displayPrice ?? 0m).ToString("N2"))/mês
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
                 </div>
             }
         </section>
     }
 
-    <!-- Accordion Matrix for Comparison (Responsive desktop view table) -->
-    <section style="background-color: white; border: 1px solid var(--cc-border); border-radius: 12px; overflow: hidden; box-shadow: var(--cc-shadow); margin-bottom: 3rem;">
-        <button @onclick="ToggleAccordion"
-                style="width: 100%; background: transparent; border: none; padding: 1.25rem 1.5rem; text-align: left; display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
-            <h3 style="margin: 0; font-size: 18px; font-weight: bold; color: var(--cc-ink);">Comparativo de Funcionalidades</h3>
-            <span class="material-symbols-outlined text-outline transition-transform duration-300" 
-                  style="transform: rotate(@(_showAccordion ? "180deg" : "0deg"));">
-                expand_more
-            </span>
-        </button>
-
-        @if (_showAccordion)
-        {
-            <div style="border-top: 1px solid var(--cc-border); overflow-x: auto;">
-                <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 14px;">
-                    <thead>
-                        <tr style="background-color: var(--cc-canvas); color: var(--cc-ink-muted);" class="font-mono">
-                            <th style="padding: 1rem 1.5rem; font-size: 11px; font-weight: bold; text-transform: uppercase;">Recurso</th>
-                            @foreach (var plan in _availablePlans)
-                            {
-                                <th style="padding: 1rem 1.5rem; font-size: 11px; font-weight: bold; text-transform: uppercase; text-align: center;">@plan.Name</th>
-                            }
-                        </tr>
-                    </thead>
-                    <tbody style="color: var(--cc-ink);">
-                        <tr style="border-bottom: 1px solid #e2e8f0;">
-                            <td style="padding: 1rem 1.5rem; font-weight: 600;">Limite de Cabeças / Matrizes</td>
-                            @foreach (var plan in _availablePlans)
-                            {
-                                <td style="padding: 1rem 1.5rem; text-align: center;">
-                                    @(plan.HeadCapacityLimit > 0 && plan.HeadCapacityLimit < 999999 ? plan.HeadCapacityLimit.ToString("N0") : "Ilimitado")
-                                </td>
-                            }
-                        </tr>
-                        <tr style="border-bottom: 1px solid #e2e8f0; background-color: var(--cc-canvas);">
-                            <td style="padding: 1rem 1.5rem; font-weight: 600;">Plantel Bovino, Matrizes & Identificação</td>
-                            @foreach (var plan in _availablePlans)
-                            {
-                                var hasFeature = plan.IncludedModules.Any(m => m.Contains("Cows", StringComparison.OrdinalIgnoreCase) || m.Contains("Breeding", StringComparison.OrdinalIgnoreCase))
-                                    || (plan.Features?.Any(f => (f.Key.Contains("Cows", StringComparison.OrdinalIgnoreCase) || f.Key.Contains("Breeding", StringComparison.OrdinalIgnoreCase)) && f.IsEnabled) ?? false);
-                                <td style="padding: 1rem 1.5rem; text-align: center;">
-                                    @if (hasFeature)
-                                    {
-                                        <span class="material-symbols-outlined" style="color: var(--cc-primary);">check</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="material-symbols-outlined" style="color: #ba1a1a;">close</span>
-                                    }
-                                </td>
-                            }
-                        </tr>
-                        <tr style="border-bottom: 1px solid #e2e8f0;">
-                            <td style="padding: 1rem 1.5rem; font-weight: 600;">Reprodução, IATF & Partos</td>
-                            @foreach (var plan in _availablePlans)
-                            {
-                                var hasFeature = plan.IncludedModules.Any(m => m.Contains("Breeding", StringComparison.OrdinalIgnoreCase) || m.Contains("Calving", StringComparison.OrdinalIgnoreCase))
-                                    || (plan.Features?.Any(f => (f.Key.Contains("Breeding", StringComparison.OrdinalIgnoreCase) || f.Key.Contains("Calving", StringComparison.OrdinalIgnoreCase)) && f.IsEnabled) ?? false);
-                                <td style="padding: 1rem 1.5rem; text-align: center;">
-                                    @if (hasFeature)
-                                    {
-                                        <span class="material-symbols-outlined" style="color: var(--cc-primary);">check</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="material-symbols-outlined" style="color: #ba1a1a;">close</span>
-                                    }
-                                </td>
-                            }
-                        </tr>
-                        <tr style="border-bottom: 1px solid #e2e8f0;">
-                            <td style="padding: 1rem 1.5rem; font-weight: 600;">Manejo, Crescimento & Pesagens</td>
-                            @foreach (var plan in _availablePlans)
-                            {
-                                var hasFeature = plan.IncludedModules.Any(m => m.Contains("Growth", StringComparison.OrdinalIgnoreCase))
-                                    || (plan.Features?.Any(f => f.Key.Contains("Growth", StringComparison.OrdinalIgnoreCase) && f.IsEnabled) ?? false);
-                                <td style="padding: 1rem 1.5rem; text-align: center;">
-                                    @if (hasFeature)
-                                    {
-                                        <span class="material-symbols-outlined" style="color: var(--cc-primary);">check</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="material-symbols-outlined" style="color: #ba1a1a;">close</span>
-                                    }
-                                </td>
-                            }
-                        </tr>
-                        <tr style="border-bottom: 1px solid #e2e8f0; background-color: var(--cc-canvas);">
-                            <td style="padding: 1rem 1.5rem; font-weight: 600;">Sanitário & Vacinação Oficial</td>
-                            @foreach (var plan in _availablePlans)
-                            {
-                                var hasFeature = plan.IncludedModules.Any(m => m.Contains("Sanitary", StringComparison.OrdinalIgnoreCase))
-                                    || (plan.Features?.Any(f => f.Key.Contains("Sanitary", StringComparison.OrdinalIgnoreCase) && f.IsEnabled) ?? false);
-                                <td style="padding: 1rem 1.5rem; text-align: center;">
-                                    @if (hasFeature)
-                                    {
-                                        <span class="material-symbols-outlined" style="color: var(--cc-primary);">check</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="material-symbols-outlined" style="color: #ba1a1a;">close</span>
-                                    }
-                                </td>
-                            }
-                        </tr>
-                        <tr style="border-bottom: 1px solid #e2e8f0;">
-                            <td style="padding: 1rem 1.5rem; font-weight: 600;">Nutrição, Silos & Formulação de Ração</td>
-                            @foreach (var plan in _availablePlans)
-                            {
-                                var hasFeature = plan.IncludedModules.Any(m => m.Contains("Nutrition", StringComparison.OrdinalIgnoreCase))
-                                    || (plan.Features?.Any(f => f.Key.Contains("Nutrition", StringComparison.OrdinalIgnoreCase) && f.IsEnabled) ?? false);
-                                <td style="padding: 1rem 1.5rem; text-align: center;">
-                                    @if (hasFeature)
-                                    {
-                                        <span class="material-symbols-outlined" style="color: var(--cc-primary);">check</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="material-symbols-outlined" style="color: #ba1a1a;">close</span>
-                                    }
-                                </td>
-                            }
-                        </tr>
-                        <tr style="border-bottom: 1px solid #e2e8f0; background-color: var(--cc-canvas);">
-                            <td style="padding: 1rem 1.5rem; font-weight: 600;">Zootecnia Avançada & Análise de Custo por @@</td>
-                            @foreach (var plan in _availablePlans)
-                            {
-                                var hasFeature = plan.IncludedModules.Any(m => m.Contains("Analytics", StringComparison.OrdinalIgnoreCase))
-                                    || (plan.Features?.Any(f => f.Key.Contains("Analytics", StringComparison.OrdinalIgnoreCase) && f.IsEnabled) ?? false);
-                                <td style="padding: 1rem 1.5rem; text-align: center;">
-                                    @if (hasFeature)
-                                    {
-                                        <span class="material-symbols-outlined" style="color: var(--cc-primary);">check</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="material-symbols-outlined" style="color: #ba1a1a;">close</span>
-                                    }
-                                </td>
-                            }
-                        </tr>
-                        <tr style="border-bottom: none;">
-                            <td style="padding: 1rem 1.5rem; font-weight: 600;">Modo Offline PWA no Curral</td>
-                            @foreach (var plan in _availablePlans)
-                            {
-                                var hasFeature = (plan.Features?.Any(f => f.Key.Contains("PwaOfflineMode", StringComparison.OrdinalIgnoreCase) && f.IsEnabled) ?? false)
-                                    || plan.IncludedModules.Any(m => m.Contains("PwaOfflineMode", StringComparison.OrdinalIgnoreCase));
-                                <td style="padding: 1rem 1.5rem; text-align: center;">
-                                    @if (hasFeature)
-                                    {
-                                        <span class="material-symbols-outlined" style="color: var(--cc-primary);">check</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="material-symbols-outlined" style="color: #ba1a1a;">close</span>
-                                    }
-                                </td>
-                            }
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        }
-    </section>
-
+    <!-- Modal de Indisponibilidade ou Falha de Faturamento -->
     @if (_showBillingUnavailableModal)
     {
         <div class="modal-overlay" @onclick="CloseBillingModal" style="position: fixed; inset: 0; background: rgba(15, 23, 42, 0.7); display: flex; align-items: center; justify-content: center; z-index: 1050; padding: 1rem;">
-            <div class="modal-card" @onclick:stopPropagation="true" style="background: white; border-radius: 16px; width: min(480px, 95vw); box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.04); overflow: hidden; border: 1px solid var(--cc-border);">
+            <div class="modal-card" @onclick:stopPropagation="true" style="background: white; border-radius: 16px; width: min(480px, 95vw); box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2); overflow: hidden; border: 1px solid var(--cc-border);">
                 <div style="background: #fef2f2; padding: 1.25rem 1.5rem; display: flex; align-items: center; gap: 0.75rem; border-bottom: 1px solid #fee2e2;">
                     <div style="width: 40px; height: 40px; border-radius: 10px; background: #fee2e2; color: #dc2626; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
                         <span class="material-symbols-outlined" style="font-size: 24px;">lock_clock</span>
                     </div>
                     <div>
-                        <h3 style="margin: 0; font-size: 16px; font-weight: 700; color: #991b1b;">Faturamento Temporariamente Indisponível</h3>
+                        <h3 style="margin: 0; font-size: 16px; font-weight: 700; color: #991b1b;">Faturamento Seguro Stripe</h3>
                         <p style="margin: 0.15rem 0 0; font-size: 12px; color: #b91c1c;">Segurança & Conformidade de Pagamento</p>
                     </div>
                 </div>
@@ -513,7 +228,7 @@
                         @_billingUnavailableReason
                     </p>
                     <div style="background: #f8fafc; border-left: 4px solid var(--cc-primary); border-radius: 4px; padding: 0.75rem 1rem; margin-bottom: 1rem; font-size: 13px; color: var(--cc-ink-muted);">
-                        <strong>Aviso de Segurança:</strong> As alterações de plano na plataforma CriaCerto exigem confirmação pelo Stripe ou autorização expressa documentada pelo Backoffice. Seu plano atual permanece inalterado.
+                        <strong>Aviso de Segurança:</strong> As alterações contratuais e rateios são validados diretamente com o Stripe. Sua configuração atual permanece protegida.
                     </div>
                 </div>
                 <div style="padding: 1rem 1.5rem; background: #f8fafc; border-top: 1px solid var(--cc-border); display: flex; justify-content: flex-end; gap: 0.75rem;">
@@ -543,15 +258,17 @@
 @code {
     private Guid _tenantId = Guid.Empty;
     private TenantProfileModel? _profile;
-    private string _activePlan = "Starter";
     private bool _isAdmin = false;
     private bool _isAnnual = false;
-    private bool _showAccordion = true;
+    private bool _showAccordion = false;
     private bool _isSubmitting = false;
-    private bool _isLoadingPlans = true;
+    private bool _isLoading = true;
     private string? _message;
     private bool _isSuccessMessage;
-    private List<SubscriptionPlanModel> _availablePlans = new();
+    private int _activeHerdCount = 0;
+    private string _selectedTierCode = "TIER_500";
+    private HashSet<string> _selectedModuleKeys = new(StringComparer.OrdinalIgnoreCase) { "Cows" };
+    private ModularSubscriptionCatalogModel _catalog = TenancyApiClient.GetDefaultModularCatalog();
     private bool _showBillingUnavailableModal = false;
     private string _billingUnavailableReason = "O serviço de faturamento seguro no Stripe está temporariamente indisponível.";
 
@@ -561,6 +278,9 @@
     [SupplyParameterFromQuery(Name = "canceled")]
     public bool? StripeCanceled { get; set; }
 
+    [SupplyParameterFromQuery(Name = "addModule")]
+    public string? AddModule { get; set; }
+
     private bool _stripeProcessed = false;
 
     private bool HasActiveStripeSubscription => _profile != null &&
@@ -568,114 +288,137 @@
         (string.Equals(_profile.Status, "Active", StringComparison.OrdinalIgnoreCase) ||
          string.Equals(_profile.Status, "PastDue", StringComparison.OrdinalIgnoreCase));
 
-    private int _registeredAnimalsCount = 0;
-    private int _reportsCount = 0;
-
-    // Usage limits
-    private int _maxAnimalsAllowed
-    {
-        get
-        {
-            var plan = _availablePlans.FirstOrDefault(p => IsActivePlan(p.PlanId));
-            if (plan != null && plan.HeadCapacityLimit > 0)
-            {
-                return plan.HeadCapacityLimit;
-            }
-            var normalized = ModuleLicenseChecker.NormalizePlan(_activePlan);
-            return normalized.Equals("Starter", StringComparison.OrdinalIgnoreCase) ? 500 : 
-                   (normalized.Equals("Pro", StringComparison.OrdinalIgnoreCase) ? 2500 : 99999);
-        }
-    }
-    private int _maxReportsAllowed
-    {
-        get
-        {
-            var normalized = ModuleLicenseChecker.NormalizePlan(_activePlan);
-            return normalized.Equals("Starter", StringComparison.OrdinalIgnoreCase) ? 10 : 
-                   (normalized.Equals("Pro", StringComparison.OrdinalIgnoreCase) ? 50 : 999);
-        }
-    }
-    private int _animalsPercentage => _maxAnimalsAllowed > 0 ? Math.Min(100, (_registeredAnimalsCount * 100) / _maxAnimalsAllowed) : 0;
-    private int _reportsPercentage => _maxReportsAllowed > 0 ? Math.Min(100, (_reportsCount * 100) / _maxReportsAllowed) : 0;
-
     protected override async Task OnInitializedAsync()
     {
         var authState = await AuthStateProvider.GetAuthenticationStateAsync();
         var user = authState.User;
 
-        if (user.Identity?.IsAuthenticated == true)
+        if (user.Identity?.IsAuthenticated != true)
         {
-            var roleClaim = user.FindFirst(ClaimTypes.Role)?.Value 
-                         ?? user.FindFirst("Role")?.Value;
-            _isAdmin = user.IsInRole("Admin") || string.Equals(roleClaim, "Admin", StringComparison.OrdinalIgnoreCase);
+            Navigation.NavigateTo("login");
+            return;
+        }
 
-            var planClaim = user.FindFirst("SubscribedPlan")?.Value;
-            if (!string.IsNullOrEmpty(planClaim))
+        var roleClaim = user.FindFirst(ClaimTypes.Role)?.Value ?? user.FindFirst("Role")?.Value;
+        _isAdmin = user.IsInRole("Admin") || string.Equals(roleClaim, "Admin", StringComparison.OrdinalIgnoreCase);
+
+        var tenantIdClaim = user.FindFirst("TenantId")?.Value;
+        if (Guid.TryParse(tenantIdClaim, out var tenantId))
+        {
+            _tenantId = tenantId;
+
+            // Retorno de checkout com sucesso: renova o token e claims na hora
+            if (StripeSuccess == true && !_stripeProcessed)
             {
-                _activePlan = ModuleLicenseChecker.NormalizePlan(planClaim);
+                _stripeProcessed = true;
+                var refreshedToken = await TenancyApiClient.RefreshTokenAsync(_tenantId);
+                if (!string.IsNullOrEmpty(refreshedToken))
+                {
+                    await AuthStateProvider.MarkUserAsAuthenticated(refreshedToken);
+                    _message = "Assinatura confirmada com sucesso pelo Stripe! Sua faixa de cabeças e módulos já estão atualizados.";
+                    _isSuccessMessage = true;
+                }
+                else
+                {
+                    _message = "Pagamento concluído no Stripe! Suas novas cotas e permissões estão sendo sincronizadas.";
+                    _isSuccessMessage = true;
+                }
+            }
+            else if (StripeCanceled == true && !_stripeProcessed)
+            {
+                _stripeProcessed = true;
+                _message = "A operação de contratação no Stripe foi cancelada. Seu plano atual permanece inalterado.";
+                _isSuccessMessage = false;
             }
 
-            var tenantIdClaim = user.FindFirst("TenantId")?.Value;
-            if (Guid.TryParse(tenantIdClaim, out var tenantId))
+            try
             {
-                _tenantId = tenantId;
+                _isLoading = true;
 
-                // Renovação de Claims e JWT no Retorno do Stripe (Fase 2.3)
-                if (StripeSuccess == true && !_stripeProcessed)
+                // 1. Carrega Perfil do Tenant
+                _profile = await TenancyApiClient.GetTenantProfileAsync(tenantId);
+                if (_profile != null)
                 {
-                    _stripeProcessed = true;
-                    var refreshedToken = await TenancyApiClient.RefreshTokenAsync(_tenantId);
-                    if (!string.IsNullOrEmpty(refreshedToken))
+                    if (!string.IsNullOrWhiteSpace(_profile.HeadTierCode))
                     {
-                        await AuthStateProvider.MarkUserAsAuthenticated(refreshedToken);
-                        _message = "Assinatura confirmada com sucesso pelo Stripe! Seu plano e permissões de acesso foram atualizados.";
-                        _isSuccessMessage = true;
+                        _selectedTierCode = _profile.HeadTierCode;
+                    }
+
+                    if (_profile.SubscribedModules is { Count: > 0 })
+                    {
+                        _selectedModuleKeys = new HashSet<string>(_profile.SubscribedModules, StringComparer.OrdinalIgnoreCase);
                     }
                     else
                     {
-                        _message = "Pagamento concluído no Stripe! Suas novas cotas e permissões estão sendo sincronizadas.";
-                        _isSuccessMessage = true;
+                        // Fallback inicial padrão
+                        _selectedModuleKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Cows", "Breeding" };
+                    }
+                    _selectedModuleKeys.Add("Cows");
+
+                    if (!string.IsNullOrWhiteSpace(AddModule))
+                    {
+                        var canonical = ModuleGuardUpsellCalculator.ResolveCommercialModuleKey(AddModule);
+                        if (!string.IsNullOrWhiteSpace(canonical))
+                        {
+                            _selectedModuleKeys.Add(canonical);
+                            if (string.IsNullOrEmpty(_message))
+                            {
+                                var readableName = ModuleGuardUpsellCalculator.GetReadableModuleName(canonical);
+                                _message = $"Módulo '{readableName}' pré-selecionado no seu carrinho modular.";
+                                _isSuccessMessage = true;
+                            }
+                        }
                     }
                 }
-                else if (StripeCanceled == true && !_stripeProcessed)
+
+                // 2. Carrega Catálogo Modular
+                _catalog = await TenancyApiClient.GetModularCatalogAsync();
+
+                // 3. Carrega Rebanho Ativo (máximo entre matrizes do Breeding e unidades de produção)
+                int cowsCount = 0;
+                try
                 {
-                    _stripeProcessed = true;
-                    _message = "A operação de assinatura no Stripe foi cancelada. Seu plano atual permanece inalterado.";
-                    _isSuccessMessage = false;
+                    var cowsResponse = await PlantelApiClient.ListCowsAsync(search: null, status: null);
+                    if (cowsResponse != null)
+                    {
+                        cowsCount = cowsResponse.TotalCount;
+                    }
+                }
+                catch
+                {
+                    // Fallback
                 }
 
-                _profile = await TenancyApiClient.GetTenantProfileAsync(tenantId);
-                if (_profile != null && !string.IsNullOrEmpty(_profile.SubscribedPlan))
+                int unitsHeadCount = 0;
+                try
                 {
-                    _activePlan = ModuleLicenseChecker.NormalizePlan(_profile.SubscribedPlan);
+                    var units = await TenancyApiClient.GetProductionUnitsAsync(tenantId);
+                    if (units != null)
+                    {
+                        unitsHeadCount = units.Sum(u => u.CurrentHeadCount);
+                    }
                 }
-            }
+                catch
+                {
+                    // Fallback
+                }
 
-            try
-            {
-                _isLoadingPlans = true;
-                _availablePlans = await TenancyApiClient.GetSubscriptionPlansAsync();
-            }
-            catch
-            {
-                _availablePlans = TenancyApiClient.GetFallbackPlans();
+                _activeHerdCount = Math.Max(cowsCount, unitsHeadCount);
+
+                // Auto-ajusta para faixa compatível se a atual for menor que o rebanho ativo
+                var currentSelectedTier = _catalog.HeadTiers.FirstOrDefault(t => string.Equals(t.TierCode, _selectedTierCode, StringComparison.OrdinalIgnoreCase));
+                if (currentSelectedTier != null && _activeHerdCount > currentSelectedTier.MaxHeads)
+                {
+                    var suitableTier = _catalog.HeadTiers.OrderBy(t => t.SortOrder).FirstOrDefault(t => t.MaxHeads >= _activeHerdCount);
+                    if (suitableTier != null)
+                    {
+                        _selectedTierCode = suitableTier.TierCode;
+                    }
+                }
             }
             finally
             {
-                _isLoadingPlans = false;
-            }
-
-            try
-            {
-                var cowsResponse = await PlantelApiClient.ListCowsAsync(search: null, status: null);
-                if (cowsResponse != null)
-                {
-                    _registeredAnimalsCount = cowsResponse.TotalCount;
-                }
-            }
-            catch
-            {
-                // Fallback for offline or client preview
+                _isLoading = false;
             }
         }
         else
@@ -684,9 +427,28 @@
         }
     }
 
-    private void SetAnnual(bool value)
+    private void HandleTierSelected(string tierCode)
     {
-        _isAnnual = value;
+        _selectedTierCode = tierCode;
+    }
+
+    private void HandleToggleModule(string moduleKey)
+    {
+        if (string.Equals(moduleKey, "Cows", StringComparison.OrdinalIgnoreCase)) return; // Cows is mandatory
+
+        if (_selectedModuleKeys.Contains(moduleKey))
+        {
+            _selectedModuleKeys.Remove(moduleKey);
+        }
+        else
+        {
+            _selectedModuleKeys.Add(moduleKey);
+        }
+    }
+
+    private void HandleAnnualChanged(bool isAnnual)
+    {
+        _isAnnual = isAnnual;
     }
 
     private void ToggleAccordion()
@@ -694,85 +456,83 @@
         _showAccordion = !_showAccordion;
     }
 
-    private bool IsActivePlan(string planId)
-    {
-        return string.Equals(
-            ModuleLicenseChecker.NormalizePlan(_activePlan),
-            ModuleLicenseChecker.NormalizePlan(planId),
-            StringComparison.OrdinalIgnoreCase);
-    }
-
-    private decimal GetPrice(SubscriptionPlanModel plan)
-    {
-        return _isAnnual ? plan.AnnualPriceMonthly : plan.MonthlyPrice;
-    }
-
-    private decimal GetPrice(string planName)
-    {
-        var plan = _availablePlans.FirstOrDefault(p => string.Equals(p.PlanId, planName, StringComparison.OrdinalIgnoreCase));
-        if (plan != null)
-        {
-            return _isAnnual ? plan.AnnualPriceMonthly : plan.MonthlyPrice;
-        }
-        return 0;
-    }
-
-    private async Task ChangePlan(string planName)
+    private async Task ExecutePrimaryAction()
     {
         if (!_isAdmin)
         {
-            _message = "Apenas administradores da fazenda possuem permissão para alterar o plano de assinatura.";
+            _message = "Apenas administradores da fazenda possuem permissão para contratar ou alterar planos.";
             _isSuccessMessage = false;
             return;
         }
 
-        if (_isSubmitting || IsActivePlan(planName) || _tenantId == Guid.Empty)
-            return;
-
-        // Prevenção de assinaturas concorrentes / cobrança dupla no Stripe
-        if (HasActiveStripeSubscription)
-        {
-            await OpenBillingPortal();
-            return;
-        }
+        if (_isSubmitting || _tenantId == Guid.Empty) return;
 
         _isSubmitting = true;
         _message = null;
 
         try
         {
-            // Tenta criar checkout seguro com o Stripe
-            var checkoutSession = await TenancyApiClient.CreateSubscriptionCheckoutAsync(
-                _tenantId,
-                planName,
-                _isAnnual ? "annual" : "monthly",
-                Navigation.ToAbsoluteUri("/settings/subscription?success=true").ToString(),
-                Navigation.ToAbsoluteUri("/settings/subscription?canceled=true").ToString());
-
-            if (checkoutSession != null && !string.IsNullOrWhiteSpace(checkoutSession.Url))
+            var modulesList = _selectedModuleKeys.ToList();
+            if (!modulesList.Contains("Cows", StringComparer.OrdinalIgnoreCase))
             {
-                Navigation.NavigateTo(checkoutSession.Url);
-                return;
+                modulesList.Add("Cows");
             }
 
-            // Eliminação do bypass gratuito: notifica indisponibilidade e bloqueia concessão sem pagamento
-            _billingUnavailableReason = "Não foi possível iniciar a sessão de faturamento seguro no Stripe para este plano. O serviço pode estar temporariamente indisponível ou em manutenção. Nenhuma cobrança foi efetuada e seu plano atual permanece inalterado.";
-            _showBillingUnavailableModal = true;
-            _message = "O faturamento online para este plano está temporariamente indisponível. Entre em contato com o suporte para regularizar sua assinatura.";
-            _isSuccessMessage = false;
-        }
-        catch (Exception ex)
-        {
-            if (HasActiveStripeSubscription || ex.Message.Contains("assinatura ativa no Stripe", StringComparison.OrdinalIgnoreCase))
+            if (HasActiveStripeSubscription)
             {
-                _billingUnavailableReason = "Sua fazenda já possui uma assinatura ativa gerenciada com segurança pelo Stripe. Para prevenir cobranças duplicadas e calcular o rateio proporcional automaticamente, a alteração de plano deve ser realizada através do Portal do Stripe.";
+                // Usuário já possui Stripe ativo -> Atualização direta modular com proration
+                var updateRequest = new UpdateModularSubscriptionRequestModel(
+                    _tenantId,
+                    _selectedTierCode,
+                    modulesList,
+                    _isAnnual ? "annual" : "monthly",
+                    AllowGracePeriod: false);
+
+                var updateResult = await TenancyApiClient.UpdateModularSubscriptionAsync(updateRequest);
+                if (updateResult != null)
+                {
+                    if (!string.IsNullOrWhiteSpace(updateResult.Token))
+                    {
+                        await AuthStateProvider.MarkUserAsAuthenticated(updateResult.Token);
+                    }
+
+                    _profile = updateResult.Profile;
+                    _selectedTierCode = updateResult.HeadTierCode;
+                    _selectedModuleKeys = new HashSet<string>(updateResult.SubscribedModules, StringComparer.OrdinalIgnoreCase);
+                    _selectedModuleKeys.Add("Cows");
+
+                    _message = "Assinatura modular atualizada com sucesso! Seus novos módulos e limites de capacidade já estão ativos.";
+                    _isSuccessMessage = true;
+                }
             }
             else
             {
-                _billingUnavailableReason = $"Ocorreu uma falha na integração de pagamentos: {ex.Message}. A alteração direta de planos sem confirmação financeira foi bloqueada.";
+                // Nova contratação / Degustação Trial -> Stripe Checkout multi-item
+                var checkoutSession = await TenancyApiClient.CreateModularCheckoutAsync(
+                    _tenantId,
+                    _selectedTierCode,
+                    modulesList,
+                    _isAnnual ? "annual" : "monthly",
+                    Navigation.ToAbsoluteUri("/settings/subscription?success=true").ToString(),
+                    Navigation.ToAbsoluteUri("/settings/subscription?canceled=true").ToString());
+
+                if (checkoutSession != null && !string.IsNullOrWhiteSpace(checkoutSession.Url))
+                {
+                    Navigation.NavigateTo(checkoutSession.Url);
+                    return;
+                }
+
+                _billingUnavailableReason = "Não foi possível iniciar a sessão de faturamento seguro no Stripe. Nenhuma cobrança foi realizada e sua configuração atual permanece inalterada.";
+                _showBillingUnavailableModal = true;
+                _message = "O faturamento online está temporariamente indisponível. Entre em contato com o suporte.";
+                _isSuccessMessage = false;
             }
+        }
+        catch (Exception ex)
+        {
+            _billingUnavailableReason = $"Ocorreu uma falha no processamento da assinatura: {ex.Message}";
             _showBillingUnavailableModal = true;
-            _message = $"Erro ao conectar ao faturamento seguro: {ex.Message}";
+            _message = $"Erro ao processar assinatura: {ex.Message}";
             _isSuccessMessage = false;
         }
         finally
@@ -785,7 +545,7 @@
     {
         if (!_isAdmin)
         {
-            _message = "Apenas administradores da fazenda possuem permissão para acessar o portal de faturamento Stripe.";
+            _message = "Apenas administradores possuem acesso ao portal de faturamento Stripe.";
             _isSuccessMessage = false;
             return;
         }
@@ -805,18 +565,14 @@
             }
             else
             {
-                _billingUnavailableReason = "Não foi possível abrir o portal de autoatendimento Stripe. Verifique se sua fazenda possui uma assinatura ativa ou contate o suporte.";
+                _billingUnavailableReason = "Não foi possível abrir o portal Stripe. Verifique se sua fazenda possui uma assinatura ativa ou contate o suporte.";
                 _showBillingUnavailableModal = true;
-                _message = "Portal de autoatendimento Stripe indisponível no momento.";
-                _isSuccessMessage = false;
             }
         }
         catch (Exception ex)
         {
             _billingUnavailableReason = $"Erro ao acessar o portal de faturamento: {ex.Message}";
             _showBillingUnavailableModal = true;
-            _message = $"Erro ao abrir portal de cobrança: {ex.Message}";
-            _isSuccessMessage = false;
         }
         finally
         {

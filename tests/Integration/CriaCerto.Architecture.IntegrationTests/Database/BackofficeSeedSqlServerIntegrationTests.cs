@@ -19,17 +19,13 @@ public sealed class BackofficeSeedSqlServerIntegrationTests : IAsyncLifetime
 {
     private MsSqlContainer? _sqlContainer;
     private string _connectionString = string.Empty;
+    private bool _isDockerAvailable;
     private readonly PasswordHasherService _passwordHasher = new();
 
     public async Task InitializeAsync()
     {
-        _sqlContainer = new MsSqlBuilder()
-            .WithImage("mcr.microsoft.com/mssql/server:2022-latest")
-            .WithPassword("Password123!")
-            .Build();
-
-        await _sqlContainer.StartAsync();
-        _connectionString = _sqlContainer.GetConnectionString();
+        (_sqlContainer, _connectionString, _isDockerAvailable) =
+            await MigrationTestSupport.StartSqlServerContainerAsync();
     }
 
     public async Task DisposeAsync()
@@ -43,6 +39,7 @@ public sealed class BackofficeSeedSqlServerIntegrationTests : IAsyncLifetime
     [Fact]
     public async Task MigrateAndSeed_OnEmptyDatabase_PopulatesBackofficeCatalog()
     {
+        if (!_isDockerAvailable) return;
         var foundationOptions = MigrationTestSupport.CreateSqlServerOptions<FoundationDbContext>(
             _connectionString,
             MigrationBaselineMetadata.Foundation.Schema);
@@ -81,11 +78,16 @@ public sealed class BackofficeSeedSqlServerIntegrationTests : IAsyncLifetime
         masterAdmin.Roles.Should().Contain(r => r.Name == BackofficeRoles.PlatformOwner);
         _passwordHasher.VerifyPassword(BackofficeDataSeeder.MasterAdminPassword, masterAdmin.PasswordHash)
             .Should().BeTrue();
+
+        (await backofficeDb.HeadTierCatalogs.CountAsync()).Should().Be(4);
+        (await backofficeDb.ModuleCatalogs.CountAsync()).Should().Be(7);
+        (await backofficeDb.ModuleTierPrices.CountAsync()).Should().Be(28);
     }
 
     [Fact]
     public async Task Seed_IsIdempotent_OnSqlServer()
     {
+        if (!_isDockerAvailable) return;
         var backofficeOptions = MigrationTestSupport.CreateSqlServerOptions<BackofficeDbContext>(
             _connectionString,
             MigrationBaselineMetadata.Backoffice.Schema);
@@ -99,11 +101,15 @@ public sealed class BackofficeSeedSqlServerIntegrationTests : IAsyncLifetime
         (await backofficeDb.Permissions.CountAsync()).Should().Be(BackofficePermissions.AllPermissions.Count);
         (await backofficeDb.AdminRoles.CountAsync()).Should().Be(BackofficeRoles.AllRoles.Count);
         (await backofficeDb.AdminUsers.CountAsync()).Should().Be(1);
+        (await backofficeDb.HeadTierCatalogs.CountAsync()).Should().Be(4);
+        (await backofficeDb.ModuleCatalogs.CountAsync()).Should().Be(7);
+        (await backofficeDb.ModuleTierPrices.CountAsync()).Should().Be(28);
     }
 
     [Fact]
     public async Task Seed_WhenAnotherAdminExists_StillCreatesBootstrapAdmin()
     {
+        if (!_isDockerAvailable) return;
         var backofficeOptions = MigrationTestSupport.CreateSqlServerOptions<BackofficeDbContext>(
             _connectionString,
             MigrationBaselineMetadata.Backoffice.Schema);
@@ -133,6 +139,7 @@ public sealed class BackofficeSeedSqlServerIntegrationTests : IAsyncLifetime
     [Fact]
     public async Task Seed_WhenBootstrapAdminExistsWithoutRole_RepairsPlatformOwnerAssignment()
     {
+        if (!_isDockerAvailable) return;
         var backofficeOptions = MigrationTestSupport.CreateSqlServerOptions<BackofficeDbContext>(
             _connectionString,
             MigrationBaselineMetadata.Backoffice.Schema);
@@ -165,6 +172,7 @@ public sealed class BackofficeSeedSqlServerIntegrationTests : IAsyncLifetime
     [Fact]
     public async Task SeedIamAsync_OnSqlServer_AllowsLoginBeforePlansAreSeeded()
     {
+        if (!_isDockerAvailable) return;
         var backofficeOptions = MigrationTestSupport.CreateSqlServerOptions<BackofficeDbContext>(
             _connectionString,
             MigrationBaselineMetadata.Backoffice.Schema);

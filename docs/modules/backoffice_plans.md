@@ -98,3 +98,75 @@ O catálogo comercial configurado no Backoffice é a fonte única da verdade par
    - Permite seleção de planos com base no catálogo atualizado, preenchendo automaticamente capacidades e valores do período de teste de 30 dias.
 3. **Gestão de Assinatura (`/settings/subscription` - `SubscriptionManagement.razor`):**
    - Apresenta os cards de planos, limites de cabeças e matriz comparativa de funcionalidades dinamicamente conforme os preços e módulos cadastrados no Backoffice.
+
+---
+
+## 7. Catálogo Modular Self-Service e Precificação por Faixas de Cabeças (Fase 1.1)
+
+A partir da migração para **Assinatura Self-Service Modular (À La Carte)**, o `Modules.Backoffice` incorpora três entidades de catálogo comercial desacopladas por faixa de cabeças e módulo:
+
+### 7.1. Entidades do Catálogo Modular
+- **`HeadTierCatalog` (`backoffice.HeadTierCatalogs`):**
+  - Define as faixas comerciais de capacidade de cabeças (`TIER_500`, `TIER_1500`, `TIER_3000`, `TIER_5000_PLUS`).
+  - Atributos: `Id`, `TierCode` (único), `DisplayName`, `MinHeads`, `MaxHeads`, `SortOrder`, `IsActive`.
+- **`ModuleCatalog` (`backoffice.ModuleCatalogs`):**
+  - Define cada módulo comercializável da plataforma (`Cows`, `Breeding`, `Calving`, `Growth`, `Sanitary`, `Nutrition`, `Analytics`).
+  - Atributos: `Id`, `ModuleKey` (único), `Name`, `Description`, `Icon`, `IsCore` (`true` apenas para `Cows` / Plantel Base, protegido contra desativação via `PlanErrors.CannotDeactivateCoreModule`), `IsActive`, `SortOrder`.
+- **`ModuleTierPrice` (`backoffice.ModuleTierPrices`):**
+  - Tabela versionada e imutável relacionando `ModuleCatalog` + `HeadTierCatalog`.
+  - Atributos: `Id`, `ModuleCatalogId`, `HeadTierCatalogId`, `VersionNumber`, `Status` (`Draft`, `Published`, `Deprecated`), `MonthlyPrice`, `AnnualPriceMonthly`, `StripePriceIdMonthly`, `StripePriceIdAnnual`, `PublishedAtUtc`, `PublishedByAdminId`, `ApprovalNotes`.
+  - Impede múltiplos rascunhos simultâneos para o mesmo par `(ModuleCatalogId, HeadTierCatalogId)` e deprecia automaticamente a versão `Published` anterior daquela faixa ao publicar uma nova versão.
+
+### 7.2. Endpoints do Catálogo Modular
+| Operação | Endpoint | Permissão Exigida |
+| :--- | :--- | :--- |
+| **Listar Faixas de Cabeças** | `GET /api/v1/backoffice/catalog/tiers` | `plans.read` |
+| **Criar Faixa de Cabeças** | `POST /api/v1/backoffice/catalog/tiers` | `plans.write` |
+| **Atualizar Faixa de Cabeças** | `PUT /api/v1/backoffice/catalog/tiers/{tierId}` | `plans.write` |
+| **Listar Módulos e Preços por Faixa** | `GET /api/v1/backoffice/catalog/modules` | `plans.read` |
+| **Detalhar Módulo por ID** | `GET /api/v1/backoffice/catalog/modules/{moduleId}` | `plans.read` |
+| **Criar Módulo no Catálogo** | `POST /api/v1/backoffice/catalog/modules` | `plans.write` |
+| **Atualizar Módulo no Catálogo** | `PUT /api/v1/backoffice/catalog/modules/{moduleId}` | `plans.write` |
+| **Criar Rascunho de Preço por Faixa** | `POST /api/v1/backoffice/catalog/modules/{moduleId}/prices` | `plans.write` |
+| **Editar Rascunho de Preço** | `PUT /api/v1/backoffice/catalog/modules/prices/{priceId}` | `plans.write` |
+| **Publicar Versão de Preço por Faixa** | `POST /api/v1/backoffice/catalog/modules/prices/{priceId}/publish` | `plans.publish` (+ flag `backoffice.feature.plan_publishing`) |
+
+### 7.3. Seed Inicial (`BackofficeDataSeeder.SeedModularCatalogAsync`) e Ponte com Tenancy (`BackofficeSubscriptionPlansProvider.GetModularCatalogAsync`)
+Popula de forma idempotente as **4 faixas de cabeças** (`TIER_500`, `TIER_1500`, `TIER_3000`, `TIER_5000_PLUS`), os **7 módulos** (`Cows` base obrigatório + 6 add-ons opcionais) e os **28 preços publicados (`ModuleTierPrice`)** correspondentes à matriz comercial. O serviço `BackofficeSubscriptionPlansProvider` implementa `GetModularCatalogAsync`, projetando as faixas e módulos ativos com seus respectivos preços publicados para consumo público no módulo `Tenancy` (`GET /api/v1/tenancy/catalog`).
+
+---
+
+### 7.4. Gestão Visual da Matriz Modular no Backoffice (`PlanCatalogManagement.razor`)
+A interface do Backoffice centraliza a administração do catálogo em `/backoffice/plans`:
+- **Aba Matriz Modular:** Apresenta a grade 7 Módulos $\times$ 4 Faixas de Cabeças com visualização rápida dos preços mensais e anuais vigentes.
+- **Ciclo de Rascunho e Aprovação:** Permite criar rascunhos de preço (`POST /api/v1/backoffice/catalog/modules/{moduleId}/prices`), editar valores e submeter à publicação sob governança de 4-Eyes (`AdminApprovalRequest`) e feature flag `backoffice.feature.plan_publishing`.
+- **Proteção do Módulo Base (`Cows`):** O módulo base possui a flag `IsCore = true` travada e é blindado contra desativação (`PlanErrors.CannotDeactivateCoreModule`).
+- **Aba de Planos Legados:** Preservada para consulta histórica e suporte a contratos antigos ainda não migrados.
+
+---
+
+### 7.5. Gestão Administrativa de Tenants (`TenantPlanChangeModal.razor` & Sub-fase 5.2)
+Permite que operadores de CS e Administradores da Plataforma ajustem a composição modular de fazendas diretamente pelo Backoffice:
+- **Simulação Reativa (`PreviewTenantPlanChangeQuery`):**
+  - Calcula em tempo real o novo valor mensal, delta de capacidade zootécnica e impacto no rebanho ativo.
+- **Comando de Alteração (`ChangeTenantPlanCommand`):**
+  - Permite alterar a faixa de cabeças (`HeadTierCode`) e habilitar/desabilitar módulos individuais.
+  - O módulo core `"Cows"` permanece compulsoriamente selecionado e desabilitado para desmarcação.
+  - **Ativação de Grace Period (14 dias):** Se a nova faixa tiver capacidade inferior ao rebanho ativo, ativa automaticamente o período de tolerância de 14 dias para adequação da fazenda.
+  - **Justificativa Compulsória:** Exige justificativa detalhada com no mínimo 15 caracteres (`Tenant.JustificationRequired`).
+  - **Auditoria Forense SHA-256:** Registra a alteração no `AuditLog` com severidade `High` (`Action = "TENANT_MODULAR_PLAN_CHANGED"`), salvando `OldValuesJson` e `NewValuesJson` encadeados criptograficamente (`RecordHash`).
+
+---
+
+### 7.6. Desacoplamento do Motor de Descontos de Indicação (`PlanReferralDiscountPolicy`)
+As políticas de recompensa do Programa de Indicação (`Modules.Referral`) foram desacopladas dos códigos fixos legados:
+- **Associação por Faixa de Cabeças:** As políticas agora vinculam descontos ao `HeadTierCode` (ex.: 10% de desconto para faturas de produtores na faixa `TIER_1500`) ou a uma diretriz global (`GLOBAL_DEFAULT`).
+- **Base de Cálculo:** O desconto incide sobre o montante mensal total contratado (`MonthlyTotalAmount`) calculado a partir da soma dos módulos ativos.
+- **Teto Inviolável:** O motor de cálculo (`PlanReferralDiscountPolicy.CalculateDiscount`) limita compulsoriamente o crédito a no máximo 100% da mensalidade, impedindo geração de faturas negativas ou repasses invertidos.
+
+---
+
+### 7.7. Coexistência e Descontinuação de Planos Monolíticos
+1. **Novos Tenants:** Todo onboarding ou auto-cadastro inicia compulsoriamente no modelo modular (degustação em `TIER_500` com módulo base `"Cows"` e módulos comerciais).
+2. **Tenants Ativos Migrados:** Assinaturas legadas foram convertidas via migration SQL idempotente `20261105_migrate_existing_tenants_to_modular.sql` e resolução canônica `LegacyPlanMigrationResolver`.
+3. **Imutabilidade Histórica:** Registros anteriores em `TenantSubscriptionHistories` e faturas Stripe passadas preservam seus identificadores originais para fins contábeis e auditoria fiscal.

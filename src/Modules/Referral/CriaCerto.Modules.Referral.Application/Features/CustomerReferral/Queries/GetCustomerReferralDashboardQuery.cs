@@ -19,13 +19,16 @@ public sealed class GetCustomerReferralDashboardQueryHandler : IRequestHandler<G
     private static readonly CultureInfo PtBrCulture = CultureInfo.GetCultureInfo("pt-BR");
     private readonly IReferralDbContext _dbContext;
     private readonly ITenantInfoLookupService _tenantLookupService;
+    private readonly IReferralDiscountPolicyResolver _policyResolver;
 
     public GetCustomerReferralDashboardQueryHandler(
         IReferralDbContext dbContext,
-        ITenantInfoLookupService tenantLookupService)
+        ITenantInfoLookupService tenantLookupService,
+        IReferralDiscountPolicyResolver? policyResolver = null)
     {
         _dbContext = dbContext;
         _tenantLookupService = tenantLookupService;
+        _policyResolver = policyResolver ?? new ReferralDiscountPolicyResolver();
     }
 
     public async Task<Result<CustomerReferralDashboardDto>> Handle(
@@ -89,26 +92,32 @@ public sealed class GetCustomerReferralDashboardQueryHandler : IRequestHandler<G
         var activeReferralsCount = attributions.Count(a => a.Status == AttributionStatus.Converted);
         var pendingTrialReferralsCount = attributions.Count(a => a.Status == AttributionStatus.Pending);
 
-        // 4. Buscar informações do plano atual do tenant e sua política de desconto
+        // 4. Buscar informações do plano/faixa atual do tenant e sua política de desconto
         var currentTenantInfo = await _tenantLookupService.GetTenantSummaryAsync(request.TenantId, cancellationToken);
+        var headTierCode = currentTenantInfo?.HeadTierCode;
         var planCode = currentTenantInfo?.PlanCode;
         var planName = currentTenantInfo?.PlanName ?? planCode;
 
-        PlanReferralDiscountPolicy? policy = null;
-        if (!string.IsNullOrWhiteSpace(planCode))
+        if (!string.IsNullOrWhiteSpace(headTierCode))
         {
-            policy = await _dbContext.PlanDiscountPolicies
-                .FirstOrDefaultAsync(p => p.PlanCode.ToUpper() == planCode.ToUpper() && p.IsActive, cancellationToken);
+            var tierDisplayName = CriaCerto.Modules.Tenancy.Application.Domain.HeadTierCapacityLimits.GetTierDisplayName(headTierCode);
+            planName = $"Faixa {tierDisplayName} ({headTierCode})";
         }
+
+        var activePolicies = await _dbContext.PlanDiscountPolicies
+            .Where(p => p.IsActive)
+            .ToListAsync(cancellationToken);
+
+        var policy = _policyResolver.Resolve(activePolicies, headTierCode, planCode);
 
         // 5. Calcular o desconto acumulado
         decimal accumulatedDiscount = 0;
         string formattedDiscount = "R$ 0,00";
-        string discountDescription = "Nenhuma política de desconto configurada para o plano atual.";
+        string discountDescription = "Nenhuma política de desconto configurada para o plano ou faixa atual.";
 
         if (policy != null)
         {
-            var basePrice = currentTenantInfo?.PlanBasePrice;
+            var basePrice = currentTenantInfo?.MonthlyTotalAmount ?? currentTenantInfo?.PlanBasePrice;
 
             if (policy.DiscountType == DiscountType.FixedValue)
             {
@@ -136,8 +145,16 @@ public sealed class GetCustomerReferralDashboardQueryHandler : IRequestHandler<G
             else // Percentage
             {
                 var percentage = Math.Min(activeReferralsCount * policy.DiscountValue, Math.Min(policy.MaxDiscountCapPercentage, 100m));
-                accumulatedDiscount = percentage;
-                formattedDiscount = $"{percentage.ToString("N0", PtBrCulture)}%";
+                if (basePrice.HasValue && basePrice.Value > 0)
+                {
+                    accumulatedDiscount = policy.CalculateDiscount(basePrice.Value, activeReferralsCount);
+                    formattedDiscount = $"R$ {accumulatedDiscount.ToString("N2", PtBrCulture)} ({percentage.ToString("N0", PtBrCulture)}%)";
+                }
+                else
+                {
+                    accumulatedDiscount = percentage;
+                    formattedDiscount = $"{percentage.ToString("N0", PtBrCulture)}%";
+                }
                 discountDescription = $"{policy.DiscountValue.ToString("N0", PtBrCulture)}% de desconto na fatura por fazenda ativa (máximo de {Math.Min(policy.MaxDiscountCapPercentage, 100m).ToString("N0", PtBrCulture)}%)";
             }
         }

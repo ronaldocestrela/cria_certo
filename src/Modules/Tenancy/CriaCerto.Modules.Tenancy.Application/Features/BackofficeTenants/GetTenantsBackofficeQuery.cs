@@ -43,7 +43,7 @@ public sealed class GetTenantsBackofficeQueryHandler
         var page = request.Page <= 0 ? 1 : request.Page;
 
         var query = TenantBackofficeQueryBuilder.ApplyFilters(
-            _dbContext.Tenants.AsNoTracking(),
+            _dbContext.Tenants.Include(t => t.SubscribedModules).AsNoTracking(),
             request.SearchTerm,
             request.Status,
             request.SubscribedPlan,

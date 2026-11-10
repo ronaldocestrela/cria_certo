@@ -41,6 +41,7 @@ public class ExistingDatabaseBaselineTests
         tables.Should().NotContain("OperationalTags");
         tables.Should().NotContain("TenantOperationalTags");
         tables.Should().NotContain("TenantSubscriptionHistories");
+        tables.Should().NotContain("TenantSubscribedModules");
 
         // Columns from subsequent migrations must NOT be included in baseline
         var tenantColumns = baselineColumns.Where(c => c.Table == "Tenants").Select(c => c.Column).ToList();
@@ -49,5 +50,6 @@ public class ExistingDatabaseBaselineTests
         tenantColumns.Should().Contain("CNPJ");
         tenantColumns.Should().NotContain("SizeSegment");
         tenantColumns.Should().NotContain("IsBackofficeSuspended");
+        tenantColumns.Should().NotContain("HeadTierCode");
     }
 }

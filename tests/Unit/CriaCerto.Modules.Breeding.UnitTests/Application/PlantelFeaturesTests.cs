@@ -1,7 +1,11 @@
+using System.Reflection;
+using CriaCerto.BuildingBlocks.Abstractions.Licensing;
 using CriaCerto.BuildingBlocks.Abstractions.Results;
+using CriaCerto.BuildingBlocks.Abstractions.Tenancy;
 using CriaCerto.Modules.Breeding.Application.Abstractions;
 using CriaCerto.Modules.Breeding.Application.Contracts;
 using CriaCerto.Modules.Breeding.Application.Domain;
+using CriaCerto.Modules.Breeding.Application.Features.BreedingOps;
 using CriaCerto.Modules.Breeding.Application.Features.Plantel;
 using CriaCerto.Modules.Breeding.Infrastructure.Persistence;
 using FluentAssertions;
@@ -93,6 +97,35 @@ public class PlantelFeaturesTests
     }
 
     [Fact]
+    public async Task CreateCowCommandHandler_WhenActiveHerdReachesTenantHeadCapacity_ShouldReturnHeadCapacityExceededError()
+    {
+        using var dbContext = CreateInMemoryDbContext();
+        var tenantContext = new FakeTenantContext(_tenantId, headCapacity: 2);
+
+        var handler = new CreateCowCommandHandler(dbContext, tenantContext);
+
+        (await handler.Handle(new CreateCowCommand("BR-301", "Nelore", DateTime.UtcNow.AddYears(-2), _tenantId), CancellationToken.None))
+            .IsSuccess.Should().BeTrue();
+        (await handler.Handle(new CreateCowCommand("BR-302", "Nelore", DateTime.UtcNow.AddYears(-2), _tenantId), CancellationToken.None))
+            .IsSuccess.Should().BeTrue();
+
+        var thirdResult = await handler.Handle(new CreateCowCommand("BR-303", "Nelore", DateTime.UtcNow.AddYears(-2), _tenantId), CancellationToken.None);
+
+        thirdResult.IsFailure.Should().BeTrue();
+        thirdResult.Error.Code.Should().Be("License.HeadCapacityExceeded");
+    }
+
+    private sealed class FakeTenantContext(Guid tenantId, int headCapacity) : ITenantContext
+    {
+        public Guid? TenantId { get; } = tenantId;
+        public string? SubscribedPlan => "Starter";
+        public string? HeadTier => "TIER_500";
+        public int HeadCapacity { get; } = headCapacity;
+        public IReadOnlySet<string> SubscribedModules { get; } =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Cows" };
+    }
+
+    [Fact]
     public async Task ListBullsQueryHandler_ShouldReturnOnlyActiveBullsOfTenant()
     {
         using var dbContext = CreateInMemoryDbContext();
@@ -111,5 +144,19 @@ public class PlantelFeaturesTests
         result.IsSuccess.Should().BeTrue();
         result.Value.Should().HaveCount(2);
         result.Value.Select(b => b.EarTag).Should().Contain(new[] { "TOURO-01", "TOURO-02" });
+    }
+
+    [Fact]
+    public void PlantelBaseCommandsAndQueries_ShouldRequireCowsModule_WhileBreedingOpsShouldRequireBreedingModule()
+    {
+        typeof(CreateCowCommand).GetCustomAttribute<RequiresModuleAttribute>()?.ModuleName.Should().Be("Cows");
+        typeof(UpdateCowCommand).GetCustomAttribute<RequiresModuleAttribute>()?.ModuleName.Should().Be("Cows");
+        typeof(GetCowQuery).GetCustomAttribute<RequiresModuleAttribute>()?.ModuleName.Should().Be("Cows");
+        typeof(ListCowsQuery).GetCustomAttribute<RequiresModuleAttribute>()?.ModuleName.Should().Be("Cows");
+        typeof(ListBullsQuery).GetCustomAttribute<RequiresModuleAttribute>()?.ModuleName.Should().Be("Cows");
+
+        typeof(RegisterIatfProtocolCommand).GetCustomAttribute<RequiresModuleAttribute>()?.ModuleName.Should().Be("Breeding");
+        typeof(RegisterPregnancyDiagnosisCommand).GetCustomAttribute<RequiresModuleAttribute>()?.ModuleName.Should().Be("Breeding");
+        typeof(GetIatfProtocolsQuery).GetCustomAttribute<RequiresModuleAttribute>()?.ModuleName.Should().Be("Breeding");
     }
 }

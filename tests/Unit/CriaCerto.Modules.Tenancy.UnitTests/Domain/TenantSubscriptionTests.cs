@@ -109,4 +109,83 @@ public class TenantSubscriptionTests
         subscription.GracePeriodEndsAtUtc.Should().BeNull();
         subscription.PendingPlanVersionId.Should().BeNull();
     }
+
+    [Fact]
+    public void CreateInitialModular_ShouldInitializeWithTierAndEnsureCowsModule()
+    {
+        var tenantId = Guid.NewGuid();
+
+        var result = TenantSubscription.CreateInitialModular(
+            tenantId,
+            "tier_1500",
+            1500,
+            ["Breeding", "Sanitary"]);
+
+        result.IsSuccess.Should().BeTrue();
+        var sub = result.Value;
+        sub.TenantId.Should().Be(tenantId);
+        sub.HeadTierCode.Should().Be("TIER_1500");
+        sub.MaxHeadCapacity.Should().Be(1500);
+        sub.SubscribedModuleKeys.Should().BeEquivalentTo(["Cows", "Breeding", "Sanitary"]);
+        sub.Status.Should().Be(SubscriptionStatus.Active);
+    }
+
+    [Fact]
+    public void ApplyModularChange_WhenUpgrade_ShouldUpdateTierCapacityAndModulesImmediately()
+    {
+        var tenantId = Guid.NewGuid();
+        var sub = TenantSubscription.CreateInitialModular(tenantId, "TIER_500", 500, ["Cows", "Breeding"]).Value;
+
+        var result = sub.ApplyModularChange(
+            targetHeadTierCode: "TIER_1500",
+            targetMaxHeadCapacity: 1500,
+            targetModuleKeys: ["Cows", "Breeding", "Growth", "Nutrition"],
+            currentHeadCount: 420);
+
+        result.IsSuccess.Should().BeTrue();
+        sub.HeadTierCode.Should().Be("TIER_1500");
+        sub.MaxHeadCapacity.Should().Be(1500);
+        sub.SubscribedModuleKeys.Should().BeEquivalentTo(["Cows", "Breeding", "Growth", "Nutrition"]);
+        sub.Status.Should().Be(SubscriptionStatus.Active);
+        sub.PendingHeadTierCode.Should().BeNull();
+    }
+
+    [Fact]
+    public void ApplyModularChange_WhenDowngradeExceedsCurrentHeadCount_ShouldActivate14DayGracePeriod()
+    {
+        var tenantId = Guid.NewGuid();
+        var sub = TenantSubscription.CreateInitialModular(tenantId, "TIER_1500", 1500, ["Cows", "Breeding", "Growth"]).Value;
+
+        var result = sub.ApplyModularChange(
+            targetHeadTierCode: "TIER_500",
+            targetMaxHeadCapacity: 500,
+            targetModuleKeys: ["Cows", "Breeding"],
+            currentHeadCount: 750);
+
+        result.IsSuccess.Should().BeTrue();
+        sub.Status.Should().Be(SubscriptionStatus.GracePeriodActive);
+        sub.HeadTierCode.Should().Be("TIER_1500");
+        sub.MaxHeadCapacity.Should().Be(1500);
+        sub.PendingHeadTierCode.Should().Be("TIER_500");
+        sub.GracePeriodEndsAtUtc.Should().NotBeNull();
+        sub.GracePeriodEndsAtUtc!.Value.Should().BeAfter(DateTime.UtcNow.AddDays(13));
+    }
+
+    [Fact]
+    public void ResolveModularGracePeriod_WhenHeadCountReducedWithinLimit_ShouldFinalizeTierChange()
+    {
+        var tenantId = Guid.NewGuid();
+        var sub = TenantSubscription.CreateInitialModular(tenantId, "TIER_1500", 1500, ["Cows", "Breeding"]).Value;
+
+        sub.ApplyModularChange("TIER_500", 500, ["Cows"], currentHeadCount: 750);
+
+        var resolveResult = sub.ResolveModularGracePeriod(targetMaxHeadCapacity: 500, currentHeadCount: 480);
+
+        resolveResult.IsSuccess.Should().BeTrue();
+        sub.Status.Should().Be(SubscriptionStatus.Active);
+        sub.HeadTierCode.Should().Be("TIER_500");
+        sub.MaxHeadCapacity.Should().Be(500);
+        sub.PendingHeadTierCode.Should().BeNull();
+        sub.GracePeriodEndsAtUtc.Should().BeNull();
+    }
 }

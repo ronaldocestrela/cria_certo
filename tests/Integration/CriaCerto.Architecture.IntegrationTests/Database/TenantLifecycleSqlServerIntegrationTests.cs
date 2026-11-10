@@ -12,16 +12,12 @@ public sealed class TenantLifecycleSqlServerIntegrationTests : IAsyncLifetime
 {
     private MsSqlContainer? _sqlContainer;
     private string _connectionString = string.Empty;
+    private bool _isDockerAvailable;
 
     public async Task InitializeAsync()
     {
-        _sqlContainer = new MsSqlBuilder()
-            .WithImage("mcr.microsoft.com/mssql/server:2022-latest")
-            .WithPassword("Password123!")
-            .Build();
-
-        await _sqlContainer.StartAsync();
-        _connectionString = _sqlContainer.GetConnectionString();
+        (_sqlContainer, _connectionString, _isDockerAvailable) =
+            await MigrationTestSupport.StartSqlServerContainerAsync();
     }
 
     public async Task DisposeAsync()
@@ -35,6 +31,7 @@ public sealed class TenantLifecycleSqlServerIntegrationTests : IAsyncLifetime
     [Fact]
     public async Task SuspendTenantForAdmin_Should_Persist_Status_And_Reason()
     {
+        if (!_isDockerAvailable) return;
         var options = MigrationTestSupport.CreateSqlServerOptions<TenancyDbContext>(
             _connectionString,
             "tenancy");
@@ -80,6 +77,7 @@ public sealed class TenantLifecycleSqlServerIntegrationTests : IAsyncLifetime
     [Fact]
     public async Task SuspendTenantForAdmin_Should_Fail_When_Tenant_Is_Protected()
     {
+        if (!_isDockerAvailable) return;
         var options = MigrationTestSupport.CreateSqlServerOptions<TenancyDbContext>(
             _connectionString,
             "tenancy");

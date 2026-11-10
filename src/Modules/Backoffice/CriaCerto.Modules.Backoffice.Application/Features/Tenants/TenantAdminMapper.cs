@@ -34,7 +34,9 @@ internal static class TenantAdminMapper
             dto.IsProtected,
             dto.CreatedAtUtc,
             dto.CurrentPeriodEndUtc,
-            dto.CancelAtPeriodEnd);
+            dto.CancelAtPeriodEnd,
+            dto.HeadTierCode,
+            dto.SubscribedModules);
 
     public static TenantAdminDetailDto ToDetailDto(TenantBackofficeDetailDto dto, IPiiDataMasker? masker = null) =>
         new(
@@ -70,7 +72,9 @@ internal static class TenantAdminMapper
             dto.CreatedAtUtc,
             dto.UpdatedAtUtc,
             dto.CurrentPeriodEndUtc,
-            dto.CancelAtPeriodEnd);
+            dto.CancelAtPeriodEnd,
+            dto.HeadTierCode,
+            dto.SubscribedModules);
 
     public static PagedTenantAdminResult ToPagedResult(PagedTenantBackofficeResult<TenantBackofficeSummaryDto> result, IPiiDataMasker? masker = null) =>
         new(

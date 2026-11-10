@@ -26,6 +26,7 @@ public sealed class SelectTenantCommandHandler : IRequestHandler<SelectTenantCom
         var user = await _dbContext.Users
             .Include(u => u.UserTenants)
             .ThenInclude(ut => ut.Tenant)
+            .ThenInclude(t => t!.SubscribedModules)
             .FirstOrDefaultAsync(u => u.Id == request.UserId, cancellationToken);
 
         if (user == null)

@@ -1,3 +1,4 @@
+using CriaCerto.BuildingBlocks.Abstractions.Licensing;
 using CriaCerto.BuildingBlocks.Abstractions.Results;
 using CriaCerto.BuildingBlocks.Application.Abstractions.Messaging;
 using CriaCerto.Modules.Growth.Application.Abstractions;
@@ -66,6 +67,7 @@ public sealed record CreatePaddockCommand(
     Guid TenantId,
     PaddockStatus Status = PaddockStatus.Active) : ICommand<PaddockDto>;
 
+[RequiresModule("Cows")]
 public sealed record CreateLotCommand(
     string Name,
     string Code,
@@ -75,12 +77,14 @@ public sealed record CreateLotCommand(
     Guid TenantId,
     Guid? InitialPaddockId = null) : ICommand<LotDto>;
 
+[RequiresModule("Cows")]
 public sealed record MoveLotToPaddockCommand(
     Guid LotId,
     Guid? DestinationPaddockId,
     string Notes,
     Guid TenantId) : ICommand<LotMovementDto>;
 
+[RequiresModule("Cows")]
 public sealed record CloseLotCommand(
     Guid LotId,
     Guid TenantId) : ICommand<LotDto>;
@@ -89,6 +93,7 @@ public sealed record CloseLotCommand(
 public sealed record GetPaddocksWithStockingRateQuery(
     Guid TenantId) : IQuery<List<PaddockStockingRateDto>>;
 
+[RequiresModule("Cows")]
 public sealed record GetLotsQuery(
     Guid TenantId) : IQuery<List<LotDto>>;
 

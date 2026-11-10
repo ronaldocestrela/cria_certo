@@ -167,4 +167,43 @@ public class BackofficeSubscriptionPlansProviderTests : IDisposable
         result.Value.First().MonthlyPrice.Should().Be(250m);
         result.Value.First().Features!.First().Name.Should().Be("Módulo Pesagem Balança");
     }
+
+    [Fact]
+    public async Task GetModularCatalogAsync_WhenSeeded_ShouldReturnActiveHeadTiersAndModulesWithPublishedPrices()
+    {
+        // Arrange
+        await CriaCerto.Modules.Backoffice.Infrastructure.Persistence.Seeders.BackofficeDataSeeder.SeedModularCatalogAsync(_db);
+        await _db.SaveChangesAsync();
+
+        // Act
+        var catalog = await _provider.GetModularCatalogAsync();
+
+        // Assert
+        catalog.Should().NotBeNull();
+        catalog!.HeadTiers.Should().HaveCount(4);
+        catalog.HeadTiers.Select(t => t.TierCode).Should().ContainInOrder("TIER_500", "TIER_1500", "TIER_3000", "TIER_5000_PLUS");
+
+        catalog.Modules.Should().HaveCount(7);
+        var cowsModule = catalog.Modules.Single(m => m.ModuleKey == "Cows");
+        cowsModule.IsCore.Should().BeTrue();
+        cowsModule.PricesByTier.Should().HaveCount(4);
+        cowsModule.PricesByTier.Single(p => p.TierCode == "TIER_500").MonthlyPrice.Should().Be(79m);
+        cowsModule.PricesByTier.Single(p => p.TierCode == "TIER_1500").MonthlyPrice.Should().Be(139m);
+    }
+
+    [Fact]
+    public async Task GetModularSubscriptionCatalogQueryHandler_WhenProviderReturnsNull_ShouldReturnDefaultFallbackMatrix()
+    {
+        // Arrange
+        var handler = new GetSubscriptionPlansQueryHandler(null);
+
+        // Act
+        var result = await handler.Handle(new GetModularSubscriptionCatalogQuery(), CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.Should().BeTrue();
+        result.Value.HeadTiers.Should().HaveCount(4);
+        result.Value.Modules.Should().HaveCount(7);
+        result.Value.Modules.Single(m => m.ModuleKey == "Cows").IsCore.Should().BeTrue();
+    }
 }

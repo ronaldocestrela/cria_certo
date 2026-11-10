@@ -24,6 +24,7 @@ public sealed class GetTenantBackofficeDetailQueryHandler
         CancellationToken cancellationToken)
     {
         var tenant = await _dbContext.Tenants
+            .Include(t => t.SubscribedModules)
             .AsNoTracking()
             .FirstOrDefaultAsync(t => t.Id == request.TenantId, cancellationToken);
 

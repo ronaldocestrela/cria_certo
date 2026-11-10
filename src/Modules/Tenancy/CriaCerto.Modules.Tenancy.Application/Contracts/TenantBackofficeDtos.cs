@@ -21,7 +21,9 @@ public sealed record TenantBackofficeSummaryDto(
     bool IsProtected,
     DateTime CreatedAtUtc,
     DateTime? CurrentPeriodEndUtc = null,
-    bool CancelAtPeriodEnd = false
+    bool CancelAtPeriodEnd = false,
+    string? HeadTierCode = null,
+    IReadOnlyCollection<string>? SubscribedModules = null
 );
 
 public sealed record TenantBackofficeDetailDto(
@@ -57,7 +59,9 @@ public sealed record TenantBackofficeDetailDto(
     DateTime CreatedAtUtc,
     DateTime UpdatedAtUtc,
     DateTime? CurrentPeriodEndUtc = null,
-    bool CancelAtPeriodEnd = false
+    bool CancelAtPeriodEnd = false,
+    string? HeadTierCode = null,
+    IReadOnlyCollection<string>? SubscribedModules = null
 );
 
 public sealed record PagedTenantBackofficeResult<T>(

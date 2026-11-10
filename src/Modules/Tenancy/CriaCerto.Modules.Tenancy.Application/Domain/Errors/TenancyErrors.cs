@@ -100,6 +100,10 @@ public static class TenancyErrors
         "Tenant.ActiveSubscriptionExists",
         "A fazenda já possui uma assinatura ativa no Stripe. Alterações de plano ou ciclo de faturamento devem ser realizadas com segurança através do portal de gerenciamento de faturamento.");
 
+    public static readonly Error NoActiveSubscription = Error.Conflict(
+        "Subscription.NoActiveSubscription",
+        "A fazenda não possui uma assinatura Stripe ativa. Utilize o checkout para iniciar sua assinatura modular.");
+
     public static readonly Error TrialExpired = Error.Unauthorized(
         "Tenant.TrialExpired",
         "O período de testes (Trial) desta organização/fazenda expirou. Por favor, regularize a assinatura para continuar utilizando o Cria Certo.");
@@ -107,4 +111,20 @@ public static class TenancyErrors
     public static readonly Error SubscriptionExpired = Error.Unauthorized(
         "Tenant.SubscriptionExpired",
         "A assinatura desta organização/fazenda está vencida. Por favor, regularize o faturamento para continuar utilizando o Cria Certo.");
+
+    public static readonly Error InvalidHeadTierCode = Error.Validation(
+        "Tenant.InvalidHeadTierCode",
+        "A faixa de capacidade de cabeças informada é inválida.");
+
+    public static readonly Error InvalidModuleKey = Error.Validation(
+        "Tenant.InvalidModuleKey",
+        "Um ou mais módulos informados não pertencem ao catálogo comercial válido.");
+
+    public static readonly Error InvalidSubscribedModuleData = Error.Validation(
+        "Tenant.InvalidSubscribedModuleData",
+        "Os dados de ativação do módulo contratado são inválidos.");
+
+    public static readonly Error HeadCapacityExceededForTier = Error.Validation(
+        "Tenant.HeadCapacityExceededForTier",
+        "A quantidade de cabeças ativas da fazenda excede o limite máximo permitido para a faixa de cabeças selecionada.");
 }

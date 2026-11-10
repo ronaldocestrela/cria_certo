@@ -18,6 +18,7 @@ public sealed class TenancyDbContext : DbContext, ITenancyDbContext
     public DbSet<TeamInvite> TeamInvites => Set<TeamInvite>();
     public DbSet<OperationalTag> OperationalTags => Set<OperationalTag>();
     public DbSet<TenantOperationalTag> TenantOperationalTags => Set<TenantOperationalTag>();
+    public DbSet<TenantSubscribedModule> TenantSubscribedModules => Set<TenantSubscribedModule>();
     public DbSet<TenantSubscriptionHistory> SubscriptionHistories => Set<TenantSubscriptionHistory>();
     public DbSet<StripeWebhookEvent> StripeWebhookEvents => Set<StripeWebhookEvent>();
 
@@ -67,6 +68,8 @@ public sealed class TenancyDbContext : DbContext, ITenancyDbContext
                 .HasFilter("[ExternalIdentifier] IS NOT NULL");
             builder.Property(t => t.Status).HasMaxLength(50).IsRequired();
             builder.Property(t => t.SubscribedPlan).HasMaxLength(50).IsRequired();
+            builder.Property(t => t.HeadTierCode).HasMaxLength(30).IsRequired().HasDefaultValue("TIER_500");
+            builder.HasIndex(t => t.HeadTierCode);
             builder.Property(t => t.State).HasMaxLength(50);
             builder.Property(t => t.City).HasMaxLength(100);
             builder.Property(t => t.StateRegistration).HasMaxLength(50);
@@ -180,6 +183,22 @@ public sealed class TenancyDbContext : DbContext, ITenancyDbContext
             builder.HasOne(ti => ti.Tenant)
                 .WithMany()
                 .HasForeignKey(ti => ti.TenantId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<TenantSubscribedModule>(builder =>
+        {
+            builder.ToTable("TenantSubscribedModules");
+            builder.HasKey(m => m.Id);
+            builder.Property(m => m.ModuleKey).HasMaxLength(50).IsRequired();
+            builder.Property(m => m.StripeSubscriptionItemId).HasMaxLength(100);
+            builder.Property(m => m.MonthlyPriceSnapshot).HasPrecision(18, 2).IsRequired();
+            builder.Property(m => m.ActivatedAtUtc).IsRequired();
+            builder.HasIndex(m => new { m.TenantId, m.ModuleKey }).IsUnique();
+
+            builder.HasOne(m => m.Tenant)
+                .WithMany(t => t.SubscribedModules)
+                .HasForeignKey(m => m.TenantId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

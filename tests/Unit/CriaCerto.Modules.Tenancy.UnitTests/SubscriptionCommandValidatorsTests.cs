@@ -1,5 +1,6 @@
 using CriaCerto.Modules.Tenancy.Application.Features.SubscriptionCheckout;
 using CriaCerto.Modules.Tenancy.Application.Features.SubscriptionPortal;
+using CriaCerto.Modules.Tenancy.Application.Features.UpdateModularSubscription;
 using CriaCerto.Modules.Tenancy.Application.Services;
 using FluentAssertions;
 
@@ -10,6 +11,7 @@ public class SubscriptionCommandValidatorsTests
     private readonly SubscriptionUrlValidator _urlValidator;
     private readonly CreateCheckoutSessionCommandValidator _checkoutValidator;
     private readonly CreatePortalSessionCommandValidator _portalValidator;
+    private readonly UpdateModularSubscriptionCommandValidator _modularUpdateValidator;
 
     public SubscriptionCommandValidatorsTests()
     {
@@ -17,6 +19,7 @@ public class SubscriptionCommandValidatorsTests
         _urlValidator = new SubscriptionUrlValidator(allowedOrigins, "http://localhost:8081");
         _checkoutValidator = new CreateCheckoutSessionCommandValidator(_urlValidator);
         _portalValidator = new CreatePortalSessionCommandValidator(_urlValidator);
+        _modularUpdateValidator = new UpdateModularSubscriptionCommandValidator();
     }
 
     [Fact]
@@ -36,6 +39,53 @@ public class SubscriptionCommandValidatorsTests
     }
 
     [Fact]
+    public void CheckoutValidator_Should_Pass_For_Valid_Modular_Command()
+    {
+        var command = new CreateCheckoutSessionCommand(
+            TenantId: Guid.NewGuid(),
+            UserId: Guid.NewGuid(),
+            HeadTierCode: "TIER_1500",
+            SelectedModules: ["Cows", "Breeding", "Sanitary"],
+            BillingCycle: "monthly"
+        );
+
+        var result = _checkoutValidator.Validate(command);
+        result.IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public void CheckoutValidator_Should_Fail_For_Invalid_Selected_Module()
+    {
+        var command = new CreateCheckoutSessionCommand(
+            TenantId: Guid.NewGuid(),
+            UserId: Guid.NewGuid(),
+            HeadTierCode: "TIER_1500",
+            SelectedModules: ["Cows", "ModuloInvalido"],
+            BillingCycle: "monthly"
+        );
+
+        var result = _checkoutValidator.Validate(command);
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e => e.PropertyName == nameof(CreateCheckoutSessionCommand.SelectedModules));
+    }
+
+    [Fact]
+    public void CheckoutValidator_Should_Fail_When_Both_HeadTierCode_And_PlanId_Are_Empty()
+    {
+        var command = new CreateCheckoutSessionCommand(
+            TenantId: Guid.NewGuid(),
+            UserId: Guid.NewGuid(),
+            HeadTierCode: "",
+            SelectedModules: ["Cows"],
+            BillingCycle: "monthly",
+            PlanId: null
+        );
+
+        var result = _checkoutValidator.Validate(command);
+        result.IsValid.Should().BeFalse();
+    }
+
+    [Fact]
     public void CheckoutValidator_Should_Pass_When_Urls_Are_Null_Or_Relative()
     {
         var command = new CreateCheckoutSessionCommand(
@@ -50,6 +100,7 @@ public class SubscriptionCommandValidatorsTests
         var result = _checkoutValidator.Validate(command);
         result.IsValid.Should().BeTrue();
     }
+
 
     [Theory]
     [InlineData("https://phishing.com/login", null)]
@@ -131,5 +182,111 @@ public class SubscriptionCommandValidatorsTests
 
         var result = validator.Validate(command);
         result.IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ModularUpdateValidator_Should_Pass_For_Valid_Command()
+    {
+        var command = new UpdateModularSubscriptionCommand(
+            TenantId: Guid.NewGuid(),
+            UserId: Guid.NewGuid(),
+            HeadTierCode: "TIER_1500",
+            SelectedModules: ["Cows", "Breeding", "Sanitary"],
+            BillingCycle: "annual",
+            AllowGracePeriod: true
+        );
+
+        var result = _modularUpdateValidator.Validate(command);
+        result.IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ModularUpdateValidator_Should_Pass_When_HeadTierCode_Is_Null_Or_Empty()
+    {
+        var command = new UpdateModularSubscriptionCommand(
+            TenantId: Guid.NewGuid(),
+            UserId: Guid.NewGuid(),
+            HeadTierCode: null,
+            SelectedModules: ["Cows", "Breeding"]
+        );
+
+        var result = _modularUpdateValidator.Validate(command);
+        result.IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ModularUpdateValidator_Should_Fail_When_TenantId_Is_Empty()
+    {
+        var command = new UpdateModularSubscriptionCommand(
+            TenantId: Guid.Empty,
+            UserId: Guid.NewGuid(),
+            HeadTierCode: "TIER_500",
+            SelectedModules: ["Cows"]
+        );
+
+        var result = _modularUpdateValidator.Validate(command);
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e => e.PropertyName == nameof(UpdateModularSubscriptionCommand.TenantId));
+    }
+
+    [Fact]
+    public void ModularUpdateValidator_Should_Fail_When_UserId_Is_Empty()
+    {
+        var command = new UpdateModularSubscriptionCommand(
+            TenantId: Guid.NewGuid(),
+            UserId: Guid.Empty,
+            HeadTierCode: "TIER_500",
+            SelectedModules: ["Cows"]
+        );
+
+        var result = _modularUpdateValidator.Validate(command);
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e => e.PropertyName == nameof(UpdateModularSubscriptionCommand.UserId));
+    }
+
+    [Fact]
+    public void ModularUpdateValidator_Should_Fail_When_HeadTierCode_Is_Invalid()
+    {
+        var command = new UpdateModularSubscriptionCommand(
+            TenantId: Guid.NewGuid(),
+            UserId: Guid.NewGuid(),
+            HeadTierCode: "TIER_INEXISTENTE",
+            SelectedModules: ["Cows"]
+        );
+
+        var result = _modularUpdateValidator.Validate(command);
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e => e.PropertyName == nameof(UpdateModularSubscriptionCommand.HeadTierCode));
+    }
+
+    [Fact]
+    public void ModularUpdateValidator_Should_Fail_When_SelectedModule_Is_Invalid()
+    {
+        var command = new UpdateModularSubscriptionCommand(
+            TenantId: Guid.NewGuid(),
+            UserId: Guid.NewGuid(),
+            HeadTierCode: "TIER_500",
+            SelectedModules: ["Cows", "ModuloInvalido"]
+        );
+
+        var result = _modularUpdateValidator.Validate(command);
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e => e.PropertyName == nameof(UpdateModularSubscriptionCommand.SelectedModules));
+    }
+
+    [Fact]
+    public void ModularUpdateValidator_Should_Fail_When_BillingCycle_Is_Invalid()
+    {
+        var command = new UpdateModularSubscriptionCommand(
+            TenantId: Guid.NewGuid(),
+            UserId: Guid.NewGuid(),
+            HeadTierCode: "TIER_500",
+            SelectedModules: ["Cows"],
+            BillingCycle: "quinzenal"
+        );
+
+        var result = _modularUpdateValidator.Validate(command);
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e => e.PropertyName == nameof(UpdateModularSubscriptionCommand.BillingCycle));
     }
 }

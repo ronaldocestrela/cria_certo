@@ -87,9 +87,17 @@ public static class ReferralErrors
             "PlanReferralDiscountPolicy.PlanCatalogRequired",
             "O identificador do plano no catálogo é obrigatório.");
 
+        public static readonly Error HeadTierCatalogRequired = Error.Validation(
+            "PlanReferralDiscountPolicy.HeadTierCatalogRequired",
+            "O identificador da faixa de cabeças no catálogo é obrigatório.");
+
+        public static readonly Error InvalidHeadTierCode = Error.Validation(
+            "PlanReferralDiscountPolicy.InvalidHeadTierCode",
+            "O código da faixa de cabeças é inválido ou não suportado.");
+
         public static readonly Error NotFound = Error.NotFound(
             "PlanReferralDiscountPolicy.NotFound",
-            "A política de desconto para o plano especificado não foi encontrada.");
+            "A política de desconto para o plano ou faixa especificada não foi encontrada.");
     }
 
     public static class Attribution

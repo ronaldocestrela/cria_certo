@@ -220,6 +220,19 @@ public class ReferralDbContext : DbContext, IReferralDbContext
                 .HasMaxLength(50)
                 .IsRequired();
 
+            builder.Property(p => p.HeadTierCatalogId)
+                .IsRequired(false);
+
+            builder.Property(p => p.HeadTierCode)
+                .HasMaxLength(50)
+                .IsRequired(false);
+
+            builder.Property(p => p.DiscountScope)
+                .HasConversion<string>()
+                .HasMaxLength(30)
+                .IsRequired()
+                .HasDefaultValue(Application.Domain.Enums.DiscountPolicyScope.LegacyPlan);
+
             builder.Property(p => p.DiscountType)
                 .HasConversion<string>()
                 .HasMaxLength(30)
@@ -236,9 +249,12 @@ public class ReferralDbContext : DbContext, IReferralDbContext
 
             builder.Property(p => p.IsActive).IsRequired();
             builder.Property(p => p.CreatedAtUtc).IsRequired();
+            builder.Property(p => p.UpdatedAtUtc).IsRequired(false);
 
             builder.HasIndex(p => p.PlanCatalogId);
             builder.HasIndex(p => p.PlanCode);
+            builder.HasIndex(p => p.HeadTierCode);
+            builder.HasIndex(p => p.DiscountScope);
             builder.HasIndex(p => p.IsActive);
         });
 

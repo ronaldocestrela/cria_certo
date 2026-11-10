@@ -72,3 +72,56 @@ public sealed record PlanVersionComparisonDto(
     decimal PriceDifferenceMonthly,
     decimal PriceDifferenceAnnual
 );
+
+public sealed record HeadTierCatalogDto(
+    Guid Id,
+    string TierCode,
+    string DisplayName,
+    int MinHeads,
+    int MaxHeads,
+    int SortOrder,
+    bool IsActive,
+    DateTimeOffset CreatedAtUtc,
+    DateTimeOffset UpdatedAtUtc
+);
+
+public sealed record ModuleTierPriceDto(
+    Guid Id,
+    Guid ModuleCatalogId,
+    Guid HeadTierCatalogId,
+    string TierCode,
+    int VersionNumber,
+    string Status,
+    decimal MonthlyPrice,
+    decimal AnnualPriceMonthly,
+    string? StripePriceIdMonthly,
+    string? StripePriceIdAnnual,
+    DateTimeOffset? PublishedAtUtc,
+    Guid? PublishedByAdminId,
+    string? ApprovalNotes,
+    DateTimeOffset CreatedAtUtc
+);
+
+public sealed record ModuleCatalogDto(
+    Guid Id,
+    string ModuleKey,
+    string Name,
+    string Description,
+    string Icon,
+    bool IsCore,
+    bool IsActive,
+    int SortOrder,
+    DateTimeOffset CreatedAtUtc,
+    DateTimeOffset UpdatedAtUtc,
+    IReadOnlyList<ModuleTierPriceDto> ActivePrices,
+    IReadOnlyList<ModuleTierPriceDto> DraftPrices,
+    IReadOnlyList<ModuleTierPriceDto> PriceHistory
+);
+
+public sealed record ModuleTierPriceInputDto(
+    Guid HeadTierCatalogId,
+    decimal MonthlyPrice,
+    decimal AnnualPriceMonthly,
+    string? StripePriceIdMonthly = null,
+    string? StripePriceIdAnnual = null
+);

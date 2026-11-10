@@ -1,3 +1,4 @@
+using System.Text.Json;
 using CriaCerto.BuildingBlocks.Abstractions.Results;
 using CriaCerto.Modules.Backoffice.Application.Domain.Entities;
 using CriaCerto.Modules.Backoffice.Application.Features.Tenants.Dtos;
@@ -13,10 +14,14 @@ namespace CriaCerto.Modules.Backoffice.Application.Features.Tenants.Commands;
 
 public sealed record ChangeTenantPlanCommand(
     Guid TenantId,
-    Guid TargetPlanVersionId,
+    Guid? TargetPlanVersionId,
     Guid AdminUserId,
     string Justification,
-    bool ForceImmediate = false
+    bool ForceImmediate = false,
+    string? HeadTierCode = null,
+    IReadOnlyCollection<string>? SubscribedModules = null,
+    string? AdminEmail = null,
+    string? IpAddress = null
 ) : IRequest<Result<ChangeTenantPlanResponseDto>>;
 
 public sealed class ChangeTenantPlanCommandValidator : AbstractValidator<ChangeTenantPlanCommand>
@@ -26,15 +31,25 @@ public sealed class ChangeTenantPlanCommandValidator : AbstractValidator<ChangeT
         RuleFor(x => x.TenantId)
             .NotEmpty().WithMessage("O ID do tenant é obrigatório.");
 
-        RuleFor(x => x.TargetPlanVersionId)
-            .NotEmpty().WithMessage("A versão do plano de destino é obrigatória.");
-
         RuleFor(x => x.AdminUserId)
             .NotEmpty().WithMessage("O ID do administrador é obrigatório.");
 
         RuleFor(x => x.Justification)
             .NotEmpty().WithMessage("A justificativa é obrigatória.")
             .MinimumLength(15).WithMessage("A justificativa deve conter no mínimo 15 caracteres.");
+
+        RuleFor(x => x)
+            .Must(x => (x.TargetPlanVersionId.HasValue && x.TargetPlanVersionId.Value != Guid.Empty)
+                       || !string.IsNullOrWhiteSpace(x.HeadTierCode)
+                       || x.SubscribedModules != null)
+            .WithMessage("É necessário informar uma versão de plano ou uma configuração modular (faixa de cabeças / módulos).");
+
+        When(x => !string.IsNullOrWhiteSpace(x.HeadTierCode), () =>
+        {
+            RuleFor(x => x.HeadTierCode!)
+                .Must(HeadTierCapacityLimits.IsValidHeadTierCode)
+                .WithMessage("A faixa de cabeças informada é inválida.");
+        });
     }
 }
 
@@ -69,16 +84,121 @@ public sealed class ChangeTenantPlanCommandHandler : IRequestHandler<ChangeTenan
     {
         Tenant? tenant = _tenantLookup != null
             ? await _tenantLookup(request.TenantId)
-            : await _tenancyDbContext!.Tenants.FirstOrDefaultAsync(t => t.Id == request.TenantId, cancellationToken);
+            : await _tenancyDbContext!.Tenants
+                .Include(t => t.SubscribedModules)
+                .FirstOrDefaultAsync(t => t.Id == request.TenantId, cancellationToken);
 
         if (tenant is null)
         {
             return Result.Failure<ChangeTenantPlanResponseDto>(TenancyErrors.TenantNotFound);
         }
 
+        // --- Modular Self-Service Flow ---
+        if (!string.IsNullOrWhiteSpace(request.HeadTierCode) || request.SubscribedModules != null)
+        {
+            var targetTierCode = !string.IsNullOrWhiteSpace(request.HeadTierCode)
+                ? HeadTierCapacityLimits.NormalizeHeadTierCode(request.HeadTierCode)
+                : (string.IsNullOrWhiteSpace(tenant.HeadTierCode) ? PlanCapacityLimits.Tier500 : tenant.HeadTierCode);
+
+            int targetCapacity = HeadTierCapacityLimits.GetMaxHeadsForTier(targetTierCode);
+            bool usageExceeds = tenant.Capacity > targetCapacity;
+            bool isGracePeriodActivated = usageExceeds && !request.ForceImmediate;
+
+            DateTime? gracePeriodEnds = isGracePeriodActivated ? DateTime.UtcNow.AddDays(14) : null;
+            string statusText = isGracePeriodActivated ? "GracePeriodActive" : "Active";
+
+            var targetModules = request.SubscribedModules != null
+                ? request.SubscribedModules
+                    .Where(m => !string.IsNullOrWhiteSpace(m))
+                    .Select(m => m.Trim())
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase)
+                : tenant.GetSubscribedModuleKeys().ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            // Core Cows module is strictly mandatory
+            targetModules.Add("Cows");
+
+            if (!isGracePeriodActivated)
+            {
+                tenant.HeadTierCode = targetTierCode;
+                tenant.Capacity = targetCapacity;
+                tenant.SubscribedPlan = $"{targetTierCode} Modular";
+                tenant.UpdatedAtUtc = DateTime.UtcNow;
+                tenant.SetSubscribedModules(targetModules);
+            }
+
+            var actionType = isGracePeriodActivated
+                ? SubscriptionActionType.DowngradeGracePeriodStarted
+                : (usageExceeds ? SubscriptionActionType.DowngradeImmediate : SubscriptionActionType.PlanChanged);
+
+            var history = TenantSubscriptionHistory.Create(
+                tenantId: tenant.Id,
+                previousPlanVersionId: null,
+                newPlanVersionId: Guid.Empty,
+                changedByAdminUserId: request.AdminUserId,
+                justification: request.Justification.Trim(),
+                actionType: actionType,
+                snapshotHeadCount: tenant.Capacity,
+                snapshotUserCount: 1,
+                snapshotUnitCount: tenant.ProductionUnits?.Count ?? 0
+            );
+
+            if (_saveHistory != null)
+            {
+                await _saveHistory(history);
+            }
+            else if (_tenancyDbContext != null)
+            {
+                _tenancyDbContext.SubscriptionHistories.Add(history);
+                await _tenancyDbContext.SaveChangesAsync(cancellationToken);
+            }
+
+            if (_backofficeDbContext != null)
+            {
+                var auditLog = AuditLog.Create(
+                    request.AdminUserId,
+                    request.AdminEmail ?? "admin@criacerto.com.br",
+                    "TENANT_MODULAR_PLAN_CHANGED",
+                    $"Tenant/{tenant.Id}",
+                    request.IpAddress ?? "127.0.0.1",
+                    JsonSerializer.Serialize(new
+                    {
+                        TenantId = tenant.Id,
+                        HeadTierCode = targetTierCode,
+                        HeadCapacity = targetCapacity,
+                        SubscribedModules = targetModules.ToList(),
+                        IsGracePeriodActivated = isGracePeriodActivated,
+                        Justification = request.Justification
+                    })
+                );
+                _backofficeDbContext.Set<AuditLog>().Add(auditLog);
+                await _backofficeDbContext.SaveChangesAsync(cancellationToken);
+            }
+
+            string message = isGracePeriodActivated
+                ? "Grace Period de 14 dias ativado para adequação do uso do tenant aos limites do novo plano modular."
+                : $"Plano modular do tenant alterado com sucesso ({targetTierCode}, {targetModules.Count} módulos).";
+
+            var response = new ChangeTenantPlanResponseDto(
+                TenantId: tenant.Id,
+                AppliedPlanVersionId: Guid.Empty,
+                PlanName: $"{targetTierCode} Modular",
+                SubscriptionStatus: statusText,
+                GracePeriodActivated: isGracePeriodActivated,
+                GracePeriodEndsAtUtc: gracePeriodEnds,
+                Message: message,
+                HeadTierCode: targetTierCode,
+                SubscribedModules: targetModules.ToList(),
+                HeadCapacity: targetCapacity
+            );
+
+            return Result.Success(response);
+        }
+
+        // --- Legacy Plan Version Flow ---
+        var targetPlanVersionId = request.TargetPlanVersionId ?? Guid.Empty;
         PlanVersion? targetVersion = _planVersionLookup != null
-            ? await _planVersionLookup(request.TargetPlanVersionId)
-            : await _backofficeDbContext!.Set<PlanVersion>().FirstOrDefaultAsync(v => v.Id == request.TargetPlanVersionId, cancellationToken);
+            ? await _planVersionLookup(targetPlanVersionId)
+            : await _backofficeDbContext!.Set<PlanVersion>().FirstOrDefaultAsync(v => v.Id == targetPlanVersionId, cancellationToken);
 
         if (targetVersion is null)
         {
@@ -90,13 +210,13 @@ public sealed class ChangeTenantPlanCommandHandler : IRequestHandler<ChangeTenan
             return Result.Failure<ChangeTenantPlanResponseDto>(TenancyErrors.PlanVersionNotPublished);
         }
 
-        bool usageExceeds = tenant.Capacity > targetVersion.HeadCapacityLimit;
-        bool isGracePeriodActivated = usageExceeds && !request.ForceImmediate;
+        bool usageExceedsLegacy = tenant.Capacity > targetVersion.HeadCapacityLimit;
+        bool isGracePeriodActivatedLegacy = usageExceedsLegacy && !request.ForceImmediate;
 
-        DateTime? gracePeriodEnds = isGracePeriodActivated ? DateTime.UtcNow.AddDays(14) : null;
-        string statusText = isGracePeriodActivated ? "GracePeriodActive" : "Active";
+        DateTime? gracePeriodEndsLegacy = isGracePeriodActivatedLegacy ? DateTime.UtcNow.AddDays(14) : null;
+        string statusTextLegacy = isGracePeriodActivatedLegacy ? "GracePeriodActive" : "Active";
 
-        if (!isGracePeriodActivated)
+        if (!isGracePeriodActivatedLegacy)
         {
             string planNameToSet = targetVersion.VersionName;
             if (_backofficeDbContext != null)
@@ -117,17 +237,17 @@ public sealed class ChangeTenantPlanCommandHandler : IRequestHandler<ChangeTenan
             tenant.UpdatedAtUtc = DateTime.UtcNow;
         }
 
-        var actionType = isGracePeriodActivated
+        var actionTypeLegacy = isGracePeriodActivatedLegacy
             ? SubscriptionActionType.DowngradeGracePeriodStarted
-            : (usageExceeds ? SubscriptionActionType.DowngradeImmediate : SubscriptionActionType.Upgrade);
+            : (usageExceedsLegacy ? SubscriptionActionType.DowngradeImmediate : SubscriptionActionType.Upgrade);
 
-        var history = TenantSubscriptionHistory.Create(
+        var historyLegacy = TenantSubscriptionHistory.Create(
             tenantId: tenant.Id,
             previousPlanVersionId: null,
             newPlanVersionId: targetVersion.Id,
             changedByAdminUserId: request.AdminUserId,
             justification: request.Justification.Trim(),
-            actionType: actionType,
+            actionType: actionTypeLegacy,
             snapshotHeadCount: tenant.Capacity,
             snapshotUserCount: 1,
             snapshotUnitCount: tenant.ProductionUnits?.Count ?? 0
@@ -135,28 +255,28 @@ public sealed class ChangeTenantPlanCommandHandler : IRequestHandler<ChangeTenan
 
         if (_saveHistory != null)
         {
-            await _saveHistory(history);
+            await _saveHistory(historyLegacy);
         }
         else if (_tenancyDbContext != null)
         {
-            _tenancyDbContext.SubscriptionHistories.Add(history);
+            _tenancyDbContext.SubscriptionHistories.Add(historyLegacy);
             await _tenancyDbContext.SaveChangesAsync(cancellationToken);
         }
 
-        string message = isGracePeriodActivated
+        string messageLegacy = isGracePeriodActivatedLegacy
             ? "Grace Period de 14 dias ativado para adequação do uso do tenant aos limites do novo plano."
             : $"Plano do tenant alterado com sucesso para {targetVersion.VersionName}.";
 
-        var response = new ChangeTenantPlanResponseDto(
+        var responseLegacy = new ChangeTenantPlanResponseDto(
             TenantId: tenant.Id,
             AppliedPlanVersionId: targetVersion.Id,
             PlanName: targetVersion.VersionName,
-            SubscriptionStatus: statusText,
-            GracePeriodActivated: isGracePeriodActivated,
-            GracePeriodEndsAtUtc: gracePeriodEnds,
-            Message: message
+            SubscriptionStatus: statusTextLegacy,
+            GracePeriodActivated: isGracePeriodActivatedLegacy,
+            GracePeriodEndsAtUtc: gracePeriodEndsLegacy,
+            Message: messageLegacy
         );
 
-        return Result.Success(response);
+        return Result.Success(responseLegacy);
     }
 }

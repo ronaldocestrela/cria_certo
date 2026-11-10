@@ -29,8 +29,10 @@ O módulo `Modules.Tenancy` gerencia as identidades dos usuários, organizaçõe
   - `IsProtected`: `bool` — impede suspensão/cancelamento/arquivamento
   - `StatusReason`: `string?` — última justificativa de transição
   - `StatusChangedAtUtc`: `DateTime?`
-  - `SubscribedPlan`: `string` (Starter, Pro, Enterprise)
-  - `Capacity`: `int` (limite de cabeças; validado via `PlanCapacityLimits`)
+  - `SubscribedPlan`: `string` (Starter, Pro, Enterprise — mantido para compatibilidade durante transição)
+  - `HeadTierCode`: `string` (`TIER_500`, `TIER_1500`, `TIER_3000`, `TIER_5000_PLUS`, padrão `TIER_500` no Trial)
+  - `Capacity`: `int` (limite de cabeças sincronizado com o `MaxHeads` da faixa contratada via `PlanCapacityLimits`)
+  - `SubscribedModules`: `List<TenantSubscribedModule>` — módulos contratados/ativos na assinatura self-service (módulo base `"Cows"` sempre incluído)
   - `TechnicalOwnerName` / `TechnicalOwnerEmail`
   - `CommercialOwnerName` / `CommercialOwnerEmail`
   - `SizeSegment`: `Micro`, `Small`, `Medium`, `Large` (default por `Capacity`)
@@ -38,6 +40,14 @@ O módulo `Modules.Tenancy` gerencia as identidades dos usuários, organizaçõe
   - `ProductiveProfile`: `Corte`, `Leite`, `Misto`, `Cria`, `Recria`, `Engorda`, `Confinamento`
   - `ChurnRisk`: `None`, `Low`, `Medium`, `High`, `Critical`
   - `CreatedAtUtc` / `UpdatedAtUtc`
+
+- **TenantSubscribedModule** (`tenancy.TenantSubscribedModules`): Representa cada módulo ativo na assinatura do tenant.
+  - `Id`: `Guid`
+  - `TenantId`: `Guid` (FK para `Tenants`, índice único composto `(TenantId, ModuleKey)`)
+  - `ModuleKey`: `string` (`Cows`, `Breeding`, `Calving`, `Growth`, `Sanitary`, `Nutrition`, `Analytics`)
+  - `StripeSubscriptionItemId`: `string?` (ID do `SubscriptionItem` correspondente no Stripe)
+  - `ActivatedAtUtc`: `DateTime`
+  - `MonthlyPriceSnapshot`: `decimal(18,2)` (valor mensal vigente no momento da ativação)
 
 - **OperationalTag**: Catálogo de etiquetas operacionais (`Slug` único, `Category`: `Support` | `CustomerSuccess` | `Retention`).
 - **TenantOperationalTag**: Vínculo N:N entre `Tenant` e `OperationalTag`.
@@ -86,9 +96,12 @@ O módulo `Modules.Tenancy` gerencia as identidades dos usuários, organizaçõe
 | `POST` | `/api/auth/register` | Auto-cadastro de novo usuário (Sign-Up) | Não | `201 Created` (`UserDto`) |
 | `POST` | `/api/auth/forgot-password` | Solicitação de código/token para redefinição de senha | Não | `200 OK` (token) |
 | `POST` | `/api/auth/reset-password` | Redefinição de senha com token de verificação | Não | `200 OK` |
-| `POST` | `/api/v1/auth/refresh-token` | Renovação de claims e token JWT para o tenant ativo | Sim | `200 OK` (`RefreshTokenResult`) |
+| `POST` | `/api/v1/auth/refresh-token` | Renovação de claims e token JWT para o tenant ativo (`head_tier`, `head_capacity`, `subscribed_module`, `subscribed_modules`) | Sim | `200 OK` (`RefreshTokenResult`) |
 | `POST` | `/api/v1/tenancy/farms` | Onboarding de fazenda e associação automática de tenant | Não | `201 Created` (`AuthResponse`) |
-| `GET` | `/api/v1/tenancy/plans` | Consulta de planos de assinatura comercial | Não | `200 OK` (`List<SubscriptionPlanDto>`) |
+| `GET` | `/api/v1/tenancy/plans` | Consulta de planos de assinatura comercial (legado/retrocompatibilidade) | Não | `200 OK` (`List<SubscriptionPlanDto>`) |
+| `GET` | `/api/v1/tenancy/catalog` | Consulta do catálogo modular self-service (faixas de cabeças + módulos e preços por faixa) | Não | `200 OK` (`ModularSubscriptionCatalogDto`) |
+| `POST` | `/api/v1/tenancy/subscription/checkout-session` | Criação de sessão de checkout Stripe multi-item modular | Sim | `200 OK` (`CheckoutSessionResponse`) |
+| `POST` | `/api/v1/tenancy/subscription/update-modular` | Alteração self-service de módulos e faixa de cabeças com rateio proporcional | Sim | `200 OK` (`ModularSubscriptionUpdateResult`) |
 
 ### Endpoints Backoffice (`/api/v1/backoffice/tenants`)
 
@@ -150,16 +163,49 @@ Erros: `Tenant.InvalidTransition`, `Tenant.JustificationRequired`, `Tenant.Prote
 - **Regra de Negócio:** Se o e-mail já estiver cadastrado, retorna `Result.Failure(Error.Conflict("User.EmailAlreadyExists", ...))`.
 
 ### 3.2 `CreateTenantCommand`
-- **Contrato:** `CreateTenantCommand(Guid? UserId, string Name, string CNPJ, string State, string City, string StateRegistration, decimal AreaInHectares, string SubscribedPlan = "Starter", int Capacity = 500, string? UserEmail = null)`
-- **Validações (`CreateTenantCommandValidator`):** Nome da fazenda obrigatório (3-150 caracteres), UF com exatamente 2 caracteres, capacidade restrita à faixa de teste de 1 a 500 cabeças (`PlanCapacityLimits.StarterLimit`) e plano restrito exclusivamente ao plano padrão de trial (`Starter`). Tentativas de passar outros planos (`Pro`, `Enterprise`) ou capacidades acima de 500 no onboarding gratuito são rejeitadas preventivamente.
-- **Regra de Negócio:** Cria o `Tenant` forçando o plano padrão de testes (`Starter`), capacidade limitada a até 500 cabeças, status inicial `Trial` (30 dias) e aplica a segmentação padrão via `tenant.ApplyDefaultSegmentation()`. Associa o usuário em `UserTenant` e retorna `AuthResponse` com JWT válido assinado para a fazenda recém-criada.
+- **Contrato:** `CreateTenantCommand(Guid? UserId, string Name, string CNPJ, string State, string City, string StateRegistration, decimal AreaInHectares, string SubscribedPlan = "Starter", int Capacity = 500, string? UserEmail = null, string? ReferralCode = null, string? OriginIpAddress = null, string? UserAgent = null, string HeadTierCode = "TIER_500", IReadOnlyList<string>? SelectedModules = null)`
+- **Validações (`CreateTenantCommandValidator`):** Nome da fazenda obrigatório (3-150 caracteres), UF com exatamente 2 caracteres, capacidade restrita à faixa de teste de 1 a 500 cabeças (`PlanCapacityLimits.StarterLimit`), faixa inicial `TIER_500` e validação dos módulos selecionados contra `PlanCapacityLimits.AllCommercialModules`.
+- **Regra de Negócio:** Cria o `Tenant` com `Status = "Trial"` (30 dias), `HeadTierCode = "TIER_500"` (`Capacity` até 500 cabeças), habilita em degustação todos os 7 módulos comerciais (ou os módulos escolhidos em `SelectedModules`, incluindo obrigatoriamente o módulo base `"Cows"`) na coleção `TenantSubscribedModules` e aplica a segmentação padrão via `tenant.ApplyDefaultSegmentation()`. Associa o usuário em `UserTenant` e retorna `AuthResponse` com JWT válido assinado para a fazenda recém-criada.
 
 ### 3.3 `ForgotPasswordCommand`
 - **Contrato:** `ForgotPasswordCommand(string Email)`
 - **Validações (`ForgotPasswordCommandValidator`):** Formato de e-mail válido.
 - **Regra de Negócio:** Gera token de 6 dígitos numéricos alfanuméricos com validade de 1 hora (`PasswordResetTokenExpiresAt = DateTime.UtcNow.AddHours(1)`). Retorna `Result.Success`.
 
-### 3.5 Comandos Backoffice (via `Modules.Backoffice` → MediatR → `Modules.Tenancy`)
+### 3.4 `ResetPasswordCommand`
+- **Contrato:** `ResetPasswordCommand(string Email, string Token, string NewPassword)`
+- **Validações (`ResetPasswordCommandValidator`):** Valida e-mail, obrigatoriedade do token e senha forte.
+- **Regra de Negócio:** Verifica se o token corresponde ao usuário e se `PasswordResetTokenExpiresAt > DateTime.UtcNow`. Se válido, atualiza o hash da nova senha e limpa o token.
+
+### 3.5 `UpdateModularSubscriptionCommand`
+- **Contrato:** `UpdateModularSubscriptionCommand(string HeadTierCode, IReadOnlyList<string> SelectedModules, bool AllowGracePeriod = false)`
+- **Validações (`UpdateModularSubscriptionCommandValidator`):**
+  - `HeadTierCode` obrigatório e correspondente a uma faixa cadastrada (`TIER_500`, `TIER_1500`, `TIER_3000`, `TIER_5000_PLUS`).
+  - Módulo core `"Cows"` inviolável (inclusão compulsória se omitido).
+  - Todos os módulos validados contra o catálogo de módulos comerciais ativos.
+- **Regra de Negócio:**
+  - Consulta o rebanho ativo através da abstração desacoplada `ITenantActiveHerdCounter`.
+  - Se `activeHerd > MaxHeads` e `!AllowGracePeriod`, bloqueia imediatamente com `Result.Failure(License.HeadCapacityExceeded)`.
+  - Se `AllowGracePeriod = true`, autoriza a transição para `SubscriptionActionType.DowngradeGracePeriodStarted` com status `GracePeriodActive` por 14 dias (`GracePeriodEndUtc = UtcNow.AddDays(14)`).
+  - Executa a atualização atômica no Stripe via `IStripePaymentService.UpdateModularSubscriptionAsync` com `create_prorations` (adicionando/removendo `SubscriptionItems`).
+  - Atualiza a coleção `TenantSubscribedModules`, sincroniza `tenant.Capacity = MaxHeads` e `tenant.HeadTierCode`, registra histórico em `TenantSubscriptionHistories` e gera novo JWT com claims atualizadas (`head_tier`, `head_capacity`, `subscribed_modules`), permitindo que a interface Blazor atualize sem recarregar.
+
+### 3.6 `CreateCheckoutSessionCommand` (Modular)
+- **Contrato:** `CreateCheckoutSessionCommand(string HeadTierCode, IReadOnlyList<string> SelectedModules, string BillingCycle = "Monthly", string? SuccessUrl = null, string? CancelUrl = null)`
+- **Regra de Negócio:**
+  - Valida capacidade inicial contra o rebanho ativo (`ITenantActiveHerdCounter`).
+  - Garante a presença compulsória do módulo base `"Cows"`.
+  - Constrói `SessionLineItemOptions` multi-item no Stripe para a combinação faixa/módulos escolhida com os `PriceIds` correspondentes ao ciclo (mensal ou anual com desconto).
+  - Persiste metadados canônicos na sessão do Stripe (`tenant_id`, `head_tier`, `max_heads`, `subscribed_modules`) para sincronização determinística via webhooks.
+
+### 3.7 `LegacyPlanMigrationResolver` & Conversão de Planos
+- Converte tenants com planos legados fixos para a matriz modular:
+  - `Starter` (e variações comerciais) $\rightarrow$ `HeadTierCode = "TIER_500"`, `Capacity = 500`, Módulos `["Cows", "Breeding", "Calving"]`.
+  - `Pro` $\rightarrow$ `HeadTierCode = "TIER_3000"`, `Capacity = 3000`, Módulos `["Cows", "Breeding", "Calving", "Growth", "Nutrition"]`.
+  - `Enterprise` $\rightarrow$ `HeadTierCode = "TIER_5000_PLUS"`, `Capacity = 10000`, Todos os 7 módulos comerciais ativos.
+- Implementado em `Tenant.MigrateFromLegacyPlan` e executado via migration de banco e script SQL idempotente `20261105_migrate_existing_tenants_to_modular.sql`.
+
+### 3.8 Comandos Backoffice (via `Modules.Backoffice` → MediatR → `Modules.Tenancy`)
 
 - **`CreateTenantForAdminCommand`**: cadastro administrativo sem exigir usuário produtor; provisiona DB do tenant; `OwnerUserEmail` opcional.
 - **`UpdateTenantForAdminCommand`**: atualização cadastral; não altera `Status` nem `SubscribedPlan`.
@@ -170,12 +216,7 @@ Erros: `Tenant.InvalidTransition`, `Tenant.JustificationRequired`, `Tenant.Prote
 
 **Unicidade:** `CnpjNormalized` e `ExternalIdentifier` são validados no onboarding (`CreateTenantCommand`) e no backoffice.
 
-**Limites de plano:** `PlanCapacityLimits` — Starter: 500, Pro: 2500, Enterprise: ilimitado.
-
-### 3.4 `ResetPasswordCommand`
-- **Contrato:** `ResetPasswordCommand(string Email, string Token, string NewPassword)`
-- **Validações (`ResetPasswordCommandValidator`):** Valida e-mail, obrigatoriedade do token e senha forte.
-- **Regra de Negócio:** Verifica se o token corresponde ao usuário e se `PasswordResetTokenExpiresAt > DateTime.UtcNow`. Se válido, atualiza o hash da nova senha e limpa o token.
+**Limites de Capacidade Zootécnica:** `HeadTierCapacityLimits` — `TIER_500`: 500 cabeças, `TIER_1500`: 1.500 cabeças, `TIER_3000`: 3.000 cabeças, `TIER_5000_PLUS`: 10.000 cabeças.
 
 ---
 
@@ -184,19 +225,21 @@ Erros: `Tenant.InvalidTransition`, `Tenant.JustificationRequired`, `Tenant.Prote
 - **`Login.razor` (`/login`):** Tela de login em 2 passos (Credenciais -> Seleção de Fazenda para usuários multi-tenant). Possui links diretos para `/register` e `/forgot-password`.
 - **`Register.razor` (`/register`):** Formulário reativo de auto-cadastro com feedback visual, tratamento de erro do Result Pattern e card de confirmação.
 - **`ForgotPassword.razor` (`/forgot-password`):** Assistente de recuperação em 2 passos (Solicitar código -> Redefinir senha).
-- **`OnboardingWizard.razor` (`/onboarding`):** Assistente de 3 passos para perfil do produtor, dados da fazenda e seleção de plano/capacidade com vinculação direta de tenant.
+- **`OnboardingWizard.razor` (`/onboarding`):** Assistente de boas-vindas com dados da fazenda e degustação modular gratuita de 30 dias na faixa `TIER_500`.
+- **`SubscriptionManagement.razor` (`/settings/subscription`):** Configurador interativo "Monte seu Plano" com seleção de faixa de cabeças (`HeadTierSelector.razor`), grid de módulos add-on (`ModuleSelectionGrid.razor`) e barra fixa de carrinho (`ModularCartStickyBar.razor`) com checkout multi-item ou atualização proporcional imediata.
+- **`ModuleGuard.razor`:** Guardião declarativo com motor de upsell contextual dinâmico (`ModuleGuardUpsellCalculator`) para ativação em 1-clique com proration.
 
 ---
 
 ## 5. Testes Unitários & Integração (`CriaCerto.Modules.Tenancy.UnitTests` & `CriaCerto.Architecture.IntegrationTests`)
 
-- `RegisterUserCommandHandlerTests`: Testes de criação bem-sucedida e rejeição de e-mail duplicado (`Error.Conflict`).
-- `RegisterUserCommandValidatorTests`: Testes de regras de validação cliente/servidor.
-- `CreateTenantCommandHandlerTests`: Testes de criação de fazenda, associação em `UserTenant` e geração de JWT.
-- `CreateTenantCommandValidatorTests`: Testes de validação de dados da fazenda e plano.
-- `ForgotPasswordCommandHandlerTests`: Testes de geração de token e expiração.
-- `ResetPasswordCommandHandlerTests`: Testes de alteração de senha e rejeição de tokens expirados/inválidos.
-- `StripeWebhookIdempotencyTests`: Testes de deduplicação e idempotência de eventos Stripe via tabela dedicada.
-- `StripeWebhookNullKeyAndTenantProtectionTests`: Testes de sanitização de chaves nulas/vazias e salvaguarda de tenants protegidos (`IsProtected`).
-- `OnboardingIntegrationTests`: Teste de integração end-to-end do fluxo Registro -> Onboarding da Fazenda -> Login sem erro `Auth.NoTenantAssociation`.
-- `CommercialPartnerLoginIntegrationTests`: Testes de autenticação de parceiro comercial sem fazenda associada, validação de token de parceiro (`IsPartner = true`, `RedirectUrl = "/partner/portal"`), resolução resiliente de e-mail e auto-reconciliação de parceiros órfãos via `IPartnerRoleLookupService`.
+- `RegisterUserCommandHandlerTests` & `RegisterUserCommandValidatorTests`: Criação de usuários e validação de requisitos de senha/e-mail.
+- `CreateTenantCommandHandlerTests` & `CreateTenantCommandValidatorTests`: Criação de fazenda em Trial com faixa `TIER_500` e inclusão do módulo `"Cows"`.
+- `JwtServiceTests`: Emissão determinística de claims modulares (`head_tier`, `head_capacity`, `subscribed_module` e `subscribed_modules`).
+- `ModularCartCalculationTests`: Testes unitários do motor de precificação `ModularCartCalculator` (mensal/anual, 20% desconto anual, recálculo de custo por cabeça/mês e auto-inclusão de `"Cows"`).
+- `ModularCheckoutAndCapacityTests`: Validação de checkout modular e comando de atualização, rejeição por capacidade excedida e disparo de Grace Period de 14 dias.
+- `HeadTierCapacityValidationTests`: Testes de regras de fronteira de capacidade zootécnica por faixa.
+- `LegacyPlanMigrationTests`: Cobertura de transição canônica de planos legados para a matriz modular com integridade de dados.
+- `StripeWebhookIntegrationTests`: 12 testes de integração cobrindo o ciclo de vida completo de faturamento multi-item (checkout, adições, remoções, upgrades, downgrades e resolução reversa via `PriceIds`).
+- `StripeWebhookIdempotencyTests` & `StripeWebhookNullKeyAndTenantProtectionTests`: Idempotência de eventos e blindagem de tenants protegidos (`IsProtected`).
+- `OnboardingIntegrationTests` & `CommercialPartnerLoginIntegrationTests`: Fluxos integrados de onboarding e login de parceiros comerciais.

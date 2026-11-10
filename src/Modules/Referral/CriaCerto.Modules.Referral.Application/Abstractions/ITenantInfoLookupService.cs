@@ -11,7 +11,11 @@ public record TenantSummaryDto(
     string? TechnicalOwnerEmail = null,
     string? CommercialOwnerEmail = null,
     string? StripeCustomerId = null,
-    decimal? PlanBasePrice = null);
+    decimal? PlanBasePrice = null,
+    string? HeadTierCode = null,
+    int? Capacity = null,
+    IReadOnlyList<string>? SubscribedModules = null,
+    decimal? MonthlyTotalAmount = null);
 
 public record TenantsRetentionMetricsDto(
     double ReferredAverageLifespanDays,
