@@ -1,7 +1,11 @@
 // Caution! Be sure you understand the caveats before publishing an application with
 // offline support. See https://aka.ms/blazor-offline-considerations
 
-self.importScripts("./service-worker-assets.js");
+try {
+  self.importScripts("./service-worker-assets.js");
+} catch (err) {
+  console.warn("[SW Published] Manifesto service-worker-assets.js não disponível neste ambiente:", err);
+}
 
 const CACHE_NAME_PREFIX = "criacerto-offline-cache-";
 const CACHE_NAME = `${CACHE_NAME_PREFIX}${self.assetsManifest?.version || "v2"}`;
