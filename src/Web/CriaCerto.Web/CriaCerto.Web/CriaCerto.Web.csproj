@@ -13,4 +13,9 @@
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="10.0.10" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Remove="wwwroot\icon-192.png;wwwroot\icon-512.png" />
+    <None Include="wwwroot\icon-192.png;wwwroot\icon-512.png" />
+  </ItemGroup>
+
 </Project>
