@@ -25,7 +25,7 @@ O aplicativo CriaCerto opera predominantemente em ambientes rurais (mangueiro, c
      - **Manter Versão do Campo (UseLocal):** Envia flag de sobrescrita (`?force=true`) para forçar atualização no servidor.
      - **Manter Versão do Servidor (UseServer):** Descarta a transação local pendente.
    - O `OfflineSyncService` transmite o `PayloadJson` íntegro via `StringContent(..., Encoding.UTF8, "application/json")` para `POST /api/v1/sync/{moduleName}/{actionType}`.
-   - No backend (`CriaCerto.Api`), o grupo `/api/v1/sync` orquestra comandos CQRS via `ISender` (`RegisterPregnancyDiagnosisCommand`, `RecordInseminationCommand`, `RegisterBreedingBatchCommand`, `RecordWeighingCommand`, `ApplyTreatmentCommand`) respeitando o isolamento modular e retornando HTTP `409 Conflict` quando `result.Error.Type == ErrorType.Conflict` e `force == false`.
+   - No backend (`CriaCerto.Api`), o grupo `/api/v1/sync` é modularizado via `OfflineSyncEndpoints.cs` e orquestra comandos CQRS via `ISender` (`RegisterPregnancyDiagnosisCommand`, `RecordInseminationCommand`, `RegisterBreedingBatchCommand`, `RecordWeighingCommand`, `ApplyTreatmentCommand`) respeitando o isolamento modular e retornando HTTP `409 Conflict` quando `result.Error.Type == ErrorType.Conflict` e `force == false`. Homologado por `OfflineSyncEndpointsIntegrationTests`.
 
 5. **Service Worker (`criacerto-shell-v2`) e Isolamento de Rotas de API:**
    - Configurado `<ServiceWorkerAssetsManifest>service-worker-assets.js</ServiceWorkerAssetsManifest>` em `CriaCerto.Web.Client.csproj` com `service-worker.js` e `service-worker.published.js`.

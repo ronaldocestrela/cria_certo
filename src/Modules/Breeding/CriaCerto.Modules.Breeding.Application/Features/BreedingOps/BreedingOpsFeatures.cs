@@ -146,7 +146,7 @@ public sealed class RegisterPregnancyDiagnosisCommandHandler : IRequestHandler<R
         if (diagResult.IsFailure)
             return Result.Failure<PregnancyDiagnosisDto>(diagResult.Error);
 
-        var cowDiagResult = cow.RecordPregnancyDiagnosis(request.IsPregnant, request.DiagnosisDate);
+        var cowDiagResult = cow.RecordPregnancyDiagnosis(request.IsPregnant, request.DiagnosisDate, request.Force);
         if (cowDiagResult.IsFailure)
             return Result.Failure<PregnancyDiagnosisDto>(cowDiagResult.Error);
 

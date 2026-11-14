@@ -418,19 +418,18 @@ O serviço `OfflineSyncService.cs` (linhas 118 e 184) faz chamadas para:
 Enviando `op.PayloadJson` como corpo da requisição. Atualmente esse grupo de rotas **não existe** em `src/Host/CriaCerto.Api/Program.cs`, resultando em `404 Not Found` toda vez que o usuário clica em `"Sincronizar Agora"` no `SyncStatusHeader.razor` ou quando a conexão é restabelecida.
 
 ### Tarefa 5.1: Corrigir o envio do Payload JSON em `OfflineSyncService.cs`
-- **Arquivo:** `src/Web/CriaCerto.Web/CriaCerto.Web.Client/Services/OfflineSyncService.cs`
-- **Detalhe Técnico Importante:** Nas linhas 118 e 184, `PostAsJsonAsync(..., op.PayloadJson)` serializa uma `string` que já está em formato JSON, gerando uma string JSON duplamente escapada (`"\"{\\\"CowTag\\\":...}\""`).
-- **Subtarefa 5.1.1:** Em `OfflineSyncService.cs` (linhas 118 e 184), enviar o `op.PayloadJson` com `StringContent(op.PayloadJson, Encoding.UTF8, "application/json")` via `_httpClient.PostAsync(...)` para que o JSON chegue íntegro ao endpoint da API (mantendo total compatibilidade com os testes em `OfflineSyncServiceTests.cs` que interceptam `SendAsync` no `HttpMessageHandler`).
+- [x] **Arquivo:** `src/Web/CriaCerto.Web/CriaCerto.Web.Client/Services/OfflineSyncService.cs`
+- [x] **Subtarefa 5.1.1:** Em `OfflineSyncService.cs` (linhas 118 e 184), enviar o `op.PayloadJson` com `StringContent(op.PayloadJson, Encoding.UTF8, "application/json")` via `_httpClient.PostAsync(...)` para que o JSON chegue íntegro ao endpoint da API (mantendo total compatibilidade com os testes em `OfflineSyncServiceTests.cs` que interceptam `SendAsync` no `HttpMessageHandler`).
 
 ### Tarefa 5.2: Mapear o grupo `/api/v1/sync` em `CriaCerto.Api`
-- **Arquivo:** `src/Host/CriaCerto.Api/Program.cs`
-- **Subtarefa 5.2.1:** Criar o grupo autenticado `/api/v1/sync`:
+- [x] **Arquivos:** `src/Host/CriaCerto.Api/Endpoints/OfflineSyncEndpoints.cs` e `src/Host/CriaCerto.Api/Program.cs`
+- [x] **Subtarefa 5.2.1:** Criar o grupo autenticado `/api/v1/sync`:
   ```csharp
   var syncGroup = app.MapGroup("/api/v1/sync")
       .RequireAuthorization()
       .WithTags("OfflineSync");
   ```
-- **Subtarefa 5.2.2:** Mapear o endpoint `POST /api/v1/sync/{moduleName}/{actionType}` (com query param opcional `bool force = false`):
+- [x] **Subtarefa 5.2.2:** Mapear o endpoint `POST /api/v1/sync/{moduleName}/{actionType}` (com query param opcional `bool force = false`) modularizado em `OfflineSyncEndpoints.cs`:
   - Suportar os módulos e ações enfileiradas pelo PWA:
     1. `Breeding` / `RegisterDiagnosis` (ou `RecordInsemination`): desserializar o JSON e despachar `RegisterPregnancyDiagnosisCommand` via `ISender` (ou processar o evento reprodutivo).
     2. `Breeding` / `RegisterBreedingBatch`: processar cada linha do lote (`RegisterBreedingBatchRequest`) atualizando/registrando o evento nas matrizes do tenant autenticado.
@@ -438,6 +437,7 @@ Enviando `op.PayloadJson` como corpo da requisição. Atualmente esse grupo de r
     4. `Sanitary` / `ApplyVaccine` ou `ApplyTreatment`: desserializar para `ApplyTreatmentCommand` e enviar via `ISender`.
   - Caso o resultado de domínio indique conflito de estado e `force == false`, retornar `Results.Conflict(new { Error = result.Error.Code, Message = result.Error.Message })` (status HTTP `409 Conflict`), permitindo que o `ConflictResolutionModal.razor` exiba a divergência para mediação do usuário.
   - Caso a combinação `moduleName`/`actionType` não seja reconhecida, retornar `Results.BadRequest(new { Error = "Sync.UnsupportedAction", Message = $"Ação '{moduleName}/{actionType}' não suportada." })`.
+  - Homologado por 10 testes de integração em `OfflineSyncEndpointsIntegrationTests.cs` e 35 testes unitários em `BreedingOpsFeaturesTests.cs`.
 
 ---
 
