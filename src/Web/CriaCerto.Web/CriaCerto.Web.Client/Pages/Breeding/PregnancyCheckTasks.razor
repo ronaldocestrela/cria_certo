@@ -99,12 +99,17 @@
 
     private void HandleSyncStateChanged()
     {
+        ApplySyncStateFromService();
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private void ApplySyncStateFromService()
+    {
         _isOnline = SyncService.IsOnline;
         _pendingCount = SyncService.PendingCount;
         _offlineMessage = _pendingCount > 0
             ? $"Modo Offline - {_pendingCount} operação(ões) pendente(s)"
             : "Modo Offline - Sincronização pendente";
-        _ = InvokeAsync(StateHasChanged);
     }
 
     public void Dispose()
@@ -162,9 +167,14 @@
             if (_isOnline)
             {
                 var response = await BreedingOps.RegisterDiagnosisAsync(request);
-                if (response is null)
+                if (response is not true)
                 {
                     _feedback = $"Falha ao registrar diagnóstico de {task.TagId}.";
+                }
+                else if (!SyncService.IsOnline)
+                {
+                    _tasks.RemoveAll(t => t.SowId == task.SowId);
+                    _feedback = $"{task.TagId} salvo offline para sincronização.";
                 }
                 else
                 {
@@ -174,9 +184,16 @@
             }
             else
             {
-                await BreedingOps.EnqueueDiagnosisAsync(request);
-                _tasks.RemoveAll(t => t.SowId == task.SowId);
-                _feedback = $"{task.TagId} salvo offline para sincronização.";
+                var enqueued = await BreedingOps.EnqueueDiagnosisAsync(request);
+                if (enqueued)
+                {
+                    _tasks.RemoveAll(t => t.SowId == task.SowId);
+                    _feedback = $"{task.TagId} salvo offline para sincronização.";
+                }
+                else
+                {
+                    _feedback = $"Falha ao salvar diagnóstico offline de {task.TagId}.";
+                }
             }
 
             await RefreshSyncStateAsync();
@@ -189,24 +206,7 @@
 
     private async Task SyncPendingAsync()
     {
-        var synced = await BreedingOps.SyncPendingOpsAsync(async (type, payload) =>
-        {
-            if (type == "breedingBatch")
-            {
-                var request = System.Text.Json.JsonSerializer.Deserialize<RegisterBreedingBatchRequest>(payload);
-                if (request is null) return false;
-                return await BreedingOps.RegisterBreedingBatchAsync(request) is not null;
-            }
-
-            if (type == "diagnosis")
-            {
-                var request = System.Text.Json.JsonSerializer.Deserialize<RegisterPregnancyDiagnosisRequest>(payload);
-                if (request is null) return false;
-                return await BreedingOps.RegisterDiagnosisAsync(request) is not null;
-            }
-
-            return false;
-        });
+        var synced = await BreedingOps.SyncPendingOpsAsync();
 
         if (synced > 0)
         {
