@@ -91,8 +91,10 @@ public sealed class BreedingOpsApiClient
         catch (HttpRequestException)
         {
             _offlineSyncService.SetNetworkStatus(false);
-            await EnqueueBreedingBatchAsync(request);
-            return new RegisterBreedingBatchResponse(new List<BreedingEventDto>(), request.Lines.Count);
+            var enqueued = await EnqueueBreedingBatchAsync(request);
+            return enqueued
+                ? new RegisterBreedingBatchResponse(new List<BreedingEventDto>(), request.Lines.Count)
+                : null;
         }
     }
 
