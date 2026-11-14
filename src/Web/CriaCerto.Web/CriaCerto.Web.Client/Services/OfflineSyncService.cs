@@ -115,7 +115,8 @@ public sealed class OfflineSyncService : IOfflineSyncService
 
                 try
                 {
-                    var response = await _httpClient.PostAsJsonAsync($"api/v1/sync/{op.ModuleName}/{op.ActionType}", op.PayloadJson);
+                    using var content = new StringContent(op.PayloadJson, System.Text.Encoding.UTF8, "application/json");
+                    var response = await _httpClient.PostAsync($"api/v1/sync/{op.ModuleName}/{op.ActionType}", content);
 
                     if (response.IsSuccessStatusCode)
                     {
@@ -181,7 +182,8 @@ public sealed class OfflineSyncService : IOfflineSyncService
         {
             await AttachTokenAsync();
             // Força a substituição no servidor
-            var response = await _httpClient.PostAsJsonAsync($"api/v1/sync/{op.ModuleName}/{op.ActionType}?force=true", op.PayloadJson);
+            using var content = new StringContent(op.PayloadJson, System.Text.Encoding.UTF8, "application/json");
+            var response = await _httpClient.PostAsync($"api/v1/sync/{op.ModuleName}/{op.ActionType}?force=true", content);
             if (response.IsSuccessStatusCode)
             {
                 _pendingOperations.Remove(op);

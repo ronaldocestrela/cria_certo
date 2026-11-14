@@ -4,7 +4,10 @@
 @using CriaCerto.Web.Client.Components.Plantel
 @using CriaCerto.Web.Client.Components.Breeding
 @using CriaCerto.Web.Client.Models
+@using CriaCerto.Web.Client.Services
+@implements IDisposable
 @inject CriaCerto.Web.Client.Services.BreedingOpsApiClient BreedingOps
+@inject IOfflineSyncService SyncService
 
 <PageTitle>Cria Certo - Diagnóstico de Gestação</PageTitle>
 
@@ -89,8 +92,24 @@
 
     protected override async Task OnInitializedAsync()
     {
+        SyncService.OnStateChanged += HandleSyncStateChanged;
         await SyncPendingAsync();
         await LoadTasksAsync();
+    }
+
+    private void HandleSyncStateChanged()
+    {
+        _isOnline = SyncService.IsOnline;
+        _pendingCount = SyncService.PendingCount;
+        _offlineMessage = _pendingCount > 0
+            ? $"Modo Offline - {_pendingCount} operação(ões) pendente(s)"
+            : "Modo Offline - Sincronização pendente";
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        SyncService.OnStateChanged -= HandleSyncStateChanged;
     }
 
     private async Task LoadTasksAsync()

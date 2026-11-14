@@ -9,11 +9,16 @@ public sealed class BreedingOpsApiClient
 {
     private readonly HttpClient _httpClient;
     private readonly IJSRuntime _jsRuntime;
+    private readonly IOfflineSyncService _offlineSyncService;
 
-    public BreedingOpsApiClient(HttpClient httpClient, IJSRuntime jsRuntime)
+    public BreedingOpsApiClient(
+        HttpClient httpClient,
+        IJSRuntime jsRuntime,
+        IOfflineSyncService offlineSyncService)
     {
         _httpClient = httpClient;
         _jsRuntime = jsRuntime;
+        _offlineSyncService = offlineSyncService;
     }
 
     public async Task<List<IatfProtocolDto>> GetIatfProtocolsAsync(Guid tenantId, CancellationToken cancellationToken = default)
@@ -50,39 +55,76 @@ public sealed class BreedingOpsApiClient
     public async Task<bool?> RegisterDiagnosisAsync(RegisterPregnancyDiagnosisRequest request, CancellationToken cancellationToken = default)
     {
         await AttachTokenAsync();
-        var response = await _httpClient.PostAsJsonAsync("api/breeding/diagnoses", request, cancellationToken);
-        return response.IsSuccessStatusCode;
+        try
+        {
+            var response = await _httpClient.PostAsJsonAsync("api/breeding/diagnoses", request, cancellationToken);
+            return response.IsSuccessStatusCode;
+        }
+        catch (HttpRequestException)
+        {
+            _offlineSyncService.SetNetworkStatus(false);
+            var enqueued = await EnqueueDiagnosisAsync(request);
+            return enqueued ? true : null;
+        }
     }
 
     public async Task<bool> EnqueueDiagnosisAsync(RegisterPregnancyDiagnosisRequest request)
     {
-        return true;
+        await _offlineSyncService.InitializeAsync();
+        var result = await _offlineSyncService.EnqueueOperationAsync("Breeding", "RegisterDiagnosis", request);
+        return result.IsSuccess;
     }
 
     public async Task<RegisterBreedingBatchResponse?> RegisterBreedingBatchAsync(RegisterBreedingBatchRequest request, CancellationToken cancellationToken = default)
     {
         await AttachTokenAsync();
-        return new RegisterBreedingBatchResponse(new List<BreedingEventDto>(), request.Lines.Count);
+        try
+        {
+            var response = await _httpClient.PostAsJsonAsync("api/v1/sync/Breeding/RegisterBreedingBatch", request, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                return null;
+            }
+
+            return new RegisterBreedingBatchResponse(new List<BreedingEventDto>(), request.Lines.Count);
+        }
+        catch (HttpRequestException)
+        {
+            _offlineSyncService.SetNetworkStatus(false);
+            await EnqueueBreedingBatchAsync(request);
+            return new RegisterBreedingBatchResponse(new List<BreedingEventDto>(), request.Lines.Count);
+        }
     }
 
     public async Task<bool> EnqueueBreedingBatchAsync(RegisterBreedingBatchRequest request)
     {
-        return true;
+        await _offlineSyncService.InitializeAsync();
+        var result = await _offlineSyncService.EnqueueOperationAsync("Breeding", "RegisterBreedingBatch", request);
+        return result.IsSuccess;
     }
 
-    public async Task<int> SyncPendingOpsAsync(Func<string, string, Task<bool>> handler)
+    public async Task<int> SyncPendingOpsAsync(Func<string, string, Task<bool>>? handler = null)
     {
-        return 0;
+        await _offlineSyncService.InitializeAsync();
+        if (!_offlineSyncService.IsOnline || _offlineSyncService.PendingCount == 0)
+            return 0;
+
+        var beforeCount = _offlineSyncService.PendingCount;
+        await _offlineSyncService.ForceSyncAsync();
+        var afterCount = _offlineSyncService.PendingCount;
+        return Math.Max(0, beforeCount - afterCount);
     }
 
     public async Task<bool> IsOnlineAsync()
     {
-        return true;
+        await _offlineSyncService.InitializeAsync();
+        return _offlineSyncService.IsOnline;
     }
 
     public async Task<int> GetPendingOpsCountAsync()
     {
-        return 0;
+        await _offlineSyncService.InitializeAsync();
+        return _offlineSyncService.PendingCount;
     }
 
     private async Task AttachTokenAsync()

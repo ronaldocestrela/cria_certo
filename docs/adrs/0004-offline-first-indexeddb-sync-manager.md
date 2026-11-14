@@ -20,11 +20,18 @@ O aplicativo CriaCerto opera predominantemente em ambientes rurais (mangueiro, c
    - Componente global `SyncStatusHeader.razor` integrado ao `MainLayout.razor` exibindo badge reativo de estado (`Online`/`Offline`), contador de pendências e botão de forçar sincronização.
    - Componente `ConflictResolutionModal.razor` para exibição e comparação lado a lado de dados locais vs servidor quando a API responder com `409 Conflict` ou `Result.Failure(Error.Conflict)`.
 
-4. **Estratégia de Mediação de Conflitos:**
+4. **Estratégia de Mediação de Conflitos e Endpoint de Sincronização (`/api/v1/sync`):**
    - O operador/zootecnista tem opção de escolher entre:
-     - **Manter Versão do Campo (UseLocal):** Envia flag de sobrescrita para forçar atualização no servidor.
+     - **Manter Versão do Campo (UseLocal):** Envia flag de sobrescrita (`?force=true`) para forçar atualização no servidor.
      - **Manter Versão do Servidor (UseServer):** Descarta a transação local pendente.
+   - O `OfflineSyncService` transmite o `PayloadJson` íntegro via `StringContent(..., Encoding.UTF8, "application/json")` para `POST /api/v1/sync/{moduleName}/{actionType}`.
+   - No backend (`CriaCerto.Api`), o grupo `/api/v1/sync` orquestra comandos CQRS via `ISender` (`RegisterPregnancyDiagnosisCommand`, `RecordInseminationCommand`, `RegisterBreedingBatchCommand`, `RecordWeighingCommand`, `ApplyTreatmentCommand`) respeitando o isolamento modular e retornando HTTP `409 Conflict` quando `result.Error.Type == ErrorType.Conflict` e `force == false`.
+
+5. **Service Worker (`criacerto-shell-v2`) e Isolamento de Rotas de API:**
+   - Configurado `<ServiceWorkerAssetsManifest>service-worker-assets.js</ServiceWorkerAssetsManifest>` em `CriaCerto.Web.Client.csproj` com `service-worker.js` e `service-worker.published.js`.
+   - Ativação imediata via `self.skipWaiting()` e `self.clients.claim()`.
+   - Bypass estrito de requisições `/api/*`, `/health` e origens externas no listener `fetch`, garantindo que quedas de rede em chamadas de API lancem `HttpRequestException` limpa no cliente C# (acionando o fallback automático do `BreedingOpsApiClient` / `IOfflineSyncService`) sem retornar HTML (`offline.html`) no lugar de JSON.
 
 ## Consequências
-* **Positivas:** Operação 100% resiliente em campo, feedback visual em tempo real no cabeçalho da aplicação, eliminação de perda de dados e resolução graciosa de conflitos.
-* **Mitigações:** Suíte de testes unitários criada em `CriaCerto.Web.Client.UnitTests` validando enfileiramento, disparo e mediação.
+* **Positivas:** Operação 100% resiliente em campo, instalabilidade PWA completa (manifesto `pt-BR`, ícones `192x192` e `512x512`, meta tags iOS/Android e fallback `offline.html` em português), feedback visual em tempo real nas telas de manejo (`BatchBreedingLog` e `PregnancyCheckTasks`), eliminação de perda de dados e resolução graciosa de conflitos.
+* **Mitigações:** Suíte de testes unitários expandida em `CriaCerto.Web.Client.UnitTests` (`OfflineSyncServiceTests` e `BreedingOpsApiClientTests`) validando enfileiramento, envio de JSON íntegro, resolução `UseLocal` (`?force=true`) e fallback automático em quedas de rede.

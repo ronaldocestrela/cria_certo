@@ -473,12 +473,12 @@ O agente LLM deve executar os seguintes comandos e garantir saída sem erros (`e
 
 ## Critérios de Aceite (Definition of Done)
 
-- [ ] `icon-192.png` (`192x192`) e `icon-512.png` (`512x512`) existem em `wwwroot` e são servidos com HTTP `200`.
-- [ ] `manifest.webmanifest` está em `pt-BR`, com `id`, `scope`, `purpose: "any maskable"` e descrição condizente com pecuária bovina.
-- [ ] `App.razor` possui as meta tags `apple-touch-icon` e `apple-mobile-web-app-capable`.
-- [ ] `offline.html` está em `pt-BR` com botão de reconexão e listener automático do evento `online`.
-- [ ] `service-worker.js` e `service-worker.published.js` não interceptam rotas `/api/*` nem `/health`, ativam `skipWaiting()` + `clients.claim()`, e fazem fallback de navegação para o App Shell ou `offline.html`.
-- [ ] `BreedingOpsApiClient` delega fila e status de conexão para `IOfflineSyncService` (sem métodos *stub* fixos).
-- [ ] `CriaCerto.Api` responde ao endpoint `POST /api/v1/sync/{moduleName}/{actionType}` (incluindo suporte a `?force=true`).
-- [ ] Todos os testes em `CriaCerto.Web.Client.UnitTests` compilam e passam.
+- [x] `icon-192.png` (`192x192`) e `icon-512.png` (`512x512`) existem em `wwwroot` e são servidos com HTTP `200`.
+- [x] `manifest.webmanifest` está em `pt-BR`, com `id`, `scope`, `purpose: "any maskable"` e descrição condizente com pecuária bovina.
+- [x] `App.razor` possui as meta tags `apple-touch-icon` e `apple-mobile-web-app-capable`.
+- [x] `offline.html` está em `pt-BR` com botão de reconexão e listener automático do evento `online`.
+- [x] `service-worker.js` e `service-worker.published.js` não interceptam rotas `/api/*` nem `/health`, ativam `skipWaiting()` + `clients.claim()`, e fazem fallback de navegação para o App Shell ou `offline.html`.
+- [x] `BreedingOpsApiClient` delega fila e status de conexão para `IOfflineSyncService` (sem métodos *stub* fixos).
+- [x] `CriaCerto.Api` responde ao endpoint `POST /api/v1/sync/{moduleName}/{actionType}` (incluindo suporte a `?force=true`).
+- [x] Todos os testes em `CriaCerto.Web.Client.UnitTests` compilam e passam.
 

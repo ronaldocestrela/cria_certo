@@ -1,39 +1,88 @@
 <!doctype html>
-<html lang="en">
+<html lang="pt-BR">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>CriaCerto Offline</title>
+  <meta name="theme-color" content="#1f5638" />
+  <title>CriaCerto - Modo de Campo (Offline)</title>
   <style>
     body {
       margin: 0;
-      font-family: "Segoe UI", sans-serif;
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
       background: #f5f7f5;
       color: #1f5638;
       display: grid;
       place-items: center;
       min-height: 100vh;
+      padding: 1rem;
+      box-sizing: border-box;
     }
-
     main {
-      max-width: 560px;
+      max-width: 520px;
+      width: 100%;
       text-align: center;
-      padding: 2rem;
+      padding: 2.25rem 2rem;
       background: #ffffff;
-      border-radius: 12px;
+      border-radius: 14px;
       box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+      border: 1px solid rgba(31, 86, 56, 0.12);
     }
-
+    .badge {
+      display: inline-block;
+      background: #e8f3ec;
+      color: #1f5638;
+      font-weight: 600;
+      font-size: 0.85rem;
+      padding: 0.35rem 0.85rem;
+      border-radius: 999px;
+      margin-bottom: 1rem;
+    }
     h1 {
-      margin-top: 0;
-      font-size: 1.8rem;
+      margin: 0 0 0.75rem;
+      font-size: 1.65rem;
+    }
+    p {
+      color: #4a5d52;
+      line-height: 1.5;
+      margin-bottom: 1.5rem;
+    }
+    .actions {
+      display: flex;
+      gap: 0.75rem;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    button, a.btn {
+      appearance: none;
+      border: none;
+      background: #1f5638;
+      color: #ffffff;
+      font-weight: 600;
+      font-size: 0.95rem;
+      padding: 0.75rem 1.4rem;
+      border-radius: 8px;
+      cursor: pointer;
+      text-decoration: none;
+    }
+    button:hover, a.btn:hover {
+      background: #17422b;
     }
   </style>
 </head>
 <body>
   <main>
-    <h1>Offline Mode Active</h1>
-    <p>The CriaCerto shell is available offline. Cached pages will continue working until the connection is restored.</p>
+    <span class="badge">Modo de Campo (Sem Conexão)</span>
+    <h1>Você está operando Offline</h1>
+    <p>
+      Não foi possível conectar ao servidor neste momento. As páginas e recursos já carregados no dispositivo continuam disponíveis e os registros feitos no curral serão sincronizados assim que o sinal retornar.
+    </p>
+    <div class="actions">
+      <button type="button" onclick="window.location.reload()">Tentar Reconectar</button>
+      <a class="btn" href="/">Voltar ao Início</a>
+    </div>
   </main>
+  <script>
+    window.addEventListener("online", () => window.location.reload());
+  </script>
 </body>
 </html>

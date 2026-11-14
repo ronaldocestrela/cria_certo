@@ -61,7 +61,7 @@ public class OfflineSyncServiceTests
     }
 
     [Fact]
-    public async Task ForceSyncAsync_ShouldSendOperations_AndRemoveOnSuccess()
+    public async Task ForceSyncAsync_ShouldSendRawJsonPayload_AndRemoveOnSuccess()
     {
         // Arrange
         _httpHandlerMock.ResponseStatusCode = HttpStatusCode.OK;
@@ -74,6 +74,9 @@ public class OfflineSyncServiceTests
         // Assert
         result.IsSuccess.Should().BeTrue();
         _sut.PendingCount.Should().Be(0);
+        _httpHandlerMock.LastRequestUri.Should().NotBeNull();
+        _httpHandlerMock.LastRequestUri!.PathAndQuery.Should().Be("/api/v1/sync/Breeding/RecordInsemination");
+        _httpHandlerMock.LastRequestContent.Should().Be("{\"CowTag\":\"BR100\"}");
     }
 
     [Fact]
@@ -93,6 +96,31 @@ public class OfflineSyncServiceTests
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("Sync.ConflictDetected");
         _sut.ActiveConflicts.Should().HaveCount(1);
+    }
+
+    [Fact]
+    public async Task ResolveConflictAsync_UseLocal_ShouldSendForceTrue_AndClearConflictOnSuccess()
+    {
+        // Arrange
+        _httpHandlerMock.ResponseStatusCode = HttpStatusCode.Conflict;
+        _httpHandlerMock.ResponseBody = JsonSerializer.Serialize(new { ServerCowStatus = "Gestation" });
+
+        await _sut.EnqueueOperationAsync("Breeding", "RecordInsemination", new { CowTag = "BR100" });
+        await _sut.ForceSyncAsync();
+
+        var conflict = _sut.ActiveConflicts[0];
+        _httpHandlerMock.ResponseStatusCode = HttpStatusCode.OK;
+
+        // Act
+        var result = await _sut.ResolveConflictAsync(conflict.OperationId, ConflictResolutionOption.UseLocal);
+
+        // Assert
+        result.IsSuccess.Should().BeTrue();
+        _httpHandlerMock.LastRequestUri.Should().NotBeNull();
+        _httpHandlerMock.LastRequestUri!.PathAndQuery.Should().Be("/api/v1/sync/Breeding/RecordInsemination?force=true");
+        _httpHandlerMock.LastRequestContent.Should().Be("{\"CowTag\":\"BR100\"}");
+        _sut.ActiveConflicts.Should().BeEmpty();
+        _sut.PendingCount.Should().Be(0);
     }
 
     [Fact]
@@ -135,14 +163,21 @@ public class OfflineSyncServiceTests
     {
         public HttpStatusCode ResponseStatusCode { get; set; } = HttpStatusCode.OK;
         public string ResponseBody { get; set; } = "{}";
+        public Uri? LastRequestUri { get; private set; }
+        public string? LastRequestContent { get; private set; }
 
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
+            LastRequestUri = request.RequestUri;
+            LastRequestContent = request.Content is not null
+                ? await request.Content.ReadAsStringAsync(cancellationToken)
+                : null;
+
             var response = new HttpResponseMessage(ResponseStatusCode)
             {
                 Content = new StringContent(ResponseBody)
             };
-            return Task.FromResult(response);
+            return response;
         }
     }
 }

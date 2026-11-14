@@ -28,7 +28,29 @@ public sealed record RegisterPregnancyDiagnosisCommand(
     bool IsPregnant,
     Guid TenantId,
     int? GestationalAgeDays = null,
-    string? Notes = null) : ICommand<PregnancyDiagnosisDto>;
+    string? Notes = null,
+    bool Force = false) : ICommand<PregnancyDiagnosisDto>;
+
+public sealed record BreedingBatchSyncLine(
+    string TagId,
+    string? SemenBatchCode = null,
+    decimal? BodyConditionScore = null);
+
+[RequiresModule("Breeding")]
+public sealed record RecordInseminationCommand(
+    string CowTag,
+    DateTime InseminationDate,
+    string SemenBatchCode,
+    Guid TenantId,
+    decimal? BodyConditionScore = null,
+    bool Force = false) : ICommand<Guid>;
+
+[RequiresModule("Breeding")]
+public sealed record RegisterBreedingBatchCommand(
+    DateTime EventDate,
+    IReadOnlyList<BreedingBatchSyncLine> Lines,
+    Guid TenantId,
+    bool Force = false) : ICommand<int>;
 
 public sealed class RegisterIatfProtocolCommandValidator : AbstractValidator<RegisterIatfProtocolCommand>
 {
@@ -173,4 +195,90 @@ public sealed class GetIatfProtocolsQueryHandler : IRequestHandler<GetIatfProtoc
         return Result.Success(dtos);
     }
 }
+
+public sealed class RecordInseminationCommandHandler : IRequestHandler<RecordInseminationCommand, Result<Guid>>
+{
+    private readonly IBreedingDbContext _dbContext;
+
+    public RecordInseminationCommandHandler(IBreedingDbContext dbContext) => _dbContext = dbContext;
+
+    public async Task<Result<Guid>> Handle(RecordInseminationCommand request, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(request.CowTag))
+            return Result.Failure<Guid>(Error.Validation("Cow.EarTagRequired", "O brinco da matriz é obrigatório."));
+
+        var normalizedTag = request.CowTag.Trim();
+        var cow = await _dbContext.Cows
+            .FirstOrDefaultAsync(c => c.EarTag == normalizedTag &&
+                                      (request.TenantId == Guid.Empty || c.TenantId == request.TenantId || c.TenantId == Guid.Empty), cancellationToken);
+
+        if (cow is null)
+            return Result.Failure<Guid>(Error.NotFound("Cow.NotFound", $"Matriz '{normalizedTag}' não encontrada."));
+
+        if (request.Force && cow.Status == ReproductiveStatus.Pregnant)
+        {
+            cow.RecordPregnancyDiagnosis(false, request.InseminationDate);
+        }
+
+        var semenCode = string.IsNullOrWhiteSpace(request.SemenBatchCode) ? "LOTE-CAMPO" : request.SemenBatchCode.Trim();
+        var insemResult = cow.RecordInsemination(request.InseminationDate, semenCode);
+        if (insemResult.IsFailure)
+            return Result.Failure<Guid>(insemResult.Error);
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        return Result.Success(cow.Id);
+    }
+}
+
+public sealed class RegisterBreedingBatchCommandHandler : IRequestHandler<RegisterBreedingBatchCommand, Result<int>>
+{
+    private readonly IBreedingDbContext _dbContext;
+
+    public RegisterBreedingBatchCommandHandler(IBreedingDbContext dbContext) => _dbContext = dbContext;
+
+    public async Task<Result<int>> Handle(RegisterBreedingBatchCommand request, CancellationToken cancellationToken)
+    {
+        if (request.Lines is null || request.Lines.Count == 0)
+            return Result.Failure<int>(Error.Validation("BreedingBatch.Empty", "O lote de cobrição deve conter ao menos uma matriz."));
+
+        var registeredCount = 0;
+
+        foreach (var line in request.Lines)
+        {
+            if (string.IsNullOrWhiteSpace(line.TagId))
+                continue;
+
+            var normalizedTag = line.TagId.Trim();
+            var cow = await _dbContext.Cows
+                .FirstOrDefaultAsync(c => c.EarTag == normalizedTag &&
+                                          (request.TenantId == Guid.Empty || c.TenantId == request.TenantId || c.TenantId == Guid.Empty), cancellationToken);
+
+            if (cow is null)
+            {
+                var createResult = Cow.Create(normalizedTag, "Nelore", null, request.TenantId, bodyConditionScore: line.BodyConditionScore);
+                if (createResult.IsFailure)
+                    return Result.Failure<int>(createResult.Error);
+
+                cow = createResult.Value;
+                _dbContext.Cows.Add(cow);
+            }
+
+            if (request.Force && cow.Status == ReproductiveStatus.Pregnant)
+            {
+                cow.RecordPregnancyDiagnosis(false, request.EventDate);
+            }
+
+            var semenCode = string.IsNullOrWhiteSpace(line.SemenBatchCode) ? "LOTE-CAMPO" : line.SemenBatchCode.Trim();
+            var insemResult = cow.RecordInsemination(request.EventDate, semenCode);
+            if (insemResult.IsFailure)
+                return Result.Failure<int>(insemResult.Error);
+
+            registeredCount++;
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        return Result.Success(registeredCount);
+    }
+}
+
 
