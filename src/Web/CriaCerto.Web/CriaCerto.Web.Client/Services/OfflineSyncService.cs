@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 using CriaCerto.BuildingBlocks.Abstractions.Results;
 using CriaCerto.Web.Client.Models;
@@ -68,12 +69,16 @@ public sealed class OfflineSyncService : IOfflineSyncService
 
     public async Task<Result> EnqueueOperationAsync<T>(string moduleName, string actionType, T payload)
     {
+        var payloadJson = payload is string rawJson && IsRawJsonObjectOrArray(rawJson)
+            ? rawJson.Trim()
+            : JsonSerializer.Serialize(payload);
+
         var op = new SyncOperation
         {
             Id = Guid.NewGuid(),
             ModuleName = moduleName,
             ActionType = actionType,
-            PayloadJson = JsonSerializer.Serialize(payload),
+            PayloadJson = payloadJson,
             CreatedAtUtc = DateTime.UtcNow,
             Status = SyncOperationStatus.Pending
         };
@@ -115,7 +120,7 @@ public sealed class OfflineSyncService : IOfflineSyncService
 
                 try
                 {
-                    using var content = new StringContent(op.PayloadJson, System.Text.Encoding.UTF8, "application/json");
+                    using var content = new StringContent(op.PayloadJson, Encoding.UTF8, "application/json");
                     var response = await _httpClient.PostAsync($"api/v1/sync/{op.ModuleName}/{op.ActionType}", content);
 
                     if (response.IsSuccessStatusCode)
@@ -180,19 +185,29 @@ public sealed class OfflineSyncService : IOfflineSyncService
 
         if (resolution == ConflictResolutionOption.UseLocal)
         {
-            await AttachTokenAsync();
-            // Força a substituição no servidor
-            using var content = new StringContent(op.PayloadJson, System.Text.Encoding.UTF8, "application/json");
-            var response = await _httpClient.PostAsync($"api/v1/sync/{op.ModuleName}/{op.ActionType}?force=true", content);
-            if (response.IsSuccessStatusCode)
+            try
             {
-                _pendingOperations.Remove(op);
-                _activeConflicts.Remove(conflict);
-                await RemoveFromIndexedDbAsync(op.Id);
+                await AttachTokenAsync();
+                // Força a substituição no servidor
+                using var content = new StringContent(op.PayloadJson, Encoding.UTF8, "application/json");
+                var response = await _httpClient.PostAsync($"api/v1/sync/{op.ModuleName}/{op.ActionType}?force=true", content);
+                if (response.IsSuccessStatusCode)
+                {
+                    _pendingOperations.Remove(op);
+                    _activeConflicts.Remove(conflict);
+                    await RemoveFromIndexedDbAsync(op.Id);
+                }
+                else
+                {
+                    return Result.Failure(Error.Failure("Sync.ResolutionFailed", "Falha ao aplicar a versão local no servidor."));
+                }
             }
-            else
+            catch (Exception ex)
             {
-                return Result.Failure(Error.Failure("Sync.ResolutionFailed", "Falha ao aplicar a versão local no servidor."));
+                op.Status = SyncOperationStatus.Failed;
+                op.ErrorMessage = ex.Message;
+                NotifyStateChanged();
+                return Result.Failure(Error.Failure("Sync.ResolutionFailed", $"Falha de conexão ao aplicar a versão local: {ex.Message}"));
             }
         }
         else if (resolution == ConflictResolutionOption.UseServer)
@@ -255,6 +270,16 @@ public sealed class OfflineSyncService : IOfflineSyncService
     }
 
     private void NotifyStateChanged() => OnStateChanged?.Invoke();
+
+    private static bool IsRawJsonObjectOrArray(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return false;
+
+        var trimmed = value.AsSpan().Trim();
+        return (trimmed.StartsWith("{") && trimmed.EndsWith("}")) ||
+               (trimmed.StartsWith("[") && trimmed.EndsWith("]"));
+    }
 
     private async Task AttachTokenAsync()
     {
