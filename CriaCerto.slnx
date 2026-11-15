@@ -45,7 +45,9 @@
     <Project Path="src/Modules/Referral/CriaCerto.Modules.Referral.Application/CriaCerto.Modules.Referral.Application.csproj" />
     <Project Path="src/Modules/Referral/CriaCerto.Modules.Referral.Infrastructure/CriaCerto.Modules.Referral.Infrastructure.csproj" />
   </Folder>
-  <Folder Name="/src/Web/" />
+  <Folder Name="/src/Web/">
+    <Project Path="src/Web/CriaCerto.Shared.UI/CriaCerto.Shared.UI.csproj" />
+  </Folder>
   <Folder Name="/src/Web/CriaCerto.Web/">
     <Project Path="src/Web/CriaCerto.Web/CriaCerto.Web.Client/CriaCerto.Web.Client.csproj" />
     <Project Path="src/Web/CriaCerto.Web/CriaCerto.Web/CriaCerto.Web.csproj" />
