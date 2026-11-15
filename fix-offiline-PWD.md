@@ -418,19 +418,18 @@ O serviço `OfflineSyncService.cs` (linhas 118 e 184) faz chamadas para:
 Enviando `op.PayloadJson` como corpo da requisição. Atualmente esse grupo de rotas **não existe** em `src/Host/CriaCerto.Api/Program.cs`, resultando em `404 Not Found` toda vez que o usuário clica em `"Sincronizar Agora"` no `SyncStatusHeader.razor` ou quando a conexão é restabelecida.
 
 ### Tarefa 5.1: Corrigir o envio do Payload JSON em `OfflineSyncService.cs`
-- **Arquivo:** `src/Web/CriaCerto.Web/CriaCerto.Web.Client/Services/OfflineSyncService.cs`
-- **Detalhe Técnico Importante:** Nas linhas 118 e 184, `PostAsJsonAsync(..., op.PayloadJson)` serializa uma `string` que já está em formato JSON, gerando uma string JSON duplamente escapada (`"\"{\\\"CowTag\\\":...}\""`).
-- **Subtarefa 5.1.1:** Em `OfflineSyncService.cs` (linhas 118 e 184), enviar o `op.PayloadJson` com `StringContent(op.PayloadJson, Encoding.UTF8, "application/json")` via `_httpClient.PostAsync(...)` para que o JSON chegue íntegro ao endpoint da API (mantendo total compatibilidade com os testes em `OfflineSyncServiceTests.cs` que interceptam `SendAsync` no `HttpMessageHandler`).
+- [x] **Arquivo:** `src/Web/CriaCerto.Web/CriaCerto.Web.Client/Services/OfflineSyncService.cs`
+- [x] **Subtarefa 5.1.1:** Em `OfflineSyncService.cs` (linhas 118 e 184), enviar o `op.PayloadJson` com `StringContent(op.PayloadJson, Encoding.UTF8, "application/json")` via `_httpClient.PostAsync(...)` para que o JSON chegue íntegro ao endpoint da API (mantendo total compatibilidade com os testes em `OfflineSyncServiceTests.cs` que interceptam `SendAsync` no `HttpMessageHandler`).
 
 ### Tarefa 5.2: Mapear o grupo `/api/v1/sync` em `CriaCerto.Api`
-- **Arquivo:** `src/Host/CriaCerto.Api/Program.cs`
-- **Subtarefa 5.2.1:** Criar o grupo autenticado `/api/v1/sync`:
+- [x] **Arquivos:** `src/Host/CriaCerto.Api/Endpoints/OfflineSyncEndpoints.cs` e `src/Host/CriaCerto.Api/Program.cs`
+- [x] **Subtarefa 5.2.1:** Criar o grupo autenticado `/api/v1/sync`:
   ```csharp
   var syncGroup = app.MapGroup("/api/v1/sync")
       .RequireAuthorization()
       .WithTags("OfflineSync");
   ```
-- **Subtarefa 5.2.2:** Mapear o endpoint `POST /api/v1/sync/{moduleName}/{actionType}` (com query param opcional `bool force = false`):
+- [x] **Subtarefa 5.2.2:** Mapear o endpoint `POST /api/v1/sync/{moduleName}/{actionType}` (com query param opcional `bool force = false`) modularizado em `OfflineSyncEndpoints.cs`:
   - Suportar os módulos e ações enfileiradas pelo PWA:
     1. `Breeding` / `RegisterDiagnosis` (ou `RecordInsemination`): desserializar o JSON e despachar `RegisterPregnancyDiagnosisCommand` via `ISender` (ou processar o evento reprodutivo).
     2. `Breeding` / `RegisterBreedingBatch`: processar cada linha do lote (`RegisterBreedingBatchRequest`) atualizando/registrando o evento nas matrizes do tenant autenticado.
@@ -438,6 +437,7 @@ Enviando `op.PayloadJson` como corpo da requisição. Atualmente esse grupo de r
     4. `Sanitary` / `ApplyVaccine` ou `ApplyTreatment`: desserializar para `ApplyTreatmentCommand` e enviar via `ISender`.
   - Caso o resultado de domínio indique conflito de estado e `force == false`, retornar `Results.Conflict(new { Error = result.Error.Code, Message = result.Error.Message })` (status HTTP `409 Conflict`), permitindo que o `ConflictResolutionModal.razor` exiba a divergência para mediação do usuário.
   - Caso a combinação `moduleName`/`actionType` não seja reconhecida, retornar `Results.BadRequest(new { Error = "Sync.UnsupportedAction", Message = $"Ação '{moduleName}/{actionType}' não suportada." })`.
+  - Homologado por 10 testes de integração em `OfflineSyncEndpointsIntegrationTests.cs` e 35 testes unitários em `BreedingOpsFeaturesTests.cs`.
 
 ---
 
@@ -445,40 +445,54 @@ Enviando `op.PayloadJson` como corpo da requisição. Atualmente esse grupo de r
 
 ### Tarefa 6.1: Atualizar e Expandir Testes Unitários em `CriaCerto.Web.Client.UnitTests`
 - **Arquivo:** `tests/Unit/CriaCerto.Web.Client.UnitTests/Services/OfflineSyncServiceTests.cs`
-- **Subtarefa 6.1.1:** Garantir que todos os 6 testes existentes em `OfflineSyncServiceTests.cs` continuem passando.
-- **Subtarefa 6.1.2:** Adicionar teste unitário para `ResolveConflictAsync` com `ConflictResolutionOption.UseLocal` verificando que a requisição é enviada com `?force=true` e que o conflito é removido da lista `ActiveConflicts` após retorno `200 OK`.
-- **Subtarefa 6.1.3:** Adicionar testes unitários para `BreedingOpsApiClient` validando que `EnqueueDiagnosisAsync`, `EnqueueBreedingBatchAsync`, `IsOnlineAsync` e `GetPendingOpsCountAsync` delegam corretamente para `IOfflineSyncService`.
+- [x] **Subtarefa 6.1.1:** Garantir que todos os 6 testes existentes em `OfflineSyncServiceTests.cs` continuem passando (ampliado para 12 testes cobrindo todo o ciclo).
+- [x] **Subtarefa 6.1.2:** Adicionar teste unitário para `ResolveConflictAsync` com `ConflictResolutionOption.UseLocal` verificando que a requisição é enviada com `?force=true` e que o conflito é removido da lista `ActiveConflicts` após retorno `200 OK`.
+- [x] **Subtarefa 6.1.3:** Adicionar testes unitários para `BreedingOpsApiClient` validando que `EnqueueDiagnosisAsync`, `EnqueueBreedingBatchAsync`, `IsOnlineAsync` e `GetPendingOpsCountAsync` delegam corretamente para `IOfflineSyncService`.
 
 ### Tarefa 6.2: Checklist de Validação de Build e Testes (Comandos Obrigatórios)
-O agente LLM deve executar os seguintes comandos e garantir saída sem erros (`exit code 0`):
+O agente LLM executou os seguintes comandos, garantindo saída sem erros (`exit code 0`):
 
-1. **Verificar existência e dimensões dos ícones PWA:**
+- [x] **Subtarefa 6.2.1: Verificar existência e dimensões dos ícones PWA:**
    ```bash
    file src/Web/CriaCerto.Web/CriaCerto.Web.Client/wwwroot/icon-192.png src/Web/CriaCerto.Web/CriaCerto.Web.Client/wwwroot/icon-512.png
    ```
-   *(Saída esperada: `192 x 192` e `512 x 512` PNG image data).*
+   *(Homologado: `192 x 192` e `512 x 512` PNG image data, RGBA).*
 
-2. **Compilar toda a solução Web e API:**
+- [x] **Subtarefa 6.2.2: Compilar toda a solução Web e API:**
    ```bash
-   dotnet build src/Web/CriaCerto.Web/CriaCerto.Web/CriaCerto.Web.csproj
-   dotnet build src/Host/CriaCerto.Api/CriaCerto.Api.csproj
+   XDG_RUNTIME_DIR=/tmp dotnet build src/Web/CriaCerto.Web/CriaCerto.Web/CriaCerto.Web.csproj
+   XDG_RUNTIME_DIR=/tmp dotnet build src/Host/CriaCerto.Api/CriaCerto.Api.csproj
    ```
+   *(Homologado: 0 erros, `Build succeeded` em ambos os projetos).*
 
-3. **Executar os testes unitários do cliente Web:**
+- [x] **Subtarefa 6.2.3: Executar os testes unitários do cliente Web:**
    ```bash
-   dotnet test tests/Unit/CriaCerto.Web.Client.UnitTests/CriaCerto.Web.Client.UnitTests.csproj
+   XDG_RUNTIME_DIR=/tmp dotnet test tests/Unit/CriaCerto.Web.Client.UnitTests/CriaCerto.Web.Client.UnitTests.csproj
    ```
+   *(Homologado: 170 testes passando com sucesso, 0 falhas).*
+
+- [x] **Subtarefa 6.2.4: Executar os testes de integração arquiteturais e endpoints de sincronização:**
+   ```bash
+   XDG_RUNTIME_DIR=/tmp dotnet test tests/Integration/CriaCerto.Architecture.IntegrationTests/CriaCerto.Architecture.IntegrationTests.csproj
+   ```
+   *(Homologado: 105 testes passando com sucesso, 0 falhas).*
+
+- [x] **Subtarefa 6.2.5: Executar os testes unitários de domínio e operações reprodutivas:**
+   ```bash
+   XDG_RUNTIME_DIR=/tmp dotnet test tests/Unit/CriaCerto.Modules.Breeding.UnitTests/CriaCerto.Modules.Breeding.UnitTests.csproj
+   ```
+   *(Homologado: 35 testes passando com sucesso, 0 falhas).*
 
 ---
 
 ## Critérios de Aceite (Definition of Done)
 
-- [ ] `icon-192.png` (`192x192`) e `icon-512.png` (`512x512`) existem em `wwwroot` e são servidos com HTTP `200`.
-- [ ] `manifest.webmanifest` está em `pt-BR`, com `id`, `scope`, `purpose: "any maskable"` e descrição condizente com pecuária bovina.
-- [ ] `App.razor` possui as meta tags `apple-touch-icon` e `apple-mobile-web-app-capable`.
-- [ ] `offline.html` está em `pt-BR` com botão de reconexão e listener automático do evento `online`.
-- [ ] `service-worker.js` e `service-worker.published.js` não interceptam rotas `/api/*` nem `/health`, ativam `skipWaiting()` + `clients.claim()`, e fazem fallback de navegação para o App Shell ou `offline.html`.
-- [ ] `BreedingOpsApiClient` delega fila e status de conexão para `IOfflineSyncService` (sem métodos *stub* fixos).
-- [ ] `CriaCerto.Api` responde ao endpoint `POST /api/v1/sync/{moduleName}/{actionType}` (incluindo suporte a `?force=true`).
-- [ ] Todos os testes em `CriaCerto.Web.Client.UnitTests` compilam e passam.
+- [x] `icon-192.png` (`192x192`) e `icon-512.png` (`512x512`) existem em `wwwroot` e são servidos com HTTP `200`.
+- [x] `manifest.webmanifest` está em `pt-BR`, com `id`, `scope`, `purpose: "any maskable"` e descrição condizente com pecuária bovina.
+- [x] `App.razor` possui as meta tags `apple-touch-icon` e `apple-mobile-web-app-capable`.
+- [x] `offline.html` está em `pt-BR` com botão de reconexão e listener automático do evento `online`.
+- [x] `service-worker.js` e `service-worker.published.js` não interceptam rotas `/api/*` nem `/health`, ativam `skipWaiting()` + `clients.claim()`, e fazem fallback de navegação para o App Shell ou `offline.html`.
+- [x] `BreedingOpsApiClient` delega fila e status de conexão para `IOfflineSyncService` (sem métodos *stub* fixos).
+- [x] `CriaCerto.Api` responde ao endpoint `POST /api/v1/sync/{moduleName}/{actionType}` (incluindo suporte a `?force=true`).
+- [x] Todos os testes em `CriaCerto.Web.Client.UnitTests` compilam e passam.
 

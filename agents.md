@@ -219,7 +219,8 @@ Every feature implementation must strictly adhere to the TDD cycle:
 * **MCP Stitch Integration:** Use MCP Stitch to generate consistent, accessible HTML/CSS component structures before binding them into Blazor `.razor` components.
 * **PWA & Field Offline First:**
   * Mangueiro / Curral / Pasture registries (Pesagem, Vacinação, IATF, Partos) must be fully operational offline.
-  * Offline actions must be queued in `IndexedDB` and processed through a background worker once connection is restored.
+  * Offline actions must be queued in `IndexedDB` (`offlineSync.js` / `IOfflineSyncService`) and processed through `POST /api/v1/sync/{moduleName}/{actionType}` (with `?force=true` support for conflict resolution) once connection is restored (ADR 0004).
+  * Service Workers (`service-worker.js` and `service-worker.published.js`) must never intercept `/api/*` or `/health` routes so that network failures cleanly trigger client-side offline queueing.
 
 ---
 

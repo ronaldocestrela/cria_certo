@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.RateLimiting;
 using Serilog;
+using CriaCerto.Api.Endpoints;
 using CriaCerto.Api.Middleware;
 using CriaCerto.Api.BackgroundServices;
 using CriaCerto.Api.Services;
@@ -2844,6 +2845,9 @@ reference.MapGet("/vaccines", async (ISender sender) =>
     var result = await sender.Send(new GetVaccineCalendarQuery());
     return ToHttpResult(result);
 });
+
+// --- OFFLINE PWA SYNC ENDPOINTS ---
+app.MapOfflineSyncEndpoints();
 
 app.Run();
 

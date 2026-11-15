@@ -4,7 +4,10 @@
 @using CriaCerto.Web.Client.Components.Plantel
 @using CriaCerto.Web.Client.Components.Breeding
 @using CriaCerto.Web.Client.Models
+@using CriaCerto.Web.Client.Services
+@implements IDisposable
 @inject CriaCerto.Web.Client.Services.BreedingOpsApiClient BreedingOps
+@inject IOfflineSyncService SyncService
 @inject NavigationManager Navigation
 
 <PageTitle>Cria Certo - Lançamento de Cobrição</PageTitle>
@@ -88,6 +91,8 @@
 
     protected override async Task OnInitializedAsync()
     {
+        SyncService.OnStateChanged += HandleSyncStateChanged;
+
         if (!string.IsNullOrWhiteSpace(Tag))
         {
             _entries[0].TagId = Tag;
@@ -95,6 +100,26 @@
 
         await RefreshSyncStateAsync();
         await SyncPendingAsync();
+    }
+
+    private void HandleSyncStateChanged()
+    {
+        ApplySyncStateFromService();
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private void ApplySyncStateFromService()
+    {
+        _isOnline = SyncService.IsOnline;
+        _pendingCount = SyncService.PendingCount;
+        _offlineMessage = _pendingCount > 0
+            ? $"Modo Offline - {_pendingCount} operação(ões) pendente(s)"
+            : "Modo Offline - Sincronização pendente";
+    }
+
+    public void Dispose()
+    {
+        SyncService.OnStateChanged -= HandleSyncStateChanged;
     }
 
     private void AddEntry() => _entries.Add(new BreedingEntryFormModel());
@@ -140,6 +165,12 @@
                 {
                     _feedback = "Falha ao registrar lote. Verifique os dados.";
                 }
+                else if (!SyncService.IsOnline)
+                {
+                    _feedback = "Lote salvo offline. Será sincronizado quando houver conexão.";
+                    _entries.Clear();
+                    _entries.Add(new BreedingEntryFormModel());
+                }
                 else
                 {
                     _feedback = $"Lote confirmado: {result.RegisteredCount} cobertura(s).";
@@ -149,10 +180,17 @@
             }
             else
             {
-                await BreedingOps.EnqueueBreedingBatchAsync(request);
-                _feedback = "Lote salvo offline. Será sincronizado quando houver conexão.";
-                _entries.Clear();
-                _entries.Add(new BreedingEntryFormModel());
+                var enqueued = await BreedingOps.EnqueueBreedingBatchAsync(request);
+                if (enqueued)
+                {
+                    _feedback = "Lote salvo offline. Será sincronizado quando houver conexão.";
+                    _entries.Clear();
+                    _entries.Add(new BreedingEntryFormModel());
+                }
+                else
+                {
+                    _feedback = "Falha ao salvar lote offline.";
+                }
             }
 
             await RefreshSyncStateAsync();
@@ -165,26 +203,7 @@
 
     private async Task SyncPendingAsync()
     {
-        var synced = await BreedingOps.SyncPendingOpsAsync(async (type, payload) =>
-        {
-            if (type == "breedingBatch")
-            {
-                var request = System.Text.Json.JsonSerializer.Deserialize<RegisterBreedingBatchRequest>(payload);
-                if (request is null) return false;
-                var result = await BreedingOps.RegisterBreedingBatchAsync(request);
-                return result is not null;
-            }
-
-            if (type == "diagnosis")
-            {
-                var request = System.Text.Json.JsonSerializer.Deserialize<RegisterPregnancyDiagnosisRequest>(payload);
-                if (request is null) return false;
-                var result = await BreedingOps.RegisterDiagnosisAsync(request);
-                return result is not null;
-            }
-
-            return false;
-        });
+        var synced = await BreedingOps.SyncPendingOpsAsync();
 
         if (synced > 0)
         {

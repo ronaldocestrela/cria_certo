@@ -183,9 +183,9 @@ public class Cow
         return Result.Success();
     }
 
-    public Result RecordPregnancyDiagnosis(bool isPregnant, DateTime diagnosisDate)
+    public Result RecordPregnancyDiagnosis(bool isPregnant, DateTime diagnosisDate, bool force = false)
     {
-        if (Status == ReproductiveStatus.Culled || Status == ReproductiveStatus.Sold)
+        if (!force && (Status == ReproductiveStatus.Culled || Status == ReproductiveStatus.Sold))
             return Result.Failure(Error.Conflict("Cow.Inactive", "Matriz inativa."));
 
         Status = isPregnant ? ReproductiveStatus.Pregnant : ReproductiveStatus.Open;
@@ -200,6 +200,18 @@ public class Cow
         ParityCount++;
         LastCalvingDate = calvingDate;
         Status = ReproductiveStatus.Open;
+        return Result.Success();
+    }
+
+    public Result MarkAsCulled()
+    {
+        Status = ReproductiveStatus.Culled;
+        return Result.Success();
+    }
+
+    public Result MarkAsSold()
+    {
+        Status = ReproductiveStatus.Sold;
         return Result.Success();
     }
 }
