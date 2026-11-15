@@ -450,24 +450,38 @@ Enviando `op.PayloadJson` como corpo da requisição. Atualmente esse grupo de r
 - [x] **Subtarefa 6.1.3:** Adicionar testes unitários para `BreedingOpsApiClient` validando que `EnqueueDiagnosisAsync`, `EnqueueBreedingBatchAsync`, `IsOnlineAsync` e `GetPendingOpsCountAsync` delegam corretamente para `IOfflineSyncService`.
 
 ### Tarefa 6.2: Checklist de Validação de Build e Testes (Comandos Obrigatórios)
-O agente LLM deve executar os seguintes comandos e garantir saída sem erros (`exit code 0`):
+O agente LLM executou os seguintes comandos, garantindo saída sem erros (`exit code 0`):
 
-1. **Verificar existência e dimensões dos ícones PWA:**
+- [x] **Subtarefa 6.2.1: Verificar existência e dimensões dos ícones PWA:**
    ```bash
    file src/Web/CriaCerto.Web/CriaCerto.Web.Client/wwwroot/icon-192.png src/Web/CriaCerto.Web/CriaCerto.Web.Client/wwwroot/icon-512.png
    ```
-   *(Saída esperada: `192 x 192` e `512 x 512` PNG image data).*
+   *(Homologado: `192 x 192` e `512 x 512` PNG image data, RGBA).*
 
-2. **Compilar toda a solução Web e API:**
+- [x] **Subtarefa 6.2.2: Compilar toda a solução Web e API:**
    ```bash
-   dotnet build src/Web/CriaCerto.Web/CriaCerto.Web/CriaCerto.Web.csproj
-   dotnet build src/Host/CriaCerto.Api/CriaCerto.Api.csproj
+   XDG_RUNTIME_DIR=/tmp dotnet build src/Web/CriaCerto.Web/CriaCerto.Web/CriaCerto.Web.csproj
+   XDG_RUNTIME_DIR=/tmp dotnet build src/Host/CriaCerto.Api/CriaCerto.Api.csproj
    ```
+   *(Homologado: 0 erros, `Build succeeded` em ambos os projetos).*
 
-3. **Executar os testes unitários do cliente Web:**
+- [x] **Subtarefa 6.2.3: Executar os testes unitários do cliente Web:**
    ```bash
-   dotnet test tests/Unit/CriaCerto.Web.Client.UnitTests/CriaCerto.Web.Client.UnitTests.csproj
+   XDG_RUNTIME_DIR=/tmp dotnet test tests/Unit/CriaCerto.Web.Client.UnitTests/CriaCerto.Web.Client.UnitTests.csproj
    ```
+   *(Homologado: 170 testes passando com sucesso, 0 falhas).*
+
+- [x] **Subtarefa 6.2.4: Executar os testes de integração arquiteturais e endpoints de sincronização:**
+   ```bash
+   XDG_RUNTIME_DIR=/tmp dotnet test tests/Integration/CriaCerto.Architecture.IntegrationTests/CriaCerto.Architecture.IntegrationTests.csproj
+   ```
+   *(Homologado: 105 testes passando com sucesso, 0 falhas).*
+
+- [x] **Subtarefa 6.2.5: Executar os testes unitários de domínio e operações reprodutivas:**
+   ```bash
+   XDG_RUNTIME_DIR=/tmp dotnet test tests/Unit/CriaCerto.Modules.Breeding.UnitTests/CriaCerto.Modules.Breeding.UnitTests.csproj
+   ```
+   *(Homologado: 35 testes passando com sucesso, 0 falhas).*
 
 ---
 
