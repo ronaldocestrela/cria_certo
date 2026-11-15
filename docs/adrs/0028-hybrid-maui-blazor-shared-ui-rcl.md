@@ -1,7 +1,7 @@
 # ADR 0028: Extração da Razor Class Library Compartilhada (CriaCerto.Shared.UI) para Arquitetura Híbrida Web e .NET MAUI
 
 ## Status
-Aceito e em Implementação (Accepted & In Implementation)
+Implementado na Fase 1 (Implemented in Phase 1)
 
 ## Contexto
 O frontend do CriaCerto foi originalmente concebido como uma aplicação Blazor Web App com cliente WebAssembly (`CriaCerto.Web.Client`) e recursos PWA para operação offline no curral e no pasto.
@@ -23,9 +23,14 @@ Para viabilizar a reutilização de 100% dos componentes de interface entre a We
    - Alinhamento da arquitetura em fases conforme definido no [hybrid_maui_roadmap.md](../../hybrid_maui_roadmap.md).
 
 3. **Estratégia de Migração em Fases (Roadmap Híbrido):**
-   - **Fase 1 (Estrutura e RCL):** Criação da RCL (Tarefa 1.1) seguida da migração gradual de componentes, páginas, layouts, rotas e assets estáticos (`wwwroot/js`, `wwwroot/css`, `wwwroot/lib`), mantendo a aplicação Web/PWA totalmente funcional.
+   - **Fase 1 (Estrutura e RCL - Concluída):** Criação da RCL (Tarefa 1.1), migração atômica de todo o código Razor (`Pages/`, `Components/`, `Layout/`, `Auth/`, `Models/`, `Services/`, `Routes.razor`, `_Imports.razor`) e assets estáticos compartilhados (`wwwroot/js`, `wwwroot/app.css`, `wwwroot/lib`, `wwwroot/imgs`) para `src/Web/CriaCerto.Shared.UI` (Tarefa 1.2), refatoração limpa para namespaces `CriaCerto.Shared.UI.*`, reconfiguração de `CriaCerto.Web.Client`, `CriaCerto.Web/Components/App.razor` (usando caminhos `_content/CriaCerto.Shared.UI/...`) e suíte de 170 testes unitários integrados (Tarefa 1.3).
    - **Fase 2 (Abstrações de Plataforma):** Isolamento de dependências de navegador (`localStorage`, `IndexedDB`, downloads e detecção de conectividade) atrás de interfaces desacopladas (`ITokenStorageService`, `IConnectivityService`, `IFileExportService`).
    - **Fases 3 a 6 (Casca .NET MAUI, Android e iOS):** Criação do projeto mobile nativo com `BlazorWebView`, suporte a SQLite/SecureStorage nativo e esteira CI/CD.
+
+4. **Homologação e Validação Técnica:**
+   - Compilação limpa em `CriaCerto.slnx` com 0 warnings e 0 erros.
+   - 100% de aprovação nos 170 testes unitários de `CriaCerto.Web.Client.UnitTests` e 105 testes de `CriaCerto.Architecture.IntegrationTests`.
+   - Preservação da integridade do PWA existente com `manifest.webmanifest`, `service-worker.js` e `service-worker.published.js` mantidos em `CriaCerto.Web.Client/wwwroot`.
 
 ## Consequências
 

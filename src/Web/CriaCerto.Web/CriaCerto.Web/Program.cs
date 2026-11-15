@@ -1,6 +1,6 @@
 using CriaCerto.Web.Components;
-using CriaCerto.Web.Client.Services;
-using CriaCerto.Web.Client.Auth;
+using CriaCerto.Shared.UI.Services;
+using CriaCerto.Shared.UI.Auth;
 using Microsoft.AspNetCore.DataProtection;
 using Yarp.ReverseProxy.Configuration;
 
@@ -126,7 +126,9 @@ app.MapReverseProxy();
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveWebAssemblyRenderMode()
-    .AddAdditionalAssemblies(typeof(CriaCerto.Web.Client._Imports).Assembly)
+    .AddAdditionalAssemblies(
+        typeof(CriaCerto.Shared.UI.Routes).Assembly,
+        typeof(CriaCerto.Web.Client.Program).Assembly)
     .AllowAnonymous();
 
 app.MapGet("/r/{code}", (string code, HttpContext context) =>

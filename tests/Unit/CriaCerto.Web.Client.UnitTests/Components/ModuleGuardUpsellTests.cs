@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using CriaCerto.Web.Client.Services;
+using CriaCerto.Shared.UI.Services;
 using FluentAssertions;
 using Xunit;
 

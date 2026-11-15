@@ -1,0 +1,68 @@
+@using CriaCerto.Shared.UI.Models
+@using CriaCerto.Shared.UI.Services
+@implements IDisposable
+@inject IOfflineSyncService SyncService
+
+<div class="sync-status-container">
+    <div class="network-badge @(SyncService.IsOnline ? "online" : "offline")" title="@(SyncService.IsOnline ? "Conectado à nuvem" : "Sem conexão de rede. Operando em modo de campo (IndexedDB)")">
+        <span class="status-pulse"></span>
+        <span class="material-symbols-outlined status-icon">
+            @(SyncService.IsOnline ? "wifi" : "wifi_off")
+        </span>
+        <span class="status-text">
+            @(SyncService.IsOnline ? "Online" : "Campo (Offline)")
+        </span>
+    </div>
+
+    @if (SyncService.PendingCount > 0)
+    {
+        <div class="pending-badge" title="@($"{SyncService.PendingCount} operações salvas localmente aguardando envio")">
+            <span class="material-symbols-outlined">sd_card</span>
+            <span class="pending-count">@SyncService.PendingCount pendente@(SyncService.PendingCount > 1 ? "s" : "")</span>
+        </div>
+    }
+
+    @if (SyncService.ActiveConflicts.Count > 0)
+    {
+        <button type="button" class="conflict-badge-btn" @onclick="OpenConflictModal" title="Clique para resolver conflitos de dados">
+            <span class="material-symbols-outlined">warning</span>
+            <span>@SyncService.ActiveConflicts.Count conflito@(SyncService.ActiveConflicts.Count > 1 ? "s" : "")</span>
+        </button>
+    }
+
+    <button type="button" class="btn-sync-action @(SyncService.IsSyncing ? "syncing" : "")" 
+            @onclick="HandleSyncClick" 
+            disabled="@(!SyncService.IsOnline || SyncService.IsSyncing || SyncService.PendingCount == 0)"
+            title="Forçar Sincronização Imediata com o Servidor">
+        <span class="material-symbols-outlined @(SyncService.IsSyncing ? "spin-icon" : "")">sync</span>
+        <span>@(SyncService.IsSyncing ? "Sincronizando..." : "Sincronizar Agora")</span>
+    </button>
+
+    <ConflictResolutionModal @bind-IsOpen="IsConflictModalOpen" CurrentConflict="ActiveConflictItem" />
+</div>
+
+@code {
+    private bool IsConflictModalOpen { get; set; }
+    private SyncConflictItem? ActiveConflictItem => SyncService.ActiveConflicts.FirstOrDefault();
+
+    protected override async Task OnInitializedAsync()
+    {
+        SyncService.OnStateChanged += StateHasChanged;
+        await SyncService.InitializeAsync();
+    }
+
+    private async Task HandleSyncClick()
+    {
+        await SyncService.ForceSyncAsync();
+    }
+
+    private void OpenConflictModal()
+    {
+        IsConflictModalOpen = true;
+    }
+
+    public void Dispose()
+    {
+        SyncService.OnStateChanged -= StateHasChanged;
+    }
+}

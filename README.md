@@ -63,6 +63,7 @@ Nesta fase inicial (Sub-phase 0.1), o foco esta na fundacao tecnica: arquitetura
 |   |   |-- Breeding/
 |   |   `-- Maternity/
 |   `-- Web/
+|       |-- CriaCerto.Shared.UI/
 |       `-- CriaCerto.Web/
 |           |-- CriaCerto.Web/
 |           `-- CriaCerto.Web.Client/

@@ -21,6 +21,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\..\src\Web\CriaCerto.Shared.UI\CriaCerto.Shared.UI.csproj" />
     <ProjectReference Include="..\..\..\src\Web\CriaCerto.Web\CriaCerto.Web.Client\CriaCerto.Web.Client.csproj" />
   </ItemGroup>
 

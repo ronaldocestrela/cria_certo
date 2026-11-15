@@ -1,0 +1,609 @@
+@page "/calving/records"
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@attribute [Authorize]
+@using CriaCerto.Shared.UI.Components
+@using CriaCerto.Shared.UI.Models
+@using CriaCerto.Modules.Calving.Application.Contracts
+@using CalvingType = CriaCerto.Modules.Calving.Application.Domain.CalvingType
+@using BirthCondition = CriaCerto.Modules.Calving.Application.Domain.BirthCondition
+@using CalfStatus = CriaCerto.Modules.Calving.Application.Domain.CalfStatus
+@inject CriaCerto.Shared.UI.Services.CalvingApiClient CalvingApi
+@inject CriaCerto.Shared.UI.Services.PlantelApiClient PlantelApi
+@inject CriaCerto.Shared.UI.Services.GrowthApiClient GrowthApi
+@inject AuthenticationStateProvider AuthStateProvider
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Cria Certo - Maternidade, Partos & Bezerreiro</PageTitle>
+
+<ModuleGuard Module="Calving">
+    <div class="container-fluid p-4">
+        @if (!string.IsNullOrEmpty(_errorMessage))
+        {
+            <div class="alert alert-danger alert-dismissible fade show shadow-sm" role="alert">
+                <i class="bi bi-exclamation-triangle-fill me-2"></i><strong>Erro:</strong> @_errorMessage
+                <button type="button" class="btn-close" @onclick="() => _errorMessage = null"></button>
+            </div>
+        }
+        @if (!string.IsNullOrEmpty(_successMessage))
+        {
+            <div class="alert alert-success alert-dismissible fade show shadow-sm" role="alert">
+                <i class="bi bi-check-circle-fill me-2"></i><strong>Sucesso:</strong> @_successMessage
+                <button type="button" class="btn-close" @onclick="() => _successMessage = null"></button>
+            </div>
+        }
+
+        <!-- HEADER & ACTIONS -->
+        <div class="row align-items-center mb-4">
+            <div class="col-md-7">
+                <p class="text-uppercase tracking-wider fw-bold text-success mb-1 small">MÓDULO MATERNIDADE & BEZERREIRO</p>
+                <h2 class="fw-bold text-dark mb-1">Registros de Partos & Desmame P205</h2>
+                <p class="text-muted mb-0">Acompanhamento zootécnico de parição, aleitamento de bezerros e cálculo de peso ajustado aos 205 dias.</p>
+            </div>
+            <div class="col-md-5 text-md-end mt-3 mt-md-0">
+                <button type="button" class="btn btn-outline-secondary me-2 fw-semibold" @onclick="LoadDataAsync">
+                    <span class="material-symbols-outlined align-middle fs-5 me-1">refresh</span> Sincronizar
+                </button>
+                <button type="button" class="btn btn-success fw-bold shadow-sm" @onclick="OpenRegisterCalvingModal">
+                    <span class="material-symbols-outlined align-middle fs-5 me-1">add</span> Novo Parto
+                </button>
+            </div>
+        </div>
+
+        <!-- KPI SUMMARY CARDS -->
+        <div class="row g-3 mb-4">
+            <div class="col-6 col-md-3">
+                <div class="card border-0 shadow-sm p-3 bg-white h-100">
+                    <div class="text-muted small text-uppercase font-monospace fw-semibold">Total Partos</div>
+                    <div class="fs-3 fw-bold text-dark my-1">@_records.Count</div>
+                    <div class="small text-muted">Nascimentos Cadastrados</div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="card border-0 shadow-sm p-3 bg-white h-100">
+                    <div class="text-muted small text-uppercase font-monospace fw-semibold">Bezerros Mamando</div>
+                    <div class="fs-3 fw-bold text-warning my-1">@UnweanedCount</div>
+                    <div class="small text-muted">Em Fase de Aleitamento</div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="card border-0 shadow-sm p-3 bg-white h-100">
+                    <div class="text-muted small text-uppercase font-monospace fw-semibold">Desmamados</div>
+                    <div class="fs-3 fw-bold text-success my-1">@WeanedCount</div>
+                    <div class="small text-muted">Desmame Concluído</div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="card border-0 shadow-sm p-3 bg-white h-100">
+                    <div class="text-muted small text-uppercase font-monospace fw-semibold">Média P205 (Desmame)</div>
+                    <div class="fs-3 fw-bold text-primary my-1">
+                        @(AverageP205 > 0 ? $"{AverageP205:N1} kg" : "-")
+                    </div>
+                    <div class="small text-muted">Peso Padronizado 205 Dias</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SEARCH AND FILTERS -->
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-body p-3">
+                <div class="row g-2 align-items-center">
+                    <div class="col-md-6">
+                        <div class="input-group">
+                            <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+                            <input type="text" class="form-control border-start-0 ps-0" placeholder="Buscar por brinco do bezerro ou raça..." @bind="_searchQuery" @bind:event="oninput" />
+                        </div>
+                    </div>
+                    <div class="col-md-6 text-md-end">
+                        <div class="btn-group" role="group">
+                            <button type="button" class="btn @(_statusFilter == null ? "btn-primary" : "btn-outline-secondary") btn-sm" @onclick="() => _statusFilter = null">Todos</button>
+                            <button type="button" class="btn @(_statusFilter == CalfStatus.Unweaned ? "btn-warning text-dark fw-bold" : "btn-outline-secondary") btn-sm" @onclick="() => _statusFilter = CalfStatus.Unweaned">Mamando</button>
+                            <button type="button" class="btn @(_statusFilter == CalfStatus.Weaned ? "btn-success" : "btn-outline-secondary") btn-sm" @onclick="() => _statusFilter = CalfStatus.Weaned">Desmamados</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- RECORDS TABLE -->
+        <div class="card border-0 shadow-sm">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Data Parto</th>
+                            <th>Brinco Bezerro</th>
+                            <th>Sexo / Raça</th>
+                            <th>Peso Nasc.</th>
+                            <th>Tipo / Condição</th>
+                            <th>Status Bezerro</th>
+                            <th>Desmame & P205</th>
+                            <th class="text-end">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (_isLoading)
+                        {
+                            <tr>
+                                <td colspan="8" class="text-center py-5">
+                                    <div class="spinner-border text-primary" role="status"></div>
+                                    <p class="text-muted mt-2 mb-0">Carregando registros de partos...</p>
+                                </td>
+                            </tr>
+                        }
+                        else if (!FilteredRecords.Any())
+                        {
+                            <tr>
+                                <td colspan="8" class="text-center py-5 text-muted">
+                                    <span class="material-symbols-outlined fs-1 text-secondary mb-2">child_care</span>
+                                    <p class="mb-0">Nenhum registro de parto encontrado.</p>
+                                </td>
+                            </tr>
+                        }
+                        else
+                        {
+                            @foreach (var rec in FilteredRecords)
+                            {
+                                <tr>
+                                    <td>
+                                        <div class="fw-bold">@rec.CalvingDate.ToString("dd/MM/yyyy")</div>
+                                        <small class="text-muted">Mãe: @GetMotherTag(rec.MotherCowId)</small>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-dark fs-6 font-monospace">@rec.CalfTagId</span>
+                                    </td>
+                                    <td>
+                                        <div>
+                                            <span class="badge @(rec.CalfSex == "F" ? "bg-danger" : "bg-primary") me-1">@rec.CalfSex</span>
+                                            <span class="text-secondary small">@rec.CalfBreed</span>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="fw-semibold">@rec.CalfBirthWeightKg.ToString("N1") kg</span>
+                                    </td>
+                                    <td>
+                                        <div class="small">
+                                            <span class="badge bg-secondary me-1">@rec.Type</span>
+                                            <span class="badge @(rec.Condition == BirthCondition.Live ? "bg-success" : "bg-danger")">@rec.Condition</span>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        @if (rec.CalfStatus == CalfStatus.Unweaned)
+                                        {
+                                            <span class="badge bg-warning text-dark"><i class="bi bi-heart-pulse me-1"></i>Mamando</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-success"><i class="bi bi-check2-circle me-1"></i>Desmamado</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (rec.WeaningDate.HasValue)
+                                        {
+                                            <div class="small fw-semibold text-dark">@rec.WeaningDate.Value.ToString("dd/MM/yyyy")</div>
+                                            <div class="small text-success fw-bold">P205: @rec.Adjusted205DayWeightKg?.ToString("N1") kg (@rec.WeaningWeightKg?.ToString("N1") kg real)</div>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted small">-</span>
+                                        }
+                                    </td>
+                                    <td class="text-end">
+                                        @if (rec.CalfStatus == CalfStatus.Unweaned)
+                                        {
+                                            <button type="button" class="btn btn-sm btn-outline-warning text-dark fw-semibold" @onclick="() => OpenWeaningModal(rec)">
+                                                <i class="bi bi-box-arrow-right me-1"></i> Registrar Desmame
+                                            </button>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-light text-dark border">Concluído</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 1: REGISTRAR NOVO PARTO -->
+    @if (_showCalvingModal)
+    {
+        <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+            <div class="modal-dialog modal-lg modal-dialog-centered">
+                <div class="modal-content border-0 shadow">
+                    <div class="modal-header bg-success text-white">
+                        <h5 class="modal-title fw-bold"><i class="bi bi-plus-circle me-2"></i>Registrar Novo Parto</h5>
+                        <button type="button" class="btn-close btn-close-white" @onclick="() => _showCalvingModal = false"></button>
+                    </div>
+                    <div class="modal-body">
+                        <EditForm Model="@_calvingForm" OnValidSubmit="HandleRegisterCalving">
+                            <DataAnnotationsValidator />
+
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold">Matriz Mãe *</label>
+                                    @if (_cows.Any())
+                                    {
+                                        <InputSelect class="form-select" @bind-Value="_calvingForm.MotherCowId">
+                                            <option value="@Guid.Empty">Selecione a matriz...</option>
+                                            @foreach (var cow in _cows)
+                                            {
+                                                <option value="@cow.Id">@cow.EarTag @(string.IsNullOrEmpty(cow.Nickname) ? "" : $"({cow.Nickname})")</option>
+                                            }
+                                        </InputSelect>
+                                    }
+                                    else
+                                    {
+                                        <InputText class="form-control" @bind-Value="_calvingForm.MotherCowIdString" placeholder="ID da Matriz" />
+                                    }
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold">Data do Parto *</label>
+                                    <InputDate class="form-control" @bind-Value="_calvingForm.CalvingDate" />
+                                </div>
+
+                                <div class="col-md-4">
+                                    <label class="form-label fw-semibold">Tipo de Parto *</label>
+                                    <InputSelect class="form-select" @bind-Value="_calvingForm.Type">
+                                        <option value="@CalvingType.Normal">Normal</option>
+                                        <option value="@CalvingType.Dystocic">Distócico (Com ajuda)</option>
+                                        <option value="@CalvingType.Cesarean">Cesariana</option>
+                                    </InputSelect>
+                                </div>
+
+                                <div class="col-md-4">
+                                    <label class="form-label fw-semibold">Condição do Nascimento *</label>
+                                    <InputSelect class="form-select" @bind-Value="_calvingForm.Condition">
+                                        <option value="@BirthCondition.Live">Nascido Vivo</option>
+                                        <option value="@BirthCondition.Stillborn">Natimorto</option>
+                                    </InputSelect>
+                                </div>
+
+                                <div class="col-md-4">
+                                    <label class="form-label fw-semibold">Brinco do Bezerro *</label>
+                                    <InputText class="form-control" @bind-Value="_calvingForm.CalfTagId" placeholder="Ex: BEZ-2026-01" required />
+                                </div>
+
+                                <div class="col-md-4">
+                                    <label class="form-label fw-semibold">Sexo do Bezerro *</label>
+                                    <InputSelect class="form-select" @bind-Value="_calvingForm.CalfSex">
+                                        <option value="M">Macho (M)</option>
+                                        <option value="F">Fêmea (F)</option>
+                                    </InputSelect>
+                                </div>
+
+                                <div class="col-md-4">
+                                    <label class="form-label fw-semibold">Raça do Bezerro *</label>
+                                    <InputText class="form-control" @bind-Value="_calvingForm.CalfBreed" placeholder="Ex: Nelore / Cruzado" required />
+                                </div>
+
+                                <div class="col-md-4">
+                                    <label class="form-label fw-semibold">Peso ao Nascer (kg) *</label>
+                                    <InputNumber class="form-control" @bind-Value="_calvingForm.CalfBirthWeightKg" />
+                                </div>
+                            </div>
+
+                            <div class="mt-4 text-end">
+                                <button type="button" class="btn btn-outline-secondary me-2" @onclick="() => _showCalvingModal = false">Cancelar</button>
+                                <button type="submit" class="btn btn-success fw-bold" disabled="@_isSaving">
+                                    @if (_isSaving)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-1"></span>
+                                    }
+                                    Salvar Registro de Parto
+                                </button>
+                            </div>
+                        </EditForm>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- MODAL 2: REGISTRAR DESMAME P205 -->
+    @if (_showWeaningModal && _selectedRecordForWeaning != null)
+    {
+        <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+            <div class="modal-dialog modal-md modal-dialog-centered">
+                <div class="modal-content border-0 shadow">
+                    <div class="modal-header bg-warning text-dark">
+                        <h5 class="modal-title fw-bold"><i class="bi bi-calculator me-2"></i>Registrar Desmame (P205)</h5>
+                        <button type="button" class="btn-close" @onclick="() => _showWeaningModal = false"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="alert alert-light border mb-3">
+                            <div class="fw-bold">Bezerro: @_selectedRecordForWeaning.CalfTagId (@_selectedRecordForWeaning.CalfSex, @_selectedRecordForWeaning.CalfBreed)</div>
+                            <small class="text-muted">Data Nascimento: @_selectedRecordForWeaning.CalvingDate.ToString("dd/MM/yyyy") | Peso Nasc: @_selectedRecordForWeaning.CalfBirthWeightKg.ToString("N1") kg</small>
+                        </div>
+
+                        <EditForm Model="@_weaningForm" OnValidSubmit="HandleRegisterWeaning">
+                            <DataAnnotationsValidator />
+
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold">Data do Desmame *</label>
+                                    <InputDate class="form-control" @bind-Value="_weaningForm.WeaningDate" />
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold">Peso ao Desmame (kg) *</label>
+                                    <InputNumber class="form-control" @bind-Value="_weaningForm.WeaningWeightKg" />
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold">Idade da Mãe (Anos) *</label>
+                                    <InputNumber class="form-control" @bind-Value="_weaningForm.MotherAgeYears" />
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold">Lote de Destino</label>
+                                    <InputSelect class="form-select" @bind-Value="_weaningForm.DestinationLotId">
+                                        <option value="">Nenhum Lote</option>
+                                        @foreach (var lot in _lots)
+                                        {
+                                            <option value="@lot.Id">@lot.Name</option>
+                                        }
+                                    </InputSelect>
+                                </div>
+                            </div>
+
+                            <div class="mt-4 text-end">
+                                <button type="button" class="btn btn-outline-secondary me-2" @onclick="() => _showWeaningModal = false">Cancelar</button>
+                                <button type="submit" class="btn btn-warning text-dark fw-bold" disabled="@_isSaving">
+                                    @if (_isSaving)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-1"></span>
+                                    }
+                                    Calcular P205 & Concluir Desmame
+                                </button>
+                            </div>
+                        </EditForm>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</ModuleGuard>
+
+@code {
+    private Guid _tenantId = Guid.Empty;
+    private bool _isLoading = true;
+    private bool _isSaving = false;
+    private string? _errorMessage;
+    private string? _successMessage;
+    private string _searchQuery = string.Empty;
+    private CalfStatus? _statusFilter;
+
+    private List<CalvingRecordListItemDto> _records = new();
+    private List<CowSummaryDto> _cows = new();
+    private List<LotDto> _lots = new();
+
+    private bool _showCalvingModal = false;
+    private CalvingFormModel _calvingForm = new();
+
+    private bool _showWeaningModal = false;
+    private CalvingRecordListItemDto? _selectedRecordForWeaning;
+    private WeaningFormModel _weaningForm = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user.Identity?.IsAuthenticated == true)
+        {
+            var tenantClaim = user.FindFirst("TenantId")?.Value;
+            if (Guid.TryParse(tenantClaim, out var tenantId))
+            {
+                _tenantId = tenantId;
+            }
+        }
+
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        _isLoading = true;
+        _errorMessage = null;
+
+        try
+        {
+            if (_tenantId != Guid.Empty)
+            {
+                _records = await CalvingApi.GetCalvingRecordsAsync(_tenantId);
+            }
+
+            var cowsResponse = await PlantelApi.ListCowsAsync(null, null);
+            if (cowsResponse?.Items != null)
+            {
+                _cows = cowsResponse.Items;
+            }
+
+            var lots = await GrowthApi.GetLotsAsync(_tenantId);
+            if (lots != null)
+            {
+                _lots = lots;
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Erro ao carregar dados de partos: {ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private IEnumerable<CalvingRecordListItemDto> FilteredRecords => _records.Where(r =>
+        (_statusFilter == null || r.CalfStatus == _statusFilter.Value) &&
+        (string.IsNullOrWhiteSpace(_searchQuery) ||
+         r.CalfTagId.Contains(_searchQuery, StringComparison.OrdinalIgnoreCase) ||
+         r.CalfBreed.Contains(_searchQuery, StringComparison.OrdinalIgnoreCase)));
+
+    private int UnweanedCount => _records.Count(r => r.CalfStatus == CalfStatus.Unweaned);
+    private int WeanedCount => _records.Count(r => r.CalfStatus == CalfStatus.Weaned);
+    private double AverageP205 => _records.Where(r => r.Adjusted205DayWeightKg.HasValue && r.Adjusted205DayWeightKg.Value > 0)
+                                         .Select(r => (double)r.Adjusted205DayWeightKg!.Value)
+                                         .DefaultIfEmpty(0)
+                                         .Average();
+
+    private string GetMotherTag(Guid motherCowId)
+    {
+        var cow = _cows.FirstOrDefault(c => c.Id == motherCowId);
+        return cow != null ? cow.EarTag : motherCowId.ToString().Substring(0, 8);
+    }
+
+    private void OpenRegisterCalvingModal()
+    {
+        _calvingForm = new CalvingFormModel
+        {
+            CalvingDate = DateTime.Today,
+            CalfBirthWeightKg = 32.0m,
+            CalfSex = "M",
+            CalfBreed = "Nelore",
+            Type = CalvingType.Normal,
+            Condition = BirthCondition.Live
+        };
+        if (_cows.Any())
+        {
+            _calvingForm.MotherCowId = _cows.First().Id;
+        }
+        _showCalvingModal = true;
+    }
+
+    private async Task HandleRegisterCalving()
+    {
+        _isSaving = true;
+        _errorMessage = null;
+
+        try
+        {
+            Guid motherId = _calvingForm.MotherCowId;
+            if (motherId == Guid.Empty && Guid.TryParse(_calvingForm.MotherCowIdString, out var parsedId))
+            {
+                motherId = parsedId;
+            }
+
+            if (motherId == Guid.Empty)
+            {
+                _errorMessage = "Por favor, selecione ou informe uma matriz mãe válida.";
+                return;
+            }
+
+            var command = new RegisterCalvingCommand(
+                motherId,
+                _calvingForm.CalvingDate,
+                _calvingForm.Type,
+                _calvingForm.CalfTagId,
+                _calvingForm.CalfSex,
+                _calvingForm.CalfBreed,
+                _calvingForm.CalfBirthWeightKg,
+                _calvingForm.Condition,
+                _tenantId);
+
+            var result = await CalvingApi.RegisterCalvingAsync(command);
+            if (result != null)
+            {
+                _successMessage = $"Parto e bezerro {_calvingForm.CalfTagId} registrados com sucesso!";
+                _showCalvingModal = false;
+                await LoadDataAsync();
+            }
+            else
+            {
+                _errorMessage = "Não foi possível registrar o parto. Verifique os dados.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Erro ao registrar parto: {ex.Message}";
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private void OpenWeaningModal(CalvingRecordListItemDto record)
+    {
+        _selectedRecordForWeaning = record;
+        _weaningForm = new WeaningFormModel
+        {
+            WeaningDate = DateTime.Today,
+            WeaningWeightKg = 190.0m,
+            MotherAgeYears = 4
+        };
+        _showWeaningModal = true;
+    }
+
+    private async Task HandleRegisterWeaning()
+    {
+        if (_selectedRecordForWeaning == null) return;
+
+        _isSaving = true;
+        _errorMessage = null;
+
+        try
+        {
+            Guid? lotId = null;
+            if (Guid.TryParse(_weaningForm.DestinationLotId, out var parsedLotId) && parsedLotId != Guid.Empty)
+            {
+                lotId = parsedLotId;
+            }
+
+            var command = new RegisterWeaningCommand(
+                _selectedRecordForWeaning.CalfId,
+                _selectedRecordForWeaning.MotherCowId,
+                _weaningForm.WeaningDate,
+                _weaningForm.WeaningWeightKg,
+                _weaningForm.MotherAgeYears,
+                _tenantId,
+                lotId);
+
+            var result = await CalvingApi.RegisterWeaningAsync(command);
+            if (result != null)
+            {
+                _successMessage = $"Desmame do bezerro {_selectedRecordForWeaning.CalfTagId} registrado com P205 = {result.Adjusted205DayWeightKg:N1} kg!";
+                _showWeaningModal = false;
+                await LoadDataAsync();
+            }
+            else
+            {
+                _errorMessage = "Erro ao registrar o desmame. Verifique se o bezerro já não foi desmamado.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Erro ao registrar desmame: {ex.Message}";
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    public class CalvingFormModel
+    {
+        public Guid MotherCowId { get; set; }
+        public string MotherCowIdString { get; set; } = string.Empty;
+        public DateTime CalvingDate { get; set; } = DateTime.Today;
+        public CalvingType Type { get; set; } = CalvingType.Normal;
+        public BirthCondition Condition { get; set; } = BirthCondition.Live;
+        public string CalfTagId { get; set; } = string.Empty;
+        public string CalfSex { get; set; } = "M";
+        public string CalfBreed { get; set; } = "Nelore";
+        public decimal CalfBirthWeightKg { get; set; } = 32.0m;
+    }
+
+    public class WeaningFormModel
+    {
+        public DateTime WeaningDate { get; set; } = DateTime.Today;
+        public decimal WeaningWeightKg { get; set; } = 190.0m;
+        public int MotherAgeYears { get; set; } = 4;
+        public string DestinationLotId { get; set; } = string.Empty;
+    }
+}

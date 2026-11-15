@@ -1,5 +1,5 @@
-using CriaCerto.Web.Client.Auth;
-using CriaCerto.Web.Client.Services;
+using CriaCerto.Shared.UI.Auth;
+using CriaCerto.Shared.UI.Services;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 
@@ -31,3 +31,8 @@ builder.Services.AddScoped<ICookieConsentService, CookieConsentService>();
 builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) });
 
 await builder.Build().RunAsync();
+
+namespace CriaCerto.Web.Client
+{
+    public partial class Program { }
+}

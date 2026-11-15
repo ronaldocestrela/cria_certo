@@ -39,8 +39,8 @@ Hoje todos os componentes Razor, páginas, serviços e `CustomAuthStateProvider`
 - [x] **Subtarefa 1.1.4:** Adicionar `<InternalsVisibleTo Include="CriaCerto.Web.Client.UnitTests" />` no `CriaCerto.Shared.UI.csproj`.
 - [x] **Subtarefa 1.1.5:** Registrar `CriaCerto.Shared.UI.csproj` em `CriaCerto.slnx` e formalizar o ADR `docs/adrs/0028-hybrid-maui-blazor-shared-ui-rcl.md`.
 
-### Tarefa 1.2: Migrar código, páginas e assets estáticos para `CriaCerto.Shared.UI`
-- **Subtarefa 1.2.1:** Mover de `src/Web/CriaCerto.Web/CriaCerto.Web.Client/` para `src/Web/CriaCerto.Shared.UI/`:
+### Tarefa 1.2: Migrar código, páginas e assets estáticos para `CriaCerto.Shared.UI` [CONCLUÍDO - FASE 1]
+- [x] **Subtarefa 1.2.1:** Mover de `src/Web/CriaCerto.Web/CriaCerto.Web.Client/` para `src/Web/CriaCerto.Shared.UI/`:
   - `Auth/`
   - `Components/`
   - `Layout/`
@@ -49,27 +49,35 @@ Hoje todos os componentes Razor, páginas, serviços e `CustomAuthStateProvider`
   - `Services/`
   - `Routes.razor`
   - `_Imports.razor`
-- **Subtarefa 1.2.2:** Mover os assets compartilhados para `src/Web/CriaCerto.Shared.UI/wwwroot/`:
+- [x] **Subtarefa 1.2.2:** Mover os assets compartilhados para `src/Web/CriaCerto.Shared.UI/wwwroot/`:
   - De `CriaCerto.Web.Client/wwwroot/js/` (`downloadHelper.js`, `offlineSync.js`) → `CriaCerto.Shared.UI/wwwroot/js/`
-  - De `CriaCerto.Web/wwwroot/` (`app.css`, `lib/`, `imgs/`) → `CriaCerto.Shared.UI/wwwroot/` (manter `favicon.png`, `icon-192.png`, `icon-512.png`, `robots.txt`, `sitemap.xml`, `llms.txt` em `CriaCerto.Web/wwwroot` ou servir via `_content/CriaCerto.Shared.UI/`).
-- **Subtarefa 1.2.3:** Ajustar namespaces ou definir `<RootNamespace>CriaCerto.Web.Client</RootNamespace>` temporariamente em `CriaCerto.Shared.UI.csproj` se optar por preservar todos os namespaces `CriaCerto.Web.Client.*` sem refatoração em massa. **Recomendação:** atualizar de forma limpa para `CriaCerto.Shared.UI` apenas se todos os imports forem atualizados em conjunto; caso contrário, manter `RootNamespace` como `CriaCerto.Shared.UI` e atualizar `_Imports.razor` e referências via busca e substituição global.
-- **Subtarefa 1.2.4:** Garantir que `Routes.razor` aponte `AppAssembly="typeof(Routes).Assembly"`.
+  - De `CriaCerto.Web/wwwroot/` (`app.css`, `lib/`, `imgs/`) → `CriaCerto.Shared.UI/wwwroot/` (mantendo cópia de `imgs/CriaCerto.png` em `CriaCerto.Web/wwwroot/imgs/` para preservação de OpenGraph e rotas externas).
+- [x] **Subtarefa 1.2.3:** Ajustar namespaces de forma limpa para `CriaCerto.Shared.UI.*` em todos os arquivos C# (`.cs`) e componentes Razor (`.razor`), atualizando `_Imports.razor` e todas as referências cruzadas sem artifícios transitórios.
+- [x] **Subtarefa 1.2.4:** Garantir que `Routes.razor` aponte `AppAssembly="typeof(Routes).Assembly"` e utilize `CriaCerto.Shared.UI.Pages.RedirectToLogin`.
 
-### Tarefa 1.3: Atualizar `CriaCerto.Web.Client`, `CriaCerto.Web`, testes e `CriaCerto.slnx`
-- **Subtarefa 1.3.1:** Em `CriaCerto.Web.Client.csproj`, remover as `<ProjectReference>` dos módulos (agora transitivas via `CriaCerto.Shared.UI`) e adicionar `<ProjectReference Include="..\..\CriaCerto.Shared.UI\CriaCerto.Shared.UI.csproj" />`.
-- **Subtarefa 1.3.2:** Em `src/Web/CriaCerto.Web/CriaCerto.Web/Components/App.razor`, atualizar os caminhos estáticos que foram movidos para a RCL:
+### Tarefa 1.3: Atualizar `CriaCerto.Web.Client`, `CriaCerto.Web`, testes e `CriaCerto.slnx` [CONCLUÍDO - FASE 1]
+- [x] **Subtarefa 1.3.1:** Em `CriaCerto.Web.Client.csproj`, remover as `<ProjectReference>` dos módulos (agora transitivas via `CriaCerto.Shared.UI`) e adicionar `<ProjectReference Include="..\..\CriaCerto.Shared.UI\CriaCerto.Shared.UI.csproj" />`. Atualizar `Program.cs` de `CriaCerto.Web.Client` com usings da RCL e classe pública parcial para reflexão.
+- [x] **Subtarefa 1.3.2:** Em `src/Web/CriaCerto.Web/CriaCerto.Web/Components/App.razor`, atualizar os caminhos estáticos que foram movidos para a RCL:
   - `_content/CriaCerto.Shared.UI/lib/bootstrap/dist/css/bootstrap.min.css`
   - `_content/CriaCerto.Shared.UI/app.css`
+  - `_content/CriaCerto.Shared.UI/CriaCerto.Shared.UI.bundle.scp.css`
   - `_content/CriaCerto.Shared.UI/js/downloadHelper.js`
   - `_content/CriaCerto.Shared.UI/js/offlineSync.js`
-  - Manter `<CriaCerto.Shared.UI.Routes ... />` (ou namespace escolhido) e ajustar `<link rel="stylesheet" href="@Assets["CriaCerto.Web.styles.css"]" />` se houver CSS isolado na RCL (`_content/CriaCerto.Shared.UI/CriaCerto.Shared.UI.bundle.scp.css`).
-- **Subtarefa 1.3.3:** Atualizar `tests/Unit/CriaCerto.Web.Client.UnitTests/CriaCerto.Web.Client.UnitTests.csproj` para referenciar também `CriaCerto.Shared.UI.csproj`.
-- **Subtarefa 1.3.4:** Registrar `src/Web/CriaCerto.Shared.UI/CriaCerto.Shared.UI.csproj` em `CriaCerto.slnx`.
+  - Referenciar `<CriaCerto.Shared.UI.Routes @rendermode="@(new InteractiveWebAssemblyRenderMode(prerender: false))" />`.
+  - Atualizar `Program.cs` e `Dockerfile` do Web Host para incluir a RCL e projetos de aplicação.
+- [x] **Subtarefa 1.3.3:** Atualizar `tests/Unit/CriaCerto.Web.Client.UnitTests/CriaCerto.Web.Client.UnitTests.csproj` para referenciar também `CriaCerto.Shared.UI.csproj`, atualizando usings nos testes e caminhos em `PwaFieldPagesOfflineStateTests.cs`.
+- [x] **Subtarefa 1.3.4:** Registrar `src/Web/CriaCerto.Shared.UI/CriaCerto.Shared.UI.csproj` em `CriaCerto.slnx` (concluído na Tarefa 1.1).
 
-### Validação da Fase 1
+### Validação da Fase 1 [CONCLUÍDA COM SUCESSO]
 ```bash
-dotnet build CriaCerto.slnx
-dotnet test tests/Unit/CriaCerto.Web.Client.UnitTests/CriaCerto.Web.Client.UnitTests.csproj
+XDG_RUNTIME_DIR=/tmp dotnet build CriaCerto.slnx
+# Build succeeded: 0 Warning(s), 0 Error(s)
+
+XDG_RUNTIME_DIR=/tmp dotnet test tests/Unit/CriaCerto.Web.Client.UnitTests/CriaCerto.Web.Client.UnitTests.csproj
+# Passed! - Failed: 0, Passed: 170, Skipped: 0, Total: 170
+
+XDG_RUNTIME_DIR=/tmp dotnet test CriaCerto.slnx
+# Passed! - Todas as suítes da solução integradas com sucesso (105 arq, 541 tenancy, 384 backoffice, 213 referral, etc.)
 ```
 
 ---

@@ -1,6 +1,6 @@
 using System.Text.Json;
-using CriaCerto.Web.Client.Models;
-using CriaCerto.Web.Client.Services;
+using CriaCerto.Shared.UI.Models;
+using CriaCerto.Shared.UI.Services;
 using FluentAssertions;
 using Microsoft.JSInterop;
 using NSubstitute;

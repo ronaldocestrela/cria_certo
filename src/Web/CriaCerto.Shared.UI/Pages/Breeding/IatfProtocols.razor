@@ -1,0 +1,441 @@
+@page "/breeding/iatf"
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@attribute [Authorize]
+@using CriaCerto.Shared.UI.Components
+@using CriaCerto.Shared.UI.Models
+@inject CriaCerto.Shared.UI.Services.BreedingOpsApiClient BreedingApi
+@inject CriaCerto.Shared.UI.Services.PlantelApiClient PlantelApi
+@inject AuthenticationStateProvider AuthStateProvider
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Cria Certo - Protocolos de IATF</PageTitle>
+
+<ModuleGuard Module="Breeding">
+    <div class="container-fluid p-4">
+        @if (!string.IsNullOrEmpty(_errorMessage))
+        {
+            <div class="alert alert-danger alert-dismissible fade show shadow-sm" role="alert">
+                <i class="bi bi-exclamation-triangle-fill me-2"></i><strong>Erro:</strong> @_errorMessage
+                <button type="button" class="btn-close" @onclick="() => _errorMessage = null"></button>
+            </div>
+        }
+        @if (!string.IsNullOrEmpty(_successMessage))
+        {
+            <div class="alert alert-success alert-dismissible fade show shadow-sm" role="alert">
+                <i class="bi bi-check-circle-fill me-2"></i><strong>Sucesso:</strong> @_successMessage
+                <button type="button" class="btn-close" @onclick="() => _successMessage = null"></button>
+            </div>
+        }
+
+        <!-- HEADER & ACTIONS -->
+        <div class="row align-items-center mb-4">
+            <div class="col-md-7">
+                <p class="text-uppercase tracking-wider fw-bold text-success mb-1 small">MÓDULO REPRODUÇÃO & IATF</p>
+                <h2 class="fw-bold text-dark mb-1">Protocolos de IATF & Sincronização</h2>
+                <p class="text-muted mb-0">Gestão de lotes de Inseminação Artificial em Tempo Fixo, agenda de hormônios e alocação de sêmen.</p>
+            </div>
+            <div class="col-md-5 text-md-end mt-3 mt-md-0">
+                <button type="button" class="btn btn-outline-secondary me-2 fw-semibold" @onclick="LoadProtocolsAsync">
+                    <span class="material-symbols-outlined align-middle fs-5 me-1">refresh</span> Sincronizar
+                </button>
+                <button type="button" class="btn btn-success fw-bold shadow-sm" @onclick="OpenCreateModal">
+                    <span class="material-symbols-outlined align-middle fs-5 me-1">add</span> Novo Protocolo IATF
+                </button>
+            </div>
+        </div>
+
+        <!-- KPI SUMMARY CARDS -->
+        <div class="row g-3 mb-4">
+            <div class="col-6 col-md-3">
+                <div class="card border-0 shadow-sm p-3 bg-white h-100">
+                    <div class="text-muted small text-uppercase font-monospace fw-semibold">Total Protocolos</div>
+                    <div class="fs-3 fw-bold text-dark my-1">@_protocols.Count</div>
+                    <div class="small text-muted">Lotes Cadastrados</div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="card border-0 shadow-sm p-3 bg-white h-100">
+                    <div class="text-muted small text-uppercase font-monospace fw-semibold">Matrizes em Protocolo</div>
+                    <div class="fs-3 fw-bold text-primary my-1">@TotalCowsInIatf</div>
+                    <div class="small text-muted">Fêmeas Sincronizadas</div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="card border-0 shadow-sm p-3 bg-white h-100">
+                    <div class="text-muted small text-uppercase font-monospace fw-semibold">Inseminações Pendentes</div>
+                    <div class="fs-3 fw-bold text-warning my-1">@PendingInseminationsCount</div>
+                    <div class="small text-muted">Aguardando D10</div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="card border-0 shadow-sm p-3 bg-white h-100">
+                    <div class="text-muted small text-uppercase font-monospace fw-semibold">Média Matrizes / Lote</div>
+                    <div class="fs-3 fw-bold text-success my-1">@(AverageCowsPerProtocol > 0 ? $"{AverageCowsPerProtocol:N0}" : "-")</div>
+                    <div class="small text-muted">Fêmeas por Protocolo</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SEARCH BAR -->
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-body p-3">
+                <div class="row g-2 align-items-center">
+                    <div class="col-md-6">
+                        <div class="input-group">
+                            <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+                            <input type="text" class="form-control border-start-0 ps-0" placeholder="Buscar protocolo por nome..." @bind="_searchQuery" @bind:event="oninput" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TABLE -->
+        <div class="card border-0 shadow-sm">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Nome do Protocolo</th>
+                            <th>Início (D0)</th>
+                            <th>Inseminação (D10)</th>
+                            <th>Matrizes Alocadas</th>
+                            <th>Status / Fase</th>
+                            <th class="text-end">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (_isLoading)
+                        {
+                            <tr>
+                                <td colspan="6" class="text-center py-5">
+                                    <div class="spinner-border text-primary" role="status"></div>
+                                    <p class="text-muted mt-2 mb-0">Carregando protocolos IATF...</p>
+                                </td>
+                            </tr>
+                        }
+                        else if (!FilteredProtocols.Any())
+                        {
+                            <tr>
+                                <td colspan="6" class="text-center py-5 text-muted">
+                                    <span class="material-symbols-outlined fs-1 text-secondary mb-2">event_note</span>
+                                    <p class="mb-0">Nenhum protocolo IATF encontrado.</p>
+                                </td>
+                            </tr>
+                        }
+                        else
+                        {
+                            @foreach (var p in FilteredProtocols)
+                            {
+                                <tr>
+                                    <td>
+                                        <div class="fw-bold text-dark">@p.Name</div>
+                                        <div class="d-flex flex-wrap gap-1 align-items-center mt-1">
+                                            @if (!string.IsNullOrWhiteSpace(p.BullName))
+                                            {
+                                                <span class="badge bg-primary-subtle text-primary border border-primary-subtle small">
+                                                    <i class="bi bi-gender-male me-1"></i>Touro: @p.BullName
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-light text-muted border small">
+                                                    <i class="bi bi-dash-circle me-1"></i>Touro Externo
+                                                </span>
+                                            }
+                                            <small class="text-muted ms-1">ID Sêmen: @p.SemenBatchId.ToString().Substring(0, 8)</small>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="fw-semibold">@p.StartDate.ToString("dd/MM/yyyy")</div>
+                                        <small class="text-muted">Colocação Implante</small>
+                                    </td>
+                                    <td>
+                                        <div class="fw-semibold text-primary">@p.InseminationDate.ToString("dd/MM/yyyy")</div>
+                                        <small class="text-muted">Inseminação Artificial</small>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-primary fs-6 font-monospace">@p.CowCount Matrizes</span>
+                                    </td>
+                                    <td>
+                                        @if (p.InseminationDate >= DateTime.Today)
+                                        {
+                                            <span class="badge bg-warning text-dark"><i class="bi bi-clock me-1"></i>Em Sincronização</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-success"><i class="bi bi-check2-all me-1"></i>Inseminado</span>
+                                        }
+                                    </td>
+                                    <td class="text-end">
+                                        <button type="button" class="btn btn-sm btn-outline-primary" @onclick="() => SelectProtocol(p)">
+                                            <i class="bi bi-eye me-1"></i> Detalhes
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: CRIAR NOVO PROTOCOLO IATF -->
+    @if (_showCreateModal)
+    {
+        <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+            <div class="modal-dialog modal-lg modal-dialog-centered">
+                <div class="modal-content border-0 shadow">
+                    <div class="modal-header bg-success text-white">
+                        <h5 class="modal-title fw-bold"><i class="bi bi-plus-circle me-2"></i>Novo Protocolo IATF</h5>
+                        <button type="button" class="btn-close btn-close-white" @onclick="() => _showCreateModal = false"></button>
+                    </div>
+                    <div class="modal-body">
+                        <EditForm Model="@_form" OnValidSubmit="HandleCreateProtocol">
+                            <DataAnnotationsValidator />
+
+                            <div class="row g-3">
+                                <div class="col-md-12">
+                                    <label class="form-label fw-semibold">Nome / Identificador do Lote IATF *</label>
+                                    <InputText class="form-control" @bind-Value="_form.Name" placeholder="Ex: Protocolo IATF Primavera 2026 - Lote 1" required />
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold">Data de Início D0 (Implante) *</label>
+                                    <InputDate class="form-control" @bind-Value="_form.StartDate" />
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold">Data da Inseminação D10 *</label>
+                                    <InputDate class="form-control" @bind-Value="_form.InseminationDate" />
+                                </div>
+
+                                <div class="col-md-12">
+                                    <label class="form-label fw-semibold">Touro Reprodutor</label>
+                                    <InputSelect class="form-select" @bind-Value="_form.BullId">
+                                        <option value="">Nenhum (Touro externo / Não cadastrado na propriedade)</option>
+                                        @foreach (var bull in _availableBulls)
+                                        {
+                                            <option value="@bull.Id">
+                                                @(string.IsNullOrWhiteSpace(bull.Name) || bull.Name == bull.EarTag ? bull.EarTag : $"{bull.EarTag} ({bull.Name})") - @bull.Breed
+                                            </option>
+                                        }
+                                    </InputSelect>
+                                    <div class="form-text">
+                                        Selecione o touro da propriedade utilizado nesta inseminação ou mantenha em branco caso utilize sêmen externo.
+                                    </div>
+                                </div>
+
+                                <div class="col-md-12">
+                                    <label class="form-label fw-semibold">Selecione as Matrizes do Plantel *</label>
+                                    @if (AvailableFemaleCows.Any())
+                                    {
+                                        <div class="border rounded p-2" style="max-height: 180px; overflow-y: auto;">
+                                            @foreach (var cow in AvailableFemaleCows)
+                                            {
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="checkbox" id="cow_@cow.Id" 
+                                                           checked="@_selectedCowIds.Contains(cow.Id)"
+                                                           @onchange="(e) => ToggleCowSelection(cow.Id, e.Value)" />
+                                                    <label class="form-check-label" for="cow_@cow.Id">
+                                                        <strong>@cow.EarTag</strong> @(string.IsNullOrEmpty(cow.Nickname) ? "" : $"({cow.Nickname})") - Status: @cow.Status
+                                                    </label>
+                                                </div>
+                                            }
+                                        </div>
+                                        <small class="text-muted">@_selectedCowIds.Count matriz(es) selecionada(s)</small>
+                                    }
+                                    else
+                                    {
+                                        <div class="text-muted small border rounded p-3 text-center">Nenhuma matriz disponível no plantel. Cadastre matrizes primeiro.</div>
+                                    }
+                                </div>
+                            </div>
+
+                            <div class="mt-4 text-end">
+                                <button type="button" class="btn btn-outline-secondary me-2" @onclick="() => _showCreateModal = false">Cancelar</button>
+                                <button type="submit" class="btn btn-success fw-bold" disabled="@(_isSaving || !_selectedCowIds.Any())">
+                                    @if (_isSaving)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-1"></span>
+                                    }
+                                    Salvar Protocolo IATF
+                                </button>
+                            </div>
+                        </EditForm>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</ModuleGuard>
+
+@code {
+    private Guid _tenantId = Guid.Empty;
+    private bool _isLoading = true;
+    private bool _isSaving = false;
+    private string? _errorMessage;
+    private string? _successMessage;
+    private string _searchQuery = string.Empty;
+
+    private List<IatfProtocolDto> _protocols = new();
+    private List<CowSummaryDto> _availableCows = new();
+    private List<BullSummaryDto> _availableBulls = new();
+    private HashSet<Guid> _selectedCowIds = new();
+
+    private bool _showCreateModal = false;
+    private ProtocolFormModel _form = new();
+
+    private static bool IsBull(string? category) =>
+        string.Equals(category, "Reprodutor", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(category, "Touro", StringComparison.OrdinalIgnoreCase);
+
+    private IEnumerable<CowSummaryDto> AvailableFemaleCows =>
+        _availableCows.Where(c => !IsBull(c.Category));
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user.Identity?.IsAuthenticated == true)
+        {
+            var tenantClaim = user.FindFirst("TenantId")?.Value;
+            if (Guid.TryParse(tenantClaim, out var tenantId))
+            {
+                _tenantId = tenantId;
+            }
+        }
+
+        await LoadProtocolsAsync();
+    }
+
+    private async Task LoadProtocolsAsync()
+    {
+        _isLoading = true;
+        _errorMessage = null;
+
+        try
+        {
+            if (_tenantId != Guid.Empty)
+            {
+                _protocols = await BreedingApi.GetIatfProtocolsAsync(_tenantId);
+            }
+
+            var cowsResponse = await PlantelApi.ListCowsAsync(null, null);
+            if (cowsResponse?.Items != null)
+            {
+                _availableCows = cowsResponse.Items;
+            }
+
+            _availableBulls = await PlantelApi.ListBullsAsync(_tenantId);
+            if (!_availableBulls.Any() && _availableCows.Any())
+            {
+                _availableBulls = _availableCows
+                    .Where(c => IsBull(c.Category) && c.Status != ReproductiveStatus.Culled && c.Status != ReproductiveStatus.Sold)
+                    .Select(c => new BullSummaryDto(c.Id, c.EarTag, c.Nickname ?? c.EarTag, c.Breed, c.SisbovId, true))
+                    .ToList();
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Erro ao carregar protocolos IATF: {ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private IEnumerable<IatfProtocolDto> FilteredProtocols => _protocols.Where(p =>
+        string.IsNullOrWhiteSpace(_searchQuery) || p.Name.Contains(_searchQuery, StringComparison.OrdinalIgnoreCase));
+
+    private int TotalCowsInIatf => _protocols.Sum(p => p.CowCount);
+    private int PendingInseminationsCount => _protocols.Count(p => p.InseminationDate >= DateTime.Today);
+    private double AverageCowsPerProtocol => _protocols.Any() ? _protocols.Average(p => p.CowCount) : 0;
+
+    private void OpenCreateModal()
+    {
+        _form = new ProtocolFormModel
+        {
+            StartDate = DateTime.Today,
+            InseminationDate = DateTime.Today.AddDays(10),
+            SemenBatchId = Guid.NewGuid(),
+            BullId = null
+        };
+        _selectedCowIds.Clear();
+        _showCreateModal = true;
+    }
+
+    private void ToggleCowSelection(Guid cowId, object? checkedValue)
+    {
+        bool isChecked = checkedValue is bool b && b;
+        if (isChecked)
+        {
+            _selectedCowIds.Add(cowId);
+        }
+        else
+        {
+            _selectedCowIds.Remove(cowId);
+        }
+    }
+
+    private void SelectProtocol(IatfProtocolDto protocol)
+    {
+        var touroInfo = !string.IsNullOrWhiteSpace(protocol.BullName) ? $" (Touro: {protocol.BullName})" : " (Touro Externo)";
+        _successMessage = $"Protocolo '{protocol.Name}'{touroInfo} selecionado com {protocol.CowCount} matrizes.";
+    }
+
+    private async Task HandleCreateProtocol()
+    {
+        if (!_selectedCowIds.Any())
+        {
+            _errorMessage = "Selecione ao menos uma matriz para o protocolo IATF.";
+            return;
+        }
+
+        _isSaving = true;
+        _errorMessage = null;
+
+        try
+        {
+            var result = await BreedingApi.RegisterIatfProtocolAsync(
+                _form.Name,
+                _form.StartDate,
+                _form.InseminationDate,
+                _form.SemenBatchId,
+                _selectedCowIds.ToList(),
+                _tenantId,
+                _form.BullId);
+
+            if (result != null)
+            {
+                var touroInfo = !string.IsNullOrWhiteSpace(result.BullName) ? $" com touro '{result.BullName}'" : "";
+                _successMessage = $"Protocolo '{result.Name}' criado com sucesso para {result.CowCount} matrizes{touroInfo}!";
+                _showCreateModal = false;
+                await LoadProtocolsAsync();
+            }
+            else
+            {
+                _errorMessage = "Erro ao registrar o protocolo IATF. Verifique os dados.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Erro ao registrar protocolo: {ex.Message}";
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    public class ProtocolFormModel
+    {
+        public string Name { get; set; } = string.Empty;
+        public DateTime StartDate { get; set; } = DateTime.Today;
+        public DateTime InseminationDate { get; set; } = DateTime.Today.AddDays(10);
+        public Guid SemenBatchId { get; set; } = Guid.NewGuid();
+        public Guid? BullId { get; set; }
+    }
+}

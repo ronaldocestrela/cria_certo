@@ -1,8 +1,8 @@
 using System.Net;
 using System.Net.Http.Json;
 using CriaCerto.BuildingBlocks.Abstractions.Results;
-using CriaCerto.Web.Client.Models;
-using CriaCerto.Web.Client.Services;
+using CriaCerto.Shared.UI.Models;
+using CriaCerto.Shared.UI.Services;
 using FluentAssertions;
 using Microsoft.JSInterop;
 using NSubstitute;

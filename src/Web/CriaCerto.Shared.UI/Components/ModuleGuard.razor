@@ -1,0 +1,404 @@
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Navigation
+@inject TenancyApiClient TenancyApiClient
+@inject CustomAuthStateProvider CustomAuth
+@using System.Security.Claims
+@using CriaCerto.BuildingBlocks.Abstractions.Licensing
+@using CriaCerto.Shared.UI.Services
+@using CriaCerto.Shared.UI.Auth
+
+@if (_isChecking)
+{
+    <div style="display: flex; justify-content: center; align-items: center; min-height: 240px;">
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 0.75rem;">
+            <span class="material-symbols-outlined animate-spin text-[36px]" style="color: var(--cc-primary);">sync</span>
+            <span class="font-mono text-xs text-muted" style="color: var(--cc-ink-muted);">Verificando licença modular...</span>
+        </div>
+    </div>
+}
+else if (_hasAccess)
+{
+    @ChildContent
+}
+else
+{
+    <!-- High-fidelity modular upsell screen matching Stitch mockup & CriaCerto Design System -->
+    <div style="max-width: 860px; margin: 2rem auto; padding: 0 1rem;">
+        <div style="background-color: white; border: 1px solid var(--cc-border); border-radius: 14px; overflow: hidden; box-shadow: var(--cc-shadow); position: relative;">
+            
+            <!-- Dynamic header accent bar -->
+            <div style="height: 6px; background: linear-gradient(90deg, var(--cc-primary), var(--cc-tertiary-container, #c5430f), var(--cc-secondary));"></div>
+            
+            <div style="padding: 3rem 2rem; display: flex; flex-direction: column; align-items: center; text-align: center;">
+                
+                <!-- Icon badge stack -->
+                <div style="position: relative; margin-bottom: 1.5rem;">
+                    <div style="width: 84px; height: 84px; border-radius: 50%; background-color: var(--cc-canvas); border: 1px solid var(--cc-border); display: flex; align-items: center; justify-content: center;">
+                        <span class="material-symbols-outlined text-[42px]" style="color: var(--cc-primary); font-variation-settings: 'wght' 300;">@_upsell.Icon</span>
+                    </div>
+                    <div style="position: absolute; bottom: -2px; right: -2px; width: 32px; height: 32px; border-radius: 50%; background-color: #ffdbd0; border: 2px solid white; display: flex; align-items: center; justify-content: center; color: #ba1a1a;">
+                        <span class="material-symbols-outlined text-[18px]">lock</span>
+                    </div>
+                </div>
+
+                <!-- Title & Modular Context Badge -->
+                <h2 class="font-headline text-[30px] font-bold" style="color: var(--cc-ink); margin: 0 0 0.5rem 0; letter-spacing: -0.01em;">
+                    Módulo de @_upsell.ModuleName
+                </h2>
+                <div style="display: inline-flex; align-items: center; gap: 0.5rem; background-color: #ffdbd0; color: #832600; padding: 0.35rem 1rem; border-radius: 99px; font-size: 13px; font-weight: bold; margin-bottom: 1.5rem;" class="font-mono">
+                    <span class="material-symbols-outlined text-[16px]">info</span>
+                    Módulo Adicional Opcional • Faixa Atual: @_upsell.TierName
+                </div>
+
+                <!-- Contextual Upsell Callout Box -->
+                <div style="background: linear-gradient(135deg, rgba(46, 95, 70, 0.08), rgba(197, 67, 15, 0.08)); border: 1.5px solid var(--cc-primary); border-radius: 12px; padding: 1.25rem 1.75rem; margin-bottom: 2rem; max-width: 680px; width: 100%; box-shadow: 0 2px 8px rgba(46, 95, 70, 0.08);">
+                    <div style="display: flex; align-items: center; justify-content: center; gap: 0.75rem; flex-wrap: wrap;">
+                        <span class="material-symbols-outlined text-[26px]" style="color: var(--cc-primary);">add_shopping_cart</span>
+                        <span style="font-size: 16px; font-weight: 700; color: var(--cc-ink); line-height: 1.4;">
+                            @ModuleGuardUpsellCalculator.FormatUpsellCallout(_upsell)
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Value Proposition -->
+                <p style="color: var(--cc-ink-muted); font-size: 16px; max-width: 640px; margin: 0 0 2.5rem 0; line-height: 1.6;">
+                    @_upsell.ValueProposition
+                </p>
+
+                <!-- Bento Feature Matrix -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 1rem; width: 100%; margin-bottom: 2.5rem;">
+                    @foreach (var feature in _upsell.Features)
+                    {
+                        <div style="background-color: var(--cc-canvas); border: 1px solid var(--cc-border); border-radius: 12px; padding: 1.25rem; text-align: left; transition: transform 0.2s, box-shadow 0.2s;">
+                            <div style="width: 38px; height: 38px; border-radius: 8px; background-color: @feature.BgColor; color: @feature.Color; display: flex; align-items: center; justify-content: center; margin-bottom: 0.75rem;">
+                                <span class="material-symbols-outlined text-[22px]">@feature.Icon</span>
+                            </div>
+                            <h4 class="font-mono text-[13px] font-bold" style="margin: 0 0 0.25rem 0; color: var(--cc-ink); text-transform: uppercase;">@feature.Title</h4>
+                            <p style="margin: 0; font-size: 12.5px; color: var(--cc-ink-muted); line-height: 1.45;">@feature.Description</p>
+                        </div>
+                    }
+                </div>
+
+                <!-- Action CTA Area -->
+                @if (_isAdmin)
+                {
+                    <div style="display: flex; flex-direction: column; sm-flex-direction: row; gap: 1rem; justify-content: center; width: 100%; max-width: 600px;">
+                        @if (_hasActiveStripeSubscription)
+                        {
+                            <button type="button" class="pressed-effect" @onclick="OpenConfirmModal"
+                                    style="padding: 0.9rem 2rem; background-color: var(--cc-primary); color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.5rem; font-size: 15px; box-shadow: 0 4px 12px rgba(46, 95, 70, 0.25);">
+                                <span class="material-symbols-outlined text-[22px]">add_task</span>
+                                <span>Adicionar Módulo à Minha Assinatura</span>
+                            </button>
+                        }
+                        else
+                        {
+                            <button type="button" class="pressed-effect" @onclick="GoToSubscriptionWithPreselectedModule"
+                                    style="padding: 0.9rem 2rem; background-color: var(--cc-primary); color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.5rem; font-size: 15px; box-shadow: 0 4px 12px rgba(46, 95, 70, 0.25);">
+                                <span class="material-symbols-outlined text-[22px]">shopping_cart_checkout</span>
+                                <span>Contratar Assinatura com este Módulo</span>
+                            </button>
+                        }
+
+                        <button type="button" class="pressed-effect" @onclick="GoToSubscriptionWithPreselectedModule"
+                                style="padding: 0.9rem 1.75rem; background: transparent; border: 1px solid var(--cc-border); color: var(--cc-ink); border-radius: 8px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.5rem; font-size: 14px;">
+                            <span class="material-symbols-outlined text-[20px]">tune</span>
+                            <span>Personalizar no Monte seu Plano</span>
+                        </button>
+                    </div>
+                }
+                else
+                {
+                    <div style="background-color: #f8fafc; border: 1px solid var(--cc-border); border-radius: 8px; padding: 1rem 1.5rem; display: flex; align-items: center; gap: 0.75rem; max-width: 600px; text-align: left;">
+                        <span class="material-symbols-outlined text-[24px]" style="color: var(--cc-primary);">admin_panel_settings</span>
+                        <div style="font-size: 13.5px; color: var(--cc-ink);">
+                            <strong>Modo Somente Leitura:</strong> Este módulo não está ativo para a fazenda. Solicite a contratação a um administrador para desbloquear o acesso.
+                        </div>
+                    </div>
+                }
+
+            </div>
+
+            <!-- Modular Guarantee Teaser -->
+            <div style="background-color: var(--cc-canvas); border-top: 1px solid var(--cc-border); padding: 1.5rem; text-align: center;">
+                <p style="font-size: 11px; text-transform: uppercase; color: var(--cc-ink-muted); margin: 0 0 0.5rem 0; font-weight: bold; tracking-wider: 0.05em;" class="font-mono">
+                    Catálogo 100% Modular CriaCerto
+                </p>
+                <p style="margin: 0; font-size: 13px; color: var(--cc-ink-muted);">
+                    Sem planos engessados: adicione ou remova módulos a qualquer momento na sua conta com rateio proporcional automático (*proration*).
+                </p>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- 1-Click Confirmation Modal -->
+    @if (_showConfirmModal)
+    {
+        <div style="position: fixed; inset: 0; z-index: 9999; background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(2px); display: flex; align-items: center; justify-content: center; padding: 1rem;">
+            <div style="background: white; border-radius: 14px; max-width: 520px; width: 100%; border: 1px solid var(--cc-border); box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2); overflow: hidden; animation: fadeIn 0.2s ease-out;">
+                
+                <div style="height: 5px; background: linear-gradient(90deg, var(--cc-primary), var(--cc-secondary));"></div>
+                
+                <div style="padding: 1.75rem 2rem;">
+                    
+                    <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.25rem;">
+                        <div style="width: 44px; height: 44px; border-radius: 10px; background-color: var(--cc-primary-soft); color: var(--cc-primary); display: flex; align-items: center; justify-content: center;">
+                            <span class="material-symbols-outlined text-[24px]">@_upsell.Icon</span>
+                        </div>
+                        <div>
+                            <h3 style="margin: 0; font-size: 19px; font-weight: 700; color: var(--cc-ink);" class="font-headline">
+                                Confirmar Adição do Módulo
+                            </h3>
+                            <p style="margin: 0.15rem 0 0 0; font-size: 13px; color: var(--cc-ink-muted);">
+                                Atualização imediata da sua assinatura ativa
+                            </p>
+                        </div>
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(_errorMessage))
+                    {
+                        <div style="padding: 0.75rem 1rem; background-color: #fee2e2; border: 1px solid #fca5a5; border-radius: 8px; color: #991b1b; font-size: 13px; margin-bottom: 1.25rem;">
+                            @_errorMessage
+                        </div>
+                    }
+
+                    <div style="background-color: var(--cc-canvas); border: 1px solid var(--cc-border); border-radius: 10px; padding: 1rem 1.25rem; margin-bottom: 1.25rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; font-size: 13.5px;">
+                            <span style="color: var(--cc-ink-muted);">Módulo a Ativar:</span>
+                            <strong style="color: var(--cc-ink);">@_upsell.ModuleName</strong>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; font-size: 13.5px;">
+                            <span style="color: var(--cc-ink-muted);">Faixa de Cabeças:</span>
+                            <strong style="color: var(--cc-ink);">@_upsell.TierName (até @_upsell.MaxHeads.ToString("N0") cab)</strong>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 0.5rem; border-top: 1px dashed var(--cc-border); font-size: 14.5px;">
+                            <span style="color: var(--cc-ink); font-weight: 600;">Adicional Mensal:</span>
+                            <strong style="color: var(--cc-primary); font-size: 16px;">+ R$ @_upsell.MonthlyPrice.ToString("N2")/mês</strong>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; align-items: flex-start; gap: 0.5rem; font-size: 12px; color: var(--cc-ink-muted); margin-bottom: 1.75rem; line-height: 1.45;">
+                        <span class="material-symbols-outlined text-[18px]" style="color: var(--cc-primary); flex-shrink: 0;">credit_card</span>
+                        <span>
+                            A cobrança será rateada proporcionalmente (*prorated*) aos dias restantes do seu ciclo atual e lançada automaticamente no cartão cadastrado no Stripe.
+                        </span>
+                    </div>
+
+                    <div style="display: flex; gap: 0.75rem; justify-content: flex-end;">
+                        <button type="button" @onclick="CloseConfirmModal" disabled="@_isSubmitting"
+                                style="padding: 0.7rem 1.25rem; background: transparent; border: 1px solid var(--cc-border); border-radius: 8px; font-weight: 600; color: var(--cc-ink); cursor: pointer; font-size: 13.5px;">
+                            Cancelar
+                        </button>
+                        <button type="button" @onclick="ConfirmAddModuleAsync" disabled="@_isSubmitting"
+                                style="padding: 0.7rem 1.5rem; background-color: var(--cc-primary); border: none; border-radius: 8px; font-weight: 700; color: white; cursor: pointer; font-size: 13.5px; display: flex; align-items: center; gap: 0.5rem;">
+                            @if (_isSubmitting)
+                            {
+                                <span class="material-symbols-outlined animate-spin text-[16px]">sync</span>
+                                <span>Ativando...</span>
+                            }
+                            else
+                            {
+                                <span class="material-symbols-outlined text-[18px]">check_circle</span>
+                                <span>Confirmar e Ativar Agora</span>
+                            }
+                        </button>
+                    </div>
+
+                </div>
+
+            </div>
+        </div>
+    }
+}
+
+@code {
+    [Parameter]
+    public string Module { get; set; } = string.Empty;
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    private bool _isChecking = true;
+    private bool _hasAccess = false;
+    private bool _isAdmin = false;
+    private bool _hasActiveStripeSubscription = false;
+    private string _headTierCode = "TIER_500";
+    private int _headCapacity = 500;
+    private Guid _tenantId = Guid.Empty;
+    private HashSet<string> _subscribedModules = new(StringComparer.OrdinalIgnoreCase) { "Cows" };
+    private ModularSubscriptionCatalogModel _catalog = TenancyApiClient.GetDefaultModularCatalog();
+    private ModuleUpsellInfo _upsell = ModuleGuardUpsellCalculator.ResolveUpsellInfo(
+        TenancyApiClient.GetDefaultModularCatalog(), "Nutrition", "TIER_500");
+
+    private bool _showConfirmModal = false;
+    private bool _isSubmitting = false;
+    private string? _errorMessage;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _isChecking = true;
+        
+        var state = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = state.User;
+
+        if (user.Identity?.IsAuthenticated == true)
+        {
+            var roleClaim = user.FindFirst(ClaimTypes.Role)?.Value ?? user.FindFirst("Role")?.Value;
+            _isAdmin = user.IsInRole("Admin") || string.Equals(roleClaim, "Admin", StringComparison.OrdinalIgnoreCase);
+
+            var tenantIdClaim = user.FindFirst("TenantId")?.Value;
+            if (Guid.TryParse(tenantIdClaim, out var tid))
+            {
+                _tenantId = tid;
+            }
+
+            var tierClaim = user.FindFirst("head_tier")?.Value;
+            if (!string.IsNullOrWhiteSpace(tierClaim))
+            {
+                _headTierCode = tierClaim;
+            }
+
+            var capacityClaim = user.FindFirst("head_capacity")?.Value;
+            if (int.TryParse(capacityClaim, out var cap))
+            {
+                _headCapacity = cap;
+            }
+
+            _subscribedModules = ExtractSubscribedModules(user);
+            _hasAccess = ModuleLicenseChecker.HasModuleAccess(_subscribedModules, Module);
+
+            if (!_hasAccess)
+            {
+                try
+                {
+                    _catalog = await TenancyApiClient.GetModularCatalogAsync();
+                }
+                catch
+                {
+                    _catalog = TenancyApiClient.GetDefaultModularCatalog();
+                }
+
+                _upsell = ModuleGuardUpsellCalculator.ResolveUpsellInfo(_catalog, Module, _headTierCode);
+
+                if (_tenantId != Guid.Empty)
+                {
+                    try
+                    {
+                        var profile = await TenancyApiClient.GetTenantProfileAsync(_tenantId);
+                        if (profile != null)
+                        {
+                            _hasActiveStripeSubscription = !string.IsNullOrWhiteSpace(profile.StripeSubscriptionId) &&
+                                (string.Equals(profile.Status, "Active", StringComparison.OrdinalIgnoreCase) ||
+                                 string.Equals(profile.Status, "PastDue", StringComparison.OrdinalIgnoreCase));
+                        }
+                    }
+                    catch
+                    {
+                        _hasActiveStripeSubscription = false;
+                    }
+                }
+            }
+        }
+        else
+        {
+            _hasAccess = false;
+        }
+
+        _isChecking = false;
+    }
+
+    private static HashSet<string> ExtractSubscribedModules(ClaimsPrincipal user)
+    {
+        var modules = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Cows" };
+
+        foreach (var claim in user.FindAll("subscribed_module"))
+        {
+            var canonical = ModuleGuardUpsellCalculator.ResolveCommercialModuleKey(claim.Value);
+            if (!string.IsNullOrWhiteSpace(canonical))
+            {
+                modules.Add(canonical);
+            }
+        }
+
+        foreach (var csvClaim in user.FindAll("subscribed_modules"))
+        {
+            if (string.IsNullOrWhiteSpace(csvClaim.Value))
+            {
+                continue;
+            }
+
+            var parts = csvClaim.Value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            foreach (var part in parts)
+            {
+                var canonical = ModuleGuardUpsellCalculator.ResolveCommercialModuleKey(part);
+                if (!string.IsNullOrWhiteSpace(canonical))
+                {
+                    modules.Add(canonical);
+                }
+            }
+        }
+
+        return modules;
+    }
+
+    private void OpenConfirmModal()
+    {
+        _errorMessage = null;
+        _showConfirmModal = true;
+    }
+
+    private void CloseConfirmModal()
+    {
+        if (_isSubmitting) return;
+        _showConfirmModal = false;
+        _errorMessage = null;
+    }
+
+    private void GoToSubscriptionWithPreselectedModule()
+    {
+        var targetKey = _upsell.ModuleKey;
+        Navigation.NavigateTo($"settings/subscription?addModule={Uri.EscapeDataString(targetKey)}");
+    }
+
+    private async Task ConfirmAddModuleAsync()
+    {
+        if (_isSubmitting || _tenantId == Guid.Empty) return;
+
+        _isSubmitting = true;
+        _errorMessage = null;
+
+        try
+        {
+            var updatedModules = ModuleGuardUpsellCalculator.BuildUpdatedModuleKeys(_subscribedModules, _upsell.ModuleKey);
+
+            var request = new UpdateModularSubscriptionRequestModel(
+                TenantId: _tenantId,
+                HeadTierCode: _headTierCode,
+                SelectedModules: updatedModules
+            );
+
+            var result = await TenancyApiClient.UpdateModularSubscriptionAsync(request);
+
+            if (result != null && !string.IsNullOrEmpty(result.Token))
+            {
+                await CustomAuth.MarkUserAsAuthenticated(result.Token);
+                _subscribedModules.Add(_upsell.ModuleKey);
+                _hasAccess = true;
+                _showConfirmModal = false;
+            }
+            else
+            {
+                _errorMessage = "A assinatura foi atualizada, mas não foi possível renovar o token de acesso. Por favor, recarregue a página.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+}
