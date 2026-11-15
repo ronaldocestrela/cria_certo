@@ -445,9 +445,9 @@ Enviando `op.PayloadJson` como corpo da requisição. Atualmente esse grupo de r
 
 ### Tarefa 6.1: Atualizar e Expandir Testes Unitários em `CriaCerto.Web.Client.UnitTests`
 - **Arquivo:** `tests/Unit/CriaCerto.Web.Client.UnitTests/Services/OfflineSyncServiceTests.cs`
-- **Subtarefa 6.1.1:** Garantir que todos os 6 testes existentes em `OfflineSyncServiceTests.cs` continuem passando.
-- **Subtarefa 6.1.2:** Adicionar teste unitário para `ResolveConflictAsync` com `ConflictResolutionOption.UseLocal` verificando que a requisição é enviada com `?force=true` e que o conflito é removido da lista `ActiveConflicts` após retorno `200 OK`.
-- **Subtarefa 6.1.3:** Adicionar testes unitários para `BreedingOpsApiClient` validando que `EnqueueDiagnosisAsync`, `EnqueueBreedingBatchAsync`, `IsOnlineAsync` e `GetPendingOpsCountAsync` delegam corretamente para `IOfflineSyncService`.
+- [x] **Subtarefa 6.1.1:** Garantir que todos os 6 testes existentes em `OfflineSyncServiceTests.cs` continuem passando (ampliado para 12 testes cobrindo todo o ciclo).
+- [x] **Subtarefa 6.1.2:** Adicionar teste unitário para `ResolveConflictAsync` com `ConflictResolutionOption.UseLocal` verificando que a requisição é enviada com `?force=true` e que o conflito é removido da lista `ActiveConflicts` após retorno `200 OK`.
+- [x] **Subtarefa 6.1.3:** Adicionar testes unitários para `BreedingOpsApiClient` validando que `EnqueueDiagnosisAsync`, `EnqueueBreedingBatchAsync`, `IsOnlineAsync` e `GetPendingOpsCountAsync` delegam corretamente para `IOfflineSyncService`.
 
 ### Tarefa 6.2: Checklist de Validação de Build e Testes (Comandos Obrigatórios)
 O agente LLM deve executar os seguintes comandos e garantir saída sem erros (`exit code 0`):
