@@ -187,32 +187,39 @@ dotnet build CriaCerto.slnx -maxCpuCount:1
 
 ---
 
-## Fase 4: Implementações Nativas MAUI (SecureStorage, SQLite, Share, Conectividade)
+## Fase 4: Implementações Nativas MAUI (SecureStorage, SQLite, Share, Conectividade) [CONCLUÍDO - ADR 0031]
 
-### Tarefa 4.1: `MauiTokenStorageService`
-- **Arquivo:** `src/Mobile/CriaCerto.Mobile/Services/MauiTokenStorageService.cs`
-- **Subtarefa 4.1.1:** Implementar `ITokenStorageService` usando `SecureStorage.Default.GetAsync("authToken")`, `SetAsync("authToken", token)` e `Remove("authToken")`.
-- **Subtarefa 4.1.2:** Tratar exceções de keystore/keychain (ex.: em simuladores sem entitlements) com fallback seguro e log.
+### Tarefa 4.1: `MauiTokenStorageService` [CONCLUÍDO]
+- [x] **Arquivo:** `src/Mobile/CriaCerto.Mobile/Services/MauiTokenStorageService.cs`
+- [x] **Subtarefa 4.1.1:** Implementado `ITokenStorageService` usando `SecureStorage.Default.GetAsync("authToken")`, `SetAsync("authToken", token)` e `Remove("authToken")`.
+- [x] **Subtarefa 4.1.2:** Tratamento defensivo de exceções de keystore/keychain (ex.: em simuladores sem entitlements ou dispositivos sem bloqueio) com fallback seguro em memória e log via `ILogger`.
 
-### Tarefa 4.2: `MauiFileExportService`
-- **Arquivo:** `src/Mobile/CriaCerto.Mobile/Services/MauiFileExportService.cs`
-- **Subtarefa 4.2.1:** Gravar os bytes em `Path.Combine(FileSystem.CacheDirectory, fileName)` e abrir a folha nativa de compartilhamento usando `Share.Default.RequestAsync(new ShareFileRequest { Title = fileName, File = new ShareFile(filePath, contentType) })`.
+### Tarefa 4.2: `MauiFileExportService` [CONCLUÍDO]
+- [x] **Arquivo:** `src/Mobile/CriaCerto.Mobile/Services/MauiFileExportService.cs`
+- [x] **Subtarefa 4.2.1:** Gravação de bytes em `Path.Combine(FileSystem.CacheDirectory, fileName)` e abertura da folha nativa de compartilhamento usando `Share.Default.RequestAsync(new ShareFileRequest { Title = fileName, File = new ShareFile(filePath, contentType) })`.
 
-### Tarefa 4.3: `MauiConnectivityService`
-- **Arquivo:** `src/Mobile/CriaCerto.Mobile/Services/MauiConnectivityService.cs`
-- **Subtarefa 4.3.1:** Implementar `IConnectivityService` usando `Connectivity.Current.NetworkAccess == NetworkAccess.Internet` e assinar `Connectivity.Current.ConnectivityChanged` para disparar `ConnectivityChanged?.Invoke(...)`.
+### Tarefa 4.3: `MauiConnectivityService` [CONCLUÍDO]
+- [x] **Arquivo:** `src/Mobile/CriaCerto.Mobile/Services/MauiConnectivityService.cs`
+- [x] **Subtarefa 4.3.1:** Implementado `IConnectivityService` usando `Connectivity.Current.NetworkAccess == NetworkAccess.Internet` e assinatura a `Connectivity.Current.ConnectivityChanged` para disparar `ConnectivityChanged?.Invoke(...)`, implementando `IDisposable`.
 
-### Tarefa 4.4: Persistência Offline Nativa com SQLite (`MauiOfflineSyncStorage`)
-- **Subtarefa 4.4.1:** Adicionar o pacote `sqlite-net-pcl` (e `SQLitePCLRaw.bundle_green`) ao `CriaCerto.Mobile.csproj`.
-- **Subtarefa 4.4.2:** Criar entidade local `OfflineSyncOperationEntity` mapeando `Id` (PK), `ModuleName`, `ActionType`, `PayloadJson`, `CreatedAtUtc`, `RetryCount`, `Status`.
-- **Subtarefa 4.4.3:** Implementar `MauiOfflineSyncStorage` salvando o banco em `Path.Combine(FileSystem.AppDataDirectory, "criacerto_offline.db3")`.
-- **Subtarefa 4.4.4:** Registrar `MauiTokenStorageService`, `MauiFileExportService`, `MauiConnectivityService` e `MauiOfflineSyncStorage` no `MauiProgram.cs`.
+### Tarefa 4.4: Persistência Offline Nativa com SQLite (`MauiOfflineSyncStorage`) [CONCLUÍDO]
+- [x] **Subtarefa 4.4.1:** Adicionados pacotes `sqlite-net-pcl` (`1.9.172`) e `SQLitePCLRaw.bundle_green` (`2.1.11`) ao `CriaCerto.Mobile.csproj`.
+- [x] **Subtarefa 4.4.2:** Criada entidade local `OfflineSyncOperationEntity` mapeando `Id` (PK), `ModuleName`, `ActionType`, `PayloadJson`, `CreatedAtUtc`, `RetryCount`, `Status` e índices otimizados.
+- [x] **Subtarefa 4.4.3:** Implementado `MauiOfflineSyncStorage` salvando o banco em `Path.Combine(FileSystem.AppDataDirectory, "criacerto_offline.db3")`.
+- [x] **Subtarefa 4.4.4:** Registrados `MauiTokenStorageService`, `MauiFileExportService`, `MauiConnectivityService` e `MauiOfflineSyncStorage` no `MauiProgram.cs`, com remoção limpa de `MobileAbstractionsStubs.cs`. Formalizado o [ADR 0031](docs/adrs/0031-hybrid-maui-blazor-native-platform-services.md).
 
-### Validação da Fase 4
+### Validação da Fase 4 [CONCLUÍDA COM SUCESSO]
 ```bash
 export ANDROID_HOME=/usr/lib/android-sdk
+export XDG_RUNTIME_DIR=/tmp
 dotnet build src/Mobile/CriaCerto.Mobile/CriaCerto.Mobile.csproj -f net10.0-android
-dotnet test CriaCerto.slnx
+# Build succeeded: 0 Warning(s), 0 Error(s) -> CriaCerto.Mobile.dll (net10.0-android com SQLite e APIs nativas)
+
+dotnet test tests/Unit/CriaCerto.Web.Client.UnitTests/CriaCerto.Web.Client.UnitTests.csproj
+# Passed! - Failed: 0, Passed: 185, Skipped: 0, Total: 185
+
+dotnet build CriaCerto.slnx -maxCpuCount:1
+# Build succeeded: 0 Warning(s), 0 Error(s) -> Toda a solução integrada
 ```
 
 ---

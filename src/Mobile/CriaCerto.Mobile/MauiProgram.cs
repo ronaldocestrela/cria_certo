@@ -27,11 +27,11 @@ public static class MauiProgram
         // Registra serviços compartilhados de UI e ApiClients da RCL
         builder.Services.AddCriaCertoSharedServices();
 
-        // Implementações iniciais de plataforma (serão aprofundadas com APIs nativas na Fase 4)
-        builder.Services.AddScoped<ITokenStorageService, MobileTokenStorageStub>();
-        builder.Services.AddScoped<IFileExportService, MobileFileExportStub>();
-        builder.Services.AddScoped<IConnectivityService, MobileConnectivityStub>();
-        builder.Services.AddScoped<IOfflineSyncStorage, MobileOfflineSyncStorageStub>();
+        // Implementações Nativas de Plataforma (Fase 4 - ADR 0031)
+        builder.Services.AddScoped<ITokenStorageService, MauiTokenStorageService>();
+        builder.Services.AddScoped<IFileExportService, MauiFileExportService>();
+        builder.Services.AddScoped<IConnectivityService, MauiConnectivityService>();
+        builder.Services.AddScoped<IOfflineSyncStorage, MauiOfflineSyncStorage>();
 
         // Configuração de HttpClient apontando diretamente para a CriaCerto.Api
         builder.Services.AddScoped(sp =>
