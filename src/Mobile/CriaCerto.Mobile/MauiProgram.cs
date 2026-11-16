@@ -21,7 +21,6 @@ public static class MauiProgram
 
 #if DEBUG
         builder.Services.AddBlazorWebViewDeveloperTools();
-        builder.Logging.AddDebug();
 #endif
 
         // Registra serviços compartilhados de UI e ApiClients da RCL

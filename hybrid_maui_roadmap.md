@@ -238,8 +238,13 @@ dotnet build CriaCerto.slnx -maxCpuCount:1
 - [x] **Subtarefa 5.2.2:** Em `Platforms/iOS/Info.plist`, configurado `NSAppTransportSecurity` com `NSAllowsLocalNetworking` = `true` para viabilizar testes e depuração contra API HTTP local (`http://localhost:5274`) no simulador iOS, mantendo HTTPS estrito em produção (`NSAllowsArbitraryLoads` desativado).
 - [x] **Subtarefa 5.2.3:** Criado `Platforms/iOS/Entitlements.plist` declarando `keychain-access-groups` (`$(AppIdentifierPrefix)br.com.criacerto.app`) para suporte seguro ao `SecureStorage` em builds assinados e configurado `<CodesignEntitlements>` no `CriaCerto.Mobile.csproj`. Cobertura de Living Documentation automatizada em `IosConfigurationTests.cs`.
 
-### Tarefa 5.3: Verificação de Endpoint na `CriaCerto.Api`
-- **Subtarefa 5.3.1:** Confirmar que todos os endpoints chamados pelos `*ApiClient` em `CriaCerto.Shared.UI` usam Bearer JWT no header `Authorization` (não dependem exclusivamente de cookies de mesma origem do `CriaCerto.Web`). Caso algum endpoint use cookie de sessão Web, adaptar para aceitar JWT Bearer.
+### Tarefa 5.3: Verificação de Endpoint na `CriaCerto.Api` [CONCLUÍDO]
+- [x] **Subtarefa 5.3.1:** Confirmado que 100% dos endpoints chamados pelos `*ApiClient` e serviços em `CriaCerto.Shared.UI` usam Bearer JWT no header `Authorization` e operam de forma totalmente stateless (sem dependência de cookies de mesma origem do `CriaCerto.Web` ou de navegadores).
+- [x] **Subtarefa 5.3.2:** Endurecido `FeatureFlagClientService` na RCL para injetar `ITokenStorageService` e anexar compulsoriamente `Authorization: Bearer <token>` em todas as consultas e operações de governança (`api/v1/backoffice/feature-flags`), eliminando dependência de estado ambiental prévio do `HttpClient`.
+- [x] **Subtarefa 5.3.3:** Criada cobertura de Living Documentation e testes de arquitetura automatizados:
+  - `ApiClientAuthorizationHeaderTests.cs` (207 testes em `CriaCerto.Web.Client.UnitTests`) cobrindo todos os 11 clientes de API, o `OfflineSyncService` e o `FeatureFlagClientService`.
+  - `ApiBearerAuthorizationVerificationTests.cs` (117 testes em `CriaCerto.Architecture.IntegrationTests`) auditando a exclusividade do esquema `JwtBearerDefaults.AuthenticationScheme`, a ausência de cookies de sessão e a proteção compulsória dos grupos de rotas.
+  - Formalizada decisão arquitetural no ADR `docs/adrs/0033-api-endpoint-bearer-jwt-authorization-verification.md`.
 
 ### Validação da Fase 5
 ```bash

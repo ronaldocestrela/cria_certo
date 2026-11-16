@@ -1,4 +1,6 @@
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using CriaCerto.Shared.UI.Abstractions;
 using CriaCerto.Shared.UI.Models;
 
 namespace CriaCerto.Shared.UI.Services;
@@ -7,6 +9,7 @@ public class FeatureFlagClientService : IFeatureFlagClientService
 {
     private readonly HttpClient _httpClient;
     private readonly IBackofficePermissionService _permissionService;
+    private readonly ITokenStorageService? _tokenStorage;
     private readonly Dictionary<string, FeatureFlagClientDto> _cache = new(StringComparer.OrdinalIgnoreCase);
     private DateTime? _lastFetchUtc;
     private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(2);
@@ -15,10 +18,12 @@ public class FeatureFlagClientService : IFeatureFlagClientService
 
     public FeatureFlagClientService(
         HttpClient httpClient,
-        IBackofficePermissionService permissionService)
+        IBackofficePermissionService permissionService,
+        ITokenStorageService? tokenStorage = null)
     {
         _httpClient = httpClient;
         _permissionService = permissionService;
+        _tokenStorage = tokenStorage;
     }
 
     public async Task<bool> IsFeatureEnabledAsync(string flagKey)
@@ -68,6 +73,7 @@ public class FeatureFlagClientService : IFeatureFlagClientService
             return _cache.Values.ToList();
         }
 
+        await AttachTokenAsync();
         try
         {
             var response = await _httpClient.GetAsync("api/v1/backoffice/feature-flags");
@@ -103,6 +109,7 @@ public class FeatureFlagClientService : IFeatureFlagClientService
 
     public async Task<List<RolloutSloHealthClientDto>> GetSloHealthAsync()
     {
+        await AttachTokenAsync();
         try
         {
             var response = await _httpClient.GetAsync("api/v1/backoffice/feature-flags/slo-health");
@@ -122,6 +129,7 @@ public class FeatureFlagClientService : IFeatureFlagClientService
 
     public async Task<FeatureFlagClientDto?> ToggleFlagAsync(string key, bool isEnabled, string? reason)
     {
+        await AttachTokenAsync();
         var request = new ToggleFeatureFlagClientRequest(isEnabled, reason);
         var response = await _httpClient.PostAsJsonAsync($"api/v1/backoffice/feature-flags/{Uri.EscapeDataString(key)}/toggle", request);
         if (!response.IsSuccessStatusCode) return null;
@@ -137,6 +145,7 @@ public class FeatureFlagClientService : IFeatureFlagClientService
 
     public async Task<FeatureFlagClientDto?> UpdateRolloutAsync(string key, int percentage, int maxAllowedRing, List<string>? whitelistedEmails, string? reason)
     {
+        await AttachTokenAsync();
         var request = new UpdateRolloutWaveClientRequest(percentage, maxAllowedRing, whitelistedEmails, reason);
         var response = await _httpClient.PutAsJsonAsync($"api/v1/backoffice/feature-flags/{Uri.EscapeDataString(key)}/rollout", request);
         if (!response.IsSuccessStatusCode) return null;
@@ -152,6 +161,7 @@ public class FeatureFlagClientService : IFeatureFlagClientService
 
     public async Task<FeatureFlagClientDto?> TriggerKillSwitchAsync(string key, string reason)
     {
+        await AttachTokenAsync();
         var request = new TriggerKillSwitchClientRequest(reason);
         var response = await _httpClient.PostAsJsonAsync($"api/v1/backoffice/feature-flags/{Uri.EscapeDataString(key)}/kill-switch", request);
         if (!response.IsSuccessStatusCode) return null;
@@ -167,6 +177,7 @@ public class FeatureFlagClientService : IFeatureFlagClientService
 
     public async Task<FeatureFlagClientDto?> RestoreKillSwitchAsync(string key, string reason)
     {
+        await AttachTokenAsync();
         var request = new RestoreKillSwitchClientRequest(reason);
         var response = await _httpClient.PostAsJsonAsync($"api/v1/backoffice/feature-flags/{Uri.EscapeDataString(key)}/restore", request);
         if (!response.IsSuccessStatusCode) return null;
@@ -178,5 +189,21 @@ public class FeatureFlagClientService : IFeatureFlagClientService
             OnFlagsChanged?.Invoke();
         }
         return updated;
+    }
+
+    private async Task AttachTokenAsync()
+    {
+        if (_tokenStorage == null) return;
+        try
+        {
+            var token = await _tokenStorage.GetTokenAsync();
+            _httpClient.DefaultRequestHeaders.Authorization = string.IsNullOrWhiteSpace(token)
+                ? null
+                : new AuthenticationHeaderValue("Bearer", token);
+        }
+        catch
+        {
+            _httpClient.DefaultRequestHeaders.Authorization = null;
+        }
     }
 }
