@@ -1,8 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk.Razor">
 
     <PropertyGroup>
-        <TargetFrameworks>net10.0-android</TargetFrameworks>
-        <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('osx')) or $([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net10.0-ios</TargetFrameworks>
+        <TargetFrameworks Condition="'$(MobileTargetFrameworks)' != ''">$(MobileTargetFrameworks)</TargetFrameworks>
+        <TargetFrameworks Condition="'$(MobileTargetFrameworks)' == ''">net10.0-android</TargetFrameworks>
+        <TargetFrameworks Condition="'$(MobileTargetFrameworks)' == '' and ($([MSBuild]::IsOSPlatform('osx')) or $([MSBuild]::IsOSPlatform('windows')))">$(TargetFrameworks);net10.0-ios</TargetFrameworks>
 
         <OutputType>Exe</OutputType>
         <RootNamespace>CriaCerto.Mobile</RootNamespace>
