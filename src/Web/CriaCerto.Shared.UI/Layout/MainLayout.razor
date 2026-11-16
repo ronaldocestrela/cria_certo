@@ -1,0 +1,57 @@
+@inherits LayoutComponentBase
+@using CriaCerto.Shared.UI.Components.Backoffice
+@using CriaCerto.Shared.UI.Auth
+@inject NavigationManager Navigation
+@inject CustomAuthStateProvider AuthStateProvider
+
+<ImpersonationBanner />
+
+<div class="shell-page">
+    <aside class="shell-sidebar">
+        <NavMenu />
+    </aside>
+
+    <main class="shell-main">
+        <header class="shell-header">
+            <div>
+                <p class="shell-kicker">Cria Certo</p>
+                <h1 class="shell-title">Gestão Pecuária Inteligente</h1>
+            </div>
+            <div class="shell-header-actions">
+                <SyncStatusHeader />
+                <a href="settings/profile" class="btn-profile-header" title="Meu Perfil e Segurança" aria-label="Meu Perfil e Segurança" id="btn-profile-header">
+                    <span class="material-symbols-outlined" aria-hidden="true">account_circle</span>
+                    <span class="btn-profile-text">Perfil</span>
+                </a>
+                <button type="button" class="btn-logout" @onclick="HandleLogout" title="Sair da aplicação" aria-label="Sair da aplicação" id="btn-logout-header">
+                    <span class="material-symbols-outlined" aria-hidden="true">logout</span>
+                    <span class="btn-logout-text">Sair</span>
+                </button>
+            </div>
+        </header>
+
+        <article class="shell-content">
+            <CustomErrorBoundary>
+                @Body
+            </CustomErrorBoundary>
+        </article>
+    </main>
+</div>
+
+<ToastContainer />
+<MobileNavMenu />
+<CriaCerto.Shared.UI.Components.Legal.CookieConsentBanner />
+
+<div id="blazor-error-ui" data-nosnippet>
+    An unhandled error has occurred.
+    <a href="." class="reload">Reload</a>
+    <span class="dismiss">🗙</span>
+</div>
+
+@code {
+    private async Task HandleLogout()
+    {
+        await AuthStateProvider.MarkUserAsLoggedOut();
+        Navigation.NavigateTo("/login", forceLoad: true);
+    }
+}

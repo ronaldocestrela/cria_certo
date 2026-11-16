@@ -1,0 +1,227 @@
+@page "/breeding/diagnostico"
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@attribute [Authorize]
+@using CriaCerto.Shared.UI.Components.Plantel
+@using CriaCerto.Shared.UI.Components.Breeding
+@using CriaCerto.Shared.UI.Models
+@using CriaCerto.Shared.UI.Services
+@implements IDisposable
+@inject CriaCerto.Shared.UI.Services.BreedingOpsApiClient BreedingOps
+@inject IOfflineSyncService SyncService
+
+<PageTitle>Cria Certo - Diagnóstico de Gestação</PageTitle>
+
+<ModuleGuard Module="Breeding">
+    <div class="breeding-mobile-page">
+        <header class="breeding-mobile-header">
+            <div class="breeding-brand">
+                <span class="material-symbols-outlined">agriculture</span>
+                <h1>Diagnóstico Diário</h1>
+            </div>
+            <div class="breeding-header-status">
+                <SyncStatusChip IsOnline="_isOnline" PendingCount="_pendingCount" />
+                <span class="material-symbols-outlined wifi-icon @(_isOnline ? "" : "offline")">@(_isOnline ? "wifi" : "wifi_off")</span>
+            </div>
+        </header>
+
+        <main class="breeding-mobile-main diagnosis-main">
+            <OfflineBanner Visible="@(!_isOnline || _pendingCount > 0)" Message="@_offlineMessage" />
+
+            <DnpAlertBanner Count="_dnpAlertCount" />
+
+            <section class="diagnosis-search-row">
+                <div class="diagnosis-search">
+                    <span class="material-symbols-outlined">search</span>
+                    <input @bind="_search" @bind:event="oninput" @bind:after="LoadTasksAsync" placeholder="Buscar Brinco..." />
+                </div>
+            </section>
+
+            <div class="queue-head">
+                <h2>Fila de Ultrassom</h2>
+                <span>@($"{_tasks.Count} PENDENTES")</span>
+            </div>
+
+            @if (_loading)
+            {
+                <div class="plantel-loading">Carregando fila de diagnóstico...</div>
+            }
+            else if (_tasks.Count == 0)
+            {
+                <p class="breeding-feedback">Nenhuma matriz na janela de 21–28 dias pós-cobertura.</p>
+            }
+            else
+            {
+                @for (var i = 0; i < _tasks.Count; i++)
+                {
+                    var index = i;
+                    var task = _tasks[index];
+                    <PregnancyTaskCard Task="task"
+                                       Expanded="index == _expandedIndex"
+                                       Busy="_submittingSowId == task.SowId"
+                                       OnExpand="() => _expandedIndex = index"
+                                       OnDiagnose="result => SubmitDiagnosis(task, result)" />
+                }
+            }
+
+            <div class="diagnosis-note">
+                <span class="material-symbols-outlined">info</span>
+                <p>A janela ideal de diagnóstico para o lote atual é entre <strong>21 e 28 dias</strong>. Registre os dados assim que o ultrassom for concluído para manter o DNP sob controle.</p>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(_feedback))
+            {
+                <p class="breeding-feedback">@_feedback</p>
+            }
+        </main>
+
+        <BreedingBottomNav />
+    </div>
+</ModuleGuard>
+
+@code {
+    private readonly List<PregnancyCheckTaskDto> _tasks = [];
+    private bool _loading = true;
+    private bool _isOnline = true;
+    private int _pendingCount;
+    private int _dnpAlertCount;
+    private int _expandedIndex;
+    private Guid? _submittingSowId;
+    private string _search = string.Empty;
+    private string? _feedback;
+    private string _offlineMessage = "Modo Offline - Sincronização pendente";
+
+    protected override async Task OnInitializedAsync()
+    {
+        SyncService.OnStateChanged += HandleSyncStateChanged;
+        await SyncPendingAsync();
+        await LoadTasksAsync();
+    }
+
+    private void HandleSyncStateChanged()
+    {
+        ApplySyncStateFromService();
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private void ApplySyncStateFromService()
+    {
+        _isOnline = SyncService.IsOnline;
+        _pendingCount = SyncService.PendingCount;
+        _offlineMessage = _pendingCount > 0
+            ? $"Modo Offline - {_pendingCount} operação(ões) pendente(s)"
+            : "Modo Offline - Sincronização pendente";
+    }
+
+    public void Dispose()
+    {
+        SyncService.OnStateChanged -= HandleSyncStateChanged;
+    }
+
+    private async Task LoadTasksAsync()
+    {
+        _loading = true;
+        try
+        {
+            await RefreshSyncStateAsync();
+            if (_isOnline)
+            {
+                var response = await BreedingOps.ListPregnancyChecksAsync(string.IsNullOrWhiteSpace(_search) ? null : _search);
+                _tasks.Clear();
+                if (response is not null)
+                {
+                    _tasks.AddRange(response.Items);
+                    _dnpAlertCount = response.DnpAlertCount;
+                }
+            }
+            else
+            {
+                _tasks.Clear();
+                _dnpAlertCount = 0;
+                _feedback = "Fila indisponível offline. Diagnósticos serão enfileirados para sync.";
+            }
+        }
+        catch
+        {
+            _tasks.Clear();
+            _feedback = "Não foi possível carregar a fila.";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SubmitDiagnosis(PregnancyCheckTaskDto task, PregnancyDiagnosisResult result)
+    {
+        _submittingSowId = task.SowId;
+        _feedback = null;
+        var request = new RegisterPregnancyDiagnosisRequest(
+            task.SowId,
+            DateOnly.FromDateTime(DateTime.UtcNow),
+            result == PregnancyDiagnosisResult.ReturnToEstrus ? PregnancyDiagnosisMethod.ReturnToEstrus : PregnancyDiagnosisMethod.Ultrasound,
+            result,
+            null);
+
+        try
+        {
+            if (_isOnline)
+            {
+                var response = await BreedingOps.RegisterDiagnosisAsync(request);
+                if (response is not true)
+                {
+                    _feedback = $"Falha ao registrar diagnóstico de {task.TagId}.";
+                }
+                else if (!SyncService.IsOnline)
+                {
+                    _tasks.RemoveAll(t => t.SowId == task.SowId);
+                    _feedback = $"{task.TagId} salvo offline para sincronização.";
+                }
+                else
+                {
+                    _tasks.RemoveAll(t => t.SowId == task.SowId);
+                    _feedback = $"{task.TagId}: diagnóstico registrado.";
+                }
+            }
+            else
+            {
+                var enqueued = await BreedingOps.EnqueueDiagnosisAsync(request);
+                if (enqueued)
+                {
+                    _tasks.RemoveAll(t => t.SowId == task.SowId);
+                    _feedback = $"{task.TagId} salvo offline para sincronização.";
+                }
+                else
+                {
+                    _feedback = $"Falha ao salvar diagnóstico offline de {task.TagId}.";
+                }
+            }
+
+            await RefreshSyncStateAsync();
+        }
+        finally
+        {
+            _submittingSowId = null;
+        }
+    }
+
+    private async Task SyncPendingAsync()
+    {
+        var synced = await BreedingOps.SyncPendingOpsAsync();
+
+        if (synced > 0)
+        {
+            _feedback = $"{synced} operação(ões) sincronizada(s).";
+        }
+
+        await RefreshSyncStateAsync();
+    }
+
+    private async Task RefreshSyncStateAsync()
+    {
+        _isOnline = await BreedingOps.IsOnlineAsync();
+        _pendingCount = await BreedingOps.GetPendingOpsCountAsync();
+        _offlineMessage = _pendingCount > 0
+            ? $"Modo Offline - {_pendingCount} operação(ões) pendente(s)"
+            : "Modo Offline - Sincronização pendente";
+    }
+}

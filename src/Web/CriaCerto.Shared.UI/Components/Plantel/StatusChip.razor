@@ -1,0 +1,76 @@
+@using CriaCerto.Shared.UI.Models
+
+<span class="plantel-chip @CssClass">
+    @Label
+</span>
+
+@code {
+    [Parameter]
+    public ReproductiveStatus? ReproductiveStatus { get; set; }
+
+    [Parameter]
+    public LifecycleStatus? LifecycleStatus { get; set; }
+
+    [Parameter]
+    public bool Attention { get; set; }
+
+    private string Label
+    {
+        get
+        {
+            if (Attention)
+            {
+                return "ATENÇÃO";
+            }
+
+            if (LifecycleStatus == CriaCerto.Shared.UI.Models.LifecycleStatus.Quarantine)
+            {
+                return "QUARENTENA";
+            }
+
+            if (LifecycleStatus == CriaCerto.Shared.UI.Models.LifecycleStatus.Culled)
+            {
+                return "DESCARTADO";
+            }
+
+            return ReproductiveStatus switch
+            {
+                CriaCerto.Shared.UI.Models.ReproductiveStatus.Empty => "VAZIA",
+                CriaCerto.Shared.UI.Models.ReproductiveStatus.Bred => "COBERTA",
+                CriaCerto.Shared.UI.Models.ReproductiveStatus.Pregnant => "GESTANTE",
+                CriaCerto.Shared.UI.Models.ReproductiveStatus.Lactating => "LACTANTE",
+                _ => "ATIVO"
+            };
+        }
+    }
+
+    private string CssClass
+    {
+        get
+        {
+            if (Attention)
+            {
+                return "chip-alert";
+            }
+
+            if (LifecycleStatus == CriaCerto.Shared.UI.Models.LifecycleStatus.Quarantine)
+            {
+                return "chip-warning";
+            }
+
+            if (LifecycleStatus == CriaCerto.Shared.UI.Models.LifecycleStatus.Culled)
+            {
+                return "chip-muted";
+            }
+
+            return ReproductiveStatus switch
+            {
+                CriaCerto.Shared.UI.Models.ReproductiveStatus.Empty => "chip-empty",
+                CriaCerto.Shared.UI.Models.ReproductiveStatus.Bred => "chip-bred",
+                CriaCerto.Shared.UI.Models.ReproductiveStatus.Pregnant => "chip-pregnant",
+                CriaCerto.Shared.UI.Models.ReproductiveStatus.Lactating => "chip-lactating",
+                _ => "chip-active"
+            };
+        }
+    }
+}

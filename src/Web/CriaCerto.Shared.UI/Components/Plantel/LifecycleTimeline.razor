@@ -1,0 +1,25 @@
+@using CriaCerto.Shared.UI.Models
+
+<section class="plantel-timeline">
+    <div class="timeline-heading">
+        <span class="material-symbols-outlined">history</span>
+        <h2>Linha do Tempo de Vida</h2>
+    </div>
+
+    @foreach (var item in Events.OrderByDescending(e => e.EventDate))
+    {
+        <article class="timeline-item">
+            <time>@item.EventDate.ToString("dd MMM yyyy").ToUpperInvariant()</time>
+            <strong>@item.Title</strong>
+            @if (!string.IsNullOrWhiteSpace(item.Notes))
+            {
+                <p>@item.Notes</p>
+            }
+        </article>
+    }
+</section>
+
+@code {
+    [Parameter]
+    public IReadOnlyList<PlantelEventDto> Events { get; set; } = Array.Empty<PlantelEventDto>();
+}

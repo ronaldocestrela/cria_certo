@@ -1,0 +1,170 @@
+@using CriaCerto.Shared.UI.Services
+
+@if (IsOpen)
+{
+    <div style="position: fixed; inset: 0; background-color: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 1000;">
+        <div style="background-color: white; border-radius: 12px; border: 1px solid var(--cc-border); width: 100%; max-width: 600px; padding: 1.5rem; box-shadow: var(--cc-shadow); display: flex; flex-direction: column; gap: 1.25rem;" class="font-headline">
+            
+            <!-- Header -->
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--cc-border); padding-bottom: 1rem;">
+                <div>
+                    <h3 style="margin: 0; font-size: 20px; font-weight: bold; color: var(--cc-ink);">Editar Perfil da Fazenda</h3>
+                    <p style="margin: 0.25rem 0 0 0; font-size: 13px; color: var(--cc-ink-muted);">Atualize os dados institucionais, fiscais e a capacidade da fazenda.</p>
+                </div>
+                <button @onclick="Close" style="background: transparent; border: none; color: var(--cc-ink-muted); cursor: pointer;">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+
+            <!-- Form -->
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem;">
+                
+                <div style="grid-column: span 2;">
+                    <label style="font-size: 12px; font-weight: bold; color: var(--cc-ink); text-transform: uppercase;" class="font-mono">Nome da Fazenda / Razão Social *</label>
+                    <input type="text" @bind="_name" style="width: 100%; padding: 0.6rem 0.8rem; border: 1px solid var(--cc-border); border-radius: 6px; font-size: 14px; margin-top: 0.25rem;" placeholder="Ex: Fazenda Santa Fé - Matriz" />
+                </div>
+
+                <div>
+                    <label style="font-size: 12px; font-weight: bold; color: var(--cc-ink); text-transform: uppercase;" class="font-mono">CNPJ / CPF *</label>
+                    <input type="text" @bind="_cnpj" style="width: 100%; padding: 0.6rem 0.8rem; border: 1px solid var(--cc-border); border-radius: 6px; font-size: 14px; margin-top: 0.25rem;" placeholder="12.345.678/0001-99" />
+                </div>
+
+                <div>
+                    <label style="font-size: 12px; font-weight: bold; color: var(--cc-ink); text-transform: uppercase;" class="font-mono">Inscrição Estadual</label>
+                    <input type="text" @bind="_stateRegistration" style="width: 100%; padding: 0.6rem 0.8rem; border: 1px solid var(--cc-border); border-radius: 6px; font-size: 14px; margin-top: 0.25rem;" placeholder="IE-12345678" />
+                </div>
+
+                <div>
+                    <label style="font-size: 12px; font-weight: bold; color: var(--cc-ink); text-transform: uppercase;" class="font-mono">Estado (UF) *</label>
+                    <input type="text" @bind="_state" maxlength="2" style="width: 100%; padding: 0.6rem 0.8rem; border: 1px solid var(--cc-border); border-radius: 6px; font-size: 14px; margin-top: 0.25rem; text-transform: uppercase;" placeholder="MT" />
+                </div>
+
+                <div>
+                    <label style="font-size: 12px; font-weight: bold; color: var(--cc-ink); text-transform: uppercase;" class="font-mono">Município *</label>
+                    <input type="text" @bind="_city" style="width: 100%; padding: 0.6rem 0.8rem; border: 1px solid var(--cc-border); border-radius: 6px; font-size: 14px; margin-top: 0.25rem;" placeholder="Sorriso" />
+                </div>
+
+                <div>
+                    <label style="font-size: 12px; font-weight: bold; color: var(--cc-ink); text-transform: uppercase;" class="font-mono">Área Total (Hectares)</label>
+                    <input type="number" step="0.1" @bind="_areaInHectares" style="width: 100%; padding: 0.6rem 0.8rem; border: 1px solid var(--cc-border); border-radius: 6px; font-size: 14px; margin-top: 0.25rem;" placeholder="4500" />
+                </div>
+
+                <div>
+                    <label style="font-size: 12px; font-weight: bold; color: var(--cc-ink); text-transform: uppercase;" class="font-mono">Capacidade Total (Cabeças)</label>
+                    <input type="number" @bind="_capacity" style="width: 100%; padding: 0.6rem 0.8rem; border: 1px solid var(--cc-border); border-radius: 6px; font-size: 14px; margin-top: 0.25rem;" placeholder="12500" />
+                </div>
+
+            </div>
+
+            @if (!string.IsNullOrEmpty(_errorMessage))
+            {
+                <div style="background-color: #fef2f2; color: #991b1b; padding: 0.75rem; border-radius: 6px; font-size: 13px; border: 1px solid #fecaca;">
+                    @_errorMessage
+                </div>
+            }
+
+            <!-- Actions -->
+            <div style="display: flex; justify-content: flex-end; gap: 0.75rem; border-top: 1px solid var(--cc-border); padding-top: 1rem;">
+                <button @onclick="Close" style="background: white; border: 1px solid var(--cc-border); padding: 0.5rem 1.25rem; border-radius: 6px; font-weight: bold; cursor: pointer; color: var(--cc-ink-muted);">
+                    Cancelar
+                </button>
+                <button @onclick="SaveAsync" disabled="@_isSaving" style="background: var(--cc-primary); color: white; border: none; padding: 0.5rem 1.5rem; border-radius: 6px; font-weight: bold; cursor: pointer;">
+                    @if (_isSaving)
+                    {
+                        <span>Salva...</span>
+                    }
+                    else
+                    {
+                        <span>Salvar Alterações</span>
+                    }
+                </button>
+            </div>
+
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback<bool> IsOpenChanged { get; set; }
+    [Parameter] public TenantProfileModel? Profile { get; set; }
+    [Parameter] public EventCallback<TenantProfileModel> OnSaved { get; set; }
+    [Inject] public TenancyApiClient TenancyApi { get; set; } = default!;
+
+    private string _name = string.Empty;
+    private string _cnpj = string.Empty;
+    private string _state = string.Empty;
+    private string _city = string.Empty;
+    private string _stateRegistration = string.Empty;
+    private decimal _areaInHectares;
+    private int _capacity;
+    private string _type = string.Empty;
+    private bool _isSaving;
+    private string? _errorMessage;
+
+    protected override void OnParametersSet()
+    {
+        if (Profile is not null)
+        {
+            _name = Profile.Name;
+            _cnpj = Profile.CNPJ;
+            _state = Profile.State;
+            _city = Profile.City;
+            _stateRegistration = Profile.StateRegistration;
+            _areaInHectares = Profile.AreaInHectares;
+            _capacity = Profile.Capacity;
+            _type = Profile.Type;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (Profile is null) return;
+
+        _errorMessage = null;
+
+        if (string.IsNullOrWhiteSpace(_name) || string.IsNullOrWhiteSpace(_cnpj) || string.IsNullOrWhiteSpace(_state) || string.IsNullOrWhiteSpace(_city))
+        {
+            _errorMessage = "Por favor, preencha todos os campos obrigatórios (Nome, CNPJ, UF e Cidade).";
+            return;
+        }
+
+        _isSaving = true;
+
+        var req = new UpdateTenantProfileRequest(
+            Profile.Id,
+            _name,
+            _cnpj,
+            _state,
+            _city,
+            _stateRegistration,
+            _areaInHectares,
+            _capacity,
+            _type
+        );
+
+        var success = await TenancyApi.UpdateTenantProfileAsync(req);
+
+        _isSaving = false;
+
+        var updated = Profile with
+        {
+            Name = _name,
+            CNPJ = _cnpj,
+            State = _state,
+            City = _city,
+            StateRegistration = _stateRegistration,
+            AreaInHectares = _areaInHectares,
+            Capacity = _capacity
+        };
+
+        await OnSaved.InvokeAsync(updated);
+        await Close();
+    }
+
+    private async Task Close()
+    {
+        IsOpen = false;
+        await IsOpenChanged.InvokeAsync(false);
+    }
+}

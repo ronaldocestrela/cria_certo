@@ -1,6 +1,8 @@
 using CriaCerto.Web.Components;
-using CriaCerto.Web.Client.Services;
-using CriaCerto.Web.Client.Auth;
+using CriaCerto.Shared.UI.Services;
+using CriaCerto.Shared.UI.Auth;
+using CriaCerto.Shared.UI.Abstractions;
+using CriaCerto.Web.Client.Services.Browser;
 using Microsoft.AspNetCore.DataProtection;
 using Yarp.ReverseProxy.Configuration;
 
@@ -22,6 +24,10 @@ builder.Services.AddRazorComponents()
     .AddInteractiveWebAssemblyComponents();
 
 builder.Services.AddCascadingAuthenticationState();
+builder.Services.AddScoped<ITokenStorageService, BrowserTokenStorageService>();
+builder.Services.AddScoped<IFileExportService, BrowserFileExportService>();
+builder.Services.AddScoped<IConnectivityService, BrowserConnectivityService>();
+builder.Services.AddScoped<IOfflineSyncStorage, BrowserOfflineSyncStorage>();
 builder.Services.AddScoped<CustomAuthStateProvider>();
 builder.Services.AddScoped<Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider>(sp => 
     sp.GetRequiredService<CustomAuthStateProvider>());
@@ -57,23 +63,7 @@ builder.Services.AddReverseProxy()
         });
 
 builder.Services.AddScoped(sp => new HttpClient());
-builder.Services.AddScoped<PlantelApiClient>();
-builder.Services.AddScoped<BreedingOpsApiClient>();
-builder.Services.AddScoped<GrowthApiClient>();
-builder.Services.AddScoped<NutritionApiClient>();
-builder.Services.AddScoped<CalvingApiClient>();
-builder.Services.AddScoped<SanitaryApiClient>();
-builder.Services.AddScoped<TenancyApiClient>();
-builder.Services.AddScoped<IBackofficeApiClient, BackofficeApiClient>();
-builder.Services.AddScoped<IBackofficePermissionService, BackofficePermissionService>();
-builder.Services.AddScoped<IImpersonationStateService, ImpersonationStateService>();
-builder.Services.AddScoped<IOfflineSyncService, OfflineSyncService>();
-builder.Services.AddScoped<IToastService, ToastService>();
-builder.Services.AddScoped<IFeatureFlagClientService, FeatureFlagClientService>();
-builder.Services.AddScoped<IReferralTrackingService, ReferralTrackingService>();
-builder.Services.AddScoped<IReferralApiClient, ReferralApiClient>();
-builder.Services.AddScoped<IPartnerApiClient, PartnerApiClient>();
-builder.Services.AddScoped<ICookieConsentService, CookieConsentService>();
+builder.Services.AddCriaCertoSharedServices();
 
 var app = builder.Build();
 
@@ -126,7 +116,9 @@ app.MapReverseProxy();
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveWebAssemblyRenderMode()
-    .AddAdditionalAssemblies(typeof(CriaCerto.Web.Client._Imports).Assembly)
+    .AddAdditionalAssemblies(
+        typeof(CriaCerto.Shared.UI.Routes).Assembly,
+        typeof(CriaCerto.Web.Client.Program).Assembly)
     .AllowAnonymous();
 
 app.MapGet("/r/{code}", (string code, HttpContext context) =>

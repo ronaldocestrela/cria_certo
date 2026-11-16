@@ -1,0 +1,282 @@
+@page "/growth/pastures"
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@attribute [Authorize]
+@using CriaCerto.Shared.UI.Components.Growth
+@using CriaCerto.Shared.UI.Models
+@inject CriaCerto.Shared.UI.Services.GrowthApiClient GrowthApi
+@inject IJSRuntime JSRuntime
+@inject Auth.CustomAuthStateProvider AuthStateProvider
+
+<PageTitle>Cria Certo - Manejo de Pastos e Lotação (UA/ha)</PageTitle>
+
+<ModuleGuard Module="Growth">
+    <div class="container-fluid p-4">
+        @if (_isOffline)
+        {
+            <div class="alert alert-warning d-flex align-items-center mb-4 shadow-sm" role="alert">
+                <i class="bi bi-wifi-off me-2 fs-5"></i>
+                <div>
+                    <strong>Modo Offline Ativo:</strong> Exibindo dados em cache local para uso no campo. Movimentações serão enfileiradas para sincronização posterior.
+                </div>
+            </div>
+        }
+
+        <!-- HERO SECTION -->
+        <div class="row align-items-center mb-4">
+            <div class="col-md-7">
+                <p class="text-uppercase tracking-wider fw-bold text-success mb-1 small">MÓDULO CRESCIMENTO & MANEJO</p>
+                <h2 class="fw-bold text-dark mb-1">Mapa de Pastos e Lotação de Piquetes</h2>
+                <p class="text-muted mb-0">Controle zootécnico de capacidade suporte em Unidade Animal (UA/ha) e rodízio de lotes.</p>
+            </div>
+            <div class="col-md-5 text-md-end mt-3 mt-md-0">
+                <button type="button" class="btn btn-outline-success me-2 fw-semibold" @onclick="() => _showCreatePaddockModal = true">
+                    <i class="bi bi-plus-circle me-1"></i> Novo Piquete
+                </button>
+                <button type="button" class="btn btn-outline-primary me-2 fw-semibold" @onclick="() => _showCreateLotModal = true">
+                    <i class="bi bi-collection-plus me-1"></i> Novo Lote
+                </button>
+                <button type="button" class="btn btn-warning text-dark fw-bold shadow-sm" @onclick="() => OpenMoveModal((Guid?)null)">
+                    <i class="bi bi-arrows-move me-1"></i> Manejar Lote
+                </button>
+            </div>
+        </div>
+
+        <!-- KPI SUMMARY CARDS -->
+        <div class="row g-3 mb-4">
+            <div class="col-6 col-md-3">
+                <div class="card border-0 shadow-sm p-3 bg-white h-100">
+                    <div class="text-muted small text-uppercase font-monospace fw-semibold">Piquetes Cadastrados</div>
+                    <div class="fs-3 fw-bold text-dark my-1">@_paddocks.Count</div>
+                    <div class="small text-muted">@TotalArea.ToString("N1") Hectares Totais</div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="card border-0 shadow-sm p-3 bg-white h-100">
+                    <div class="text-muted small text-uppercase font-monospace fw-semibold">Carga Total Rebanho</div>
+                    <div class="fs-3 fw-bold text-primary my-1">@TotalUA.ToString("N1") <small class="fs-6">UA</small></div>
+                    <div class="small text-muted">@TotalHeadCount Cabeças Alocadas</div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="card border-0 shadow-sm p-3 bg-white h-100">
+                    <div class="text-muted small text-uppercase font-monospace fw-semibold">Taxa Lotação Média</div>
+                    <div class="fs-3 fw-bold text-success my-1">@AverageStockingRate.ToString("F2") <small class="fs-6">UA/ha</small></div>
+                    <div class="small text-muted">Capacidade Média</div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="card border-0 shadow-sm p-3 bg-white h-100 @(OvergrazedCount > 0 ? "border-start border-danger border-4" : "")">
+                    <div class="text-muted small text-uppercase font-monospace fw-semibold">Sobrepastejo (Alertas)</div>
+                    <div class="fs-3 fw-bold @(OvergrazedCount > 0 ? "text-danger" : "text-dark") my-1">@OvergrazedCount</div>
+                    <div class="small text-muted">Piquetes Acima da Capacidade</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PASTURE PADDOCKS MAP GRID -->
+        <div class="card border-0 shadow-sm mb-5">
+            <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                <h5 class="fw-bold mb-0 text-dark"><i class="bi bi-grid-3x3-gap-fill text-success me-2"></i>Piquetes e Mapa de Ocupação</h5>
+                <span class="badge bg-light text-dark border">@_paddocks.Count pastos monitorados</span>
+            </div>
+            <div class="card-body p-4">
+                @if (_isLoading)
+                {
+                    <div class="text-center py-5">
+                        <div class="spinner-border text-success mb-2" role="status"></div>
+                        <p class="text-muted small mb-0">Carregando mapa de piquetes e lotação...</p>
+                    </div>
+                }
+                else if (_paddocks.Count == 0)
+                {
+                    <div class="text-center py-5">
+                        <i class="bi bi-pin-map display-4 text-muted mb-3 d-block"></i>
+                        <h6 class="fw-bold">Nenhum piquete cadastrado ainda</h6>
+                        <p class="text-muted small">Cadastre os pastos da sua fazenda para iniciar a gestão de capacidade suporte (UA/ha).</p>
+                        <button class="btn btn-success btn-sm mt-2" @onclick="() => _showCreatePaddockModal = true">Cadastrar Primeiro Piquete</button>
+                    </div>
+                }
+                else
+                {
+                    <div class="row g-4">
+                        @foreach (var paddock in _paddocks)
+                        {
+                            <div class="col-12 col-md-6 col-lg-4 col-xl-3">
+                                <PaddockCard Paddock="paddock" OnMoveClick="OpenMoveModal" />
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- LOTS INVENTORY TABLE -->
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                <h5 class="fw-bold mb-0 text-dark"><i class="bi bi-layers-fill text-primary me-2"></i>Lotes de Animais Ativos</h5>
+                <span class="badge bg-primary">@_lots.Count(l => l.Status == LotStatus.Active) Lotes Ativos</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Código / Nome do Lote</th>
+                                <th>Categoria</th>
+                                <th>Qtd Cabeças</th>
+                                <th>Peso Médio (kg)</th>
+                                <th>Carga UA</th>
+                                <th>Piquete Alocado</th>
+                                <th>Status</th>
+                                <th class="text-end">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var lot in _lots.Where(l => l.Status == LotStatus.Active))
+                            {
+                                <tr>
+                                    <td>
+                                        <strong class="text-dark">@lot.Code</strong> - @lot.Name
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-light text-dark border">@lot.Category</span>
+                                    </td>
+                                    <td>@lot.HeadCount cab</td>
+                                    <td>@lot.AverageWeightKg.ToString("N1") kg</td>
+                                    <td><strong class="text-primary">@lot.TotalUA.ToString("F2") UA</strong></td>
+                                    <td>
+                                        @if (lot.CurrentPaddockId.HasValue)
+                                        {
+                                            <span class="badge bg-success-subtle text-success border border-success">
+                                                <i class="bi bi-geo-alt-fill me-1"></i> @lot.PaddockName
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-warning-subtle text-warning border border-warning">Sem Pasto Alocado</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-success">Ativo</span>
+                                    </td>
+                                    <td class="text-end">
+                                        <button class="btn btn-sm btn-outline-warning text-dark me-1" title="Manejar Lote" @onclick="() => OpenMoveModalForLot(lot.Id)">
+                                            <i class="bi bi-arrows-move"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-danger" title="Encerrar Lote" @onclick="() => CloseLotAsync(lot.Id)">
+                                            <i class="bi bi-x-circle"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</ModuleGuard>
+
+<!-- MODALS -->
+<CreatePaddockModal IsOpen="_showCreatePaddockModal" TenantId="_tenantId" OnSaved="LoadDataAsync" OnClose="() => _showCreatePaddockModal = false" />
+<CreateLotModal IsOpen="_showCreateLotModal" TenantId="_tenantId" Paddocks="_paddocks" OnSaved="LoadDataAsync" OnClose="() => _showCreateLotModal = false" />
+<MoveLotModal IsOpen="_showMoveLotModal" TenantId="_tenantId" PreSelectedPaddockId="_preSelectedPaddockId" ActiveLots="_lots" Paddocks="_paddocks" OnSaved="LoadDataAsync" OnClose="() => _showMoveLotModal = false" />
+
+@code {
+    private Guid _tenantId = Guid.Empty;
+    private readonly List<PaddockStockingRateDto> _paddocks = new();
+    private readonly List<LotDto> _lots = new();
+
+    private bool _isLoading = true;
+    private bool _isOffline;
+    private bool _showCreatePaddockModal;
+    private bool _showCreateLotModal;
+    private bool _showMoveLotModal;
+    private Guid? _preSelectedPaddockId;
+
+    private decimal TotalArea => _paddocks.Sum(p => p.AreaHectares);
+    private decimal TotalUA => _paddocks.Sum(p => p.CurrentTotalUA);
+    private int TotalHeadCount => _paddocks.Sum(p => p.TotalHeadCount);
+    private decimal AverageStockingRate => TotalArea > 0 ? Math.Round(TotalUA / TotalArea, 2) : 0m;
+    private int OvergrazedCount => _paddocks.Count(p => p.IsOvergrazed);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user.Identity?.IsAuthenticated == true)
+        {
+            var tenantClaim = user.FindFirst("TenantId")?.Value;
+            if (Guid.TryParse(tenantClaim, out var tenantId))
+            {
+                _tenantId = tenantId;
+            }
+        }
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            if (_tenantId != Guid.Empty)
+            {
+                var paddocksTask = GrowthApi.GetPaddocksAsync(_tenantId);
+                var lotsTask = GrowthApi.GetLotsAsync(_tenantId);
+
+                await Task.WhenAll(paddocksTask, lotsTask);
+
+                _paddocks.Clear();
+                _paddocks.AddRange(paddocksTask.Result);
+
+                _lots.Clear();
+                _lots.AddRange(lotsTask.Result);
+            }
+            _isOffline = false;
+        }
+        catch
+        {
+            _isOffline = true;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void OpenMoveModal(Guid paddockId)
+    {
+        _preSelectedPaddockId = paddockId;
+        _showMoveLotModal = true;
+    }
+
+    private void OpenMoveModal(Guid? paddockId)
+    {
+        _preSelectedPaddockId = paddockId;
+        _showMoveLotModal = true;
+    }
+
+    private void OpenMoveModalForLot(Guid lotId)
+    {
+        _preSelectedPaddockId = null;
+        _showMoveLotModal = true;
+    }
+
+    private async Task CloseLotAsync(Guid lotId)
+    {
+        try
+        {
+            await GrowthApi.CloseLotAsync(lotId, _tenantId);
+            await LoadDataAsync();
+        }
+        catch
+        {
+            var lot = _lots.FirstOrDefault(l => l.Id == lotId);
+            if (lot != null)
+            {
+                _lots.Remove(lot);
+            }
+        }
+    }
+}

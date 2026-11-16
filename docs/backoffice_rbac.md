@@ -52,7 +52,7 @@ O módulo adota a diretiva **Default Deny**: qualquer requisição para a rota `
 
 ## 5. Como Utilizar no Backend e Frontend
 
-### Backend (.NET 10 Web API) — Minimal APIs em `Program.cs`
+### Backend (.NET 10 Web API) — Minimal APIs em `Endpoints/Backoffice/`
 
 ```csharp
 backoffice.MapGet("/tenants", ...)

@@ -1,6 +1,6 @@
 using System.Reflection;
-using CriaCerto.Web.Client.Pages.Breeding;
-using CriaCerto.Web.Client.Services;
+using CriaCerto.Shared.UI.Pages.Breeding;
+using CriaCerto.Shared.UI.Services;
 using FluentAssertions;
 using NSubstitute;
 using Xunit;
@@ -13,11 +13,11 @@ public class PwaFieldPagesOfflineStateTests
 
     private static readonly string BatchBreedingLogPath = Path.Combine(
         RepoRoot,
-        "src/Web/CriaCerto.Web/CriaCerto.Web.Client/Pages/Breeding/BatchBreedingLog.razor");
+        "src/Web/CriaCerto.Shared.UI/Pages/Breeding/BatchBreedingLog.razor");
 
     private static readonly string PregnancyCheckTasksPath = Path.Combine(
         RepoRoot,
-        "src/Web/CriaCerto.Web/CriaCerto.Web.Client/Pages/Breeding/PregnancyCheckTasks.razor");
+        "src/Web/CriaCerto.Shared.UI/Pages/Breeding/PregnancyCheckTasks.razor");
 
     [Fact]
     public void FieldPages_ShouldInjectOfflineSyncServiceAndImplementIDisposable()
@@ -153,7 +153,7 @@ public class PwaFieldPagesOfflineStateTests
         syncServiceMock.When(x => x.SetNetworkStatus(Arg.Any<bool>()))
             .Do(call => isOnline = call.Arg<bool>());
         syncServiceMock
-            .EnqueueOperationAsync("Breeding", "RegisterBreedingBatch", Arg.Any<CriaCerto.Web.Client.Models.RegisterBreedingBatchRequest>())
+            .EnqueueOperationAsync("Breeding", "RegisterBreedingBatch", Arg.Any<CriaCerto.Shared.UI.Models.RegisterBreedingBatchRequest>())
             .Returns(_ =>
             {
                 pendingCount++;
@@ -170,7 +170,7 @@ public class PwaFieldPagesOfflineStateTests
         SetProperty(page, "SyncService", syncServiceMock);
         SetProperty(page, "BreedingOps", breedingOps);
 
-        var entries = GetField<List<CriaCerto.Web.Client.Models.BreedingEntryFormModel>>(page, "_entries");
+        var entries = GetField<List<CriaCerto.Shared.UI.Models.BreedingEntryFormModel>>(page, "_entries");
         entries[0].TagId = "BR-205";
         entries[0].BoarOrSemenRef = "NELORE-01";
 
@@ -199,7 +199,7 @@ public class PwaFieldPagesOfflineStateTests
         syncServiceMock.When(x => x.SetNetworkStatus(Arg.Any<bool>()))
             .Do(call => isOnline = call.Arg<bool>());
         syncServiceMock
-            .EnqueueOperationAsync("Breeding", "RegisterDiagnosis", Arg.Any<CriaCerto.Web.Client.Models.RegisterPregnancyDiagnosisRequest>())
+            .EnqueueOperationAsync("Breeding", "RegisterDiagnosis", Arg.Any<CriaCerto.Shared.UI.Models.RegisterPregnancyDiagnosisRequest>())
             .Returns(_ =>
             {
                 pendingCount++;
@@ -216,7 +216,7 @@ public class PwaFieldPagesOfflineStateTests
         SetProperty(page, "SyncService", syncServiceMock);
         SetProperty(page, "BreedingOps", breedingOps);
 
-        var taskDto = new CriaCerto.Web.Client.Models.PregnancyCheckTaskDto(
+        var taskDto = new CriaCerto.Shared.UI.Models.PregnancyCheckTaskDto(
             Guid.NewGuid(),
             "BR-404",
             "Nelore",
@@ -225,17 +225,17 @@ public class PwaFieldPagesOfflineStateTests
             new DateOnly(2026, 10, 21),
             24,
             "Ricardo S.",
-            CriaCerto.Web.Client.Models.BreedingMethod.TimedArtificialInsemination,
+            CriaCerto.Shared.UI.Models.BreedingMethod.TimedArtificialInsemination,
             2,
             false);
 
-        var tasks = GetField<List<CriaCerto.Web.Client.Models.PregnancyCheckTaskDto>>(page, "_tasks");
+        var tasks = GetField<List<CriaCerto.Shared.UI.Models.PregnancyCheckTaskDto>>(page, "_tasks");
         tasks.Add(taskDto);
 
         // Act
         var submitMethod = typeof(PregnancyCheckTasks).GetMethod("SubmitDiagnosis", BindingFlags.Instance | BindingFlags.NonPublic);
         submitMethod.Should().NotBeNull();
-        await (Task)submitMethod!.Invoke(page, [taskDto, CriaCerto.Web.Client.Models.PregnancyDiagnosisResult.Pregnant])!;
+        await (Task)submitMethod!.Invoke(page, [taskDto, CriaCerto.Shared.UI.Models.PregnancyDiagnosisResult.Pregnant])!;
 
         // Assert
         GetField<bool>(page, "_isOnline").Should().BeFalse();

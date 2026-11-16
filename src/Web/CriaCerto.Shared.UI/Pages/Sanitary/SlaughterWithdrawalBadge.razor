@@ -1,0 +1,26 @@
+@namespace CriaCerto.Shared.UI.Pages.Sanitary
+
+@if (IsBlocked)
+{
+    <span class="badge bg-danger shadow-sm py-2 px-3">
+        <i class="bi bi-shield-slash-fill me-2"></i>
+        BLOQUEADO PARA ABATE (@RemainingDays dias restantes)
+        @if (!string.IsNullOrEmpty(BlockingProduct))
+        {
+            <span class="ms-1 opacity-75">| @BlockingProduct</span>
+        }
+    </span>
+}
+else
+{
+    <span class="badge bg-success shadow-sm py-2 px-3">
+        <i class="bi bi-shield-check me-2"></i>
+        LIBERADO PARA ABATE (Sem Carência Ativa)
+    </span>
+}
+
+@code {
+    [Parameter] public bool IsBlocked { get; set; }
+    [Parameter] public int RemainingDays { get; set; }
+    [Parameter] public string? BlockingProduct { get; set; }
+}

@@ -1,0 +1,233 @@
+@page "/breeding/cobertura"
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@attribute [Authorize]
+@using CriaCerto.Shared.UI.Components.Plantel
+@using CriaCerto.Shared.UI.Components.Breeding
+@using CriaCerto.Shared.UI.Models
+@using CriaCerto.Shared.UI.Services
+@implements IDisposable
+@inject CriaCerto.Shared.UI.Services.BreedingOpsApiClient BreedingOps
+@inject IOfflineSyncService SyncService
+@inject NavigationManager Navigation
+
+<PageTitle>Cria Certo - Lançamento de Cobrição</PageTitle>
+
+<ModuleGuard Module="Breeding">
+    <div class="breeding-mobile-page">
+        <header class="breeding-mobile-header">
+            <div class="breeding-brand">
+                <span class="material-symbols-outlined">agriculture</span>
+                <h1>Cria Certo</h1>
+            </div>
+            <div class="breeding-header-status">
+                <SyncStatusChip IsOnline="_isOnline" PendingCount="_pendingCount" />
+                <span class="material-symbols-outlined wifi-icon @(_isOnline ? "" : "offline")">@(_isOnline ? "wifi" : "wifi_off")</span>
+            </div>
+        </header>
+
+        <main class="breeding-mobile-main">
+            <OfflineBanner Visible="@(!_isOnline || _pendingCount > 0)" Message="@_offlineMessage" />
+
+            <section class="breeding-section-head">
+                <h2>Setor de Cobrição</h2>
+                <p><span class="material-symbols-outlined">location_on</span>Galpão 02 - Lote de Cobrição</p>
+            </section>
+
+            @for (var i = 0; i < _entries.Count; i++)
+            {
+                var index = i;
+                <BreedingEntryCard Entry="_entries[index]"
+                                   IsActive="index == 0"
+                                   ShowRemove="_entries.Count > 1 && index > 0"
+                                   OnRemove="() => RemoveEntry(index)" />
+            }
+
+            <button type="button" class="add-matrix-btn" @onclick="AddEntry">
+                <span class="material-symbols-outlined">add</span>
+                ADICIONAR MATRIZ
+            </button>
+
+            <div class="batch-summary">
+                <div class="batch-summary-head">
+                    <div>
+                        <span class="summary-label">Resumo do Lote</span>
+                        <strong>@($"{FilledCount}/{_entries.Count} Inseminações")</strong>
+                    </div>
+                    <div class="summary-icon"><span class="material-symbols-outlined">science</span></div>
+                </div>
+                <div class="batch-progress"><div style="width:@($"{ProgressPercent}%")"></div></div>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(_feedback))
+            {
+                <p class="breeding-feedback">@_feedback</p>
+            }
+        </main>
+
+        <div class="breeding-fixed-cta">
+            <button type="button" class="plantel-primary-action confirm-batch-btn" disabled="@_submitting" @onclick="ConfirmBatch">
+                <span class="material-symbols-outlined">task_alt</span>
+                Confirmar Lote de Cobrição
+            </button>
+        </div>
+
+        <BreedingBottomNav />
+    </div>
+</ModuleGuard>
+
+@code {
+    [SupplyParameterFromQuery]
+    public string? Tag { get; set; }
+
+    private readonly List<BreedingEntryFormModel> _entries = [new()];
+    private bool _isOnline = true;
+    private int _pendingCount;
+    private bool _submitting;
+    private string? _feedback;
+    private string _offlineMessage = "Modo Offline - Sincronização pendente";
+
+    private int FilledCount => _entries.Count(e => !string.IsNullOrWhiteSpace(e.TagId));
+    private int ProgressPercent => _entries.Count == 0 ? 0 : (int)Math.Round(FilledCount * 100.0 / _entries.Count);
+
+    protected override async Task OnInitializedAsync()
+    {
+        SyncService.OnStateChanged += HandleSyncStateChanged;
+
+        if (!string.IsNullOrWhiteSpace(Tag))
+        {
+            _entries[0].TagId = Tag;
+        }
+
+        await RefreshSyncStateAsync();
+        await SyncPendingAsync();
+    }
+
+    private void HandleSyncStateChanged()
+    {
+        ApplySyncStateFromService();
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private void ApplySyncStateFromService()
+    {
+        _isOnline = SyncService.IsOnline;
+        _pendingCount = SyncService.PendingCount;
+        _offlineMessage = _pendingCount > 0
+            ? $"Modo Offline - {_pendingCount} operação(ões) pendente(s)"
+            : "Modo Offline - Sincronização pendente";
+    }
+
+    public void Dispose()
+    {
+        SyncService.OnStateChanged -= HandleSyncStateChanged;
+    }
+
+    private void AddEntry() => _entries.Add(new BreedingEntryFormModel());
+
+    private void RemoveEntry(int index)
+    {
+        if (_entries.Count > 1)
+        {
+            _entries.RemoveAt(index);
+        }
+    }
+
+    private async Task ConfirmBatch()
+    {
+        var lines = _entries
+            .Where(e => !string.IsNullOrWhiteSpace(e.TagId))
+            .Select(e => new BreedingBatchLineDto(
+                e.TagId.Trim(),
+                e.Method,
+                string.IsNullOrWhiteSpace(e.BoarOrSemenRef) ? null : e.BoarOrSemenRef.Trim(),
+                string.IsNullOrWhiteSpace(e.Technician) ? null : e.Technician.Trim(),
+                MapEcc(e.EccScore),
+                null,
+                null))
+            .ToList();
+
+        if (lines.Count == 0)
+        {
+            _feedback = "Informe ao menos um brinco de matriz.";
+            return;
+        }
+
+        _submitting = true;
+        _feedback = null;
+        var request = new RegisterBreedingBatchRequest(DateOnly.FromDateTime(DateTime.UtcNow), lines);
+
+        try
+        {
+            if (_isOnline)
+            {
+                var result = await BreedingOps.RegisterBreedingBatchAsync(request);
+                if (result is null)
+                {
+                    _feedback = "Falha ao registrar lote. Verifique os dados.";
+                }
+                else if (!SyncService.IsOnline)
+                {
+                    _feedback = "Lote salvo offline. Será sincronizado quando houver conexão.";
+                    _entries.Clear();
+                    _entries.Add(new BreedingEntryFormModel());
+                }
+                else
+                {
+                    _feedback = $"Lote confirmado: {result.RegisteredCount} cobertura(s).";
+                    _entries.Clear();
+                    _entries.Add(new BreedingEntryFormModel());
+                }
+            }
+            else
+            {
+                var enqueued = await BreedingOps.EnqueueBreedingBatchAsync(request);
+                if (enqueued)
+                {
+                    _feedback = "Lote salvo offline. Será sincronizado quando houver conexão.";
+                    _entries.Clear();
+                    _entries.Add(new BreedingEntryFormModel());
+                }
+                else
+                {
+                    _feedback = "Falha ao salvar lote offline.";
+                }
+            }
+
+            await RefreshSyncStateAsync();
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+
+    private async Task SyncPendingAsync()
+    {
+        var synced = await BreedingOps.SyncPendingOpsAsync();
+
+        if (synced > 0)
+        {
+            _feedback = $"{synced} operação(ões) sincronizada(s).";
+        }
+
+        await RefreshSyncStateAsync();
+    }
+
+    private async Task RefreshSyncStateAsync()
+    {
+        _isOnline = await BreedingOps.IsOnlineAsync();
+        _pendingCount = await BreedingOps.GetPendingOpsCountAsync();
+        _offlineMessage = _pendingCount > 0
+            ? $"Modo Offline - {_pendingCount} operação(ões) pendente(s)"
+            : "Modo Offline - Sincronização pendente";
+    }
+
+    private static BodyConditionScore? MapEcc(decimal ecc) => ecc switch
+    {
+        <= 1.5m => BodyConditionScore.VeryThin,
+        <= 2.5m => BodyConditionScore.Thin,
+        <= 3.5m => BodyConditionScore.Ideal,
+        <= 4.5m => BodyConditionScore.Fat,
+        _ => BodyConditionScore.VeryFat
+    };
+}

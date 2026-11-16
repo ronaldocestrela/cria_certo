@@ -1,6 +1,6 @@
 using System.Security.Claims;
 using CriaCerto.Modules.Backoffice.Application.Security;
-using CriaCerto.Web.Client.Services;
+using CriaCerto.Shared.UI.Services;
 using FluentAssertions;
 using Xunit;
 

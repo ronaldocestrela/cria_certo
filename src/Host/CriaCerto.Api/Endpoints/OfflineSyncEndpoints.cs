@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
+using static CriaCerto.Api.Endpoints.Common.EndpointResultExtensions;
 using CriaCerto.BuildingBlocks.Abstractions.Results;
 using CriaCerto.BuildingBlocks.Abstractions.Tenancy;
 using CriaCerto.Modules.Breeding.Application.Domain;
@@ -263,26 +264,5 @@ public static class OfflineSyncEndpoints
             Message = $"Ação '{moduleName}/{actionType}' não suportada."
         });
     }
-
-    private static IResult ToHttpResult<TValue>(Result<TValue> result, int successStatusCode = StatusCodes.Status200OK)
-    {
-        if (result.IsSuccess)
-        {
-            return successStatusCode == StatusCodes.Status200OK
-                ? Results.Ok(result.Value)
-                : Results.Json(result.Value, statusCode: successStatusCode);
-        }
-
-        return Results.Json(result.Error, statusCode: ToStatusCode(result.Error.Type));
-    }
-
-    private static int ToStatusCode(ErrorType errorType) => errorType switch
-    {
-        ErrorType.Validation => StatusCodes.Status400BadRequest,
-        ErrorType.NotFound => StatusCodes.Status404NotFound,
-        ErrorType.Conflict => StatusCodes.Status409Conflict,
-        ErrorType.Unauthorized => StatusCodes.Status403Forbidden,
-        _ => StatusCodes.Status400BadRequest
-    };
 }
 

@@ -1,5 +1,5 @@
-using CriaCerto.Web.Client.Models;
-using CriaCerto.Web.Client.Services;
+using CriaCerto.Shared.UI.Models;
+using CriaCerto.Shared.UI.Services;
 using FluentAssertions;
 
 namespace CriaCerto.Web.Client.UnitTests.Services;

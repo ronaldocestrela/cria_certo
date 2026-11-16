@@ -1,0 +1,526 @@
+@page "/breeding/registry"
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@attribute [Authorize]
+@using CriaCerto.Shared.UI.Components.Plantel
+@using CriaCerto.Shared.UI.Components.Sanitary
+@using CriaCerto.Shared.UI.Models
+@inject CriaCerto.Shared.UI.Services.PlantelApiClient PlantelApi
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+@inject Auth.CustomAuthStateProvider AuthStateProvider
+
+<PageTitle>Cria Certo - Cadastro & Plantel de Bovinos</PageTitle>
+
+<ModuleGuard Module="Cows">
+    <div class="plantel-page">
+        <OfflineBanner Visible="@_offlineMode" />
+
+        @if (!string.IsNullOrEmpty(_errorMessage))
+        {
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                <strong>Erro:</strong> @_errorMessage
+                <button type="button" class="btn-close" @onclick="() => _errorMessage = null"></button>
+            </div>
+        }
+        @if (!string.IsNullOrEmpty(_successMessage))
+        {
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                <strong>Sucesso:</strong> @_successMessage
+                <button type="button" class="btn-close" @onclick="() => _successMessage = null"></button>
+            </div>
+        }
+
+        <!-- HEADER & ACTIONS -->
+        <div class="page-header d-flex flex-wrap justify-content-between align-items-center mb-4">
+            <div>
+                <h2 class="h4 mb-1 font-weight-bold text-dark">Plantel Matrizes e Reprodutores</h2>
+                <p class="text-muted small mb-0">Gestão individual de fêmeas em reprodução, IEP, ECC e status reprodutivo.</p>
+            </div>
+            <div class="d-flex gap-2">
+                <button class="btn btn-outline-secondary d-flex align-items-center gap-1" @onclick="LoadCowsAsync">
+                    <span class="material-symbols-outlined">refresh</span> Sincronizar
+                </button>
+                <button class="btn btn-success d-flex align-items-center gap-1" @onclick="OpenCreateModal">
+                    <span class="material-symbols-outlined">add</span> Novo Animal
+                </button>
+            </div>
+        </div>
+
+        <!-- METRICS SUMMARY CARDS -->
+        <div class="row g-3 mb-4">
+            <div class="col-12 col-sm-6 col-xl-3">
+                <div class="card border-0 shadow-sm p-3 bg-white rounded-3 h-100">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <span class="text-muted small text-uppercase font-weight-bold">Total Fêmeas Ativas</span>
+                            <h3 class="h3 font-weight-bold mb-0 text-dark">@ActiveFemalesCount</h3>
+                        </div>
+                        <div class="p-3 bg-light-success text-success rounded-circle d-flex align-items-center justify-content-center" style="width: 48px; height: 48px;">
+                            <BovineIcon Size="26" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12 col-sm-6 col-xl-3">
+                <div class="card border-0 shadow-sm p-3 bg-white rounded-3 h-100">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <span class="text-muted small text-uppercase font-weight-bold">Touros / Reprodutores</span>
+                            <h3 class="h3 font-weight-bold mb-0 text-primary">@ActiveBullsCount</h3>
+                        </div>
+                        <div class="p-3 bg-light-primary text-primary rounded-circle d-flex align-items-center justify-content-center" style="width: 48px; height: 48px;">
+                            <span class="material-symbols-outlined fs-4">male</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12 col-sm-6 col-xl-3">
+                <div class="card border-0 shadow-sm p-3 bg-white rounded-3 h-100">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <span class="text-muted small text-uppercase font-weight-bold">Matrizes Prenhes</span>
+                            <h3 class="h3 font-weight-bold mb-0 text-success">@PregnantCount</h3>
+                        </div>
+                        <div class="p-3 bg-light-success text-success rounded-circle d-flex align-items-center justify-content-center" style="width: 48px; height: 48px;">
+                            <span class="material-symbols-outlined fs-4">pregnancy</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12 col-sm-6 col-xl-3">
+                <div class="card border-0 shadow-sm p-3 bg-white rounded-3 h-100">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <span class="text-muted small text-uppercase font-weight-bold">Média IEP Estimada</span>
+                            <h3 class="h3 font-weight-bold mb-0 text-warning">@(AverageIep > 0 ? AverageIep.ToString("F1") : "-") <span class="fs-6 font-weight-normal text-muted">meses</span></h3>
+                        </div>
+                        <div class="p-3 bg-light-warning text-warning rounded-circle d-flex align-items-center justify-content-center" style="width: 48px; height: 48px;">
+                            <span class="material-symbols-outlined fs-4">event_repeat</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SEARCH & FILTER BAR -->
+        <div class="card border-0 shadow-sm p-3 mb-4 bg-white rounded-3">
+            <div class="row g-3">
+                <div class="col-12 col-md-5">
+                    <div class="input-group">
+                        <span class="input-group-text bg-white border-end-0">
+                            <span class="material-symbols-outlined text-muted">search</span>
+                        </span>
+                        <input type="text" class="form-control border-start-0 ps-0" placeholder="Buscar por brinco, nome, chip ou SISBOV..." @bind="_search" @bind:event="oninput" @bind:after="LoadCowsAsync" />
+                    </div>
+                </div>
+                <div class="col-12 col-md-7 d-flex flex-wrap gap-2 justify-content-md-end align-items-center">
+                    <button class="btn btn-sm btn-outline-secondary @FilterClass(null, false, false)" @onclick="() => SetFilter(null, false, false)">Todos</button>
+                    <button class="btn btn-sm btn-outline-secondary @FilterClass(null, true, false)" @onclick="() => SetFilter(null, true, false)">Matrizes</button>
+                    <button class="btn btn-sm btn-outline-secondary @FilterClass(null, false, true)" @onclick="() => SetFilter(null, false, true)">Reprodutores</button>
+                    <button class="btn btn-sm btn-outline-secondary @FilterClass(ReproductiveStatus.Open, true, false)" @onclick="() => SetFilter(ReproductiveStatus.Open, true, false)">Vazias</button>
+                    <button class="btn btn-sm btn-outline-secondary @FilterClass(ReproductiveStatus.InIatfProtocol, true, false)" @onclick="() => SetFilter(ReproductiveStatus.InIatfProtocol, true, false)">Em IATF</button>
+                    <button class="btn btn-sm btn-outline-secondary @FilterClass(ReproductiveStatus.Pregnant, true, false)" @onclick="() => SetFilter(ReproductiveStatus.Pregnant, true, false)">Prenhes</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- DATAGRID TABLE -->
+        <section class="card border-0 shadow-sm bg-white rounded-3 overflow-hidden">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="bg-light text-muted small text-uppercase">
+                    <tr>
+                        <th class="ps-4">Brinco / Apelido</th>
+                        <th>Raça / Categoria</th>
+                        <th>Status Reprodutivo</th>
+                        <th>ECC</th>
+                        <th>Último Parto / Inseminação</th>
+                        <th class="text-end pe-4">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_cows.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="6" class="text-center py-5 text-muted">
+                                <BovineIcon Size="48" Class="d-block mx-auto mb-2 text-secondary" />
+                                Nenhum animal encontrado nesta fazenda.
+                            </td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var cow in FilteredCows)
+                        {
+                            <tr>
+                                <td class="ps-4 fw-bold text-dark">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span class="badge bg-dark font-monospace fs-6">@cow.EarTag</span>
+                                        @if (!string.IsNullOrEmpty(cow.Nickname))
+                                        {
+                                            <span class="text-secondary small">(@cow.Nickname)</span>
+                                        }
+                                    </div>
+                                    @if (!string.IsNullOrEmpty(cow.SisbovId))
+                                    {
+                                        <div class="text-muted extra-small font-monospace">SISBOV: @cow.SisbovId</div>
+                                    }
+                                </td>
+                                <td>
+                                    <div>@cow.Breed</div>
+                                    <span class="badge bg-light text-dark border extra-small">@cow.Category</span>
+                                </td>
+                                <td>
+                                    @GetStatusBadge(cow)
+                                </td>
+                                <td>
+                                    <span class="fw-bold">@(cow.BodyConditionScore?.ToString("F1") ?? "-")</span>
+                                </td>
+                                <td>
+                                    @if (!IsBull(cow.Category) && cow.LastCalvingDate.HasValue)
+                                    {
+                                        <div>@cow.LastCalvingDate.Value.ToString("dd/MM/yyyy")</div>
+                                        <div class="text-muted extra-small">IEP: @(cow.IepMonths?.ToString("F1") ?? "-") meses</div>
+                                    }
+                                    else if (IsBull(cow.Category))
+                                    {
+                                        <span class="text-muted extra-small">N/A (Reprodutor)</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted extra-small">N/A</span>
+                                    }
+                                </td>
+                                <td class="text-end pe-4">
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-outline-primary" @onclick="() => NavigateToDetail(cow.Id)" title="Ver Ficha Completa">
+                                            <span class="material-symbols-outlined fs-6">visibility</span>
+                                        </button>
+                                        <button class="btn btn-outline-danger" @onclick="() => OpenDispatchModal(cow)" title="Registrar Baixa / Descarte">
+                                            <span class="material-symbols-outlined fs-6">output</span>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </section>
+    </div>
+</ModuleGuard>
+
+@if (_showDispatchModal && _selectedCow != null)
+{
+    <DispatchAnimalModal 
+        TenantId="_tenantId"
+        AnimalId="@_selectedCow.Id"
+        AnimalEarTag="@_selectedCow.EarTag"
+        OnClose="CloseDispatchModal"
+        OnDispatched="HandleAnimalDispatched" />
+}
+
+@if (_showCreateModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Novo Cadastro de Bovino</h5>
+                    <button type="button" class="btn-close" @onclick="CloseCreateModal"></button>
+                </div>
+                <div class="modal-body">
+                    <EditForm Model="@_createRequest" OnValidSubmit="HandleCreateAnimal">
+                        <DataAnnotationsValidator />
+
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label class="form-label">Brinco / Identificador *</label>
+                                <InputText class="form-control" @bind-Value="_createRequest.EarTag" placeholder="Ex: BR-105" required />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Apelido / Nome</label>
+                                <InputText class="form-control" @bind-Value="_createRequest.Nickname" placeholder="Ex: Mimosa" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Categoria *</label>
+                                <InputSelect class="form-select" @bind-Value="_createRequest.Category">
+                                    <option value="Matriz">Matriz (Fêmea)</option>
+                                    <option value="Reprodutor">Reprodutor (Touro)</option>
+                                    <option value="Bezerro">Bezerro / Bezerra</option>
+                                    <option value="Novilho">Novilho / Garrote</option>
+                                </InputSelect>
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label">Brinco SISBOV</label>
+                                <InputText class="form-control" @bind-Value="_createRequest.SisbovId" placeholder="Ex: 1000301" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Chip RFID</label>
+                                <InputText class="form-control" @bind-Value="_createRequest.RfidTag" placeholder="Ex: RFID-9902" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Registro PBB (Tattoo)</label>
+                                <InputText class="form-control" @bind-Value="_createRequest.RegistryNumber" placeholder="Ex: PBB-8812" />
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label">Raça *</label>
+                                <InputText class="form-control" @bind-Value="_createRequest.Breed" placeholder="Ex: Nelore" required />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Origem</label>
+                                <InputSelect class="form-select" @bind-Value="_createRequest.Origin">
+                                    <option value="Nascimento Interno">Nascimento Interno</option>
+                                    <option value="Compra">Compra / Aquisição</option>
+                                    <option value="Transferencia">Transferência</option>
+                                </InputSelect>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Escore de Condição Corporal (1-5)</label>
+                                <InputNumber class="form-control" @bind-Value="_createRequest.BodyConditionScore" min="1" max="5" step="0.5" />
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label">Data de Nascimento</label>
+                                <InputDate class="form-control" @bind-Value="_createRequest.BirthDate" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Data de Entrada no Rebanho</label>
+                                <InputDate class="form-control" @bind-Value="_createRequest.EntryDate" />
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label">Peso de Entrada (kg)</label>
+                                <InputNumber class="form-control" @bind-Value="_createRequest.EntryWeightKg" placeholder="Ex: 240.5" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Pai (Sêmen / Touro)</label>
+                                <InputText class="form-control" @bind-Value="_createRequest.SireInfo" placeholder="Ex: Touro Nelore PO" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Mãe (Matriz)</label>
+                                <InputText class="form-control" @bind-Value="_createRequest.DamInfo" placeholder="Ex: BR-040" />
+                            </div>
+                        </div>
+
+                        <div class="modal-footer mt-4 px-0 pb-0">
+                            <button type="button" class="btn btn-secondary" @onclick="CloseCreateModal">Cancelar</button>
+                            <button type="submit" class="btn btn-primary" disabled="@_isSaving">
+                                @(_isSaving ? "Salvando..." : "Salvar Animal")
+                            </button>
+                        </div>
+                    </EditForm>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private readonly List<CowSummaryDto> _cows = new();
+    private string? _search;
+    private ReproductiveStatus? _status;
+    private bool _offlineMode;
+    private bool _showCreateModal;
+    private bool _showDispatchModal;
+    private CowSummaryDto? _selectedCow;
+    private bool _isSaving;
+    private string? _errorMessage;
+    private string? _successMessage;
+
+    private CreateAnimalRequest _createRequest = new();
+
+    private void OpenDispatchModal(CowSummaryDto cow)
+    {
+        _selectedCow = cow;
+        _showDispatchModal = true;
+    }
+
+    private void CloseDispatchModal()
+    {
+        _showDispatchModal = false;
+        _selectedCow = null;
+    }
+
+    private async Task HandleAnimalDispatched()
+    {
+        _successMessage = $"Despacho do animal {_selectedCow?.EarTag} realizado com sucesso!";
+        await LoadCowsAsync();
+    }
+
+    private bool _onlyFemales;
+    private bool _onlyBulls;
+
+    private static bool IsBull(string? category) =>
+        string.Equals(category, "Reprodutor", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(category, "Touro", StringComparison.OrdinalIgnoreCase);
+
+    private int ActiveFemalesCount => _cows.Count(c => !IsBull(c.Category) && c.Status != ReproductiveStatus.Culled && c.Status != ReproductiveStatus.Sold);
+    private int ActiveBullsCount => _cows.Count(c => IsBull(c.Category) && c.Status != ReproductiveStatus.Culled && c.Status != ReproductiveStatus.Sold);
+    private int PregnantCount => _cows.Count(c => !IsBull(c.Category) && c.Status == ReproductiveStatus.Pregnant);
+    private double AverageIep
+    {
+        get
+        {
+            var valid = _cows.Where(c => !IsBull(c.Category) && c.IepMonths.HasValue).Select(c => c.IepMonths!.Value).ToList();
+            return valid.Count > 0 ? valid.Average() : 0.0;
+        }
+    }
+
+    private IEnumerable<CowSummaryDto> FilteredCows => _cows.Where(c =>
+        (!_status.HasValue || c.Status == _status.Value) &&
+        (!_onlyFemales || !IsBull(c.Category)) &&
+        (!_onlyBulls || IsBull(c.Category)) &&
+        (string.IsNullOrWhiteSpace(_search) ||
+            c.EarTag.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+            (c.Nickname != null && c.Nickname.Contains(_search, StringComparison.OrdinalIgnoreCase)) ||
+            (c.SisbovId != null && c.SisbovId.Contains(_search, StringComparison.OrdinalIgnoreCase))));
+
+    private void SetFilter(ReproductiveStatus? status, bool onlyFemales, bool onlyBulls)
+    {
+        _status = status;
+        _onlyFemales = onlyFemales;
+        _onlyBulls = onlyBulls;
+    }
+
+    private string FilterClass(ReproductiveStatus? status, bool onlyFemales, bool onlyBulls)
+    {
+        if (_status == status && _onlyFemales == onlyFemales && _onlyBulls == onlyBulls)
+            return "active btn-primary text-white";
+        return string.Empty;
+    }
+
+    private RenderFragment GetStatusBadge(CowSummaryDto cow) => builder =>
+    {
+        if (IsBull(cow.Category))
+        {
+            if (cow.Status == ReproductiveStatus.Culled)
+            {
+                builder.OpenElement(0, "span");
+                builder.AddAttribute(1, "class", "badge bg-danger");
+                builder.AddContent(2, "Descartado");
+                builder.CloseElement();
+            }
+            else if (cow.Status == ReproductiveStatus.Sold)
+            {
+                builder.OpenElement(0, "span");
+                builder.AddAttribute(1, "class", "badge bg-secondary");
+                builder.AddContent(2, "Vendido");
+                builder.CloseElement();
+            }
+            else
+            {
+                builder.OpenElement(0, "span");
+                builder.AddAttribute(1, "class", "badge bg-success");
+                builder.AddContent(2, "Apto / Ativo");
+                builder.CloseElement();
+            }
+            return;
+        }
+
+        var (css, text) = cow.Status switch
+        {
+            ReproductiveStatus.Open => ("bg-secondary", "Vazia"),
+            ReproductiveStatus.InIatfProtocol => ("bg-info text-dark", "Em IATF"),
+            ReproductiveStatus.Inseminated => ("bg-primary", "Inseminada"),
+            ReproductiveStatus.Pregnant => ("bg-success", "Prenhe"),
+            ReproductiveStatus.Lactating => ("bg-warning text-dark", "Lactante"),
+            ReproductiveStatus.Culled => ("bg-danger", "Descartada"),
+            ReproductiveStatus.Sold => ("bg-secondary", "Vendida"),
+            ReproductiveStatus.Active => ("bg-success", "Ativa"),
+            _ => ("bg-primary", cow.Status.ToString())
+        };
+
+        builder.OpenElement(0, "span");
+        builder.AddAttribute(1, "class", $"badge {css}");
+        builder.AddContent(2, text);
+        builder.CloseElement();
+    };
+
+    private Guid _tenantId = Guid.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user.Identity?.IsAuthenticated == true)
+        {
+            var tenantClaim = user.FindFirst("TenantId")?.Value;
+            if (Guid.TryParse(tenantClaim, out var tenantId))
+            {
+                _tenantId = tenantId;
+            }
+        }
+        await LoadCowsAsync();
+    }
+
+    private async Task LoadCowsAsync()
+    {
+        try
+        {
+            var response = await PlantelApi.ListCowsAsync(_search, null);
+            _cows.Clear();
+            if (response?.Items.Count > 0)
+            {
+                _cows.AddRange(response.Items);
+            }
+            _offlineMode = false;
+        }
+        catch
+        {
+            _cows.Clear();
+            _offlineMode = true;
+        }
+    }
+
+    private void OpenCreateModal()
+    {
+        _createRequest = new CreateAnimalRequest
+        {
+            TenantId = _tenantId
+        };
+        _showCreateModal = true;
+    }
+
+    private void CloseCreateModal()
+    {
+        _showCreateModal = false;
+    }
+
+    private async Task HandleCreateAnimal()
+    {
+        _isSaving = true;
+        _errorMessage = null;
+        _successMessage = null;
+        _createRequest.TenantId = _tenantId;
+
+        try
+        {
+            var response = await PlantelApi.CreateCowAsync(_createRequest);
+            if (response.IsSuccessStatusCode)
+            {
+                _successMessage = $"Animal {_createRequest.EarTag} cadastrado com sucesso!";
+                _showCreateModal = false;
+                await LoadCowsAsync();
+            }
+            else
+            {
+                _errorMessage = "Não foi possível cadastrar o animal. Verifique se o brinco já está cadastrado.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Erro ao enviar cadastro: {ex.Message}";
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private void NavigateToDetail(Guid id)
+    {
+        Navigation.NavigateTo($"/breeding/animal/{id}");
+    }
+}

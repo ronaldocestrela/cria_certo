@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <PackageReference Include="Yarp.ReverseProxy" Version="2.3.0" />
+    <ProjectReference Include="..\..\CriaCerto.Shared.UI\CriaCerto.Shared.UI.csproj" />
     <ProjectReference Include="..\CriaCerto.Web.Client\CriaCerto.Web.Client.csproj" />
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="10.0.10" />
   </ItemGroup>

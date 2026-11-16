@@ -1,0 +1,58 @@
+@using CriaCerto.Shared.UI.Models
+@using CriaCerto.Shared.UI.Auth
+@inject NavigationManager Navigation
+@inject CustomAuthStateProvider AuthStateProvider
+
+<div class="brand-block">
+    <img src="imgs/CriaCerto.png" alt="Cria Certo Logo" style="height: 38px; width: auto; object-fit: contain; border-radius: 6px;" />
+    <div>
+        <a class="brand-title" href="analytics/executive-dashboard">Cria Certo</a>
+        <p class="brand-subtitle">Pecuária Bovina & Performance</p>
+    </div>
+</div>
+
+<div class="module-tag">Enterprise Plan</div>
+
+<nav class="desktop-nav" aria-label="Primary navigation">
+    <p class="nav-group-label">Operações Bovinas</p>
+    @foreach (var item in NavigationCatalog.GetOperationalItems())
+    {
+        <NavLink class="nav-link" href="@item.Href" Match="@(item.MatchExact ? NavLinkMatch.All : NavLinkMatch.Prefix)">
+            @if (!string.IsNullOrWhiteSpace(item.Icon))
+            {
+                <span class="material-symbols-outlined nav-icon" aria-hidden="true">@item.Icon</span>
+            }
+            <span class="nav-text">@item.Title</span>
+        </NavLink>
+    }
+
+    <p class="nav-group-label nav-space">Configurações</p>
+    @foreach (var item in NavigationCatalog.GetSettingsItems())
+    {
+        <NavLink class="nav-link" href="@item.Href" Match="@(item.MatchExact ? NavLinkMatch.All : NavLinkMatch.Prefix)">
+            @if (!string.IsNullOrWhiteSpace(item.Icon))
+            {
+                <span class="material-symbols-outlined nav-icon" aria-hidden="true">@item.Icon</span>
+            }
+            <span class="nav-text">@item.Title</span>
+        </NavLink>
+    }
+
+    <button type="button" class="nav-link nav-logout-btn" @onclick="HandleLogout" title="Sair da aplicação" id="btn-logout-sidebar">
+        <span class="material-symbols-outlined nav-icon icon-logout" aria-hidden="true">logout</span>
+        <span class="nav-text">Sair da Conta</span>
+    </button>
+
+    <div class="promo-card">
+        <p class="promo-title">Offline Sync Ready</p>
+        <p class="promo-text">Registros de pasto e curral cacheados offline.</p>
+    </div>
+</nav>
+
+@code {
+    private async Task HandleLogout()
+    {
+        await AuthStateProvider.MarkUserAsLoggedOut();
+        Navigation.NavigateTo("/login", forceLoad: true);
+    }
+}

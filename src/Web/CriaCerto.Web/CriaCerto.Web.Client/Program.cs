@@ -1,5 +1,7 @@
-using CriaCerto.Web.Client.Auth;
-using CriaCerto.Web.Client.Services;
+using CriaCerto.Shared.UI.Abstractions;
+using CriaCerto.Shared.UI.Auth;
+using CriaCerto.Shared.UI.Services;
+using CriaCerto.Web.Client.Services.Browser;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 
@@ -7,27 +9,21 @@ var builder = WebAssemblyHostBuilder.CreateDefault(args);
 
 builder.Services.AddAuthorizationCore();
 builder.Services.AddCascadingAuthenticationState();
-builder.Services.AddScoped<CustomAuthStateProvider>();
-builder.Services.AddScoped<AuthenticationStateProvider>(sp => sp.GetRequiredService<CustomAuthStateProvider>());
-builder.Services.AddScoped<PlantelApiClient>();
-builder.Services.AddScoped<BreedingOpsApiClient>();
-builder.Services.AddScoped<GrowthApiClient>();
-builder.Services.AddScoped<NutritionApiClient>();
-builder.Services.AddScoped<CalvingApiClient>();
-builder.Services.AddScoped<SanitaryApiClient>();
-builder.Services.AddScoped<AnalyticsApiClient>();
-builder.Services.AddScoped<TenancyApiClient>();
-builder.Services.AddScoped<IBackofficeApiClient, BackofficeApiClient>();
-builder.Services.AddScoped<IBackofficePermissionService, BackofficePermissionService>();
-builder.Services.AddScoped<IImpersonationStateService, ImpersonationStateService>();
-builder.Services.AddScoped<IOfflineSyncService, OfflineSyncService>();
-builder.Services.AddScoped<IToastService, ToastService>();
-builder.Services.AddScoped<IFeatureFlagClientService, FeatureFlagClientService>();
-builder.Services.AddScoped<IReferralTrackingService, ReferralTrackingService>();
-builder.Services.AddScoped<IReferralApiClient, ReferralApiClient>();
-builder.Services.AddScoped<IPartnerApiClient, PartnerApiClient>();
-builder.Services.AddScoped<ICookieConsentService, CookieConsentService>();
+
+// Abstrações de Plataforma (Browser Implementations)
+builder.Services.AddScoped<ITokenStorageService, BrowserTokenStorageService>();
+builder.Services.AddScoped<IFileExportService, BrowserFileExportService>();
+builder.Services.AddScoped<IConnectivityService, BrowserConnectivityService>();
+builder.Services.AddScoped<IOfflineSyncStorage, BrowserOfflineSyncStorage>();
+
+// Serviços de Autenticação, Clientes de API e Estado de UI Compartilhados (RCL)
+builder.Services.AddCriaCertoSharedServices();
 
 builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) });
 
 await builder.Build().RunAsync();
+
+namespace CriaCerto.Web.Client
+{
+    public partial class Program { }
+}

@@ -1,0 +1,167 @@
+@using CriaCerto.Modules.Analytics.Application.Contracts
+@using CriaCerto.Modules.Analytics.Application.Services
+@using CriaCerto.Shared.UI.Abstractions
+@inject IFileExportService FileExportService
+
+<div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <div class="modal-header bg-dark text-white rounded-top-4 py-3">
+                <h5 class="modal-title fw-bold text-white">
+                    <i class="bi bi-file-earmark-arrow-down me-2 text-success"></i>Exportar Relatórios Zootécnicos & GTA
+                </h5>
+                <button type="button" class="btn-close btn-close-white" @onclick="OnClose"></button>
+            </div>
+            <div class="modal-body p-4">
+                @if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>@errorMessage
+                        <button type="button" class="btn-close" @onclick="() => errorMessage = null"></button>
+                    </div>
+                }
+
+                <!-- PASSOS SELEÇÃO -->
+                <div class="mb-4">
+                    <label class="form-label fw-bold text-dark mb-2">1. Selecione o Tipo de Relatório:</label>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <div class="card h-100 border p-3 rounded-3 cursor-pointer text-center @(selectedReportType == ReportTypeEnum.ExecutiveScorecard ? "border-success bg-success-subtle fw-bold" : "bg-light")"
+                                 @onclick="() => selectedReportType = ReportTypeEnum.ExecutiveScorecard">
+                                <i class="bi bi-speedometer2 fs-2 text-success mb-2"></i>
+                                <span class="d-block text-dark">Scorecard Executivo</span>
+                                <small class="text-muted d-block mt-1">Consolidação de KPIs de Prenhez, GPD e Custo/@@</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card h-100 border p-3 rounded-3 cursor-pointer text-center @(selectedReportType == ReportTypeEnum.HerdInventory ? "border-primary bg-primary-subtle fw-bold" : "bg-light")"
+                                 @onclick="() => selectedReportType = ReportTypeEnum.HerdInventory">
+                                <i class="bi bi-grid-3x3-gap fs-2 text-primary mb-2"></i>
+                                <span class="d-block text-dark">Inventário do Rebanho</span>
+                                <small class="text-muted d-block mt-1">Detalhamento por Categorias, Lotes e Arrobas</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card h-100 border p-3 rounded-3 cursor-pointer text-center @(selectedReportType == ReportTypeEnum.GtaSupport ? "border-warning bg-warning-subtle fw-bold" : "bg-light")"
+                                 @onclick="() => selectedReportType = ReportTypeEnum.GtaSupport">
+                                <i class="bi bi-file-earmark-text fs-2 text-warning mb-2"></i>
+                                <span class="d-block text-dark">Suporte à GTA</span>
+                                <small class="text-muted d-block mt-1">Contagem Oficial por Sexo e Faixa Etária</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-3 mb-4">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold text-dark mb-2">2. Formato do Arquivo:</label>
+                        <div class="btn-group w-100" role="group">
+                            <button type="button" class="btn @(selectedFormat == ReportFormatEnum.Csv ? "btn-dark" : "btn-outline-dark")"
+                                    @onclick="() => selectedFormat = ReportFormatEnum.Csv">
+                                <i class="bi bi-filetype-csv me-1"></i> CSV
+                            </button>
+                            <button type="button" class="btn @(selectedFormat == ReportFormatEnum.Excel ? "btn-success" : "btn-outline-success")"
+                                    @onclick="() => selectedFormat = ReportFormatEnum.Excel">
+                                <i class="bi bi-file-earmark-excel me-1"></i> Excel (.xlsx)
+                            </button>
+                            <button type="button" class="btn @(selectedFormat == ReportFormatEnum.Pdf ? "btn-danger" : "btn-outline-danger")"
+                                    @onclick="() => selectedFormat = ReportFormatEnum.Pdf">
+                                <i class="bi bi-file-earmark-pdf me-1"></i> PDF Estilizado
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold text-dark mb-2">3. Filtro de Período:</label>
+                        <select class="form-select" @bind="selectedPeriodType">
+                            <option value="@PeriodTypeEnum.CurrentHarvest">Safra Atual (2025/2026)</option>
+                            <option value="@PeriodTypeEnum.OffSeason">Entressafra</option>
+                            <option value="@PeriodTypeEnum.CurrentMonth">Mês Vigente</option>
+                            <option value="@PeriodTypeEnum.CustomRange">Intervalo Personalizado</option>
+                        </select>
+                    </div>
+                </div>
+
+                @if (selectedPeriodType == PeriodTypeEnum.CustomRange)
+                {
+                    <div class="row g-3 mb-4 bg-light p-3 rounded-3 border">
+                        <div class="col-md-6">
+                            <label class="form-label text-muted small">Data Inicial:</label>
+                            <input type="date" class="form-control" @bind="startDate" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label text-muted small">Data Final:</label>
+                            <input type="date" class="form-control" @bind="endDate" />
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <div class="modal-footer bg-light rounded-bottom-4 py-3">
+                <button type="button" class="btn btn-outline-secondary px-4" @onclick="OnClose" disabled="@isExporting">Cancelar</button>
+                <button type="button" class="btn btn-success px-4 fw-bold shadow-sm" @onclick="GenerateReport" disabled="@isExporting">
+                    @if (isExporting)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                        <span>Gerando...</span>
+                    }
+                    else
+                    {
+                        <i class="bi bi-download me-2"></i>
+                        <span>Gerar e Baixar Relatório</span>
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public ExecutiveScorecardDto Scorecard { get; set; } = null!;
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private ReportTypeEnum selectedReportType = ReportTypeEnum.ExecutiveScorecard;
+    private ReportFormatEnum selectedFormat = ReportFormatEnum.Csv;
+    private PeriodTypeEnum selectedPeriodType = PeriodTypeEnum.CurrentHarvest;
+    private DateTime? startDate;
+    private DateTime? endDate;
+    private bool isExporting = false;
+    private string? errorMessage;
+
+    private async Task GenerateReport()
+    {
+        errorMessage = null;
+
+        if (selectedPeriodType == PeriodTypeEnum.CustomRange && startDate.HasValue && endDate.HasValue && startDate > endDate)
+        {
+            errorMessage = "A data inicial não pode ser posterior à data final.";
+            return;
+        }
+
+        isExporting = true;
+        try
+        {
+            var query = new ExportBovineReportQuery(
+                Scorecard: Scorecard,
+                ReportType: selectedReportType,
+                Format: selectedFormat,
+                PeriodType: selectedPeriodType,
+                StartDate: startDate,
+                EndDate: endDate);
+
+            var reportResult = ConsolidatedBovineAnalyticsEngine.GenerateReport(query);
+
+            await FileExportService.ExportFileAsync(reportResult.FileName, reportResult.ContentType, reportResult.FileContents);
+
+            await OnClose.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Falha ao gerar o relatório: {ex.Message}";
+        }
+        finally
+        {
+            isExporting = false;
+        }
+    }
+}

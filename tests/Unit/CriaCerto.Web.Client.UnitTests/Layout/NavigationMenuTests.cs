@@ -1,4 +1,4 @@
-using CriaCerto.Web.Client.Models;
+using CriaCerto.Shared.UI.Models;
 using FluentAssertions;
 using Xunit;
 

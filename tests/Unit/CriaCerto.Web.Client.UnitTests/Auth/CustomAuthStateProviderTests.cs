@@ -1,4 +1,4 @@
-using CriaCerto.Web.Client.Auth;
+using CriaCerto.Shared.UI.Auth;
 using FluentAssertions;
 using System.Text;
 using System.Text.Json;

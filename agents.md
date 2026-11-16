@@ -10,16 +10,17 @@ The platform optimizes cattle farm operations across the entire lifecycle: Breed
 ## 2. Architecture & Design Principles
 
 ### 2.1 Architectural Style: Modular Monolith
-* **Structure:** Single unit composed of strictly separated, domain-aligned internal modules.
-* **Communication:** In-process domain events and mediator patterns. Direct cross-module database joins are **prohibited**.
-* **Tiered Feature Gating:** Modules are dynamically enabled/disabled based on tenant subscription plans (e.g., *Starter* = Breeding & Herd Registry; *Enterprise* = Full Zootecnic Analytics + Financials + Feedlot/Confinamento Optimization).
+* **Structure:** Single deployable unit composed of strictly separated, domain-aligned internal modules (`CriaCerto.Modules.*`).
+* **Isolation:** In-process domain events and MediatR commands/queries. Direct cross-module database joins or foreign keys are **strictly prohibited**. Inter-module data references use value IDs (`Guid`).
+* **Tiered Feature Gating:** Modules are dynamically enabled/disabled per tenant subscription plan and subscribed module list (gated via `ModuleAccessBehavior` and `<ModuleGuard>`).
 
 ### 2.2 Core Architectural Requirements
 * **Backend:** .NET 10 (C# 14) following Clean Architecture & Domain-Driven Design (DDD).
-* **Frontend:** Blazor WebAssembly / Blazor Web App targeting .NET 10 with **PWA (Progressive Web App)** capabilities for offline resilience in field/pasture environments.
-* **Design & UI Automation:** **MCP Stitch** integration for automated, standardized Blazor UI component generation.
-* **Development Methodology:** **Test-Driven Development (TDD)** — Red/Green/Refactor mandatory for all business code.
-* **Documentation Strategy:** **Living Documentation** — Automated generation and execution of specs via BDD/Tests. Architecture Decision Records (ADRs) and markdown docs must be kept up-to-date with code changes.
+* **Frontend & Mobile Híbrido:** Blazor Web App / WASM .NET 10 com suporte PWA offline e app nativo Android & iOS via **.NET MAUI Blazor Hybrid (`BlazorWebView`)** no host `CriaCerto.Mobile`. Compartilhamento de componentes e fluxos na Razor Class Library (RCL) `CriaCerto.Shared.UI` desacoplada por abstrações de plataforma (ADRs 0028–0032).
+* **Stateless API:** Toda a comunicação cliente-API é estritamente **stateless** via cabeçalho `Authorization: Bearer <token>` (ADR 0033).
+* **Design & UI Automation:** **MCP Stitch** para síntese padronizada e componentes atômicos Blazor.
+* **Development Methodology:** **Test-Driven Development (TDD)** — Red/Green/Refactor mandatório para todo código de negócio.
+* **Documentation Strategy:** **Living Documentation** — Manter ADRs e documentações em `/docs/` rigorosamente atualizados a cada alteração.
 * **Error & Response Pattern:** Mandatory **Result Pattern** (`Result<T>`) across all Backend layers — **NO Exceptions for Control Flow**.
 
 ---
@@ -29,205 +30,157 @@ The platform optimizes cattle farm operations across the entire lifecycle: Breed
 ### 3.1 Backend (.NET 10)
 * **Framework:** .NET 10 Web API / Modular Monolith Architecture.
 * **Language:** C# 14.
-* **Domain & CQRS:** MediatR / In-Memory Channel Bus.
-* **Data Access:** Entity Framework Core 10, PostgreSQL (Multi-tenant schema-per-tenant or row-level security).
-* **Functional Error Handling:** Custom or CSharpFunctionalExtensions `Result<T>` / `Result<T, Error>`.
-* **Validation:** FluentValidation integrated into MediatR pipeline.
-* **Testing Stack:** xUnit, FluentAssertions, NSubstitute / Moq, Testcontainers (PostgreSQL integration tests).
+* **Domain & CQRS:** MediatR com pipeline behaviors para validação, autorização, observabilidade e feature flags.
+* **Data Access:** Entity Framework Core 10, PostgreSQL com isolamento multi-tenant.
+* **Functional Error Handling:** Result Pattern nativo em `CriaCerto.BuildingBlocks.Results`.
+* **Validation:** FluentValidation integrado ao pipeline MediatR.
+* **Testing Stack:** xUnit, FluentAssertions, NSubstitute / Moq, Testcontainers (PostgreSQL).
 
-### 3.2 Frontend (Blazor .NET 10)
-* **Framework:** Blazor Web App / WASM .NET 10 with PWA offline caching strategy.
-* **UI Components:** Reusable atomic component design system. Integration with **MCP Stitch** for component synthesis and UI standardization.
-* **Offline Storage:** IndexedDB (via Blazored.LocalStorage or JS Interop) with IndexedDB-to-Server background synchronization workers.
-* **State Management:** Fluxor or Custom Scoped State Stores.
+### 3.2 Frontend & Mobile Híbrido (Blazor .NET 10 & .NET MAUI)
+* **Web:** Blazor Web App / WebAssembly com Service Worker e cache PWA offline.
+* **Mobile Nativo:** .NET MAUI Blazor Hybrid (`CriaCerto.Mobile`) para Android e iOS (ADR 0030).
+* **Shared UI (RCL):** `CriaCerto.Shared.UI` (`net10.0`) encapsulando páginas, componentes, layouts e API clients (ADR 0028).
+* **Platform Abstractions:** Contratos em `CriaCerto.Shared.UI.Abstractions` (`ITokenStorageService`, `IFileExportService`, `IConnectivityService`, `IOfflineSyncStorage`) com implementações Web (ADR 0029) e Mobile (ADR 0031).
+* **Offline Storage:** IndexedDB no browser via JSInterop (`offlineSync.js`); SQLite / SecureStorage no mobile.
+* **CI/CD Mobile:** GitHub Actions em `.github/workflows/mobile-build.yml` com jobs heterogêneos para Android e iOS (ADR 0034).
 
 ### 3.3 Transactional Email Provider (Resend)
 * **Provider:** Resend REST API v1 (`POST https://api.resend.com/emails`).
-* **Abstractions:** `IEmailSender`, `EmailMessage`, `EmailRecipient`, `EmailSendResult` located in `CriaCerto.BuildingBlocks.Abstractions.Email`.
-* **Infrastructure:** `ResendEmailSender`, `ResendOptions`, `NullEmailSender` (mock/development fallback) in `CriaCerto.BuildingBlocks.Infrastructure.Email`.
-* **Error Handling:** 100% Result Pattern compliance (`EmailErrors`). No network or API exceptions propagated.
-* **Architecture Decision Record:** See `docs/adrs/0015-transactional-email-provider-resend.md`.
+* **Abstractions:** `IEmailSender`, `EmailMessage`, `EmailRecipient`, `EmailSendResult` em `CriaCerto.BuildingBlocks.Abstractions.Email`.
+* **Infrastructure:** `ResendEmailSender` e fallback `NullEmailSender` (ADR 0015).
 
 ---
 
 ## 4. Mandatory Backend Standard: The Result Pattern
 
-Exceptions MUST NOT be used for domain validation or expected business rule failures. All application services, command handlers, query handlers, and domain methods must return `Result` or `Result<T>`.
+Exceptions **MUST NOT** be used for domain validation or expected business rule failures. All application services, command handlers, query handlers, and domain methods must return `Result` or `Result<T>`.
 
-### Key Interfaces & Base Types
+### Uso Prático
+A biblioteca base está localizada em `CriaCerto.BuildingBlocks.Results` / `CriaCerto.BuildingBlocks.Abstractions`.
+
 ```csharp
-public record Error(string Code, string Message, ErrorType Type)
-{
-    public static readonly Error None = new(string.Empty, string.Empty, ErrorType.Failure);
-    public static Error NotFound(string code, string description) => new(code, description, ErrorType.NotFound);
-    public static Error Validation(string code, string description) => new(code, description, ErrorType.Validation);
-    public static Error Conflict(string code, string description) => new(code, description, ErrorType.Conflict);
-}
+// Sucesso sem retorno de valor
+return Result.Success();
 
-public enum ErrorType
-{
-    Failure,
-    Validation,
-    NotFound,
-    Conflict,
-    Unauthorized
-}
+// Sucesso com valor
+return Result.Success(entityDto);
 
-public class Result
-{
-    public bool IsSuccess { get; }
-    public bool IsFailure => !IsSuccess;
-    public Error Error { get; }
-
-    protected Result(bool isSuccess, Error error)
-    {
-        if (isSuccess && error != Error.None || !isSuccess && error == Error.None)
-            throw new InvalidOperationException("Invalid Result state.");
-
-        IsSuccess = isSuccess;
-        Error = error;
-    }
-
-    public static Result Success() => new(true, Error.None);
-    public static Result Failure(Error error) => new(false, error);
-    public static Result<TValue> Success<TValue>(TValue value) => new(value, true, Error.None);
-    public static Result<TValue> Failure<TValue>(Error error) => new(default, false, error);
-}
-
-public class Result<TValue> : Result
-{
-    private readonly TValue? _value;
-
-    protected internal Result(TValue? value, bool isSuccess, Error error)
-        : base(isSuccess, error)
-    {
-        _value = value;
-    }
-
-    public TValue Value => IsSuccess 
-        ? _value! 
-        : throw new InvalidOperationException("The value of a failure result cannot be accessed.");
-}
+// Falha de validação ou domínio usando tipos tipados de Error
+return Result.Failure(Error.Validation("Animal.InvalidTag", "O brinco informado é inválido."));
+return Result.Failure(Error.NotFound("Animal.NotFound", "Matriz não encontrada."));
+return Result.Failure(Error.Conflict("Animal.TagInUse", "Brinco já cadastrado no rebanho."));
 ```
 
 ---
 
 ## 5. Domain Modules Specification
 
-### 5.1 Breeding & Cattle Herd Management Module (`Modules.Breeding`)
-* **Entities:** `Cow` (Vaca/Matriz), `Bull` (Touro/Reprodutor), `SemenBatch` (Sêmen/Palheta), `BreedingEvent` (Inseminação/IATF/Monta Natural).
-* **Features:**
-  * Artificial Insemination / Fixed-Time AI (IATF) protocol tracking.
-  * Pregnancy diagnosis (ultrasound / rectal palpation).
-  * Reproductive indicators: Calving Interval (IEP - Intervalo Entre Partos), Conception Rate, Open Days (Dias em Aberto).
+Cada módulo de negócio possui seu próprio ciclo de vida, modelos e contexto de persistência. A documentação aprofundada de cada módulo reside em `/docs/modules/` e nos respectivos ADRs em `/docs/adrs/`.
 
-### 5.2 Calving & Calf Nursery Module (`Modules.Calving`)
-* **Entities:** `Calving` (Parto), `Calf` (Bezerro/a), `Weaning` (Desmame).
-* **Features:**
-  * Birth recording (birth weight, sex, coat/breed, mother tag ID, birth condition).
-  * Calf identification (Ear Tag / SISBOV / RFID Chip / Tattoo).
-  * Weaning recording & 205-day adjusted weight calculation.
-  * Pre-weaning mortality & weaning rate per cow.
+### 5.1 Breeding & Cattle Herd Management (`Modules.Breeding`)
+* **Entidades:** `Cow` (Matriz), `Bull` (Touro), `SemenBatch` (Sêmen/Palheta), `BreedingEvent` (Inseminação/IATF/Monta Natural).
+* **Capacidades:** Protocolos IATF, diagnóstico de gestação, métricas reprodutivas (IEP, Taxa de Concepção, Dias em Aberto).
+* **Docs:** [docs/modules/breeding.md](file:///home/rony/LPR/CriaCerto/docs/modules/breeding.md).
 
-### 5.3 Growth, Pasture & Feedlot Module (`Modules.Growth`)
-* **Entities:** `Lot` (Lote de Animais), `PasturePaddock` (Pasto/Piquete), `AnimalMovement`, `Weighing` (Pesagem/Arroba), `FeedlotPen` (Confinamento/Curral).
-* **Features:**
-  * Growth stages: Calf (Bezerro), Yearling (Novilho/Garrote), Fattening/Finishing (Boi Gordo/Recria/Engorda).
-  * Animal Unit per Hectare (UA/ha - Taxa de Lotação) calculation per paddock.
-  * Average Daily Gain (ADG / GPD - Ganho de Peso Diário em kg e @).
-  * Mortality and culling tracking.
+### 5.2 Calving & Calf Nursery (`Modules.Calving`)
+* **Entidades:** `Calving` (Parto), `Calf` (Bezerro/a), `Weaning` (Desmame).
+* **Capacidades:** Registro de nascimentos, identificação (Brinco/SISBOV/RFID), desmame, peso ajustado aos 205 dias, taxa de mortalidade pré-desmame.
+* **Docs:** [docs/modules/calving.md](file:///home/rony/LPR/CriaCerto/docs/modules/calving.md).
 
-### 5.4 Nutrition & Feed Management Module (`Modules.Nutrition`)
-* **Entities:** `FeedRation`, `PastureSupplementation` (Sal Mineral / Proteinado), `DailyFeedBatch` (Carregamento de Trato), `SiloStock`.
-* **Features:**
-  * Pasture mineral & protein supplementation logs.
-  * Feedlot total mixed ration (TMR / Trato) delivery logs.
-  * Feed Conversion Ratio (CA) and Cost per @ (Arroba) produced.
+### 5.3 Growth, Pasture & Feedlot (`Modules.Growth`)
+* **Entidades:** `Lot` (Lote), `PasturePaddock` (Piquete), `AnimalMovement`, `Weighing` (Pesagem/@), `FeedlotPen` (Curral de Confinamento).
+* **Capacidades:** Fases (Cria, Recria, Engorda), cálculo de UA/ha (Taxa de Lotação), GPD / ADG (Ganho de Peso Diário).
+* **Docs:** [docs/modules/growth.md](file:///home/rony/LPR/CriaCerto/docs/modules/growth.md).
 
-### 5.5 Sanitary & Veterinary Module (`Modules.Sanitary`)
-* **Entities:** `VaccinationCampaign` (Febre Aftosa, Brucelose, Raiva, Clostridiose), `DewormingRecord` (Vermifugação), `TreatmentRecord`.
-* **Features:**
-  * Mandatory state/federal vaccination campaign tracking.
-  * Individual/Lot medical treatments with slaughter withdrawal period (período de carência) blocks.
+### 5.4 Nutrition & Feed Management (`Modules.Nutrition`)
+* **Entidades:** `FeedRation`, `PastureSupplementation` (Sal Mineral / Proteinado), `DailyFeedBatch` (Trato Diário), `SiloStock`.
+* **Capacidades:** Suplementação a pasto, trato de confinamento (TMR), Conversão Alimentar (CA) e Custo por @ produzida.
+* **Docs:** [docs/modules/nutrition.md](file:///home/rony/LPR/CriaCerto/docs/modules/nutrition.md), [ADR 0003](file:///home/rony/LPR/CriaCerto/docs/adrs/0003-nutrition-and-feed-conversion-analytics.md).
 
-### 5.6 Tenant & Licensing Module (`Modules.Tenancy`)
-* **Entities:** `Tenant`, `SubscriptionPlan`, `ModuleAccess`, `OperationalTag`, `TenantOperationalTag`.
-* **Tenant lifecycle states:** `Trial`, `Active`, `PastDue`, `Suspended`, `Cancelled`, `Archived` — governed via `TenantLifecycle` with mandatory admin justification for transitions.
-* **Operational segmentation (Backoffice 2.3):** `SizeSegment`, `CommercialRegion`, `ProductiveProfile`, `ChurnRisk` on `Tenant`; operational tags for support/CS/retention campaigns.
-* **Features:**
-  * Middleware for module availability verification per tenant.
-  * Feature toggling and usage limits (e.g., max head of cattle supported per plan).
-  * Producer access enforcement for blocked tenant statuses (`Suspended`, `Cancelled`, `Archived`).
-  * Account activation & email confirmation workflow (`ConfirmEmailCommand`, `ResendConfirmationEmailCommand`) enforced at login with 24h token expiration via Resend (ADR 0016).
-  * Data subject rights & profile governance under LGPD Art. 18, III (`GetUserProfileQuery`, `UpdateUserProfileCommand`, `ChangeUserPasswordCommand`) with password entropy enforcement and SHA-256 forensic audit logging (ADR 0017).
-  * Data subject access & machine-readable portability under LGPD Art. 18, II e V (`ExportUserDataPortabilityQuery`) emitting canonical JSON packages with SHA-256 forensic audit logging (ADR 0018).
-  * Data subject account deletion, unlinking & anonymization under LGPD Art. 18, VI (`AnonymizeUserAccountCommand`, `POST /api/v1/auth/account/delete`) harmonized with agropecuary/tax data retention, sole administrator safeguarding, and Critical SHA-256 forensic audit logging (ADR 0019).
-  * B2B Data Processing Agreement (DPA) under LGPD Art. 39 & 46: Formalization of CriaCerto as Operator and farm/producer as Controller for invited team members (`TeamInvite`) and field operators, specifying technical safeguards (AES-256-GCM, blind indexing, SHA-256), sub-processor governance (Stripe, Resend, Cloud), 30-day export grace period, and incident notification (ADR 0022).
-  * Expurgo Automatizado de Dados Temporários (LGPD 4.2 & Art. 16): Background worker periódico (`DataRetentionPurgingBackgroundService`) governando a eliminação de tokens de confirmação de e-mail e redefinição de senha com mais de 7 dias de expiração (`User.ClearExpiredTokens`) e descarte físico seguro de convites de equipe não aceitos há mais de 30 dias (`TeamInvites`). Orquestrado via `PurgeExpiredTenancyTokensAndInvitesCommand`, limpeza de sessões administrativas obsoletas (`PurgeExpiredAdminSessionsCommand`) com auditoria forense SHA-256 e endpoint de execução sob demanda no Backoffice (ADR 0023).
-  * Canal Oficial do Encarregado (DPO - Art. 41) & Fluxo DSR (Data Subject Request): Portal institucional público `/dpo` e componente reativo `DataSubjectRequestForm.razor` com protocolo canônico `DSR-YYYYMMDD-XXXX`, catálogo de direitos fundamentais do Art. 18 da LGPD, prazo legal improrrogável de até 15 dias úteis (Art. 19, II), comando CQRS `SubmitDataSubjectRequestCommand`, duplo disparo de e-mail transacional via Resend (`IEmailSender`), auditoria forense SHA-256 no `AuditLog` e endpoint público defensivo `POST /api/v1/compliance/dpo/requests` (ADR 0024).
+### 5.5 Sanitary & Veterinary (`Modules.Sanitary`)
+* **Entidades:** `VaccinationCampaign` (Aftosa, Brucelose, Raiva, Clostridiose), `DewormingRecord`, `TreatmentRecord`.
+* **Capacidades:** Campanhas sanitárias obrigatórias, tratamentos clínicos e bloqueio preventivo de período de carência (slaughter withdrawal).
+* **Docs:** [docs/modules/sanitary.md](file:///home/rony/LPR/CriaCerto/docs/modules/sanitary.md).
+
+### 5.6 Tenant & Licensing (`Modules.Tenancy`)
+* **Entidades:** `Tenant`, `User`, `TenantSubscribedModule`, `SubscriptionPlan`, `TenantSubscriptionHistory`.
+* **Capacidades:**
+  * Multi-tenancy, isolamento de dados e ciclo de vida do tenant (`Trial`, `Active`, `PastDue`, `Suspended`, `Cancelled`, `Archived` - ADR 0005).
+  * Catálogo Modular Self-Service e precificação por faixas de cabeças (`TIER_500` a `TIER_5000_PLUS`) com módulo core `Cows` mandatório (ADR 0027).
+  * Gating dinâmico via `ITenantContext`, claims JWT e middleware `ModuleAccessBehavior`.
+  * Governança LGPD: confirmação de e-mail (ADR 0016), retificação (ADR 0017), portabilidade JSON (ADR 0018), exclusão/anonimização (ADR 0019), DPA B2B (ADR 0022), expurgo automatizado de dados temporários (ADR 0023) e canal DSR/DPO em `/dpo` (ADR 0024).
+* **Docs:** [docs/modules/tenancy.md](file:///home/rony/LPR/CriaCerto/docs/modules/tenancy.md), [ADR 0027](file:///home/rony/LPR/CriaCerto/docs/adrs/0027-modular-self-service-and-tiered-head-pricing.md).
 
 ### 5.7 Backoffice Module (`Modules.Backoffice`)
-* **Bootstrap admin (seed):** Parametrizado via `.env` / variáveis de ambiente (`BACKOFFICE_MASTER_ADMIN_EMAIL`, `BACKOFFICE_MASTER_ADMIN_PASSWORD`, `BACKOFFICE_MASTER_ADMIN_NAME`) ou seção `Backoffice:MasterAdmin` do `appsettings.json`, com fallbacks padrão para `admin@criacerto.com.br` / `AdminPassword123!` — criado por `BackofficeDataSeeder` na inicialização da API.
-* **Dev reset:** set `Backoffice:ResetBootstrapAdminPassword=true` in `appsettings.Development.json` to re-sync the bootstrap password on existing databases (never enable in production without explicit ops approval).
-* **Login endpoint:** `POST /api/v1/backoffice/auth/login` returns `401` for invalid credentials (`Backoffice.InvalidCredentials`), not RBAC `403`.
-* **Administrative Approvals (4-Eyes Principle):** Critical platform actions (`PublishPlanVersion`, `MassTenantSuspension`, `ExtendedAccessGrant`) must follow the dual-control principle (`AdminApprovalRequest`). The requester cannot self-approve (`ApprovalErrors.CannotSelfApprove`). Requests carry automatic TTL expiration (default 48h), mandatory justification (min 10 chars), execution payloads and visual diffs with full audit logging in `AuditLog`.
-* **Forensic Audit & Tamper-Evident Hashing (Backoffice 5.1):** All administrative actions are recorded in structured `AuditLog` records with actor context, network metadata (IP, user agent), target tenants and before/after diffs (`OldValuesJson`, `NewValuesJson`). Every entry includes a canonical SHA-256 integrity hash (`RecordHash`) chained to the previous entry (`PreviousRecordHash`). Data retention policies are tiered by severity (`Critical`: permanent/1825d without auto-purge; `High`: 1095d archive; `Medium`: 365d archive; `Low`: 90d purge).
-* **Observability & Anomaly Alerts (Backoffice 5.2):** Native .NET 10 telemetry via `Meter("CriaCerto.Modules.Backoffice")` and `ActivitySource` with MediatR pipeline behavior `BackofficeObservabilityBehavior` recording operation latency histograms and distributed spans. Proactive anomaly detection engine (`AnomalyDetectionEngine`) monitoring brute force/policy denials (`ALR_POLICY_BRUTE_FORCE`), off-hours critical actions (`ALR_OFF_HOURS_CRITICAL_ACTION`), impersonation surges (`ALR_IMPERSONATION_BURST`), and forensic hash chain tampering (`ALR_FORENSIC_TAMPER_DETECTED`). Managed via `BackofficeAlert` with fingerprint deduplication, alert triage cycle (`Active` ➔ `Acknowledged` ➔ `Resolved`), and `/backoffice/observability` console.
-* **Compliance LGPD & Access Governance (Backoffice 5.3):** Full compliance with Brazilian General Data Protection Law (LGPD - Law 13.709/2018) via deterministic PII masking (`IPiiDataMasker` / `PiiDataMasker`) protecting CPFs, CNPJs, personal emails, phone numbers, IP addresses and sensitive JSON payloads by default (Privacy by Default). Granular permissions (`compliance.read`, `compliance.export`, `compliance.unmask`). Just-In-Time unmasking (`RevealSensitiveDataCommand`) requires mandatory justification (min 10 chars) and immediately records an immutable SHA-256 chained audit record (`Category = Compliance, Action = "PII_DATA_UNMASKED", Severity = High`). Formal access dossiers for external audits and regulatory inquiries (`ExportAccessTrailQuery`) generated with cryptographic signature and critical audit severity. Managed visually via `MaskedDataField.razor`, `RevealPiiModal.razor`, and `/backoffice/compliance` console.
-* **Application Security & Negative Authorization Hardening (Backoffice 6.1):** Defense-in-depth architecture covering the OWASP API Security Top 10. Native .NET 10 rate limiting (`BackofficeAuthRateLimiter`) with 15 req/min on `/api/v1/backoffice/auth/login` and `/refresh` (`Backoffice.RateLimitExceeded`). Constant-time PBKDF2 dummy verification in `AuthenticateAdminUserCommandHandler` eliminating username enumeration via timing side-channels. Impersonation token containment in `BackofficeAccessMiddleware` preventing support tokens from accessing administrative endpoints (`Backoffice.ImpersonationRestricted`). Mandatory security headers (CSP, Permissions-Policy, HSTS, and `Cache-Control: no-store, no-cache` for all backoffice responses). Exhaustive negative authorization matrix (`BackofficeNegativeAuthorizationTests` and `BackofficeAuthenticationHardeningTests`) tagged with `[Trait("Category", "SecurityRegression")]` ensuring continuous CI/CD quality gate enforcement.
-* **Wave Rollout & Feature Flag Governance (Backoffice 6.2):** Liberação progressiva por anéis (`Ring0_Canary`: `PlatformOwner`; `Ring1_EarlyAdopters`: `SupportN2`, `FinanceOps`; `Ring2_GeneralAvailability`: todos os operadores autorizados pelo RBAC). Avaliação determinística contextual via SHA-256 (`Key:AdminEmail % 100`) para rollouts percentuais sem oscilações na interface. Intercepção declarativa via `[RequireFeatureFlag("key")]` e `FeatureFlagEvaluationBehavior` no MediatR abortando comandos não liberados com `Result.Failure(FeatureFlagErrors)`. Regime de emergência (*Kill-Switch* / *Circuit Breaker*) instantâneo com registro compulsório em `AuditLog` com severidade crítica e encadeamento criptográfico SHA-256. Guardas client-side reativos (`FeatureFlagGuard.razor`), badges de estado (`RolloutWaveBadge.razor`) e console `/backoffice/rollout` com monitoramento contínuo de SLOs (taxa de erro e latência p95).
-* **Operações, Playbooks e Resposta a Incidentes (Backoffice 6.3 & LGPD 5.2):** Procedimentos operacionais padrão (SOPs) consolidados em `/docs/operations/`: triagem N1, suporte assistido com dupla salvaguarda e remediação assistida (`playbook_support.md`); governança de planos, precificação e separação de funções via 4-Eyes (`playbook_finance.md`); runbooks de contenção emergencial (`runbook_incident_response.md`: RUNBOOK-01 a RUNBOOK-07 cobrindo Kill-Switch com corte em < 1s, violação de hash forense `ALR_FORENSIC_TAMPER_DETECTED`, mitigação de força bruta/rate-limiting, contenção de impersonação `Backoffice.ImpersonationRestricted`, falsificação de webhook Stripe e gestão/notificação de incidentes com dados pessoais sob Art. 48 da LGPD e Resolução CD/ANPD nº 15/2024 via `PrivacyIncidentEvaluator` com SLAs de 3 dias úteis e 24h para produtores sob DPA). Matriz RACI, trilhas de treinamento por perfil e termos de privilégios (`training_matrix_and_handoff.md`), homologados por simulação de mesa (*Tabletop Drill* - `tabletop_simulation_report.md`) e suíte de testes automatizada de simulação (`IncidentResponseSimulationTests`), formalizados nos ADRs `0014-operational-playbooks-incident-response-and-handoff.md` e `0025-lgpd-incident-response-and-anpd-notification.md`.
-* **Inventário de Dados e Relatório de Impacto (ROPA Art. 37 & RIPD Art. 38 - LGPD 5.3):** Governança formal e rastreabilidade viva consolidada em `/docs/compliance/`: inventário detalhado de 7 macroprocessos de tratamento (`ropa_data_inventory.md`) cobrindo finalidades, bases legais do Art. 7º, categorias de titulares e dados, subprocessadores (Stripe, Resend, Cloud) e prazos legais de retenção (Marco Civil, CTN e Código Civil); e Relatório de Impacto à Proteção de Dados Pessoais (`ripd_dpia_overview.md`) avaliando os riscos inerentes de impersonação de suporte e processamento financeiro com Stripe/Referral, atestando a eficácia das salvaguardas (dupla salvaguarda, `BackofficeAccessMiddleware`, `IPiiDataMasker`, Kill-Switch < 1s, cifra AES-256-GCM, blind indexing HMAC-SHA256, carência D+30 e aprovação 4-Eyes), com matriz de redução de risco inerente para risco residual baixo e homologação formal pelo DPO. Diretrizes de revisão periódica e gatilhos arquiteturais formalizados no ADR `0026-lgpd-ropa-data-inventory-and-ripd-governance.md` e suíte de testes de Living Documentation em `LgpdComplianceDocumentationTests`.
-* **Gestão Financeira de Comissões e Repasses (Referral 3.2):** Controle de conciliação bancária e liquidação financeira no console `/backoffice/referral/payouts`. Carência estrita D+30 contra estornos/chargebacks sem liberação antecipada. Visão agregada por parceiro com drill-down nas faturas indicadas. Baixa e registro de repasse compulsório com comprovante bancário (PDF/imagem) salvo em armazenamento local seguro com sanitização contra path traversal e código NSU/Pix E2E. Exportação em lote de remessa Pix estruturada em CSV com BOM UTF-8 e encadeamento compulsório no `AuditLog` com hash SHA-256 sob as permissões `referral.payouts.read`, `referral.payouts.manage` e `referral.payouts.export`.
-* **Maturação, Enforcement e Prevenção de Estornos (Referral 5.1):** Background worker diário (`ReferralMaturityAndEnforcementWorker`) baseado em `PeriodicTimer` governando a transição de comissões de `PendingMaturity` para `AvailableForPayout` após carência D+30. Estratégia híbrida contra estornos: webhook reativo (`charge.refunded`) em tempo real via `StripeChargeRefundedIntegrationEvent` e checagem preventiva no job via `IReferralPaymentVerificationService` para faturas canceladas ou notas de crédito pós-pagamento. Tratamento compulsório de inadimplência (`PastDue`, `Cancelled`, `Suspended`) com cancelamento de comissões pendentes, migração da atribuição para `Churned` e auditoria forense SHA-256 no `AuditLog` (`Category = Billing`, `Severity = High`). Endpoint manual `POST /api/v1/backoffice/referral/payouts/run-enforcement` sob claim `referral.payouts.manage`.
-* **Prevenção a Abusos, Fraudes e Governança 4-Eyes (Referral 5.2):** Detecção de auto-indicação no cadastro via validação cruzada desacoplada (`ITenantInfoLookupService`) impedindo indicações entre contas com mesmo CPF/CNPJ ou mesmo titular/e-mail para produtores e parceiros. Bloqueio em tempo real de colisão de cartão de crédito no Stripe (`HasCardFingerprintCollisionAsync`) com transição para `Fraudulent`, suspensão preventiva imediata do indicador (`ParticipantStatus.Suspended`) e registro forense crítico no `AuditLog`. Limite estrito de 100% no motor de desconto (`PlanReferralDiscountPolicy.CalculateDiscount` e `ReferralRewardLedger.CreateInvoiceDiscountCredit`), impedindo saldo negativo a pagar ou transferência de dinheiro de volta. Governança 4-Eyes compulsória para alterações contratuais de comissão de parceiros via `AdminApprovalRequest` (`ApprovalRequestType.UpdatePartnerContractCommission`) com hash SHA-256 encadeado no `AuditLog` do Backoffice.
-* **Telemetria, CAC/LTV e Indicadores de Sucesso (Referral 6.1):** Telemetria nativa .NET 10 via `Meter("CriaCerto.Modules.Referral")` e `ActivitySource` com contadores para cliques, atribuições, recompensas emitidas e latência de processamento. Consolidação de KPIs de negócio em `GetReferralProgramKpisQuery`: funil de conversão (cliques ➔ cadastros ➔ faturas pagas), CAC por canal (Produtor vs Parceiro Comercial vs Mídia Paga), Blended CAC com proteção contra divisão por zero, Índice de Viralidade ($K\text{-Factor} = \text{Novos Clientes via Indicação} / \text{Clientes Ativos da Plataforma}$) e análise comparativa de LTV e retenção via abstração desacoplada (`ITenantInfoLookupService`). Lançamento de despesas de marketing em `PaidMediaSpend` no Backoffice com auditoria forense. Console analítico `/backoffice/referral/analytics` no Blazor com seletores de período flexíveis sob as permissões `referral.analytics.read` e `referral.analytics.manage`.
-* **Testes Automatizados e Homologação Ponta a Ponta (Referral 6.2):** Bateria exaustiva de testes unitários e de integração cobrindo os motores de cálculo e a esteira de webhooks do Stripe. Motor de descontos de cliente (`PlanDiscountEngineTests`) com parametrização de políticas (percentual, valor fixo, múltiplos amigos) e teto inviolável de 100% da assinatura base. Motor de comissão de parceiro comercial (`PartnerCommissionEngineTests`) com suporte a primeiro mês (`PercentageFirstMonth`), percentual recorrente (`PercentageRecurring`) com limitação ou sem teto de meses e valor fixo de conversão (`FixedPerConversion`). Simulação ponta a ponta com assinaturas criptográficas reais HMAC-SHA256 do Stripe (`ReferralStripeWebhookLifecycleIntegrationTests`) validando o ciclo completo: ativação via `checkout.session.completed` ➔ geração de comissão em carência D+30 (`PendingMaturity`) ➔ estorno via `charge.refunded` com cancelamento automático e trilha forense no `AuditLog`. Homologação de carência D+30 e concorrência (`ReferralMaturityAndPaymentConcurrencyIntegrationTests`) garantindo idempotência e blindagem contra cobranças e webhooks simultâneos.
-* **Provisionamento de Acesso e Credenciais de Parceiros (Referral 5.4):** Ao cadastrar um parceiro comercial via backoffice, o serviço `PartnerAccountProvisioner` efetua o provisionamento de credenciais seguras no módulo Tenancy. Para novos usuários, gera senha temporária legível (`CriaCerto#XXXXXX`), tokens de confirmação de e-mail e de redefinição de senha com TTL de 7 dias e dispara e-mail transacional via Resend (`IEmailSender`) contendo o link oficial de indicação (`/r/{code}`), credenciais provisórias, botão de confirmação (`/confirm-email`) e link para definição de senha própria no primeiro acesso (`/forgot-password`). Para parceiros com conta já existente, vincula a conta associativa preservando suas credenciais e envia e-mail de notificação de parceria.
-* **Criptografia em Repouso e Blind Indexing (Referral 3.1 & LGPD Art. 46):** Criptografia simétrica autenticada em repouso com algoritmo **AES-256-GCM** via `IDataEncryptionService` e `AesGcmDataEncryptionService` para `PixKey` e `LegalDocumentNumber` em `PartnerContract`. Envelope canônico Base64 com prefixo `$cc1$` suportando rotação transparente de chaves via `KeyRing`. Padrão internacional de **Blind Indexing (HMAC-SHA256)** gerando `LegalDocumentNumberHash` indexado para permitir validação de unicidade e buscas em $O(1)$ sem expor PII. ValueConverter transparente `EncryptedStringConverter` no `ReferralDbContext`, serviço idempotente de re-encriptação `ReferralDataReencryptionService` e endpoint administrativo `POST /api/v1/backoffice/referral/reencrypt-contracts` (ADR 0020).
-* **Sanitização de Logs, Telemetria e Result Pattern em Exceções (LGPD 3.2 & Art. 46):** Motor centralizado de redaction (`IPiiRedactor` / `PiiRedactor`) nos Building Blocks higienizando cabeçalhos HTTP (`Authorization: Bearer [REDACTED]`, `Cookie`, `Set-Cookie`, `X-Api-Key`), query strings e payloads JSON (senhas, CPFs mascarados `***.456.789-**`, CNPJs `12.***.***/0001-**`, cartões e chaves Pix). Middleware de requisições `RequestLoggingMiddleware` com Serilog suprimindo completamente o corpo de rotas confidenciais de login/senhas (`[REDACTED_SENSITIVE_ENDPOINT]`). Barreira externa `GlobalExceptionHandlerMiddleware` interceptando exceções não tratadas, registrando logs estruturados com TraceId e retornando payloads padronizados com Result Pattern (`Error.Unexpected(traceId)`) com status 500 sem expor stack traces ou connection strings ao cliente HTTP. Telemetria blindada em `BackofficeObservabilityBehavior` registrando apenas o tipo de exceção sem vazar dados pessoais ou mensagens de banco (ADR 0021).
-* **Catálogo Modular Self-Service & Precificação por Faixas de Cabeças (Modular Self-Service 1.1):** Entidades `HeadTierCatalog` (`TIER_500`, `TIER_1500`, `TIER_3000`, `TIER_5000_PLUS`), `ModuleCatalog` (`Cows` base obrigatório com `IsCore = true` + add-ons opcionais `Breeding`, `Calving`, `Growth`, `Sanitary`, `Nutrition`, `Analytics`) e `ModuleTierPrice` (versionamento imutável `Draft` ➔ `Published` ➔ `Deprecated` por par módulo/faixa com `StripePriceIdMonthly` e `StripePriceIdAnnual`). Seed inicial idempotente em `BackofficeDataSeeder.SeedModularCatalogAsync` populando as 4 faixas, 7 módulos e 28 preços publicados, e endpoints administrativos em `/api/v1/backoffice/catalog/tiers` e `/api/v1/backoffice/catalog/modules` protegidos por `plans.read`, `plans.write`, `plans.publish` e feature flag `backoffice.feature.plan_publishing` com auditoria forense SHA-256 em `AuditLog`.
-* **Modelagem de Assinatura Modular no Tenancy (Modular Self-Service 1.2):** Evolução de `Tenant` (`HeadTierCode` padrão `"TIER_500"`, `Capacity` sincronizado com `MaxHeads` da faixa e coleção `SubscribedModules` garantindo inclusão obrigatória do módulo base `"Cows"`), `TenantSubscribedModule` (`tenancy.TenantSubscribedModules` com índice único `(TenantId, ModuleKey)`, `StripeSubscriptionItemId`, `ActivatedAtUtc` e `MonthlyPriceSnapshot`) e `TenantSubscription` (`CreateInitialModular`, `ApplyModularChange` com *Grace Period* de 14 dias para redução de faixa abaixo do rebanho ativo e `ResolveModularGracePeriod`). Onboarding de 30 dias (`CreateTenantCommand`) iniciando em `Trial` na faixa `TIER_500` com degustação de todos os módulos comerciais (ou seleção customizada no wizard com `"Cows"` obrigatório) e exposição pública do catálogo modular via `BackofficeSubscriptionPlansProvider.GetModularCatalogAsync` e `GET /api/v1/tenancy/catalog`.
-* **Evolução do `ITenantContext` e Geração de JWT Modular (Modular Self-Service 2.1):** Emissão de claims modulares no `JwtService.GenerateToken` (`head_tier`, `head_capacity`, múltiplas claims `subscribed_module` e claim compacta CSV `subscribed_modules` a partir de `tenant.GetSubscribedModuleKeys()`, mantendo `SubscribedPlan` para retrocompatibilidade) e carregamento eager `.ThenInclude(t => t!.SubscribedModules)` nos fluxos de autenticação (`LoginCommandHandler`, `SelectTenantCommandHandler`, `RefreshTokenCommandHandler` e `ChangeSubscriptionPlanCommandHandler`). Evolução de `ITenantContext` e `HttpContextTenantContext` com `IReadOnlySet<string> SubscribedModules` (case-insensitive, garantindo módulo base `"Cows"` para tenants autenticados), `int HeadCapacity` e `string? HeadTier`.
-* **Refatoração de `ModuleLicenseChecker`, `ModuleAccessBehavior` e `HeadTierCapacityLimits` (Modular Self-Service 2.2):** Substituição do dicionário estático `PlanAccess` em `ModuleLicenseChecker` pelo método `HasModuleAccess(IEnumerable<string>? subscribedModules, string? requiredModule)` garantindo acesso permanente aos módulos base `"Cows"` e `"Tenancy"` e validando módulos opcionais sem reciprocidade implícita entre `"Cows"` e `"Breeding"`. Interceptação no `ModuleAccessBehavior` validando `_tenantContext.SubscribedModules` contra `[RequiresModule("...")]` e retornando erro padronizado `License.ModuleNotSubscribed` (`ErrorType.Unauthorized`). Separação de gating entre Plantel Base/Lotes (`[RequiresModule("Cows")]` em `CreateCowCommand`, `UpdateCowCommand`, `GetCowQuery`, `ListCowsQuery`, `ListBullsQuery`, `CreateLotCommand`, `MoveLotToPaddockCommand`, `CloseLotCommand`, `GetLotsQuery` e `ModuleGuard` em `Registry.razor`/`AnimalDetail.razor`) e Reprodução/IATF (`[RequiresModule("Breeding")]` em `RegisterIatfProtocolCommand`, `RegisterPregnancyDiagnosisCommand`, `GetIatfProtocolsQuery`). Validação de limite de cabeças por faixa via `HeadTierCapacityLimits` e bloqueio de cadastro acima da capacidade ativa (`License.HeadCapacityExceeded`).
-* **Checkout de Nova Assinatura Modular no Stripe (Modular Self-Service 3.1):** Evolução de `CreateCheckoutSessionCommand` e `CreateCheckoutSessionRequest` para o modelo À La Carte por faixa (`HeadTierCode`) e múltiplos módulos (`SelectedModules`). Inclusão compulsória do módulo core `"Cows"` no conjunto de módulos e validação estrita de capacidade ativa (`currentHeadCount <= MaxHeads`) via abstração desacoplada `ITenantActiveHerdCounter` (`DefaultTenantActiveHerdCounter` e `CompositeActiveHerdCounter` no Host API), retornando `Result.Failure(License.HeadCapacityExceeded)` caso o rebanho ativo exceda o teto da faixa. Geração de `SessionLineItemOptions` multi-item no `IStripePaymentService.CreateModularCheckoutSessionAsync` com preços publicados mensais/anuais e persistência de metadados canônicos (`tenant_id`, `head_tier`, `max_heads`, `subscribed_modules`) na sessão e subscrição do Stripe, mantendo total retrocompatibilidade com chamadas baseadas no formato `PlanId` anterior.
-* **Adição/Remoção Self-Service de Módulos e Mudança de Faixa no Stripe (Modular Self-Service 3.2):** Comando `UpdateModularSubscriptionCommand` e validador `UpdateModularSubscriptionCommandValidator` permitindo que produtores com assinatura ativa adicionem/removam módulos ou alterem a faixa de cabeças com rateio proporcional automático (`ProrationBehavior = "create_prorations"`) via `IStripePaymentService.UpdateModularSubscriptionAsync`. Módulo core `"Cows"` preservado compulsoriamente em todas as operações. Governança estrita de capacidade via `ITenantActiveHerdCounter`: se o rebanho ativo exceder a nova faixa, a requisição é bloqueada com `License.HeadCapacityExceeded` (quando `AllowGracePeriod = false`) ou transiciona o tenant para carência de 14 dias (`SubscriptionActionType.DowngradeGracePeriodStarted` com status `GracePeriodActive` quando `AllowGracePeriod = true`). Atualização atômica de `Tenants`, `TenantSubscribedModules` e `TenantSubscriptionHistories` com emissão de novo token JWT atualizado e endpoint seguro `POST /api/v1/tenancy/subscription/update-modular`.
-* **Processamento de Webhooks Stripe Modular (Modular Self-Service 3.3):** Pipeline de webhooks (`ProcessStripeWebhookCommand` e `StripePaymentService.ProcessWebhookAsync`) preparado para os ciclos modulares: sincronização atômica nos eventos `checkout.session.completed`, `customer.subscription.updated` e `invoice.paid` com carregamento eager `.Include(t => t.SubscribedModules)`. Resolução híbrida e resiliente via `ResolveModularSubscriptionInfoAsync` priorizando metadados (`head_tier`, `max_heads`, `subscribed_modules`) com fallback para mapeamento reverso de `PriceIds` via catálogo modular (`ISubscriptionPlansProvider` ou catálogo padrão). Sincronização em `ApplyModularSubscription` preservando compulsoriamente o módulo base `"Cows"`, limpando módulos removidos e persistindo novos módulos com `StripeSubscriptionItemId`. Auditoria forense e rastreabilidade em `TenantSubscriptionHistories` diferenciando ações semânticas (`NewSubscription`, `Upgrade`, `DowngradeImmediate`, `PlanChanged`, `Renewal`) com justificativas ricas e preservação integral de retrocompatibilidade com faturas/planos fixos legados (`Starter`, `Pro`, `Enterprise`).
-* **Experiência Self-Service "Monte seu Plano" no Blazor (Modular Self-Service 4.1):** Reestruturação de `SubscriptionManagement.razor` (`/settings/subscription`) no Blazor WebAssembly com arquitetura em 3 seções interativas: `HeadTierSelector.razor` (cálculo em tempo real de ocupação de rebanho e desabilitação preventiva de faixas inferiores ao rebanho ativo), `ModuleSelectionGrid.razor` (grid reativo com módulo core `"Cows"` inviolável e cards add-on com atualização instantânea de preços por faixa) e `ModularCartStickyBar.razor` (resumo fixo com chave mensal/anual de 15% de economia, gatilho comercial pecuário de custo por cabeça/mês e ação adaptativa: Checkout multi-item para novas contratações/trial ou `update-modular` direto com rateio proporcional para assinaturas ativas, atualizando JWT e claims do usuário sem logout). Suportado por `TenancyApiClient` e suíte de testes em `SubscriptionCalculatorTests.cs` e `TenancyApiClientTests.cs`.
-* **Evolução do `ModuleGuard.razor` e Upsell Contextual de 1-Clique (Modular Self-Service 4.2):** Modernização do `ModuleGuard.razor` expurgando terminologias legadas (`Starter/Pro/Enterprise`) e introduzindo motor de upsell dinâmico via `ModuleGuardUpsellCalculator`: cálculo do acréscimo mensal (+ R$ XX,XX/mês) e capacidade por faixa de cabeças em tempo de execução. Para administradores com faturamento Stripe ativo, ativação imediata de 1-clique via modal contextual com rateio proporcional (*proration*), renovação atômica do JWT em tempo de execução e liberação instantânea do conteúdo sem recarregar a tela. Para contas em Trial/sem cartão, redirecionamento direto para `/settings/subscription?addModule={Module}` com pré-seleção automática do carrinho modular. Cobertura protetora com `<ModuleGuard>` estendida às telas satélites de Nutrição (`DailyTroughLog`, `PastureSupplementationLog`, `SiloStockManagement`), Sanidade (`SanitaryCampaigns`), Analytics (`ExecutiveDashboard`) e Manejo (`CurralWeighingFastInput`), homologada por 25 testes unitários em `ModuleGuardUpsellTests.cs`.
-* **Desacoplamento e Descontos de Indicação por Faixa de Cabeças (Modular Self-Service 5.1):** Desacoplamento do motor de descontos de indicação (`PlanReferralDiscountPolicy`) dos planos fixos legados (`Starter/Pro/Enterprise`) e vinculação à **Faixa de Cabeças (`HeadTierCode`)** ou a um **percentual padrão global (`GLOBAL_DEFAULT`)** sobre a fatura modular total (`MonthlyTotalAmount`) do produtor indicador. Resolução hierárquica resiliente via `IReferralDiscountPolicyResolver` (Faixa Específica ➔ Padrão Global ➔ Plano Legado) com teto inviolável de 100% da mensalidade (sem saldo negativo ou devolução). Abstração `TenantSummaryDto` enriquecida com `HeadTierCode`, `Capacity`, `SubscribedModules` e `MonthlyTotalAmount`. Console do Backoffice `/backoffice/referral/discount-policies` (`DiscountPoliciesManagement.razor`) atualizado com filtros categorizados (`HeadTier`, `GlobalDefault`, `LegacyPlan`) e badges de escopo, homologado por 213 testes unitários no módulo Referral.
-* **Gestão de Tenants e Catálogo Modular no Backoffice (Modular Self-Service 5.2):** Gestão visual completa da **Matriz de Módulos x Faixas de Cabeças** em `PlanCatalogManagement.razor` (7 Módulos $\times$ 4 Faixas) com criação/edição de faixas (`CreateHeadTierCatalogCommand`), módulos (`CreateModuleCatalogCommand`), rascunhos de preços (`CreateModuleTierPriceDraftCommand`) e publicação sob feature flag `backoffice.feature.plan_publishing` e 4-Eyes, preservando aba dedicada a planos legados. Gestão de tenants em `TenantPlanChangeModal.razor` permitindo a administradores alterar a faixa de cabeças (`HeadTierCode`) e conceder/revogar módulos individuais com módulo core `"Cows"` inviolável, cálculo reativo de deltas de capacidade via `PreviewTenantPlanChangeQuery`, ativação automática de Grace Period de 14 dias para reduções de capacidade abaixo do rebanho ativo, justificativa compulsória ($\ge 15$ caracteres) e registro estruturado no `AuditLog` com encadeamento criptográfico SHA-256. Suportado por `IBackofficeApiClient` e homologado por 384 testes unitários no Backoffice.
-* **Conversão e Migração de Tenants Legados para o Catálogo Modular (Modular Self-Service 6.1):** Resolução canônica de conversão em domínio via `LegacyPlanMigrationResolver` e `Tenant.MigrateFromLegacyPlan` governando a transição de planos legados para o modelo modular: Starter (`TIER_500`, 500 cabeças, `["Cows", "Breeding", "Calving"]`), Pro (`TIER_3000`, 3000 cabeças, `["Cows", "Breeding", "Calving", "Growth", "Nutrition"]`) e Enterprise (`TIER_5000_PLUS`, 10000 cabeças, todos os 7 módulos comerciais), com fallback seguro e inviolabilidade do módulo core `"Cows"`. Migration EF Core `20261105220000_MigrateExistingTenantsToModularCatalog` e script SQL operacional idempotente `20261105_migrate_existing_tenants_to_modular.sql` executando a conversão atômica de `Tenants`, inserção com `WHERE NOT EXISTS` em `TenantSubscribedModules` e registro de auditoria em `TenantSubscriptionHistories` com `ActionType = 'PlanChanged'`, homologados por 482 testes unitários no módulo Tenancy.
-* **Suíte de Testes Automatizados e Homologação Modular (Modular Self-Service 6.2 & ADR 0027):** Cobertura de testes unitários e de integração validando os pilares do modelo modular: gating arbitrário (`ModuleLicenseCheckerTests` e `GatingTests` cobrindo os 7 módulos comerciais com Result Pattern e `License.ModuleNotSubscribed`), fronteira estrita de capacidade por faixa (`HeadTierCapacityValidationTests` cobrindo `TIER_500`, `TIER_1500`, `TIER_3000`, `TIER_5000_PLUS`), bloqueio contra rebanho ativo em `CreateCheckoutSessionCommandHandler` e downgrade/Grace Period de 14 dias em `UpdateModularSubscriptionCommandHandler` (`ModularCheckoutAndCapacityTests`), motor de cálculo de carrinho modular e custo por cabeça (`ModularCartCalculator` e `ModularCartCalculationTests`), e ciclo de vida ponta a ponta de webhooks Stripe multi-item em `StripeWebhookIntegrationTests` (checkout multi-item, adição/remoção atômica de módulos com preservação compulsória de `"Cows"`, upgrade/downgrade de faixas e resolução reversa via `PriceIds`). Decisão arquitetural formalizada no ADR `0027-modular-self-service-and-tiered-head-pricing.md`. Homologado por 541 testes unitários em Tenancy, 115 em BuildingBlocks e 12 testes de integração em Stripe Webhooks.
+* **Entidades:** `AdminUser`, `PlanCatalog`, `ModuleCatalog`, `HeadTierCatalog`, `AdminApprovalRequest`, `AuditLog`, `BackofficeAlert`.
+* **Capacidades:**
+  * Gestão do catálogo modular (preços mensais/anuais vinculados ao Stripe) e governança de planos (ADR 0027).
+  * Princípio 4-Eyes (`AdminApprovalRequest`) para ações críticas de plataforma com justificativa e TTL (ADR 0008).
+  * Trilha de auditoria forense estruturada com encadeamento criptográfico SHA-256 (`RecordHash` encadeado) e políticas de retenção escalonadas (ADR 0009).
+  * Observabilidade e detecção proativa de anomalias (`AnomalyDetectionEngine`) via telemetria nativa .NET 10 (ADR 0010).
+  * Privacidade e conformidade LGPD: mascaramento determinístico de PII (`IPiiDataMasker`) e revelação Just-In-Time com auditoria (ADR 0011).
+  * Hardening de segurança OWASP: rate limiting nativo, mitigação de side-channel timing e contenção de impersonation (ADR 0007, 0012).
+  * Governança de rollout por anéis (`Ring0_Canary` a `Ring2_GA`) e Kill-Switch emergencial instantâneo (ADR 0013).
+  * Playbooks operacionais consolidados e resposta a incidentes de privacidade ANPD (ADRs 0014, 0025, [docs/operations/](file:///home/rony/LPR/CriaCerto/docs/operations)).
+* **Docs:** [docs/modules/backoffice_plans.md](file:///home/rony/LPR/CriaCerto/docs/modules/backoffice_plans.md), [docs/modules/backoffice_billing.md](file:///home/rony/LPR/CriaCerto/docs/modules/backoffice_billing.md).
 
-## 6. Software Engineering Practices & AI Agent Guidelines
-
-### 6.1 TDD Workflow (Mandatory Enforcement)
-Every feature implementation must strictly adhere to the TDD cycle:
-1. **RED:** Write unit/integration tests defining expected behavior (e.g., verifying `Result.Failure` when input violates business rules).
-2. **GREEN:** Write minimal production code required to pass tests.
-3. **REFACTOR:** Clean up code, enforce design patterns, ensure module isolation.
-
-### 6.2 Living Documentation & Documentation Drift Prevention
-* **Living Documentation Rules:**
-  * When adding or modifying an API endpoint, domain event, or business rule, you **MUST update the relevant markdown files** in `/docs/` during the same commit/iteration.
-  * Maintain executable specifications using SpecFlow / Reqnroll or self-documenting xUnit tests.
-  * Keep ADRs (Architecture Decision Records) updated in `/docs/adrs/`.
-
-### 6.3 Frontend Development & MCP Stitch Protocols
-* **Component Architecture:** All Blazor components must be modular, highly granular, and stateless where possible (smart parent / dumb child pattern).
-* **MCP Stitch Integration:** Use MCP Stitch to generate consistent, accessible HTML/CSS component structures before binding them into Blazor `.razor` components.
-* **PWA & Field Offline First:**
-  * Mangueiro / Curral / Pasture registries (Pesagem, Vacinação, IATF, Partos) must be fully operational offline.
-  * Offline actions must be queued in `IndexedDB` (`offlineSync.js` / `IOfflineSyncService`) and processed through `POST /api/v1/sync/{moduleName}/{actionType}` (with `?force=true` support for conflict resolution) once connection is restored (ADR 0004).
-  * Service Workers (`service-worker.js` and `service-worker.published.js`) must never intercept `/api/*` or `/health` routes so that network failures cleanly trigger client-side offline queueing.
+### 5.8 Referral & Parceiros Comerciais (`Modules.Referral`)
+* **Entidades:** `ReferralProgramParticipant`, `PartnerContract`, `ReferralRewardLedger`, `PaidMediaSpend`.
+* **Capacidades:**
+  * Programa "Indique e Ganhe" para produtores (descontos vinculados à faixa de cabeças ou fatura total) e parceiros comerciais (comissões financeiras).
+  * Carência estrita D+30 contra estornos, conciliação e repasses Pix no Backoffice com remessa estruturada em CSV com BOM UTF-8.
+  * Proteção contra fraudes: bloqueio de autofiliação (mesmo CPF/CNPJ/e-mail), colisão de cartão de crédito no Stripe e teto de 100% de desconto.
+  * Criptografia em repouso com algoritmo **AES-256-GCM** e **Blind Indexing (HMAC-SHA256)** para busca $O(1)$ de PIIs financeiras (ADR 0020).
+  * Telemetria e consolidação de KPIs (CAC, LTV, $K\text{-Factor}$) no console analítico `/backoffice/referral/analytics`.
+* **Docs:** [docs/modules/referral.md](file:///home/rony/LPR/CriaCerto/docs/modules/referral.md), [ADR 0020](file:///home/rony/LPR/CriaCerto/docs/adrs/0020-lgpd-referral-at-rest-encryption-and-blind-indexing.md).
 
 ---
 
-## 7. AI Agent Guidelines for Output Generation
+## 6. Architecture Decision Records (ADRs) Quick Reference
 
-When writing code as an AI assistant for this repository:
-1. **Never throw exceptions for validation or business domain errors.** Always return `Result.Failure(Error)`.
-2. **Check module boundaries.** Do not reference cross-module DB entities directly.
-3. **Always write unit tests first or alongside code.**
-4. **Update `agents.md` or related module documentation** whenever architectural decisions or business domain rules are updated.
+Consulte o arquivo de ADR específico em [docs/adrs/](file:///home/rony/LPR/CriaCerto/docs/adrs) para obter os requisitos detalhados de cada decisão:
+
+| ADR | Título / Escopo |
+| :--- | :--- |
+| **0001 - 0003** | Modular Monolith Foundation, Identity & Multi-tenancy, Nutrição e Zootecnia |
+| **0004** | Offline-First IndexedDB Sync Manager & Service Worker |
+| **0005 - 0006** | Tenant Lifecycle State Machine e Segmentação Operacional |
+| **0007 - 0013** | Governança Backoffice: Dupla Salvaguarda, 4-Eyes, Auditoria Forense SHA-256, Observabilidade, Máscaras PII LGPD, Hardening OWASP e Wave Rollout |
+| **0014** | Operational Playbooks, Incident Response e Handoff Operacional |
+| **0015 - 0016** | Provedor de E-mail Transacional Resend e Workflow de Confirmação de E-mail |
+| **0017 - 0026** | Pacote LGPD: Retificação, Portabilidade, Anonimização, Criptografia AES-GCM/Blind Indexing, Sanitização PII, DPA B2B, Expurgo Automatizado, Canal DPO/DSR, Resposta a Incidentes ANPD e ROPA/RIPD |
+| **0027** | Catálogo Modular Self-Service e Precificação por Faixas de Cabeças |
+| **0028 - 0034** | Arquitetura Mobile Híbrida: RCL Shared UI, Abstrações de Plataforma, Host .NET MAUI, Serviços Nativos, Segurança Android/iOS, API Stateless Bearer JWT e CI/CD Multiplataforma |
+
+---
+
+## 7. Software Engineering Practices & AI Agent Guidelines
+
+### 7.1 TDD Workflow (Mandatory Enforcement)
+Todo desenvolvimento deve seguir rigorosamente o ciclo Red-Green-Refactor:
+1. **RED:** Escrever testes unitários/integração que capturem o comportamento esperado (ex.: `Result.Failure` para violações de regra de negócio).
+2. **GREEN:** Escrever o código de produção mínimo indispensável para os testes passarem.
+3. **REFACTOR:** Limpar o código, aplicar boas práticas e garantir o isolamento estrito dos módulos.
+
+### 7.2 Living Documentation & Documentation Drift Prevention
+* Ao adicionar ou modificar endpoints, eventos de domínio, entidades ou regras de negócio, os arquivos em `/docs/` **DEVEM ser atualizados no mesmo commit/iteração**.
+* Mantenha especificações executáveis em testes xUnit autodocumentados.
+* Atualize ou crie novos ADRs em `/docs/adrs/` sempre que uma decisão de arquitetura for tomada ou alterada.
+
+### 7.3 Frontend Development & MCP Stitch Protocols
+* **Component Architecture:** Componentes Blazor granulares, modulares e desacoplados (padrão smart parent / dumb child).
+* **MCP Stitch Integration:** Usar MCP Stitch para prototipar/sintetizar estruturas HTML/CSS antes de ligá-las aos componentes Blazor `.razor`.
+* **PWA & Field Offline-First:**
+  * Telas de manejo de campo (Pesagem, Vacinação, IATF, Partos) devem operar offline.
+  * Operações offline são enfileiradas (`offlineSync.js` no Web / SQLite no Mobile) e sincronizadas via `POST /api/v1/sync/{moduleName}/{actionType}` (ADR 0004).
+  * Service Workers nunca devem interceptar rotas `/api/*` ou `/health`.
+
+---
+
+## 8. AI Agent Rules for Output Generation
+
+Ao atuar como assistente de IA neste repositório:
+1. **Nunca lance exceções para validação ou regras de domínio.** Retorne sempre `Result.Failure(Error)`.
+2. **Respeite as fronteiras modulares.** Nunca execute joins entre tabelas de módulos diferentes nem referencie DbContexts externos. Use IDs primitivos (`Guid`).
+3. **Escreva testes junto com o código (TDD).** Não entregue implementações sem sua respectiva suíte de testes.
+4. **Pratique Progressive Disclosure.** Consulte os arquivos específicos em `/docs/modules/` e `/docs/adrs/` quando precisar de detalhes de implementação de um módulo específico, mantendo este guia (`agents.md`) conciso e focado em princípios transversais.

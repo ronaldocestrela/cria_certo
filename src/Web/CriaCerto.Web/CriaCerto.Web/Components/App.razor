@@ -9,8 +9,9 @@
     <meta name="author" content="CriaCerto Bovino SaaS" />
     <base href="/" />
     <ResourcePreloader />
-    <link rel="stylesheet" href="@Assets["lib/bootstrap/dist/css/bootstrap.min.css"]" />
-    <link rel="stylesheet" href="@Assets["app.css"]" />
+    <link rel="stylesheet" href="@Assets["_content/CriaCerto.Shared.UI/lib/bootstrap/dist/css/bootstrap.min.css"]" />
+    <link rel="stylesheet" href="@Assets["_content/CriaCerto.Shared.UI/app.css"]" />
+    <link rel="stylesheet" href="@Assets["_content/CriaCerto.Shared.UI/CriaCerto.Shared.UI.bundle.scp.css"]" />
     <link rel="stylesheet" href="@Assets["CriaCerto.Web.styles.css"]" />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" />
     <link rel="manifest" href="manifest.webmanifest" />
@@ -80,9 +81,9 @@
 </head>
 
 <body>
-    <CriaCerto.Web.Client.Routes @rendermode="@(new InteractiveWebAssemblyRenderMode(prerender: false))" />
-    <script src="@Assets["js/downloadHelper.js"]"></script>
-    <script src="@Assets["js/offlineSync.js"]"></script>
+    <CriaCerto.Shared.UI.Routes @rendermode="@(new InteractiveWebAssemblyRenderMode(prerender: false))" />
+    <script src="@Assets["_content/CriaCerto.Shared.UI/js/downloadHelper.js"]"></script>
+    <script src="@Assets["_content/CriaCerto.Shared.UI/js/offlineSync.js"]"></script>
     <script src="@Assets["_framework/blazor.web.js"]"></script>
     <script>
         if ("serviceWorker" in navigator) {

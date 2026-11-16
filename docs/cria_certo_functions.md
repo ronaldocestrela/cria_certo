@@ -104,7 +104,7 @@ Centralizado nas pastas de [Tenancy/Features](file:///home/rony/LPR/CriaCerto/sr
 ---
 
 ### 8. 🛡️ Backoffice Administrativo e Governança (`Backoffice`)
-Módulo corporativo completo com endpoints em [Program.cs](file:///home/rony/LPR/CriaCerto/src/Host/CriaCerto.Api/Program.cs#L294-L1168) e telas dedicadas:
+Módulo corporativo completo com endpoints em [Endpoints/Backoffice](file:///home/rony/LPR/CriaCerto/src/Host/CriaCerto.Api/Endpoints/Backoffice) e telas dedicadas:
 * **KPIs da Plataforma:** MRR, ARR, taxa de churn, total de fazendas ativas e alertas em aberto.
 * **IAM de Administradores:** Gestão de usuários do backoffice com papéis granulares, MFA (TOTP com QR code e códigos de recuperação) e gestão/revogação de sessões ativas.
 * **Operações de Tenants:** Suspensão, reativação, cancelamento e arquivamento de fazendas com registro de justificativa, além de segmentação comercial e etiquetas operacionais (`Tags`).

@@ -1,0 +1,242 @@
+@page "/breeding/animal/{Id:guid}"
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@attribute [Authorize]
+@using CriaCerto.Shared.UI.Components.Plantel
+@using CriaCerto.Shared.UI.Models
+@inject CriaCerto.Shared.UI.Services.PlantelApiClient PlantelApi
+@inject NavigationManager Navigation
+
+<PageTitle>Ficha do Bovino - @(_animal?.EarTag ?? "Carregando...")</PageTitle>
+
+<ModuleGuard Module="Cows">
+    <div class="animal-detail-page p-4">
+        <div class="mb-3">
+            <button class="btn btn-outline-secondary btn-sm" @onclick="GoBack">
+                <span class="material-symbols-outlined align-middle fs-6">arrow_back</span> Voltar ao Rebanho
+            </button>
+        </div>
+
+        @if (_isLoading)
+        {
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Carregando ficha do animal...</span>
+                </div>
+            </div>
+        }
+        @if (_animal != null)
+        {
+            <!-- Header Card Principal -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-body p-4">
+                    <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="bg-light p-3 rounded-circle text-primary text-center" style="width: 70px; height: 70px; display: flex; align-items: center; justify-content: center;">
+                                <BovineIcon Size="42" />
+                            </div>
+                            <div>
+                                <div class="d-flex align-items-center gap-2">
+                                    <h2 class="mb-0 fw-bold">@_animal.EarTag</h2>
+                                    <span class="badge bg-primary fs-6">@_animal.Category</span>
+                                    <span class="badge bg-success fs-6">@GetStatusLabel(_animal)</span>
+                                </div>
+                                <p class="text-muted mb-0">
+                                    <strong>Apelido:</strong> @(_animal.Nickname ?? "Sem apelido") |
+                                    <strong>Raça:</strong> @_animal.Breed |
+                                    <strong>SISBOV:</strong> @(_animal.SisbovId ?? "N/A") |
+                                    <strong>RFID:</strong> @(_animal.RfidTag ?? "N/A")
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="text-end">
+                            <span class="d-block text-muted small">REGISTRO PBB</span>
+                            <strong class="fs-5 text-dark">@(_animal.RegistryNumber ?? "Sem registro")</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Grade de KPIs / Estatísticas Zootécnicas -->
+            <div class="row g-3 mb-4">
+                <div class="col-md-3">
+                    <div class="card border-0 shadow-sm p-3">
+                        <span class="text-muted small">Idade Aproximada</span>
+                        <h4 class="fw-bold mb-0 text-primary">@(CalculateAgeMonths(_animal.BirthDate)?.ToString() ?? "-")@(_animal.BirthDate.HasValue ? " meses" : "")</h4>
+                        <small class="text-muted">Nasc: @(_animal.BirthDate?.ToString("dd/MM/yyyy") ?? "Não informada")</small>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card border-0 shadow-sm p-3">
+                        <span class="text-muted small">Escore Corporal (ECC)</span>
+                        <h4 class="fw-bold mb-0 text-success">@(_animal.BodyConditionScore?.ToString("0.0") ?? "-") / 5.0</h4>
+                        <small class="text-muted">Condição atual</small>
+                    </div>
+                </div>
+                @if (IsBull(_animal.Category))
+                {
+                    <div class="col-md-3">
+                        <div class="card border-0 shadow-sm p-3">
+                            <span class="text-muted small">Aptidão Reprodutiva</span>
+                            <h4 class="fw-bold mb-0 text-success">Reprodutor Apto</h4>
+                            <small class="text-muted">Exame Andrológico Vigente</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card border-0 shadow-sm p-3">
+                            <span class="text-muted small">Finalidade Reprodutiva</span>
+                            <h4 class="fw-bold mb-0 text-primary">Monta / Coleta</h4>
+                            <small class="text-muted">Touro Ativo no Plantel</small>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="col-md-3">
+                        <div class="card border-0 shadow-sm p-3">
+                            <span class="text-muted small">Paridade de Partos</span>
+                            <h4 class="fw-bold mb-0 text-info">@_animal.ParityCount partos</h4>
+                            <small class="text-muted">Último: @(_animal.LastCalvingDate?.ToString("dd/MM/yyyy") ?? "-")</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card border-0 shadow-sm p-3">
+                            <span class="text-muted small">IEP Estimado</span>
+                            <h4 class="fw-bold mb-0 text-warning">@(_animal.IepMonths?.ToString("0.0") ?? "-") meses</h4>
+                            <small class="text-muted">Intervalo entre Partos</small>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <!-- Dados Genealógicos e Origem -->
+            <div class="row g-3 mb-4">
+                <div class="col-md-6">
+                    <div class="card border-0 shadow-sm p-3 h-100">
+                        <h5 class="fw-bold mb-3 text-primary">Informações Cadastrais & Genealogia</h5>
+                        <ul class="list-group list-group-flush">
+                            <li class="list-group-item d-flex justify-content-between px-0">
+                                <span>Origem do Animal:</span>
+                                <strong>@_animal.Origin</strong>
+                            </li>
+                            <li class="list-group-item d-flex justify-content-between px-0">
+                                <span>Data de Entrada no Rebanho:</span>
+                                <strong>@(_animal.EntryDate?.ToString("dd/MM/yyyy") ?? "-")</strong>
+                            </li>
+                            <li class="list-group-item d-flex justify-content-between px-0">
+                                <span>Peso na Entrada:</span>
+                                <strong>@(_animal.EntryWeightKg.HasValue ? _animal.EntryWeightKg + " kg" : "-")</strong>
+                            </li>
+                            <li class="list-group-item d-flex justify-content-between px-0">
+                                <span>Pai / Sêmen:</span>
+                                <strong>@(_animal.SireInfo ?? "Não informado")</strong>
+                            </li>
+                            <li class="list-group-item d-flex justify-content-between px-0">
+                                <span>Mãe / Matriz:</span>
+                                <strong>@(_animal.DamInfo ?? "Não informada")</strong>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Linha do Tempo Unificada -->
+                <div class="col-md-6">
+                    <div class="card border-0 shadow-sm p-3 h-100">
+                        <h5 class="fw-bold mb-3 text-primary">Linha do Tempo Unificada do Bovino</h5>
+                        @if (_animal.Timeline == null || _animal.Timeline.Count == 0)
+                        {
+                            <p class="text-muted">Sem registros históricos adicionais para este animal.</p>
+                        }
+                        else
+                        {
+                            <div class="timeline-container ps-3 border-start">
+                                @foreach (var item in _animal.Timeline)
+                                {
+                                    <div class="timeline-item position-relative mb-3 ps-3">
+                                        <div class="d-flex align-items-center gap-2">
+                                            <span class="material-symbols-outlined text-primary fs-5">@item.IconName</span>
+                                            <strong class="text-dark">@item.Title</strong>
+                                            <span class="badge bg-light text-dark ms-auto">@item.EventDate.ToString("dd/MM/yyyy")</span>
+                                        </div>
+                                        <p class="mb-0 text-muted small">@item.Description</p>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</ModuleGuard>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private CowDetailDto? _animal;
+    private bool _isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAnimalDetailAsync();
+    }
+
+    private async Task LoadAnimalDetailAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            _animal = await PlantelApi.GetCowAsync(Id);
+        }
+        catch
+        {
+            _animal = null;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private int? CalculateAgeMonths(DateTime? birthDate)
+    {
+        if (!birthDate.HasValue) return null;
+        var now = DateTime.Today;
+        return ((now.Year - birthDate.Value.Year) * 12) + now.Month - birthDate.Value.Month;
+    }
+
+    private static bool IsBull(string? category) =>
+        string.Equals(category, "Reprodutor", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(category, "Touro", StringComparison.OrdinalIgnoreCase);
+
+    private string GetStatusLabel(CowDetailDto animal)
+    {
+        if (IsBull(animal.Category))
+        {
+            return animal.Status switch
+            {
+                ReproductiveStatus.Culled => "Descartado",
+                ReproductiveStatus.Sold => "Vendido",
+                _ => "Apto / Ativo"
+            };
+        }
+
+        return animal.Status switch
+        {
+            ReproductiveStatus.Open => "Vazia",
+            ReproductiveStatus.InIatfProtocol => "Em IATF",
+            ReproductiveStatus.Inseminated => "Inseminada",
+            ReproductiveStatus.Pregnant => "Prenhe",
+            ReproductiveStatus.Lactating => "Lactante",
+            ReproductiveStatus.Culled => "Descartada",
+            ReproductiveStatus.Sold => "Vendida",
+            ReproductiveStatus.Active => "Ativa",
+            _ => animal.Status.ToString()
+        };
+    }
+
+    private void GoBack()
+    {
+        Navigation.NavigateTo("/breeding/registry");
+    }
+}

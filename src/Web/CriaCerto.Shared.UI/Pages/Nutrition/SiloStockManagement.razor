@@ -1,0 +1,305 @@
+@page "/nutrition/silos"
+@using CriaCerto.Modules.Nutrition.Application.Contracts
+@using CriaCerto.Modules.Nutrition.Application.Domain
+@using CriaCerto.Modules.Nutrition.Application.Features.SiloStockFeatures
+@using CriaCerto.Shared.UI.Services
+@inject NutritionApiClient ApiClient
+@inject IJSRuntime JSRuntime
+@inject Auth.CustomAuthStateProvider AuthStateProvider
+@attribute [Authorize]
+
+<PageTitle>Gestão de Silos e Insumos | CriaCerto</PageTitle>
+
+<ModuleGuard Module="Nutrition">
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3 class="fw-bold text-success mb-1">
+                <i class="bi bi-box-seam me-2"></i>Gestão de Silos e Estoque Alimentar
+            </h3>
+            <p class="text-muted mb-0">Controle de insumos, milho, silagem, sal mineral, custo por kg e ponto de reposição.</p>
+        </div>
+        <button class="btn btn-success shadow-sm" @onclick="OpenNewSiloModal">
+            <i class="bi bi-plus-lg me-1"></i> Novo Silo / Insumo
+        </button>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-success" role="status">
+                <span class="visually-hidden">Carregando estoque...</span>
+            </div>
+            <p class="text-muted mt-2">Carregando silos e estoques de alimentos...</p>
+        </div>
+    }
+    else
+    {
+        @if (silos.Any(s => s.IsStockLow))
+        {
+            <div class="alert alert-danger border-0 shadow-sm d-flex align-items-center mb-4 rounded-3 p-3">
+                <i class="bi bi-exclamation-triangle-fill fs-3 me-3 text-danger"></i>
+                <div>
+                    <h6 class="fw-bold mb-1">Atenção: Nível Crítico de Estoque Detectado!</h6>
+                    <p class="mb-0 text-muted small">
+                        @(silos.Count(s => s.IsStockLow)) insumo(s) estão com saldo abaixo do ponto mínimo de reposição. Realize a entrada de nota ou reabastecimento para não interromper a distribuição de tratos.
+                    </p>
+                </div>
+            </div>
+        }
+
+        <div class="row g-4">
+            @foreach (var silo in silos)
+            {
+                <div class="col-md-6 col-lg-4">
+                    <div class="card border-0 shadow-sm rounded-3 h-100 position-relative @(silo.IsStockLow ? "border-start border-warning border-4" : "")">
+                        <div class="card-body p-4">
+                            <div class="d-flex justify-content-between align-items-start mb-3">
+                                <div>
+                                    <span class="badge bg-light text-dark border mb-1">@GetCategoryName(silo.Category)</span>
+                                    <h5 class="fw-bold mb-0 text-dark">@silo.Name</h5>
+                                </div>
+                                @if (silo.IsStockLow)
+                                {
+                                    <span class="badge bg-warning text-dark" title="Estoque abaixo do ponto de reposição!">
+                                        <i class="bi bi-exclamation-triangle-fill me-1"></i>Estoque Baixo
+                                    </span>
+                                }
+                            </div>
+
+                            <div class="my-3 py-2 border-top border-bottom">
+                                <div class="row text-center">
+                                    <div class="col-6 border-end">
+                                        <span class="text-muted small d-block">Saldo Atual</span>
+                                        <strong class="fs-4 text-success font-monospace">@silo.CurrentStockKg.ToString("N0") <small class="fs-6 text-muted">kg</small></strong>
+                                    </div>
+                                    <div class="col-6">
+                                        <span class="text-muted small d-block">Custo Médio / kg</span>
+                                        <strong class="fs-4 text-primary font-monospace">R$ @silo.UnitCostPerKg.ToString("N2")</strong>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="d-flex justify-content-between text-muted small mb-3">
+                                <span>Matéria Seca (MS): <strong>@silo.DryMatterPercentage%</strong></span>
+                                <span>Ponto Mínimo: <strong>@silo.MinimumThresholdKg.ToString("N0") kg</strong></span>
+                            </div>
+
+                            <button class="btn btn-outline-success btn-sm w-100 mt-2" @onclick="() => OpenRestockModal(silo)">
+                                <i class="bi bi-box-arrow-in-down me-1"></i> Reabastecer / Entrada
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            @if (!silos.Any())
+            {
+                <div class="col-12 text-center py-5">
+                    <i class="bi bi-inbox fs-1 text-muted d-block mb-3"></i>
+                    <h5 class="text-muted fw-normal">Nenhum insumo ou silo cadastrado.</h5>
+                    <p class="text-muted">Cadastre o estoque inicial de milho, silagem ou sal mineral para gerenciar o trato.</p>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@if (showCreateModal)
+{
+    <div class="modal fade show d-block bg-dark bg-opacity-50" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-plus-circle me-2"></i>Cadastrar Silo / Insumo</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CloseModals"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Nome do Insumo</label>
+                        <input type="text" class="form-control" placeholder="Ex: Milho Moído Seco" @bind="newSiloName" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Categoria</label>
+                        <select class="form-select" @bind="newSiloCategory">
+                            <option value="@FeedCategory.BulkGrain">Grão / Concentrado (Milho, Farelo)</option>
+                            <option value="@FeedCategory.ForageSilage">Volumoso / Silagem</option>
+                            <option value="@FeedCategory.MineralSalt">Sal Mineral / Proteinado</option>
+                            <option value="@FeedCategory.Additive">Aditivo / Núcleo / Premix</option>
+                        </select>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Estoque Inicial (kg)</label>
+                            <input type="number" class="form-control" @bind="newSiloInitialKg" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Custo Unitário (R$/kg)</label>
+                            <input type="number" step="0.01" class="form-control" @bind="newSiloCostPerKg" />
+                        </div>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Teor de Matéria Seca (%)</label>
+                            <input type="number" step="1" class="form-control" @bind="newSiloDryMatter" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Ponto Mínimo Reposição (kg)</label>
+                            <input type="number" class="form-control" @bind="newSiloMinThreshold" />
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button class="btn btn-secondary" @onclick="CloseModals">Cancelar</button>
+                    <button class="btn btn-success fw-bold" @onclick="SaveNewSilo">Salvar Silo</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (showRestockModal && selectedSilo != null)
+{
+    <div class="modal fade show d-block bg-dark bg-opacity-50" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-box-arrow-in-down me-2"></i>Reabastecer @selectedSilo.Name</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CloseModals"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="alert alert-info py-2 mb-3">
+                        Saldo atual: <strong>@selectedSilo.CurrentStockKg.ToString("N0") kg</strong> | Custo atual: <strong>R$ @selectedSilo.UnitCostPerKg.ToString("N2")/kg</strong>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Quantidade Adicionada (kg)</label>
+                        <input type="number" class="form-control form-control-lg" @bind="restockKg" placeholder="0" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Novo Custo de Aquisição (R$/kg)</label>
+                        <input type="number" step="0.01" class="form-control form-control-lg" @bind="restockCostPerKg" />
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button class="btn btn-secondary" @onclick="CloseModals">Cancelar</button>
+                    <button class="btn btn-primary fw-bold" @onclick="SaveRestock">Confirmar Reabastecimento</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+</ModuleGuard>
+
+@code {
+    private Guid currentTenantId = Guid.Empty;
+    private bool isLoading = true;
+    private List<SiloStockDto> silos = new();
+
+    private bool showCreateModal = false;
+    private bool showRestockModal = false;
+    private SiloStockDto? selectedSilo;
+
+    private string newSiloName = "";
+    private FeedCategory newSiloCategory = FeedCategory.BulkGrain;
+    private decimal newSiloInitialKg = 10000m;
+    private decimal newSiloCostPerKg = 1.20m;
+    private decimal newSiloDryMatter = 88m;
+    private decimal newSiloMinThreshold = 2000m;
+
+    private decimal restockKg = 5000m;
+    private decimal restockCostPerKg = 1.25m;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user.Identity?.IsAuthenticated == true)
+        {
+            var tenantClaim = user.FindFirst("TenantId")?.Value;
+            if (Guid.TryParse(tenantClaim, out var tenantId))
+            {
+                currentTenantId = tenantId;
+            }
+        }
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        isLoading = true;
+        if (currentTenantId != Guid.Empty)
+        {
+            silos = await ApiClient.GetSilosAsync(currentTenantId);
+        }
+        isLoading = false;
+    }
+
+    private string GetCategoryName(FeedCategory category) => category switch
+    {
+        FeedCategory.BulkGrain => "Grãos & Concentrados",
+        FeedCategory.ForageSilage => "Volumoso & Silagem",
+        FeedCategory.MineralSalt => "Sal Mineral & Proteinado",
+        FeedCategory.Additive => "Aditivos & Premix",
+        _ => "Geral"
+    };
+
+    private void OpenNewSiloModal()
+    {
+        newSiloName = "";
+        showCreateModal = true;
+    }
+
+    private void OpenRestockModal(SiloStockDto silo)
+    {
+        selectedSilo = silo;
+        restockKg = 5000m;
+        restockCostPerKg = silo.UnitCostPerKg;
+        showRestockModal = true;
+    }
+
+    private void CloseModals()
+    {
+        showCreateModal = false;
+        showRestockModal = false;
+        selectedSilo = null;
+    }
+
+    private async Task SaveNewSilo()
+    {
+        if (string.IsNullOrWhiteSpace(newSiloName)) return;
+
+        var cmd = new CreateSiloStockCommand(
+            currentTenantId,
+            newSiloName,
+            newSiloCategory,
+            newSiloInitialKg,
+            newSiloCostPerKg,
+            newSiloDryMatter,
+            newSiloMinThreshold);
+
+        var result = await ApiClient.CreateSiloAsync(cmd);
+        if (result != null)
+        {
+            CloseModals();
+            await LoadDataAsync();
+        }
+    }
+
+    private async Task SaveRestock()
+    {
+        if (selectedSilo == null || restockKg <= 0) return;
+
+        var cmd = new RestockSiloCommand(
+            selectedSilo.Id,
+            currentTenantId,
+            restockKg,
+            restockCostPerKg);
+
+        var result = await ApiClient.RestockSiloAsync(cmd);
+        if (result != null)
+        {
+            CloseModals();
+            await LoadDataAsync();
+        }
+    }
+}

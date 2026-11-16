@@ -1,0 +1,85 @@
+name: Mobile CI/CD (Android & iOS)
+
+on:
+  push:
+    branches: [ "main", "master", "develop" ]
+    paths:
+      - "src/Mobile/**"
+      - "src/Web/CriaCerto.Shared.UI/**"
+      - ".github/workflows/mobile-build.yml"
+  pull_request:
+    branches: [ "main", "master", "develop" ]
+    paths:
+      - "src/Mobile/**"
+      - "src/Web/CriaCerto.Shared.UI/**"
+      - ".github/workflows/mobile-build.yml"
+  workflow_dispatch:
+
+jobs:
+  build-android:
+    name: Build & Package Android (net10.0-android)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Java SDK (Temurin 17)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup .NET SDK 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+          include-prerelease: true
+
+      - name: Install .NET MAUI Android Workload
+        run: dotnet workload install maui-android
+
+      - name: Restore Mobile Dependencies
+        run: dotnet restore src/Mobile/CriaCerto.Mobile/CriaCerto.Mobile.csproj -p:MobileTargetFrameworks=net10.0-android
+
+      - name: Build Android App (Release)
+        run: dotnet build src/Mobile/CriaCerto.Mobile/CriaCerto.Mobile.csproj -f net10.0-android -c Release --no-restore -p:MobileTargetFrameworks=net10.0-android
+
+      - name: Publish Android APK
+        run: dotnet publish src/Mobile/CriaCerto.Mobile/CriaCerto.Mobile.csproj -f net10.0-android -c Release -p:AndroidPackageFormat=apk --no-restore -p:MobileTargetFrameworks=net10.0-android -o ./publish-android
+
+      - name: Upload Android Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: criacerto-mobile-android
+          path: ./publish-android/*.apk
+          retention-days: 14
+
+  build-ios:
+    name: Build iOS (net10.0-ios)
+    runs-on: macos-latest
+
+    # Documentação de Secrets para Assinatura Apple (App Store / TestFlight):
+    # - APPLE_CERTIFICATE_BASE64: Certificado de distribuição Apple (.p12) codificado em base64
+    # - APPLE_CERTIFICATE_PASSWORD: Senha do certificado .p12
+    # - APPLE_PROVISIONING_PROFILE_BASE64: Provisioning profile (.mobileprovision) codificado em base64
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+          include-prerelease: true
+
+      - name: Install .NET MAUI iOS Workload
+        run: dotnet workload install maui-ios
+
+      - name: Restore Mobile Dependencies
+        run: dotnet restore src/Mobile/CriaCerto.Mobile/CriaCerto.Mobile.csproj -p:MobileTargetFrameworks=net10.0-ios -p:ValidateXcodeVersion=false -p:EnableCodeSigning=false
+
+      - name: Build iOS App (Release)
+        run: dotnet build src/Mobile/CriaCerto.Mobile/CriaCerto.Mobile.csproj -f net10.0-ios -c Release --no-restore -p:MobileTargetFrameworks=net10.0-ios -p:ValidateXcodeVersion=false -p:EnableCodeSigning=false
+
