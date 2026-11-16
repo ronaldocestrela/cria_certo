@@ -226,12 +226,12 @@ dotnet build CriaCerto.slnx -maxCpuCount:1
 
 ## Fase 5: Configurações Específicas de Android e iOS
 
-### Tarefa 5.1: Configuração Android (`Platforms/Android/`)
-- **Subtarefa 5.1.1:** Em `Platforms/Android/AndroidManifest.xml`, garantir permissões:
+### Tarefa 5.1: Configuração Android (`Platforms/Android/`) [CONCLUÍDO]
+- [x] **Subtarefa 5.1.1:** Em `Platforms/Android/AndroidManifest.xml`, garantidas permissões:
   - `<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />`
   - `<uses-permission android:name="android.permission.INTERNET" />`
-- **Subtarefa 5.1.2:** Para testes locais em `Debug` contra API HTTP (`10.0.2.2`), criar `Platforms/Android/Resources/xml/network_security_config.xml` liberando cleartext apenas para `10.0.2.2` / `localhost` e referenciar no `AndroidManifest.xml` (em `Release`, exigir HTTPS).
-- **Subtarefa 5.1.3:** Verificar `MainActivity.cs` com `ConfigurationChanges` adequados (`ConfigChanges.ScreenSize | ConfigChanges.Orientation | ConfigChanges.UiMode | ConfigChanges.ScreenLayout | ConfigChanges.SmallestScreenSize | ConfigChanges.Density`).
+- [x] **Subtarefa 5.1.2:** Criado `Platforms/Android/Resources/xml/network_security_config.xml` liberando cleartext apenas para `10.0.2.2`, `localhost` e `127.0.0.1` durante testes locais e impondo regra restritiva `<base-config cleartextTrafficPermitted="false">` com CAs do sistema, exigindo HTTPS obrigatório em produção/Release. Referenciado no `AndroidManifest.xml` via `android:networkSecurityConfig="@xml/network_security_config"`.
+- [x] **Subtarefa 5.1.3:** Verificado `MainActivity.cs` com `ConfigurationChanges` adequados (`ConfigChanges.ScreenSize | ConfigChanges.Orientation | ConfigChanges.UiMode | ConfigChanges.ScreenLayout | ConfigChanges.SmallestScreenSize | ConfigChanges.Density`). Cobertura de Living Documentation automatizada em `AndroidConfigurationTests.cs`.
 
 ### Tarefa 5.2: Configuração iOS (`Platforms/iOS/`)
 - **Subtarefa 5.2.1:** Em `Platforms/iOS/Info.plist`, configurar `CFBundleDisplayName` (`CriaCerto`), `UILaunchStoryboardName` e `ITSAppUsesNonExemptEncryption` (`false`, se aplicável).
