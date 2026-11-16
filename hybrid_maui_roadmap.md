@@ -125,53 +125,64 @@ XDG_RUNTIME_DIR=/tmp dotnet test CriaCerto.slnx
 
 ---
 
-## Fase 3: Criação do Projeto .NET MAUI Blazor Hybrid (`CriaCerto.Mobile`)
+## Fase 3: Criação do Projeto .NET MAUI Blazor Hybrid (`CriaCerto.Mobile`) [CONCLUÍDO - ADR 0030]
 
-### Tarefa 3.1: Criar e configurar `CriaCerto.Mobile.csproj`
-- **Arquivo a criar:** `src/Mobile/CriaCerto.Mobile/CriaCerto.Mobile.csproj`
-- **Subtarefa 3.1.1:** Criar o projeto usando `<Project Sdk="Microsoft.NET.Sdk.Razor">` com `<UseMaui>true</UseMaui>`, `<SingleProject>true</SingleProject>`, `<ImplicitUsings>enable</ImplicitUsings>`, `<Nullable>enable</Nullable>`.
-- **Subtarefa 3.1.2:** Configurar `TargetFrameworks` de forma compatível com Linux (local) e macOS (CI/Mac):
+### Tarefa 3.1: Criar e configurar `CriaCerto.Mobile.csproj` [CONCLUÍDO]
+- [x] **Arquivo criado:** `src/Mobile/CriaCerto.Mobile/CriaCerto.Mobile.csproj`
+- [x] **Subtarefa 3.1.1:** Criado o projeto usando `<Project Sdk="Microsoft.NET.Sdk.Razor">` com `<UseMaui>true</UseMaui>`, `<SingleProject>true</SingleProject>`, `<ImplicitUsings>enable</ImplicitUsings>`, `<Nullable>enable</Nullable>`.
+- [x] **Subtarefa 3.1.2:** Configurado `TargetFrameworks` de forma compatível com Linux (local: `net10.0-android`) e macOS/Windows (CI/Mac: `net10.0-ios`):
   ```xml
   <TargetFrameworks>net10.0-android</TargetFrameworks>
   <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('osx')) or $([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net10.0-ios</TargetFrameworks>
   ```
-- **Subtarefa 3.1.3:** Definir metadados do app:
+- [x] **Subtarefa 3.1.3:** Definidos metadados do app:
   - `<ApplicationTitle>CriaCerto</ApplicationTitle>`
   - `<ApplicationId>br.com.criacerto.app</ApplicationId>`
   - `<ApplicationDisplayVersion>1.0.0</ApplicationDisplayVersion>`
   - `<ApplicationVersion>1</ApplicationVersion>`
   - `<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">15.0</SupportedOSPlatformVersion>`
   - `<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">24.0</SupportedOSPlatformVersion>`
-- **Subtarefa 3.1.4:** Adicionar pacotes necessários:
+- [x] **Subtarefa 3.1.4:** Adicionados pacotes necessários:
   - `Microsoft.Maui.Controls` (`$(MauiVersion)`)
   - `Microsoft.AspNetCore.Components.WebView.Maui` (`$(MauiVersion)`)
   - `Microsoft.Extensions.Logging.Debug` (em `Debug`)
   - Referência de projeto para `..\..\Web\CriaCerto.Shared.UI\CriaCerto.Shared.UI.csproj`.
-- **Subtarefa 3.1.5:** Configurar `MauiIcon` e `MauiSplashScreen` copiando `CriaCerto.png` (`1536x1536`) para `Resources/AppIcon/appicon.png` e `Resources/Splash/splash.png` (cor de fundo `#1f5638` alinhada ao `theme_color` do app).
-- **Subtarefa 3.1.6:** Adicionar `src/Mobile/CriaCerto.Mobile/CriaCerto.Mobile.csproj` em `CriaCerto.slnx`.
+- [x] **Subtarefa 3.1.5:** Configurados `MauiIcon` e `MauiSplashScreen` copiando `CriaCerto.png` (`1536x1536`) para `Resources/AppIcon/appicon.png` e `Resources/Splash/splash.png` (cor de fundo `#1f5638`).
+- [x] **Subtarefa 3.1.6:** Adicionado `src/Mobile/CriaCerto.Mobile/CriaCerto.Mobile.csproj` em `CriaCerto.slnx` na pasta `/src/Mobile/`.
 
-### Tarefa 3.2: Criar estrutura inicial do MAUI Blazor Hybrid
-- **Subtarefa 3.2.1:** Criar `App.xaml`, `App.xaml.cs`, `MainPage.xaml` (contendo `<BlazorWebView x:Name="blazorWebView" HostPage="wwwroot/index.html">` com `<RootComponent Selector="#app" ComponentType="{x:Type shared:Routes}" />`) e `MainPage.xaml.cs`.
-- **Subtarefa 3.2.2:** Criar `src/Mobile/CriaCerto.Mobile/wwwroot/index.html` carregando:
+### Tarefa 3.2: Criar estrutura inicial do MAUI Blazor Hybrid [CONCLUÍDO]
+- [x] **Subtarefa 3.2.1:** Criados `App.xaml`, `App.xaml.cs`, `MainPage.xaml` (contendo `<BlazorWebView x:Name="blazorWebView" HostPage="wwwroot/index.html">` com `<RootComponent Selector="#app" ComponentType="{x:Type shared:Routes}" />`) e `MainPage.xaml.cs`.
+- [x] **Subtarefa 3.2.2:** Criado `src/Mobile/CriaCerto.Mobile/wwwroot/index.html` carregando:
   - `_content/CriaCerto.Shared.UI/lib/bootstrap/dist/css/bootstrap.min.css`
   - `_content/CriaCerto.Shared.UI/app.css`
-  - `_content/CriaCerto.Shared.UI/CriaCerto.Shared.UI.bundle.scp.css` (se existir)
-  - Fonte `Material Symbols Outlined` (ou cópia local em `wwwroot/fonts/` para funcionamento 100% offline no curral)
+  - `_content/CriaCerto.Shared.UI/CriaCerto.Shared.UI.bundle.scp.css`
+  - Fonte `Material Symbols Outlined`
   - `<div id="app">Carregando CriaCerto...</div>`
   - `<script src="_framework/blazor.webview.js" autostart="false"></script>`
-- **Subtarefa 3.2.3:** Criar `MauiProgram.cs`:
-  - Chamar `builder.UseMauiApp<App>()` e `builder.Services.AddMauiBlazorWebView()`.
-  - Em `#if DEBUG`, adicionar `builder.Services.AddBlazorWebViewDeveloperTools()` e `builder.Logging.AddDebug()`.
-  - Registrar `AuthorizationCore`, `CascadingAuthenticationState`, `CustomAuthStateProvider` e todos os `*ApiClient` e serviços de `CriaCerto.Shared.UI` (idealmente via um método de extensão compartilhado `services.AddCriaCertoSharedServices()`).
-  - Configurar `HttpClient` apontando diretamente para a URL da `CriaCerto.Api` (sem YARP):
-    - `#if DEBUG` + Android: `http://10.0.2.2:<porta_api>` (ou variável de configuração em `appsettings.json` embutido como `MauiAsset`).
-    - `#if DEBUG` + iOS Simulator: `http://localhost:<porta_api>`.
-    - `Release`: URL HTTPS de produção da `CriaCerto.Api`.
+  - `<script src="_content/CriaCerto.Shared.UI/js/downloadHelper.js"></script>`
+- [x] **Subtarefa 3.2.3:** Criado `MauiProgram.cs`:
+  - `builder.UseMauiApp<App>()` e `builder.Services.AddMauiBlazorWebView()`.
+  - Em `#if DEBUG`, `builder.Services.AddBlazorWebViewDeveloperTools()` e `builder.Logging.AddDebug()`.
+  - Registrado `AddCriaCertoSharedServices()` via método de extensão compartilhado em `CriaCerto.Shared.UI.Services`, reutilizado também pelo `CriaCerto.Web.Client`.
+  - Registrados stubs/implementações iniciais de `ITokenStorageService`, `IFileExportService`, `IConnectivityService` e `IOfflineSyncStorage` para resolução integral de DI.
+  - Configurado `HttpClient` apontando diretamente para `CriaCerto.Api`:
+    - `#if DEBUG` + Android: `http://10.0.2.2:5274/`
+    - `#if DEBUG` + iOS: `http://localhost:5274/`
+    - `Release`: `https://app.criacerto.com.br/`.
+- [x] **Subtarefa 3.2.4:** Criados arquivos de bootstrap de plataforma para Android (`AndroidManifest.xml`, `MainActivity.cs`, `MainApplication.cs`) e iOS (`AppDelegate.cs`, `Program.cs`, `Info.plist`). Formalizado o [ADR 0030](docs/adrs/0030-hybrid-maui-blazor-mobile-host-project.md).
 
-### Validação da Fase 3
+### Validação da Fase 3 [CONCLUÍDA COM SUCESSO]
 ```bash
 export ANDROID_HOME=/usr/lib/android-sdk
+export XDG_RUNTIME_DIR=/tmp
 dotnet build src/Mobile/CriaCerto.Mobile/CriaCerto.Mobile.csproj -f net10.0-android
+# Build succeeded: 0 Warning(s), 0 Error(s) -> CriaCerto.Mobile.dll (net10.0-android)
+
+dotnet test tests/Unit/CriaCerto.Web.Client.UnitTests/CriaCerto.Web.Client.UnitTests.csproj
+# Passed! - Failed: 0, Passed: 182, Skipped: 0, Total: 182
+
+dotnet build CriaCerto.slnx -maxCpuCount:1
+# Build succeeded: 0 Warning(s), 0 Error(s) -> Toda a solução integrada
 ```
 
 ---

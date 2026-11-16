@@ -45,6 +45,9 @@
     <Project Path="src/Modules/Referral/CriaCerto.Modules.Referral.Application/CriaCerto.Modules.Referral.Application.csproj" />
     <Project Path="src/Modules/Referral/CriaCerto.Modules.Referral.Infrastructure/CriaCerto.Modules.Referral.Infrastructure.csproj" />
   </Folder>
+  <Folder Name="/src/Mobile/">
+    <Project Path="src/Mobile/CriaCerto.Mobile/CriaCerto.Mobile.csproj" />
+  </Folder>
   <Folder Name="/src/Web/">
     <Project Path="src/Web/CriaCerto.Shared.UI/CriaCerto.Shared.UI.csproj" />
   </Folder>

@@ -16,7 +16,7 @@ The platform optimizes cattle farm operations across the entire lifecycle: Breed
 
 ### 2.2 Core Architectural Requirements
 * **Backend:** .NET 10 (C# 14) following Clean Architecture & Domain-Driven Design (DDD).
-* **Frontend & Mobile Híbrido:** Blazor Web App / WASM .NET 10 com PWA e suporte mobile nativo Android & iOS via **.NET MAUI Blazor Hybrid (`BlazorWebView`)**. Compartilhamento de 100% dos componentes de interface, layouts, contratos e clientes via Razor Class Library (RCL) `CriaCerto.Shared.UI` (ADR 0028) desacoplada através de abstrações de plataforma (ADR 0029).
+* **Frontend & Mobile Híbrido:** Blazor Web App / WASM .NET 10 com PWA e suporte mobile nativo Android & iOS via **.NET MAUI Blazor Hybrid (`BlazorWebView`)** no host `CriaCerto.Mobile` (ADR 0030). Compartilhamento de 100% dos componentes de interface, layouts, contratos e clientes via Razor Class Library (RCL) `CriaCerto.Shared.UI` (ADR 0028) desacoplada através de abstrações de plataforma (ADR 0029).
 * **Design & UI Automation:** **MCP Stitch** integration for automated, standardized Blazor UI component generation.
 * **Development Methodology:** **Test-Driven Development (TDD)** — Red/Green/Refactor mandatory for all business code.
 * **Documentation Strategy:** **Living Documentation** — Automated generation and execution of specs via BDD/Tests. Architecture Decision Records (ADRs) and markdown docs must be kept up-to-date with code changes.
