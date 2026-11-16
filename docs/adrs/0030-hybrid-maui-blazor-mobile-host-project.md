@@ -61,11 +61,14 @@ No ecossistema corporativo da plataforma pecuária CriaCerto:
 - **Isolamento de Plataformas:** O condicionamento em MSBuild preserva a integridade do pipeline local em Linux e permite compilação de iOS em runners macOS no GitHub Actions (Fase 6).
 - **Consistência de Dependências:** O método de extensão compartilhado previne discrepâncias no registro de clientes HTTP entre Web e Mobile.
 
-### Próximos Passos (Fases 4 e 5)
-- Substituir os stubs iniciais de serviços pelas implementações móveis nativas completas:
+### Próximos Passos (Fases 4, 5 e 6)
+- [x] Substituídos os stubs iniciais de serviços pelas implementações móveis nativas completas ([ADR 0031](0031-hybrid-maui-blazor-native-platform-services.md)):
   - `MauiTokenStorageService` via `SecureStorage.Default`
   - `MauiFileExportService` via `Share.Default`
   - `MauiConnectivityService` via `Connectivity.Current`
   - `MauiOfflineSyncStorage` via SQLite (`sqlite-net-pcl`)
-- Adicionar configurações de segurança de transporte de rede clara (`network_security_config.xml`) para testes em desenvolvimento Android.
+- [x] Adicionadas configurações de segurança e descritores de plataforma para Android e iOS ([ADR 0032](0032-mobile-platform-security-and-configuration-android-ios.md)):
+  - Android: `network_security_config.xml`, `AndroidManifest.xml` e `MainActivity.cs`.
+  - iOS: `Info.plist` (ATS local bypass e metadados de loja), `Entitlements.plist` (`keychain-access-groups`) e `<CodesignEntitlements>`.
+- [ ] Pipeline CI/CD Multiplataforma (Fase 6: GitHub Actions com runner `macos-latest` para iOS e `ubuntu-latest` para Android).
 

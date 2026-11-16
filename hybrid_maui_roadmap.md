@@ -233,10 +233,10 @@ dotnet build CriaCerto.slnx -maxCpuCount:1
 - [x] **Subtarefa 5.1.2:** Criado `Platforms/Android/Resources/xml/network_security_config.xml` liberando cleartext apenas para `10.0.2.2`, `localhost` e `127.0.0.1` durante testes locais e impondo regra restritiva `<base-config cleartextTrafficPermitted="false">` com CAs do sistema, exigindo HTTPS obrigatório em produção/Release. Referenciado no `AndroidManifest.xml` via `android:networkSecurityConfig="@xml/network_security_config"`.
 - [x] **Subtarefa 5.1.3:** Verificado `MainActivity.cs` com `ConfigurationChanges` adequados (`ConfigChanges.ScreenSize | ConfigChanges.Orientation | ConfigChanges.UiMode | ConfigChanges.ScreenLayout | ConfigChanges.SmallestScreenSize | ConfigChanges.Density`). Cobertura de Living Documentation automatizada em `AndroidConfigurationTests.cs`.
 
-### Tarefa 5.2: Configuração iOS (`Platforms/iOS/`)
-- **Subtarefa 5.2.1:** Em `Platforms/iOS/Info.plist`, configurar `CFBundleDisplayName` (`CriaCerto`), `UILaunchStoryboardName` e `ITSAppUsesNonExemptEncryption` (`false`, se aplicável).
-- **Subtarefa 5.2.2:** Se for testar em `Debug` contra API HTTP local no simulador iOS, adicionar exceção `NSAppTransportSecurity` -> `NSAllowsLocalNetworking` = `true` (mantendo HTTPS obrigatório em produção).
-- **Subtarefa 5.2.3:** Configurar `Platforms/iOS/Entitlements.plist` (Keychain Access Groups se necessário para `SecureStorage` em builds assinados).
+### Tarefa 5.2: Configuração iOS (`Platforms/iOS/`) [CONCLUÍDO]
+- [x] **Subtarefa 5.2.1:** Em `Platforms/iOS/Info.plist`, configurado `CFBundleDisplayName` (`CriaCerto`), `UILaunchStoryboardName` (`MauiSplash`) e `ITSAppUsesNonExemptEncryption` (`false`).
+- [x] **Subtarefa 5.2.2:** Em `Platforms/iOS/Info.plist`, configurado `NSAppTransportSecurity` com `NSAllowsLocalNetworking` = `true` para viabilizar testes e depuração contra API HTTP local (`http://localhost:5274`) no simulador iOS, mantendo HTTPS estrito em produção (`NSAllowsArbitraryLoads` desativado).
+- [x] **Subtarefa 5.2.3:** Criado `Platforms/iOS/Entitlements.plist` declarando `keychain-access-groups` (`$(AppIdentifierPrefix)br.com.criacerto.app`) para suporte seguro ao `SecureStorage` em builds assinados e configurado `<CodesignEntitlements>` no `CriaCerto.Mobile.csproj`. Cobertura de Living Documentation automatizada em `IosConfigurationTests.cs`.
 
 ### Tarefa 5.3: Verificação de Endpoint na `CriaCerto.Api`
 - **Subtarefa 5.3.1:** Confirmar que todos os endpoints chamados pelos `*ApiClient` em `CriaCerto.Shared.UI` usam Bearer JWT no header `Authorization` (não dependem exclusivamente de cookies de mesma origem do `CriaCerto.Web`). Caso algum endpoint use cookie de sessão Web, adaptar para aceitar JWT Bearer.
