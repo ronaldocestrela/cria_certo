@@ -5,7 +5,9 @@
 @using CriaCerto.Shared.UI.Components.Backoffice
 @using CriaCerto.Shared.UI.Pages.Backoffice.Components
 @using CriaCerto.Shared.UI.Services
+@using CriaCerto.Shared.UI.Abstractions
 @inject IBackofficeApiClient ApiClient
+@inject IFileExportService FileExportService
 @inject IJSRuntime JS
 @inject NavigationManager Navigation
 
@@ -797,7 +799,7 @@
             return;
         }
 
-        await JS.InvokeVoidAsync("downloadFileFromByteArray", result.FileName, "text/csv", result.Content);
+        await FileExportService.ExportFileAsync(result.FileName, "text/csv", result.Content);
     }
 
     private async Task SaveSegmentation()

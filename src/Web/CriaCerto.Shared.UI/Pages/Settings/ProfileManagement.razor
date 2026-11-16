@@ -4,11 +4,13 @@
 @attribute [Authorize]
 @using CriaCerto.Shared.UI.Services
 @using CriaCerto.Shared.UI.Auth
+@using CriaCerto.Shared.UI.Abstractions
 @inject AuthenticationStateProvider AuthStateProvider
 @inject CustomAuthStateProvider CustomAuth
 @inject NavigationManager Navigation
 @inject TenancyApiClient TenancyClient
 @inject IToastService ToastService
+@inject IFileExportService FileExportService
 @inject IJSRuntime JS
 
 <PageTitle>Cria Certo - Meu Perfil & Segurança</PageTitle>
@@ -1876,7 +1878,7 @@
             var (success, content, fileName, error) = await TenancyClient.ExportUserDataPortabilityAsync();
             if (success && content != null && content.Length > 0)
             {
-                await JS.InvokeVoidAsync("downloadFileFromByteArray", fileName, "application/json", content);
+                await FileExportService.ExportFileAsync(fileName ?? "dossie-portabilidade-lgpd.json", "application/json", content);
                 ToastService.ShowSuccess("Dossiê de portabilidade LGPD gerado com sucesso! O download foi iniciado automaticamente no seu navegador.");
             }
             else

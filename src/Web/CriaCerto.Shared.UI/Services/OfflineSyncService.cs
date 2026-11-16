@@ -2,18 +2,19 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using CriaCerto.BuildingBlocks.Abstractions.Results;
+using CriaCerto.Shared.UI.Abstractions;
 using CriaCerto.Shared.UI.Models;
-using Microsoft.JSInterop;
 
 namespace CriaCerto.Shared.UI.Services;
 
 public sealed class OfflineSyncService : IOfflineSyncService
 {
-    private readonly IJSRuntime _jsRuntime;
     private readonly HttpClient _httpClient;
+    private readonly IConnectivityService _connectivityService;
+    private readonly IOfflineSyncStorage _offlineStorage;
+    private readonly ITokenStorageService _tokenStorage;
     private readonly List<SyncOperation> _pendingOperations = new();
     private readonly List<SyncConflictItem> _activeConflicts = new();
-    private DotNetObjectReference<OfflineSyncService>? _dotNetRef;
     private bool _initialized;
 
     public bool IsOnline { get; private set; } = true;
@@ -24,10 +25,16 @@ public sealed class OfflineSyncService : IOfflineSyncService
 
     public event Action? OnStateChanged;
 
-    public OfflineSyncService(IJSRuntime jsRuntime, HttpClient httpClient)
+    public OfflineSyncService(
+        HttpClient httpClient,
+        IConnectivityService connectivityService,
+        IOfflineSyncStorage offlineStorage,
+        ITokenStorageService tokenStorage)
     {
-        _jsRuntime = jsRuntime;
         _httpClient = httpClient;
+        _connectivityService = connectivityService;
+        _offlineStorage = offlineStorage;
+        _tokenStorage = tokenStorage;
     }
 
     public async Task InitializeAsync()
@@ -36,22 +43,29 @@ public sealed class OfflineSyncService : IOfflineSyncService
 
         try
         {
-            _dotNetRef = DotNetObjectReference.Create(this);
-            IsOnline = await _jsRuntime.InvokeAsync<bool>("criaCertoOfflineSync.init", _dotNetRef);
-            await RefreshPendingOperationsFromStoreAsync();
+            await _connectivityService.InitializeAsync();
+            _connectivityService.ConnectivityChanged += OnConnectivityChanged;
+            IsOnline = _connectivityService.IsOnline;
+
+            await _offlineStorage.InitializeAsync();
+            var storedOps = await _offlineStorage.GetPendingOperationsAsync();
+            if (storedOps != null && storedOps.Count > 0)
+            {
+                _pendingOperations.Clear();
+                _pendingOperations.AddRange(storedOps);
+            }
+
             _initialized = true;
             NotifyStateChanged();
         }
         catch
         {
-            // Fallback para ambiente de testes unitários sem ambiente JS completo
             IsOnline = true;
             _initialized = true;
         }
     }
 
-    [JSInvokable]
-    public void OnNetworkStatusChanged(bool isOnline)
+    private void OnConnectivityChanged(bool isOnline)
     {
         SetNetworkStatus(isOnline);
     }
@@ -88,11 +102,11 @@ public sealed class OfflineSyncService : IOfflineSyncService
 
         try
         {
-            await _jsRuntime.InvokeVoidAsync("criaCertoOfflineSync.enqueueOperation", op);
+            await _offlineStorage.SavePendingOperationAsync(op);
         }
         catch
         {
-            // Ignorado em ambientes sem suporte JS no-op
+            // Tratamento silencioso em caso de falha de persistência secundária
         }
 
         return Result.Success();
@@ -127,7 +141,7 @@ public sealed class OfflineSyncService : IOfflineSyncService
                     {
                         op.Status = SyncOperationStatus.Success;
                         _pendingOperations.Remove(op);
-                        await RemoveFromIndexedDbAsync(op.Id);
+                        await _offlineStorage.RemovePendingOperationAsync(op.Id);
                     }
                     else if (response.StatusCode == System.Net.HttpStatusCode.Conflict)
                     {
@@ -195,7 +209,7 @@ public sealed class OfflineSyncService : IOfflineSyncService
                 {
                     _pendingOperations.Remove(op);
                     _activeConflicts.Remove(conflict);
-                    await RemoveFromIndexedDbAsync(op.Id);
+                    await _offlineStorage.RemovePendingOperationAsync(op.Id);
                 }
                 else
                 {
@@ -215,7 +229,7 @@ public sealed class OfflineSyncService : IOfflineSyncService
             // Descarta a operação local
             _pendingOperations.Remove(op);
             _activeConflicts.Remove(conflict);
-            await RemoveFromIndexedDbAsync(op.Id);
+            await _offlineStorage.RemovePendingOperationAsync(op.Id);
         }
 
         NotifyStateChanged();
@@ -229,44 +243,15 @@ public sealed class OfflineSyncService : IOfflineSyncService
 
         try
         {
-            await _jsRuntime.InvokeVoidAsync("criaCertoOfflineSync.clearQueue");
+            await _offlineStorage.ClearPendingOperationsAsync();
         }
         catch
         {
-            // Ignorado em ambientes de teste sem JS
+            // Ignorado em caso de falha de persistência
         }
 
         NotifyStateChanged();
         return Result.Success();
-    }
-
-    private async Task RefreshPendingOperationsFromStoreAsync()
-    {
-        try
-        {
-            var storedOps = await _jsRuntime.InvokeAsync<List<SyncOperation>>("criaCertoOfflineSync.getPendingOperations");
-            if (storedOps != null && storedOps.Count > 0)
-            {
-                _pendingOperations.Clear();
-                _pendingOperations.AddRange(storedOps);
-            }
-        }
-        catch
-        {
-            // Ignorado em ambientes de teste
-        }
-    }
-
-    private async Task RemoveFromIndexedDbAsync(Guid id)
-    {
-        try
-        {
-            await _jsRuntime.InvokeVoidAsync("criaCertoOfflineSync.removeOperation", id);
-        }
-        catch
-        {
-            // Ignorado em ambientes de teste
-        }
     }
 
     private void NotifyStateChanged() => OnStateChanged?.Invoke();
@@ -285,7 +270,7 @@ public sealed class OfflineSyncService : IOfflineSyncService
     {
         try
         {
-            var token = await _jsRuntime.InvokeAsync<string?>("localStorage.getItem", "authToken");
+            var token = await _tokenStorage.GetTokenAsync();
             _httpClient.DefaultRequestHeaders.Authorization = string.IsNullOrWhiteSpace(token)
                 ? null
                 : new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);

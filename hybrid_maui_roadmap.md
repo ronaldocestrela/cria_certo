@@ -82,71 +82,45 @@ XDG_RUNTIME_DIR=/tmp dotnet test CriaCerto.slnx
 
 ---
 
-## Fase 2: Abstrações de Plataforma (Auth, Storage, Downloads, Conectividade)
+## Fase 2: Abstrações de Plataforma (Auth, Storage, Downloads, Conectividade) [CONCLUÍDO - ADR 0029]
 
 ### Contexto
-O código atual possui acoplamento direto com `IJSRuntime`, `localStorage`, `IndexedDB` e `OperatingSystem.IsBrowser()`. No MAUI Blazor Hybrid, `OperatingSystem.IsBrowser()` retorna `false` e APIs nativas são muito mais confiáveis do que `localStorage`/`IndexedDB` dentro de WebViews (especialmente no iOS).
+O código original possuía acoplamento direto com `IJSRuntime`, `localStorage`, `IndexedDB` e `OperatingSystem.IsBrowser()`. No MAUI Blazor Hybrid, `OperatingSystem.IsBrowser()` retorna `false` e APIs nativas são muito mais confiáveis do que `localStorage`/`IndexedDB` dentro de WebViews (especialmente no iOS). As abstrações foram implementadas e integradas por Inversão de Controle (IoC).
 
-### Tarefa 2.1: Criar interfaces de plataforma em `CriaCerto.Shared.UI/Abstractions/`
-- **Subtarefa 2.1.1:** Criar `ITokenStorageService`:
-  ```csharp
-  public interface ITokenStorageService
-  {
-      Task<string?> GetTokenAsync();
-      Task SetTokenAsync(string token);
-      Task RemoveTokenAsync();
-  }
-  ```
-- **Subtarefa 2.1.2:** Criar `IFileExportService`:
-  ```csharp
-  public interface IFileExportService
-  {
-      Task ExportFileAsync(string fileName, string contentType, byte[] content);
-  }
-  ```
-- **Subtarefa 2.1.3:** Criar `IConnectivityService`:
-  ```csharp
-  public interface IConnectivityService
-  {
-      bool IsOnline { get; }
-      event Action<bool>? ConnectivityChanged;
-      Task InitializeAsync();
-  }
-  ```
-- **Subtarefa 2.1.4:** Criar `IOfflineKeyValueStorage` (para substituir usos diretos de `localStorage` como em `MoveLotModal.razor` e fila offline) ou abstrair `IOfflineSyncStorage` para a fila de `SyncOperation`:
-  ```csharp
-  public interface IOfflineSyncStorage
-  {
-      Task InitializeAsync();
-      Task<IReadOnlyList<SyncOperation>> GetPendingOperationsAsync();
-      Task SavePendingOperationAsync(SyncOperation operation);
-      Task RemovePendingOperationAsync(Guid operationId);
-      Task ClearPendingOperationsAsync();
-  }
-  ```
+### Tarefa 2.1: Criar interfaces de plataforma em `CriaCerto.Shared.UI/Abstractions/` [CONCLUÍDO]
+- [x] **Subtarefa 2.1.1:** Criado `ITokenStorageService` (`GetTokenAsync`, `SetTokenAsync`, `RemoveTokenAsync`).
+- [x] **Subtarefa 2.1.2:** Criado `IFileExportService` (`ExportFileAsync(fileName, contentType, content)`).
+- [x] **Subtarefa 2.1.3:** Criado `IConnectivityService` (`IsOnline`, `ConnectivityChanged`, `InitializeAsync`).
+- [x] **Subtarefa 2.1.4:** Criado `IOfflineSyncStorage` (`InitializeAsync`, `GetPendingOperationsAsync`, `SavePendingOperationAsync`, `RemovePendingOperationAsync`, `ClearPendingOperationsAsync`).
 
-### Tarefa 2.2: Refatorar serviços e componentes em `CriaCerto.Shared.UI` para usar as abstrações
-- **Subtarefa 2.2.1 (`CustomAuthStateProvider.cs`):**
-  - Substituir `IJSRuntime` por `ITokenStorageService`.
-  - **Remover** a trava `if (!OperatingSystem.IsBrowser())` que impede leitura do token fora do browser. Tratar apenas erros de prerender/indisponibilidade no lado Web dentro da implementação `BrowserTokenStorageService`.
-- **Subtarefa 2.2.2 (`BackofficeApiClient.cs` e `OfflineSyncService.cs`):**
-  - Substituir chamadas diretas `_jsRuntime.InvokeAsync<string?>("localStorage.getItem", "authToken")` por `ITokenStorageService.GetTokenAsync()`.
-- **Subtarefa 2.2.3 (`OfflineSyncService.cs` e `MoveLotModal.razor`):**
-  - Injetar `IConnectivityService` e `IOfflineSyncStorage` no `OfflineSyncService` (eliminando dependência direta de `offlineSync.js` dentro do serviço compartilhado).
-  - Em `Components/Growth/MoveLotModal.razor` (linha ~193), substituir `JS.InvokeVoidAsync("localStorage.setItem", ...)` pelo `IOfflineSyncService.EnqueueOperationAsync(...)`.
-- **Subtarefa 2.2.4 (Downloads/Relatórios):**
-  - Localizar todas as chamadas a `downloadFileFromByteArray` via `grep -rn "downloadFileFromByteArray" src/Web/CriaCerto.Shared.UI` e substituí-las pela injeção de `IFileExportService.ExportFileAsync(...)`.
+### Tarefa 2.2: Refatorar serviços e componentes em `CriaCerto.Shared.UI` para usar as abstrações [CONCLUÍDO]
+- [x] **Subtarefa 2.2.1 (`CustomAuthStateProvider.cs`):**
+  - Substituído `IJSRuntime` por `ITokenStorageService`.
+  - **Removida** a trava `if (!OperatingSystem.IsBrowser())`.
+- [x] **Subtarefa 2.2.2 (`BackofficeApiClient.cs`, `OfflineSyncService.cs` e demais `*ApiClient.cs`):**
+  - Injetado `ITokenStorageService` com suporte a `AttachTokenAsync()`, preservando sobrecarga retrocompatível com `IJSRuntime` via `JSRuntimeTokenStorageAdapter`.
+- [x] **Subtarefa 2.2.3 (`OfflineSyncService.cs` e `MoveLotModal.razor`):**
+  - Injetados `IConnectivityService`, `IOfflineSyncStorage`, `ITokenStorageService` e `HttpClient` no `OfflineSyncService` (eliminando acoplamento com `offlineSync.js` no Shared.UI).
+  - Em `Components/Growth/MoveLotModal.razor`, substituída a gravação em `localStorage` por `IOfflineSyncService.EnqueueOperationAsync(...)`.
+- [x] **Subtarefa 2.2.4 (Downloads/Relatórios):**
+  - Substituídas todas as chamadas a `downloadFileFromByteArray` por `IFileExportService.ExportFileAsync(...)` em `ProfileManagement.razor`, `PayoutsManagement.razor`, `TenantsManagement.razor` e `ExportReportModal.razor`.
 
-### Tarefa 2.3: Criar implementações Web (Browser) em `CriaCerto.Web.Client`
-- **Subtarefa 2.3.1:** Implementar `BrowserTokenStorageService` (usando `IJSRuntime` + `localStorage`, com proteção `if (!OperatingSystem.IsBrowser()) return null;`).
-- **Subtarefa 2.3.2:** Implementar `BrowserFileExportService` (chamando `downloadFileFromByteArray`).
-- **Subtarefa 2.3.3:** Implementar `BrowserConnectivityService` e `BrowserOfflineSyncStorage` (chamando `js/offlineSync.js` / `IndexedDB`).
-- **Subtarefa 2.3.4:** Registrar todas essas implementações no `CriaCerto.Web.Client/Program.cs` e no `CriaCerto.Web/Program.cs` (para compatibilidade com DI no host SSR).
+### Tarefa 2.3: Criar implementações Web (Browser) em `CriaCerto.Web.Client` [CONCLUÍDO]
+- [x] **Subtarefa 2.3.1:** Implementado `BrowserTokenStorageService` (com guarda `if (!OperatingSystem.IsBrowser()) return null;`).
+- [x] **Subtarefa 2.3.2:** Implementado `BrowserFileExportService` (chamando `downloadFileFromByteArray`).
+- [x] **Subtarefa 2.3.3:** Implementados `BrowserConnectivityService` e `BrowserOfflineSyncStorage` (interagindo com `criaCertoOfflineSync` / `IndexedDB`).
+- [x] **Subtarefa 2.3.4:** Registradas todas as implementações no `CriaCerto.Web.Client/Program.cs` e no host SSR `CriaCerto.Web/Program.cs`. Formalizado ADR `docs/adrs/0029-platform-abstractions-for-hybrid-maui-and-web.md`.
 
-### Validação da Fase 2
+### Validação da Fase 2 [CONCLUÍDA COM SUCESSO]
 ```bash
-dotnet build CriaCerto.slnx
-dotnet test tests/Unit/CriaCerto.Web.Client.UnitTests/CriaCerto.Web.Client.UnitTests.csproj
+XDG_RUNTIME_DIR=/tmp dotnet build CriaCerto.slnx
+# Build succeeded: 0 Warning(s), 0 Error(s)
+
+XDG_RUNTIME_DIR=/tmp dotnet test tests/Unit/CriaCerto.Web.Client.UnitTests/CriaCerto.Web.Client.UnitTests.csproj
+# Passed! - Failed: 0, Passed: 182, Skipped: 0, Total: 182
+
+XDG_RUNTIME_DIR=/tmp dotnet test CriaCerto.slnx
+# Passed! - Toda a solução integrada com sucesso
 ```
 
 ---

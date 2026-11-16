@@ -16,7 +16,7 @@ The platform optimizes cattle farm operations across the entire lifecycle: Breed
 
 ### 2.2 Core Architectural Requirements
 * **Backend:** .NET 10 (C# 14) following Clean Architecture & Domain-Driven Design (DDD).
-* **Frontend & Mobile Híbrido:** Blazor Web App / WASM .NET 10 com PWA e suporte mobile nativo Android & iOS via **.NET MAUI Blazor Hybrid (`BlazorWebView`)**. Compartilhamento de 100% dos componentes de interface, layouts, contratos e clientes via Razor Class Library (RCL) `CriaCerto.Shared.UI` (ADR 0028).
+* **Frontend & Mobile Híbrido:** Blazor Web App / WASM .NET 10 com PWA e suporte mobile nativo Android & iOS via **.NET MAUI Blazor Hybrid (`BlazorWebView`)**. Compartilhamento de 100% dos componentes de interface, layouts, contratos e clientes via Razor Class Library (RCL) `CriaCerto.Shared.UI` (ADR 0028) desacoplada através de abstrações de plataforma (ADR 0029).
 * **Design & UI Automation:** **MCP Stitch** integration for automated, standardized Blazor UI component generation.
 * **Development Methodology:** **Test-Driven Development (TDD)** — Red/Green/Refactor mandatory for all business code.
 * **Documentation Strategy:** **Living Documentation** — Automated generation and execution of specs via BDD/Tests. Architecture Decision Records (ADRs) and markdown docs must be kept up-to-date with code changes.
@@ -37,7 +37,8 @@ The platform optimizes cattle farm operations across the entire lifecycle: Breed
 
 ### 3.2 Frontend & Mobile Híbrido (Blazor .NET 10 & .NET MAUI)
 * **Framework:** Blazor Web App / WASM .NET 10 com estratégia PWA offline e .NET MAUI Blazor Hybrid para apps nativos Android & iOS.
-* **Shared UI (RCL):** `CriaCerto.Shared.UI` (`Microsoft.NET.Sdk.Razor`, `net10.0`) encapsulando páginas, layouts, componentes atômicos, rotas, modelos e serviços de comunicação.
+* **Shared UI (RCL):** `CriaCerto.Shared.UI` (`Microsoft.NET.Sdk.Razor`, `net10.0`) encapsulando páginas, layouts, componentes atômicos, rotas, modelos e serviços de comunicação (ADR 0028).
+* **Platform Abstractions (ADR 0029):** Isolamento de capacidades específicas do host através de contratos injetáveis em `CriaCerto.Shared.UI.Abstractions`: `ITokenStorageService` (auth JWT), `IFileExportService` (downloads e compartilhamento de relatórios), `IConnectivityService` (monitoramento reativo de conectividade online/offline) e `IOfflineSyncStorage` (fila durável de sincronização offline). Implementações browser em `CriaCerto.Web.Client.Services.Browser` e implementações móveis nativas em `CriaCerto.Mobile.Services`.
 * **UI Components:** Reusable atomic component design system. Integration with **MCP Stitch** for component synthesis and UI standardization.
 * **Offline Storage:** IndexedDB (via Blazored.LocalStorage or JS Interop) no browser; SQLite / SecureStorage nas plataformas móveis nativas, integrados a workers de sincronização em segundo plano.
 * **State Management:** Fluxor or Custom Scoped State Stores.

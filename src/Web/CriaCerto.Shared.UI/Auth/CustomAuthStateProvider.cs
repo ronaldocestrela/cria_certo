@@ -1,5 +1,5 @@
+using CriaCerto.Shared.UI.Abstractions;
 using Microsoft.AspNetCore.Components.Authorization;
-using Microsoft.JSInterop;
 using System.Security.Claims;
 using System.Text.Json;
 
@@ -7,25 +7,20 @@ namespace CriaCerto.Shared.UI.Auth;
 
 public class CustomAuthStateProvider : AuthenticationStateProvider
 {
-    private readonly IJSRuntime _jsRuntime;
+    private readonly ITokenStorageService _tokenStorage;
     private readonly ClaimsPrincipal _anonymous = new(new ClaimsIdentity());
     private AuthenticationState? _cachedState;
 
-    public CustomAuthStateProvider(IJSRuntime jsRuntime)
+    public CustomAuthStateProvider(ITokenStorageService tokenStorage)
     {
-        _jsRuntime = jsRuntime;
+        _tokenStorage = tokenStorage;
     }
 
     public override async Task<AuthenticationState> GetAuthenticationStateAsync()
     {
-        if (!OperatingSystem.IsBrowser())
-        {
-            return _cachedState ?? new AuthenticationState(_anonymous);
-        }
-
         try
         {
-            var token = await _jsRuntime.InvokeAsync<string?>("localStorage.getItem", "authToken");
+            var token = await _tokenStorage.GetTokenAsync();
             if (string.IsNullOrWhiteSpace(token))
             {
                 _cachedState = new AuthenticationState(_anonymous);
@@ -34,7 +29,7 @@ public class CustomAuthStateProvider : AuthenticationStateProvider
 
             if (!TryCreateAuthenticatedState(token, out var authenticatedState))
             {
-                await _jsRuntime.InvokeVoidAsync("localStorage.removeItem", "authToken");
+                await _tokenStorage.RemoveTokenAsync();
                 _cachedState = new AuthenticationState(_anonymous);
                 return _cachedState;
             }
@@ -42,11 +37,7 @@ public class CustomAuthStateProvider : AuthenticationStateProvider
             _cachedState = authenticatedState;
             return authenticatedState;
         }
-        catch (JSException)
-        {
-            return _cachedState ?? new AuthenticationState(_anonymous);
-        }
-        catch (InvalidOperationException)
+        catch
         {
             return _cachedState ?? new AuthenticationState(_anonymous);
         }
@@ -54,7 +45,7 @@ public class CustomAuthStateProvider : AuthenticationStateProvider
 
     public async Task MarkUserAsAuthenticated(string token)
     {
-        await _jsRuntime.InvokeVoidAsync("localStorage.setItem", "authToken", token);
+        await _tokenStorage.SetTokenAsync(token);
         var authState = TryCreateAuthenticatedState(token, out var authenticatedState)
             ? authenticatedState
             : new AuthenticationState(_anonymous);
@@ -64,7 +55,7 @@ public class CustomAuthStateProvider : AuthenticationStateProvider
 
     public async Task MarkUserAsLoggedOut()
     {
-        await _jsRuntime.InvokeVoidAsync("localStorage.removeItem", "authToken");
+        await _tokenStorage.RemoveTokenAsync();
         _cachedState = new AuthenticationState(_anonymous);
         NotifyAuthenticationStateChanged(Task.FromResult(_cachedState));
     }

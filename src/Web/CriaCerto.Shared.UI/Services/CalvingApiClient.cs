@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using CriaCerto.Modules.Calving.Application.Contracts;
+using CriaCerto.Shared.UI.Abstractions;
 using Microsoft.JSInterop;
 
 namespace CriaCerto.Shared.UI.Services;
@@ -8,12 +9,17 @@ namespace CriaCerto.Shared.UI.Services;
 public sealed class CalvingApiClient
 {
     private readonly HttpClient _httpClient;
-    private readonly IJSRuntime _jsRuntime;
+    private readonly ITokenStorageService _tokenStorage;
 
-    public CalvingApiClient(HttpClient httpClient, IJSRuntime jsRuntime)
+    public CalvingApiClient(HttpClient httpClient, ITokenStorageService tokenStorage)
     {
         _httpClient = httpClient;
-        _jsRuntime = jsRuntime;
+        _tokenStorage = tokenStorage;
+    }
+
+    public CalvingApiClient(HttpClient httpClient, IJSRuntime jsRuntime)
+        : this(httpClient, new JSRuntimeTokenStorageAdapter(jsRuntime))
+    {
     }
 
     public async Task<List<CalvingRecordListItemDto>> GetCalvingRecordsAsync(Guid tenantId, CancellationToken cancellationToken = default)
@@ -54,7 +60,7 @@ public sealed class CalvingApiClient
     {
         try
         {
-            var token = await _jsRuntime.InvokeAsync<string?>("localStorage.getItem", "authToken");
+            var token = await _tokenStorage.GetTokenAsync();
             _httpClient.DefaultRequestHeaders.Authorization = string.IsNullOrWhiteSpace(token)
                 ? null
                 : new AuthenticationHeaderValue("Bearer", token);

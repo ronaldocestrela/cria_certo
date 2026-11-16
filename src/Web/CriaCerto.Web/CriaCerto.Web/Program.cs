@@ -1,6 +1,8 @@
 using CriaCerto.Web.Components;
 using CriaCerto.Shared.UI.Services;
 using CriaCerto.Shared.UI.Auth;
+using CriaCerto.Shared.UI.Abstractions;
+using CriaCerto.Web.Client.Services.Browser;
 using Microsoft.AspNetCore.DataProtection;
 using Yarp.ReverseProxy.Configuration;
 
@@ -22,6 +24,10 @@ builder.Services.AddRazorComponents()
     .AddInteractiveWebAssemblyComponents();
 
 builder.Services.AddCascadingAuthenticationState();
+builder.Services.AddScoped<ITokenStorageService, BrowserTokenStorageService>();
+builder.Services.AddScoped<IFileExportService, BrowserFileExportService>();
+builder.Services.AddScoped<IConnectivityService, BrowserConnectivityService>();
+builder.Services.AddScoped<IOfflineSyncStorage, BrowserOfflineSyncStorage>();
 builder.Services.AddScoped<CustomAuthStateProvider>();
 builder.Services.AddScoped<Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider>(sp => 
     sp.GetRequiredService<CustomAuthStateProvider>());

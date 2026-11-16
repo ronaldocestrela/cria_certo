@@ -23,6 +23,7 @@ using CriaCerto.Modules.Referral.Application.Features.Payouts.Dtos;
 using CriaCerto.Modules.Referral.Application.Features.PlanDiscounts.Dtos;
 using CriaCerto.Modules.Referral.Application.Features.Analytics.Dtos;
 using CriaCerto.Modules.Backoffice.Application.Features.PaidMedia.Dtos;
+using CriaCerto.Shared.UI.Abstractions;
 using CriaCerto.Shared.UI.Models;
 using Microsoft.JSInterop;
 
@@ -272,12 +273,17 @@ public sealed class ExportTenantsResult
 public class BackofficeApiClient : IBackofficeApiClient
 {
     private readonly HttpClient _httpClient;
-    private readonly IJSRuntime _jsRuntime;
+    private readonly ITokenStorageService _tokenStorage;
 
-    public BackofficeApiClient(HttpClient httpClient, IJSRuntime jsRuntime)
+    public BackofficeApiClient(HttpClient httpClient, ITokenStorageService tokenStorage)
     {
         _httpClient = httpClient;
-        _jsRuntime = jsRuntime;
+        _tokenStorage = tokenStorage;
+    }
+
+    public BackofficeApiClient(HttpClient httpClient, IJSRuntime jsRuntime)
+        : this(httpClient, new JSRuntimeTokenStorageAdapter(jsRuntime))
+    {
     }
 
     public async Task<BackofficeLoginResponse> LoginAsync(string email, string password, string? mfaCode = null, CancellationToken cancellationToken = default)
@@ -324,7 +330,7 @@ public class BackofficeApiClient : IBackofficeApiClient
     {
         try
         {
-            var token = await _jsRuntime.InvokeAsync<string?>("localStorage.getItem", "authToken");
+            var token = await _tokenStorage.GetTokenAsync();
             _httpClient.DefaultRequestHeaders.Authorization = string.IsNullOrWhiteSpace(token)
                 ? null
                 : new AuthenticationHeaderValue("Bearer", token);

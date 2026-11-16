@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using CriaCerto.Shared.UI.Abstractions;
 using CriaCerto.Shared.UI.Models;
 using Microsoft.JSInterop;
 
@@ -8,12 +9,17 @@ namespace CriaCerto.Shared.UI.Services;
 public sealed class GrowthApiClient
 {
     private readonly HttpClient _httpClient;
-    private readonly IJSRuntime _jsRuntime;
+    private readonly ITokenStorageService _tokenStorage;
 
-    public GrowthApiClient(HttpClient httpClient, IJSRuntime jsRuntime)
+    public GrowthApiClient(HttpClient httpClient, ITokenStorageService tokenStorage)
     {
         _httpClient = httpClient;
-        _jsRuntime = jsRuntime;
+        _tokenStorage = tokenStorage;
+    }
+
+    public GrowthApiClient(HttpClient httpClient, IJSRuntime jsRuntime)
+        : this(httpClient, new JSRuntimeTokenStorageAdapter(jsRuntime))
+    {
     }
 
     public async Task<List<PaddockStockingRateDto>> GetPaddocksAsync(Guid tenantId, CancellationToken cancellationToken = default)
@@ -125,7 +131,7 @@ public sealed class GrowthApiClient
     {
         try
         {
-            var token = await _jsRuntime.InvokeAsync<string?>("localStorage.getItem", "authToken");
+            var token = await _tokenStorage.GetTokenAsync();
             _httpClient.DefaultRequestHeaders.Authorization = string.IsNullOrWhiteSpace(token)
                 ? null
                 : new AuthenticationHeaderValue("Bearer", token);

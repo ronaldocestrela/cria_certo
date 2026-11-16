@@ -6,7 +6,9 @@
 @using CriaCerto.Modules.Referral.Application.Features.Payouts.Dtos
 @using CriaCerto.Shared.UI.Components.Backoffice
 @using CriaCerto.Shared.UI.Services
+@using CriaCerto.Shared.UI.Abstractions
 @inject IBackofficeApiClient ApiClient
+@inject IFileExportService FileExportService
 @inject IJSRuntime JS
 @inject IToastService Toast
 
@@ -1209,7 +1211,7 @@
             var result = await ApiClient.ExportPixBatchCsvAsync();
             if (result.IsSuccess)
             {
-                await JS.InvokeVoidAsync("downloadFileFromByteArray", result.FileName, "text/csv", result.Content);
+                await FileExportService.ExportFileAsync(result.FileName, "text/csv", result.Content);
                 Toast.ShowSuccess("Remessa Pix gerada com sucesso!");
             }
             else

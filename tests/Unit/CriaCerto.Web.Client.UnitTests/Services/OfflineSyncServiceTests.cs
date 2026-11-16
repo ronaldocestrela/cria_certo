@@ -1,10 +1,10 @@
 using System.Net;
 using System.Text.Json;
 using CriaCerto.BuildingBlocks.Abstractions.Results;
+using CriaCerto.Shared.UI.Abstractions;
 using CriaCerto.Shared.UI.Models;
 using CriaCerto.Shared.UI.Services;
 using FluentAssertions;
-using Microsoft.JSInterop;
 using NSubstitute;
 using Xunit;
 
@@ -12,21 +12,26 @@ namespace CriaCerto.Web.Client.UnitTests.Services;
 
 public class OfflineSyncServiceTests
 {
-    private readonly IJSRuntime _jsRuntimeMock;
+    private readonly IConnectivityService _connectivityMock;
+    private readonly IOfflineSyncStorage _offlineStorageMock;
+    private readonly ITokenStorageService _tokenStorageMock;
     private readonly HttpMessageHandlerMock _httpHandlerMock;
     private readonly HttpClient _httpClient;
     private readonly OfflineSyncService _sut;
 
     public OfflineSyncServiceTests()
     {
-        _jsRuntimeMock = Substitute.For<IJSRuntime>();
+        _connectivityMock = Substitute.For<IConnectivityService>();
+        _connectivityMock.IsOnline.Returns(true);
+        _offlineStorageMock = Substitute.For<IOfflineSyncStorage>();
+        _tokenStorageMock = Substitute.For<ITokenStorageService>();
         _httpHandlerMock = new HttpMessageHandlerMock();
         _httpClient = new HttpClient(_httpHandlerMock)
         {
             BaseAddress = new Uri("https://localhost:7000/")
         };
 
-        _sut = new OfflineSyncService(_jsRuntimeMock, _httpClient);
+        _sut = new OfflineSyncService(_httpClient, _connectivityMock, _offlineStorageMock, _tokenStorageMock);
     }
 
     [Fact]
@@ -270,6 +275,37 @@ public class OfflineSyncServiceTests
         result.IsSuccess.Should().BeTrue();
         _sut.PendingCount.Should().Be(0);
         _sut.ActiveConflicts.Should().BeEmpty();
+        await _offlineStorageMock.Received(1).ClearPendingOperationsAsync();
+    }
+
+    [Fact]
+    public async Task InitializeAsync_ShouldLoadPendingOperationsFromStorage()
+    {
+        // Arrange
+        var stored = new List<SyncOperation>
+        {
+            new() { Id = Guid.NewGuid(), ModuleName = "Growth", ActionType = "MoveLot", PayloadJson = "{}" }
+        };
+        _offlineStorageMock.GetPendingOperationsAsync().Returns(stored);
+
+        // Act
+        await _sut.InitializeAsync();
+
+        // Assert
+        _sut.PendingCount.Should().Be(1);
+        _sut.PendingOperations[0].Id.Should().Be(stored[0].Id);
+        await _connectivityMock.Received(1).InitializeAsync();
+        await _offlineStorageMock.Received(1).InitializeAsync();
+    }
+
+    [Fact]
+    public async Task EnqueueOperationAsync_ShouldPersistToOfflineStorage()
+    {
+        // Act
+        await _sut.EnqueueOperationAsync("Growth", "MoveLot", new { LotId = Guid.NewGuid() });
+
+        // Assert
+        await _offlineStorageMock.Received(1).SavePendingOperationAsync(Arg.Is<SyncOperation>(op => op.ModuleName == "Growth" && op.ActionType == "MoveLot"));
     }
 
     private class HttpMessageHandlerMock : HttpMessageHandler

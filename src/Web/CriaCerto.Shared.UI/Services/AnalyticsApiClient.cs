@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using CriaCerto.Modules.Analytics.Application.Contracts;
+using CriaCerto.Shared.UI.Abstractions;
 using Microsoft.JSInterop;
 
 namespace CriaCerto.Shared.UI.Services;
@@ -8,12 +9,17 @@ namespace CriaCerto.Shared.UI.Services;
 public sealed class AnalyticsApiClient
 {
     private readonly HttpClient _httpClient;
-    private readonly IJSRuntime _jsRuntime;
+    private readonly ITokenStorageService _tokenStorage;
 
-    public AnalyticsApiClient(HttpClient httpClient, IJSRuntime jsRuntime)
+    public AnalyticsApiClient(HttpClient httpClient, ITokenStorageService tokenStorage)
     {
         _httpClient = httpClient;
-        _jsRuntime = jsRuntime;
+        _tokenStorage = tokenStorage;
+    }
+
+    public AnalyticsApiClient(HttpClient httpClient, IJSRuntime jsRuntime)
+        : this(httpClient, new JSRuntimeTokenStorageAdapter(jsRuntime))
+    {
     }
 
     public async Task<ExecutiveDashboardDto?> GetExecutiveDashboardAsync(Guid? tenantId = null, CancellationToken cancellationToken = default)
@@ -52,7 +58,7 @@ public sealed class AnalyticsApiClient
     {
         try
         {
-            var token = await _jsRuntime.InvokeAsync<string?>("localStorage.getItem", "authToken");
+            var token = await _tokenStorage.GetTokenAsync();
             _httpClient.DefaultRequestHeaders.Authorization = string.IsNullOrWhiteSpace(token)
                 ? null
                 : new AuthenticationHeaderValue("Bearer", token);

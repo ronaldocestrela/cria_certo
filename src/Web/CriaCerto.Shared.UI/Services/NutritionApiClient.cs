@@ -5,6 +5,7 @@ using CriaCerto.Modules.Nutrition.Application.Features.AnalyticsFeatures;
 using CriaCerto.Modules.Nutrition.Application.Features.FeedingFeatures;
 using CriaCerto.Modules.Nutrition.Application.Features.RationFeatures;
 using CriaCerto.Modules.Nutrition.Application.Features.SiloStockFeatures;
+using CriaCerto.Shared.UI.Abstractions;
 using Microsoft.JSInterop;
 
 namespace CriaCerto.Shared.UI.Services;
@@ -12,12 +13,17 @@ namespace CriaCerto.Shared.UI.Services;
 public sealed class NutritionApiClient
 {
     private readonly HttpClient _httpClient;
-    private readonly IJSRuntime _jsRuntime;
+    private readonly ITokenStorageService _tokenStorage;
 
-    public NutritionApiClient(HttpClient httpClient, IJSRuntime jsRuntime)
+    public NutritionApiClient(HttpClient httpClient, ITokenStorageService tokenStorage)
     {
         _httpClient = httpClient;
-        _jsRuntime = jsRuntime;
+        _tokenStorage = tokenStorage;
+    }
+
+    public NutritionApiClient(HttpClient httpClient, IJSRuntime jsRuntime)
+        : this(httpClient, new JSRuntimeTokenStorageAdapter(jsRuntime))
+    {
     }
 
     public async Task<List<SiloStockDto>> GetSilosAsync(Guid tenantId, CancellationToken cancellationToken = default)
@@ -112,7 +118,7 @@ public sealed class NutritionApiClient
     {
         try
         {
-            var token = await _jsRuntime.InvokeAsync<string?>("localStorage.getItem", "authToken");
+            var token = await _tokenStorage.GetTokenAsync();
             _httpClient.DefaultRequestHeaders.Authorization = string.IsNullOrWhiteSpace(token)
                 ? null
                 : new AuthenticationHeaderValue("Bearer", token);

@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using CriaCerto.Shared.UI.Abstractions;
 using CriaCerto.Shared.UI.Models;
 using Microsoft.JSInterop;
 
@@ -8,17 +9,25 @@ namespace CriaCerto.Shared.UI.Services;
 public sealed class BreedingOpsApiClient
 {
     private readonly HttpClient _httpClient;
-    private readonly IJSRuntime _jsRuntime;
+    private readonly ITokenStorageService _tokenStorage;
     private readonly IOfflineSyncService _offlineSyncService;
+
+    public BreedingOpsApiClient(
+        HttpClient httpClient,
+        ITokenStorageService tokenStorage,
+        IOfflineSyncService offlineSyncService)
+    {
+        _httpClient = httpClient;
+        _tokenStorage = tokenStorage;
+        _offlineSyncService = offlineSyncService;
+    }
 
     public BreedingOpsApiClient(
         HttpClient httpClient,
         IJSRuntime jsRuntime,
         IOfflineSyncService offlineSyncService)
+        : this(httpClient, new JSRuntimeTokenStorageAdapter(jsRuntime), offlineSyncService)
     {
-        _httpClient = httpClient;
-        _jsRuntime = jsRuntime;
-        _offlineSyncService = offlineSyncService;
     }
 
     public async Task<List<IatfProtocolDto>> GetIatfProtocolsAsync(Guid tenantId, CancellationToken cancellationToken = default)
@@ -133,7 +142,7 @@ public sealed class BreedingOpsApiClient
     {
         try
         {
-            var token = await _jsRuntime.InvokeAsync<string?>("localStorage.getItem", "authToken");
+            var token = await _tokenStorage.GetTokenAsync();
             _httpClient.DefaultRequestHeaders.Authorization = string.IsNullOrWhiteSpace(token)
                 ? null
                 : new AuthenticationHeaderValue("Bearer", token);

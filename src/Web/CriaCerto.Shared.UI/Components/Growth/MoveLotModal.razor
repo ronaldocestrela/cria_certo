@@ -1,6 +1,6 @@
 @using CriaCerto.Shared.UI.Models
 @inject CriaCerto.Shared.UI.Services.GrowthApiClient GrowthApi
-@inject IJSRuntime JS
+@inject CriaCerto.Shared.UI.Services.IOfflineSyncService OfflineSync
 
 @if (IsOpen)
 {
@@ -189,9 +189,8 @@
     {
         try
         {
-            var payload = System.Text.Json.JsonSerializer.Serialize(command);
-            await JS.InvokeVoidAsync("localStorage.setItem", $"offline_movement_{Guid.NewGuid()}", payload);
-            return true;
+            var result = await OfflineSync.EnqueueOperationAsync("growth", "move-lot", command);
+            return result.IsSuccess;
         }
         catch
         {

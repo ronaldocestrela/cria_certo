@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using CriaCerto.Shared.UI.Abstractions;
 using Microsoft.JSInterop;
 
 namespace CriaCerto.Shared.UI.Services;
@@ -264,12 +265,17 @@ public sealed record AnonymizeAccountRequest(
 public sealed class TenancyApiClient
 {
     private readonly HttpClient _httpClient;
-    private readonly IJSRuntime? _jsRuntime;
+    private readonly ITokenStorageService? _tokenStorage;
 
-    public TenancyApiClient(HttpClient httpClient, IJSRuntime? jsRuntime = null)
+    public TenancyApiClient(HttpClient httpClient, ITokenStorageService? tokenStorage = null)
     {
         _httpClient = httpClient;
-        _jsRuntime = jsRuntime;
+        _tokenStorage = tokenStorage;
+    }
+
+    public TenancyApiClient(HttpClient httpClient, IJSRuntime? jsRuntime)
+        : this(httpClient, jsRuntime != null ? new JSRuntimeTokenStorageAdapter(jsRuntime) : null)
+    {
     }
 
     public async Task<List<SubscriptionPlanModel>> GetSubscriptionPlansAsync(CancellationToken cancellationToken = default)
@@ -754,10 +760,10 @@ public sealed class TenancyApiClient
 
     private async Task AttachTokenAsync()
     {
-        if (_jsRuntime == null) return;
+        if (_tokenStorage == null) return;
         try
         {
-            var token = await _jsRuntime.InvokeAsync<string?>("localStorage.getItem", "authToken");
+            var token = await _tokenStorage.GetTokenAsync();
             _httpClient.DefaultRequestHeaders.Authorization = string.IsNullOrWhiteSpace(token)
                 ? null
                 : new AuthenticationHeaderValue("Bearer", token);
