@@ -254,25 +254,28 @@ dotnet build src/Mobile/CriaCerto.Mobile/CriaCerto.Mobile.csproj -f net10.0-andr
 
 ---
 
-## Fase 6: Pipeline CI/CD Multiplataforma (GitHub Actions para Android & iOS)
+## Fase 6: Pipeline CI/CD Multiplataforma (GitHub Actions para Android & iOS) [CONCLUÍDO]
 
 ### Contexto
 Como o desenvolvimento local ocorre em Linux, o build e empacotamento de **iOS** precisam rodar em um runner `macos-latest`.
 
-### Tarefa 6.1: Criar workflow `.github/workflows/mobile-build.yml`
-- **Subtarefa 6.1.1 (Job `android` em `ubuntu-latest`):**
-  - Setup `.NET 10.0.x`
+### Tarefa 6.1: Criar workflow `.github/workflows/mobile-build.yml` [CONCLUÍDO]
+- [x] **Subtarefa 6.1.1 (Job `android` em `ubuntu-latest`):**
+  - Setup `.NET 10.0.x` e Java 17 Temurin
   - `dotnet workload install maui-android`
   - `dotnet build src/Mobile/CriaCerto.Mobile/CriaCerto.Mobile.csproj -f net10.0-android -c Release`
-  - (Opcional) `dotnet publish -f net10.0-android -c Release` para gerar `.aab` / `.apk` como artifact.
-- **Subtarefa 6.1.2 (Job `ios` em `macos-latest`):**
-  - Setup `.NET 10.0.x` e selecionar Xcode compatível com .NET 10 MAUI
+  - `dotnet publish -f net10.0-android -c Release -p:AndroidPackageFormat=apk` gerando `.apk` como artifact via `actions/upload-artifact@v4`.
+- [x] **Subtarefa 6.1.2 (Job `ios` em `macos-latest`):**
+  - Setup `.NET 10.0.x` em runner macOS
   - `dotnet workload install maui-ios`
   - `dotnet build src/Mobile/CriaCerto.Mobile/CriaCerto.Mobile.csproj -f net10.0-ios -c Release`
-  - Documentar os secrets necessários para assinatura na App Store / TestFlight (`APPLE_CERTIFICATE_BASE64`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_PROVISIONING_PROFILE_BASE64`).
+  - Documentados os secrets necessários para assinatura na App Store / TestFlight (`APPLE_CERTIFICATE_BASE64`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_PROVISIONING_PROFILE_BASE64`).
+- [x] **Subtarefa 6.1.3 (Living Documentation & Governança de CI):**
+  - Criada classe de testes de arquitetura `MobileCiCdWorkflowTests.cs` (6 testes unitários em `CriaCerto.Web.Client.UnitTests`) auditando sintaxe, gatilhos por caminhos, alvos de framework, workloads e caminhos de projeto `.csproj`.
+  - Formalizada decisão arquitetural no ADR `docs/adrs/0034-mobile-cross-platform-ci-cd-pipeline-github-actions.md`.
 
 ### Validação da Fase 6
-- Validar sintaxe YAML do workflow e confirmar que todos os caminhos de projeto em `.github/workflows/mobile-build.yml` existem exatamente no repositório.
+- Validada sintaxe YAML do workflow, filtros de caminho e confirmada a existência exata de todos os caminhos de projeto em `.github/workflows/mobile-build.yml` via Living Documentation (`MobileCiCdWorkflowTests.cs`).
 
 ---
 
@@ -284,5 +287,5 @@ Como o desenvolvimento local ocorre em Linux, o build e empacotamento de **iOS**
 - [ ] Login persiste token no `SecureStorage` e sobrevive à reinicialização do app.
 - [ ] Operações offline no curral são gravadas no SQLite local e sincronizadas automaticamente quando `Connectivity.Current` detecta internet.
 - [ ] Exportação de relatórios funciona via folha de compartilhamento nativa (`Share.Default`).
-- [ ] Workflow CI valida build de `net10.0-android` e `net10.0-ios`.
+- [x] Workflow CI valida build de `net10.0-android` e `net10.0-ios`.
 
