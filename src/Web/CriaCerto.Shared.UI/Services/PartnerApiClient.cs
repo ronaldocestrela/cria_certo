@@ -4,6 +4,7 @@ using System.Text.Json;
 using CriaCerto.BuildingBlocks.Abstractions.Results;
 using CriaCerto.Shared.UI.Abstractions;
 using CriaCerto.Shared.UI.Models;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.JSInterop;
 
 namespace CriaCerto.Shared.UI.Services;
@@ -29,13 +30,14 @@ public sealed class PartnerApiClient : IPartnerApiClient
     private readonly ITokenStorageService _tokenStorage;
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 
+    [ActivatorUtilitiesConstructor]
     public PartnerApiClient(HttpClient httpClient, ITokenStorageService tokenStorage)
     {
         _httpClient = httpClient;
         _tokenStorage = tokenStorage;
     }
 
-    public PartnerApiClient(HttpClient httpClient, IJSRuntime jsRuntime)
+    internal PartnerApiClient(HttpClient httpClient, IJSRuntime jsRuntime)
         : this(httpClient, new JSRuntimeTokenStorageAdapter(jsRuntime))
     {
     }

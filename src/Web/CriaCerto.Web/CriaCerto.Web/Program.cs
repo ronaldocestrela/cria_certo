@@ -63,23 +63,7 @@ builder.Services.AddReverseProxy()
         });
 
 builder.Services.AddScoped(sp => new HttpClient());
-builder.Services.AddScoped<PlantelApiClient>();
-builder.Services.AddScoped<BreedingOpsApiClient>();
-builder.Services.AddScoped<GrowthApiClient>();
-builder.Services.AddScoped<NutritionApiClient>();
-builder.Services.AddScoped<CalvingApiClient>();
-builder.Services.AddScoped<SanitaryApiClient>();
-builder.Services.AddScoped<TenancyApiClient>();
-builder.Services.AddScoped<IBackofficeApiClient, BackofficeApiClient>();
-builder.Services.AddScoped<IBackofficePermissionService, BackofficePermissionService>();
-builder.Services.AddScoped<IImpersonationStateService, ImpersonationStateService>();
-builder.Services.AddScoped<IOfflineSyncService, OfflineSyncService>();
-builder.Services.AddScoped<IToastService, ToastService>();
-builder.Services.AddScoped<IFeatureFlagClientService, FeatureFlagClientService>();
-builder.Services.AddScoped<IReferralTrackingService, ReferralTrackingService>();
-builder.Services.AddScoped<IReferralApiClient, ReferralApiClient>();
-builder.Services.AddScoped<IPartnerApiClient, PartnerApiClient>();
-builder.Services.AddScoped<ICookieConsentService, CookieConsentService>();
+builder.Services.AddCriaCertoSharedServices();
 
 var app = builder.Build();
 

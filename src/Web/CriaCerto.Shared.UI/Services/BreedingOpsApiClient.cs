@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using CriaCerto.Shared.UI.Abstractions;
 using CriaCerto.Shared.UI.Models;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.JSInterop;
 
 namespace CriaCerto.Shared.UI.Services;
@@ -12,6 +13,7 @@ public sealed class BreedingOpsApiClient
     private readonly ITokenStorageService _tokenStorage;
     private readonly IOfflineSyncService _offlineSyncService;
 
+    [ActivatorUtilitiesConstructor]
     public BreedingOpsApiClient(
         HttpClient httpClient,
         ITokenStorageService tokenStorage,
@@ -22,7 +24,7 @@ public sealed class BreedingOpsApiClient
         _offlineSyncService = offlineSyncService;
     }
 
-    public BreedingOpsApiClient(
+    internal BreedingOpsApiClient(
         HttpClient httpClient,
         IJSRuntime jsRuntime,
         IOfflineSyncService offlineSyncService)

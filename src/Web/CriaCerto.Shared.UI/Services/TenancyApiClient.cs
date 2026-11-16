@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using CriaCerto.Shared.UI.Abstractions;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.JSInterop;
 
 namespace CriaCerto.Shared.UI.Services;
@@ -267,13 +268,14 @@ public sealed class TenancyApiClient
     private readonly HttpClient _httpClient;
     private readonly ITokenStorageService? _tokenStorage;
 
+    [ActivatorUtilitiesConstructor]
     public TenancyApiClient(HttpClient httpClient, ITokenStorageService? tokenStorage = null)
     {
         _httpClient = httpClient;
         _tokenStorage = tokenStorage;
     }
 
-    public TenancyApiClient(HttpClient httpClient, IJSRuntime? jsRuntime)
+    internal TenancyApiClient(HttpClient httpClient, IJSRuntime? jsRuntime)
         : this(httpClient, jsRuntime != null ? new JSRuntimeTokenStorageAdapter(jsRuntime) : null)
     {
     }

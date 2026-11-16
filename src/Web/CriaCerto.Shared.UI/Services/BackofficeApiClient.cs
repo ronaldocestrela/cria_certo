@@ -25,6 +25,7 @@ using CriaCerto.Modules.Referral.Application.Features.Analytics.Dtos;
 using CriaCerto.Modules.Backoffice.Application.Features.PaidMedia.Dtos;
 using CriaCerto.Shared.UI.Abstractions;
 using CriaCerto.Shared.UI.Models;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.JSInterop;
 
 namespace CriaCerto.Shared.UI.Services;
@@ -275,13 +276,14 @@ public class BackofficeApiClient : IBackofficeApiClient
     private readonly HttpClient _httpClient;
     private readonly ITokenStorageService _tokenStorage;
 
+    [ActivatorUtilitiesConstructor]
     public BackofficeApiClient(HttpClient httpClient, ITokenStorageService tokenStorage)
     {
         _httpClient = httpClient;
         _tokenStorage = tokenStorage;
     }
 
-    public BackofficeApiClient(HttpClient httpClient, IJSRuntime jsRuntime)
+    internal BackofficeApiClient(HttpClient httpClient, IJSRuntime jsRuntime)
         : this(httpClient, new JSRuntimeTokenStorageAdapter(jsRuntime))
     {
     }

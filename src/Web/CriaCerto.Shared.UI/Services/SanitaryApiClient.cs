@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using CriaCerto.Modules.Sanitary.Application.Contracts;
 using CriaCerto.Shared.UI.Abstractions;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.JSInterop;
 
 namespace CriaCerto.Shared.UI.Services;
@@ -11,13 +12,14 @@ public sealed class SanitaryApiClient
     private readonly HttpClient _httpClient;
     private readonly ITokenStorageService _tokenStorage;
 
+    [ActivatorUtilitiesConstructor]
     public SanitaryApiClient(HttpClient httpClient, ITokenStorageService tokenStorage)
     {
         _httpClient = httpClient;
         _tokenStorage = tokenStorage;
     }
 
-    public SanitaryApiClient(HttpClient httpClient, IJSRuntime jsRuntime)
+    internal SanitaryApiClient(HttpClient httpClient, IJSRuntime jsRuntime)
         : this(httpClient, new JSRuntimeTokenStorageAdapter(jsRuntime))
     {
     }

@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using CriaCerto.Modules.Analytics.Application.Contracts;
 using CriaCerto.Shared.UI.Abstractions;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.JSInterop;
 
 namespace CriaCerto.Shared.UI.Services;
@@ -11,13 +12,14 @@ public sealed class AnalyticsApiClient
     private readonly HttpClient _httpClient;
     private readonly ITokenStorageService _tokenStorage;
 
+    [ActivatorUtilitiesConstructor]
     public AnalyticsApiClient(HttpClient httpClient, ITokenStorageService tokenStorage)
     {
         _httpClient = httpClient;
         _tokenStorage = tokenStorage;
     }
 
-    public AnalyticsApiClient(HttpClient httpClient, IJSRuntime jsRuntime)
+    internal AnalyticsApiClient(HttpClient httpClient, IJSRuntime jsRuntime)
         : this(httpClient, new JSRuntimeTokenStorageAdapter(jsRuntime))
     {
     }

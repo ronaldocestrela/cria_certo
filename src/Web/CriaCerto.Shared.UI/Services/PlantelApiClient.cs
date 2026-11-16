@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using CriaCerto.Shared.UI.Abstractions;
 using CriaCerto.Shared.UI.Models;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.JSInterop;
 
 namespace CriaCerto.Shared.UI.Services;
@@ -11,13 +12,14 @@ public sealed class PlantelApiClient
     private readonly HttpClient _httpClient;
     private readonly ITokenStorageService _tokenStorage;
 
+    [ActivatorUtilitiesConstructor]
     public PlantelApiClient(HttpClient httpClient, ITokenStorageService tokenStorage)
     {
         _httpClient = httpClient;
         _tokenStorage = tokenStorage;
     }
 
-    public PlantelApiClient(HttpClient httpClient, IJSRuntime jsRuntime)
+    internal PlantelApiClient(HttpClient httpClient, IJSRuntime jsRuntime)
         : this(httpClient, new JSRuntimeTokenStorageAdapter(jsRuntime))
     {
     }

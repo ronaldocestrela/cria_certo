@@ -24,15 +24,18 @@ public static class CriaCertoSharedServiceCollectionExtensions
         services.AddScoped<SanitaryApiClient>();
         services.AddScoped<AnalyticsApiClient>();
         services.AddScoped<TenancyApiClient>();
-        services.AddScoped<IBackofficeApiClient, BackofficeApiClient>();
+        services.AddScoped<BackofficeApiClient>();
+        services.AddScoped<IBackofficeApiClient>(sp => sp.GetRequiredService<BackofficeApiClient>());
         services.AddScoped<IBackofficePermissionService, BackofficePermissionService>();
         services.AddScoped<IImpersonationStateService, ImpersonationStateService>();
         services.AddScoped<IOfflineSyncService, OfflineSyncService>();
         services.AddScoped<IToastService, ToastService>();
         services.AddScoped<IFeatureFlagClientService, FeatureFlagClientService>();
         services.AddScoped<IReferralTrackingService, ReferralTrackingService>();
-        services.AddScoped<IReferralApiClient, ReferralApiClient>();
-        services.AddScoped<IPartnerApiClient, PartnerApiClient>();
+        services.AddScoped<ReferralApiClient>();
+        services.AddScoped<IReferralApiClient>(sp => sp.GetRequiredService<ReferralApiClient>());
+        services.AddScoped<PartnerApiClient>();
+        services.AddScoped<IPartnerApiClient>(sp => sp.GetRequiredService<PartnerApiClient>());
         services.AddScoped<ICookieConsentService, CookieConsentService>();
 
         return services;

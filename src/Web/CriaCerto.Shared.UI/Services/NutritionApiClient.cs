@@ -6,6 +6,7 @@ using CriaCerto.Modules.Nutrition.Application.Features.FeedingFeatures;
 using CriaCerto.Modules.Nutrition.Application.Features.RationFeatures;
 using CriaCerto.Modules.Nutrition.Application.Features.SiloStockFeatures;
 using CriaCerto.Shared.UI.Abstractions;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.JSInterop;
 
 namespace CriaCerto.Shared.UI.Services;
@@ -15,13 +16,14 @@ public sealed class NutritionApiClient
     private readonly HttpClient _httpClient;
     private readonly ITokenStorageService _tokenStorage;
 
+    [ActivatorUtilitiesConstructor]
     public NutritionApiClient(HttpClient httpClient, ITokenStorageService tokenStorage)
     {
         _httpClient = httpClient;
         _tokenStorage = tokenStorage;
     }
 
-    public NutritionApiClient(HttpClient httpClient, IJSRuntime jsRuntime)
+    internal NutritionApiClient(HttpClient httpClient, IJSRuntime jsRuntime)
         : this(httpClient, new JSRuntimeTokenStorageAdapter(jsRuntime))
     {
     }
