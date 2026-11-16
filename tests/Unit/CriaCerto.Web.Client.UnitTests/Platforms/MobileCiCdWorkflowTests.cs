@@ -88,6 +88,28 @@ public class MobileCiCdWorkflowTests
         content.Should().Contain("APPLE_PROVISIONING_PROFILE_BASE64", "O workflow deve documentar o secret para o provisioning profile Apple");
     }
 
+    [Fact]
+    public void SolutionFile_ShouldExcludeMobileFromDefaultBuild_ToPreventCiFailure()
+    {
+        var slnxPath = Path.Combine(RepoRoot, "CriaCerto.slnx");
+        var content = File.ReadAllText(slnxPath);
+
+        content.Should().Contain("src/Mobile/CriaCerto.Mobile/CriaCerto.Mobile.csproj", "O projeto mobile deve constar na solução para desenvolvimento");
+        content.Should().Contain("<Build Solution=\"*|*\" Project=\"false\" />",
+            "O projeto mobile deve estar configurado com Build false na solução para não quebrar runners de CI backend sem workloads MAUI");
+    }
+
+    [Fact]
+    public void GlobalJson_ShouldPinDotNet10Sdk()
+    {
+        var globalJsonPath = Path.Combine(RepoRoot, "global.json");
+        File.Exists(globalJsonPath).Should().BeTrue("O arquivo global.json deve existir na raiz do repositório");
+
+        var content = File.ReadAllText(globalJsonPath);
+        content.Should().Contain("\"version\": \"10.0.100\"", "Deve fixar o SDK .NET 10");
+        content.Should().Contain("\"rollForward\": \"latestFeature\"", "Deve permitir roll forward seguro apenas dentro do .NET 10");
+    }
+
     private static string ResolveRepoRoot()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
