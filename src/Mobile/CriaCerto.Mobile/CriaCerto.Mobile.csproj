@@ -28,7 +28,9 @@
     </PropertyGroup>
 
     <PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">
-        <CodesignEntitlements>Platforms\iOS\Entitlements.plist</CodesignEntitlements>
+        <CodesignEntitlements Condition="'$(EnableCodeSigning)' == 'true'">Platforms\iOS\Entitlements.plist</CodesignEntitlements>
+        <!-- Permite compilação sem certificado quando EnableCodeSigning não for explicitamente definido como true -->
+        <EnableCodeSigning Condition="'$(EnableCodeSigning)' == ''">false</EnableCodeSigning>
         <!-- Permite compilação no CI mesmo quando a versão do Xcode do runner divergir da exigida pelo workload do .NET iOS -->
         <ValidateXcodeVersion>false</ValidateXcodeVersion>
     </PropertyGroup>

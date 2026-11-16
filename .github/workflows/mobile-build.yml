@@ -78,8 +78,8 @@ jobs:
         run: dotnet workload install maui-ios
 
       - name: Restore Mobile Dependencies
-        run: dotnet restore src/Mobile/CriaCerto.Mobile/CriaCerto.Mobile.csproj -p:MobileTargetFrameworks=net10.0-ios -p:ValidateXcodeVersion=false
+        run: dotnet restore src/Mobile/CriaCerto.Mobile/CriaCerto.Mobile.csproj -p:MobileTargetFrameworks=net10.0-ios -p:ValidateXcodeVersion=false -p:EnableCodeSigning=false
 
       - name: Build iOS App (Release)
-        run: dotnet build src/Mobile/CriaCerto.Mobile/CriaCerto.Mobile.csproj -f net10.0-ios -c Release --no-restore -p:MobileTargetFrameworks=net10.0-ios -p:ValidateXcodeVersion=false
+        run: dotnet build src/Mobile/CriaCerto.Mobile/CriaCerto.Mobile.csproj -f net10.0-ios -c Release --no-restore -p:MobileTargetFrameworks=net10.0-ios -p:ValidateXcodeVersion=false -p:EnableCodeSigning=false
 
