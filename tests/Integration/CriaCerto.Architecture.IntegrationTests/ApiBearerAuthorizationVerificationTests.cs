@@ -85,9 +85,18 @@ public class ApiBearerAuthorizationVerificationTests
     {
         // Arrange
         var programPath = Path.Combine(RepoRoot, "src/Host/CriaCerto.Api/Program.cs");
-        var syncPath = Path.Combine(RepoRoot, "src/Host/CriaCerto.Api/Endpoints/OfflineSyncEndpoints.cs");
+        var endpointsDir = Path.Combine(RepoRoot, "src/Host/CriaCerto.Api/Endpoints");
+        var endpointFiles = Directory.Exists(endpointsDir)
+            ? Directory.GetFiles(endpointsDir, "*.cs", SearchOption.AllDirectories)
+            : Array.Empty<string>();
 
-        var sourceCode = File.ReadAllText(programPath) + "\n" + File.ReadAllText(syncPath);
+        var sb = new StringBuilder();
+        sb.AppendLine(File.ReadAllText(programPath));
+        foreach (var file in endpointFiles)
+        {
+            sb.AppendLine(File.ReadAllText(file));
+        }
+        var sourceCode = sb.ToString();
 
         // Act & Assert
         sourceCode.Should().Contain(routePrefix, $"O grupo de rotas '{routePrefix}' deve estar registrado na API.");
