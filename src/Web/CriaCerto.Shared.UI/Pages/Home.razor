@@ -973,7 +973,6 @@
 @code {
     private bool _isAnnual = true;
     private bool _isMobileMenuOpen = false;
-    private bool _isLoadingCatalog = true;
     private bool _showFullMatrix = false;
     private int _activeFaqIndex = 0;
     private string _activePreset = "cria";
@@ -985,16 +984,11 @@
     {
         try
         {
-            _isLoadingCatalog = true;
             _catalog = await TenancyApiClient.GetModularCatalogAsync();
         }
         catch
         {
             _catalog = TenancyApiClient.GetDefaultModularCatalog();
-        }
-        finally
-        {
-            _isLoadingCatalog = false;
         }
     }
 

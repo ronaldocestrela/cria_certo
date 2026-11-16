@@ -1,9 +1,10 @@
 <Project>
   <PropertyGroup>
-    <!-- NU1900: audit source unreachable; NU1903: transitive vulns in pre-release .NET 10 packages -->
-    <NoWarn>$(NoWarn);NU1900;NU1903</NoWarn>
+    <!-- NU1900: audit source unreachable; NU1903: transitive vulns in pre-release .NET 10 packages; XA0033: Java SDK version parse warning on Ubuntu Linux -->
+    <NoWarn>$(NoWarn);NU1900;NU1903;XA0033</NoWarn>
     <Company>CriaCerto</Company>
     <Authors>Ronaldo Estrela</Authors>
     <Copyright>Copyright (c) 2026 Ronaldo Estrela / CriaCerto. Todos os direitos reservados.</Copyright>
+    <AndroidSdkDirectory Condition="'$(AndroidSdkDirectory)' == '' and Exists('/usr/lib/android-sdk')">/usr/lib/android-sdk</AndroidSdkDirectory>
   </PropertyGroup>
 </Project>

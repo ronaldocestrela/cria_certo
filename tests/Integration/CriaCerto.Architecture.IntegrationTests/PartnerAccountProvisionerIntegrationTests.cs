@@ -94,11 +94,12 @@ public sealed class PartnerAccountProvisionerIntegrationTests : IDisposable
             Arg.Is<EmailMessage>(m =>
                 m.To.Any(r => r.Email == email) &&
                 m.Subject.Contains("Parceiros") &&
+                m.HtmlBody != null &&
                 m.HtmlBody.Contains("http://localhost:5205/r/CARLOS-CONSULTORIA") &&
                 m.HtmlBody.Contains("http://localhost:5205/confirm-email?token=") &&
                 m.HtmlBody.Contains("Senha Temporária") &&
                 m.HtmlBody.Contains("http://localhost:5205/forgot-password?email=") &&
-                createdUser.PasswordHash.Length > 0),
+                createdUser!.PasswordHash.Length > 0),
             Arg.Any<CancellationToken>());
     }
 
@@ -152,6 +153,7 @@ public sealed class PartnerAccountProvisionerIntegrationTests : IDisposable
             Arg.Is<EmailMessage>(m =>
                 m.To.Any(r => r.Email == existingUser.Email) &&
                 m.Subject.Contains("Parceiro") &&
+                m.HtmlBody != null &&
                 m.HtmlBody.Contains("http://localhost:5205/r/MARCOS-PARCEIRO") &&
                 m.HtmlBody.Contains("suas credenciais habituais")),
             Arg.Any<CancellationToken>());
