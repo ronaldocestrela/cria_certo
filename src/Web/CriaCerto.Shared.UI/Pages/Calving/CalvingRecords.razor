@@ -1,8 +1,10 @@
 @page "/calving/records"
 @rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
 @attribute [Authorize]
+@implements IDisposable
 @using CriaCerto.Shared.UI.Components
 @using CriaCerto.Shared.UI.Models
+@using CriaCerto.Shared.UI.Services
 @using CriaCerto.Modules.Calving.Application.Contracts
 @using CalvingType = CriaCerto.Modules.Calving.Application.Domain.CalvingType
 @using BirthCondition = CriaCerto.Modules.Calving.Application.Domain.BirthCondition
@@ -10,6 +12,7 @@
 @inject CriaCerto.Shared.UI.Services.CalvingApiClient CalvingApi
 @inject CriaCerto.Shared.UI.Services.PlantelApiClient PlantelApi
 @inject CriaCerto.Shared.UI.Services.GrowthApiClient GrowthApi
+@inject IOfflineSyncService SyncService
 @inject AuthenticationStateProvider AuthStateProvider
 @inject IJSRuntime JSRuntime
 
@@ -40,6 +43,12 @@
                 <p class="text-muted mb-0">Acompanhamento zootécnico de parição, aleitamento de bezerros e cálculo de peso ajustado aos 205 dias.</p>
             </div>
             <div class="col-md-5 text-md-end mt-3 mt-md-0">
+                @if (!_isOnline)
+                {
+                    <span class="badge bg-warning text-dark me-2 align-middle px-3 py-2">
+                        <i class="bi bi-wifi-off me-1"></i> Modo Offline Ativo
+                    </span>
+                }
                 <button type="button" class="btn btn-outline-secondary me-2 fw-semibold" @onclick="LoadDataAsync">
                     <span class="material-symbols-outlined align-middle fs-5 me-1">refresh</span> Sincronizar
                 </button>
@@ -389,8 +398,14 @@
     private CalvingRecordListItemDto? _selectedRecordForWeaning;
     private WeaningFormModel _weaningForm = new();
 
+    private bool _isOnline = true;
+
     protected override async Task OnInitializedAsync()
     {
+        SyncService.OnStateChanged += HandleSyncStateChanged;
+        await SyncService.InitializeAsync();
+        _isOnline = SyncService.IsOnline;
+
         var authState = await AuthStateProvider.GetAuthenticationStateAsync();
         var user = authState.User;
         if (user.Identity?.IsAuthenticated == true)
@@ -403,6 +418,17 @@
         }
 
         await LoadDataAsync();
+    }
+
+    private void HandleSyncStateChanged()
+    {
+        _isOnline = SyncService.IsOnline;
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        SyncService.OnStateChanged -= HandleSyncStateChanged;
     }
 
     private async Task LoadDataAsync()
@@ -506,17 +532,40 @@
                 _calvingForm.Condition,
                 _tenantId);
 
-            var result = await CalvingApi.RegisterCalvingAsync(command);
-            if (result != null)
+            if (_isOnline)
             {
-                _successMessage = $"Parto e bezerro {_calvingForm.CalfTagId} registrados com sucesso!";
-                _showCalvingModal = false;
-                await LoadDataAsync();
+                var result = await CalvingApi.RegisterCalvingAsync(command);
+                if (result != null)
+                {
+                    _successMessage = $"Parto e bezerro {_calvingForm.CalfTagId} registrados com sucesso!";
+                    _showCalvingModal = false;
+                    await LoadDataAsync();
+                }
+                else
+                {
+                    _errorMessage = "Não foi possível registrar o parto. Verifique os dados.";
+                }
             }
             else
             {
-                _errorMessage = "Não foi possível registrar o parto. Verifique os dados.";
+                await EnqueueCalvingOfflineAsync(command);
             }
+        }
+        catch (HttpRequestException)
+        {
+            SyncService.SetNetworkStatus(false);
+            Guid motherId = _calvingForm.MotherCowId != Guid.Empty ? _calvingForm.MotherCowId : Guid.NewGuid();
+            var command = new RegisterCalvingCommand(
+                motherId,
+                _calvingForm.CalvingDate,
+                _calvingForm.Type,
+                _calvingForm.CalfTagId,
+                _calvingForm.CalfSex,
+                _calvingForm.CalfBreed,
+                _calvingForm.CalfBirthWeightKg,
+                _calvingForm.Condition,
+                _tenantId);
+            await EnqueueCalvingOfflineAsync(command);
         }
         catch (Exception ex)
         {
@@ -525,6 +574,38 @@
         finally
         {
             _isSaving = false;
+        }
+    }
+
+    private async Task EnqueueCalvingOfflineAsync(RegisterCalvingCommand command)
+    {
+        await SyncService.InitializeAsync();
+        var enqueued = await SyncService.EnqueueOperationAsync("Calving", "RecordCalving", command);
+        if (enqueued.IsSuccess)
+        {
+            _successMessage = $"Parto e bezerro {command.CalfTagId} salvos offline com sucesso! Serão sincronizados assim que houver conexão.";
+            _showCalvingModal = false;
+
+            _records.Insert(0, new CalvingRecordListItemDto(
+                Guid.NewGuid(),
+                command.MotherCowId,
+                command.CalvingDate,
+                command.Type,
+                command.Condition,
+                Guid.NewGuid(),
+                command.CalfTagId,
+                command.CalfSex,
+                command.CalfBreed,
+                command.CalfBirthWeightKg,
+                CalfStatus.Unweaned,
+                null,
+                null,
+                null,
+                null));
+        }
+        else
+        {
+            _errorMessage = "Falha ao salvar parto offline.";
         }
     }
 
@@ -564,17 +645,37 @@
                 _tenantId,
                 lotId);
 
-            var result = await CalvingApi.RegisterWeaningAsync(command);
-            if (result != null)
+            if (_isOnline)
             {
-                _successMessage = $"Desmame do bezerro {_selectedRecordForWeaning.CalfTagId} registrado com P205 = {result.Adjusted205DayWeightKg:N1} kg!";
-                _showWeaningModal = false;
-                await LoadDataAsync();
+                var result = await CalvingApi.RegisterWeaningAsync(command);
+                if (result != null)
+                {
+                    _successMessage = $"Desmame do bezerro {_selectedRecordForWeaning.CalfTagId} registrado com P205 = {result.Adjusted205DayWeightKg:N1} kg!";
+                    _showWeaningModal = false;
+                    await LoadDataAsync();
+                }
+                else
+                {
+                    _errorMessage = "Erro ao registrar o desmame. Verifique se o bezerro já não foi desmamado.";
+                }
             }
             else
             {
-                _errorMessage = "Erro ao registrar o desmame. Verifique se o bezerro já não foi desmamado.";
+                await EnqueueWeaningOfflineAsync(command);
             }
+        }
+        catch (HttpRequestException)
+        {
+            SyncService.SetNetworkStatus(false);
+            var command = new RegisterWeaningCommand(
+                _selectedRecordForWeaning.CalfId,
+                _selectedRecordForWeaning.MotherCowId,
+                _weaningForm.WeaningDate,
+                _weaningForm.WeaningWeightKg,
+                _weaningForm.MotherAgeYears,
+                _tenantId,
+                null);
+            await EnqueueWeaningOfflineAsync(command);
         }
         catch (Exception ex)
         {
@@ -583,6 +684,21 @@
         finally
         {
             _isSaving = false;
+        }
+    }
+
+    private async Task EnqueueWeaningOfflineAsync(RegisterWeaningCommand command)
+    {
+        await SyncService.InitializeAsync();
+        var enqueued = await SyncService.EnqueueOperationAsync("Calving", "RecordWeaning", command);
+        if (enqueued.IsSuccess)
+        {
+            _successMessage = $"Desmame do bezerro {_selectedRecordForWeaning?.CalfTagId} salvo offline com sucesso! Será sincronizado quando houver conexão.";
+            _showWeaningModal = false;
+        }
+        else
+        {
+            _errorMessage = "Falha ao salvar desmame offline.";
         }
     }
 

@@ -7,12 +7,19 @@ using CriaCerto.BuildingBlocks.Abstractions.Tenancy;
 using CriaCerto.Modules.Breeding.Application.Contracts;
 using CriaCerto.Modules.Breeding.Application.Domain;
 using CriaCerto.Modules.Breeding.Application.Features.BreedingOps;
+using CriaCerto.Modules.Breeding.Application.Features.Plantel;
+using CriaCerto.Modules.Calving.Application.Contracts;
 using CriaCerto.Modules.Growth.Application.Contracts;
+using CriaCerto.Modules.Nutrition.Application.Contracts;
+using CriaCerto.Modules.Nutrition.Application.Domain;
+using CriaCerto.Modules.Nutrition.Application.Features.FeedingFeatures;
+using CriaCerto.Modules.Nutrition.Application.Features.SiloStockFeatures;
 using CriaCerto.Modules.Sanitary.Application.Contracts;
 using CriaCerto.Modules.Sanitary.Application.Domain;
 using FluentAssertions;
 using MediatR;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.HttpResults;
 using NSubstitute;
 using Xunit;
 
@@ -295,6 +302,190 @@ public class OfflineSyncEndpointsIntegrationTests
 
         await _senderMock.Received(1).Send(
             Arg.Is<RecordInseminationCommand>(c => c.CowTag == "BR-UNESCAPE"),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task HandleSyncOperation_Breeding_RegisterCow_ShouldDispatchCommandAndReturnCreated()
+    {
+        // Arrange
+        var payload = JsonSerializer.Serialize(new
+        {
+            EarTag = "NEL-901",
+            Breed = "Nelore",
+            Category = "Matriz",
+            BodyConditionScore = 3.5m
+        });
+        var request = CreateHttpRequestWithBody(payload);
+
+        var expectedDto = new CowDetailDto(
+            Guid.NewGuid(), "NEL-901", null, null, null, null, null, "Nelore", "Nascimento Interno",
+            null, DateTime.UtcNow, null, null, null, 3.5m, "Matriz",
+            ReproductiveStatus.Open, 0, null, null, null, Array.Empty<TimelineEventDto>());
+
+        _senderMock.Send(Arg.Any<CreateCowCommand>(), Arg.Any<CancellationToken>())
+            .Returns(Result.Success(expectedDto));
+
+        // Act
+        var result = await OfflineSyncEndpoints.HandleSyncOperationAsync(
+            "Breeding", "RegisterCow", false, request, _userClaims, _tenantContextMock, _senderMock, CancellationToken.None);
+
+        // Assert
+        var statusCodeResult = result as IStatusCodeHttpResult;
+        statusCodeResult.Should().NotBeNull();
+        statusCodeResult!.StatusCode.Should().Be(StatusCodes.Status200OK);
+
+        await _senderMock.Received(1).Send(
+            Arg.Is<CreateCowCommand>(c => c.EarTag == "NEL-901" && c.TenantId == _tenantId),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task HandleSyncOperation_Calving_RecordCalving_ShouldDispatchCommandAndReturnOk()
+    {
+        // Arrange
+        var motherId = Guid.NewGuid();
+        var payload = JsonSerializer.Serialize(new
+        {
+            MotherCowId = motherId,
+            CalvingDate = DateTime.UtcNow,
+            Type = 1,
+            CalfTagId = "BEZ-101",
+            CalfSex = "M",
+            CalfBreed = "Nelore",
+            CalfBirthWeightKg = 34.5m,
+            Condition = 1
+        });
+        var request = CreateHttpRequestWithBody(payload);
+
+        var expectedDto = new CalvingDto(
+            Guid.NewGuid(), motherId, DateTime.UtcNow,
+            CriaCerto.Modules.Calving.Application.Domain.CalvingType.Normal,
+            Guid.NewGuid(), "BEZ-101",
+            CriaCerto.Modules.Calving.Application.Domain.BirthCondition.Live);
+
+        _senderMock.Send(Arg.Any<RegisterCalvingCommand>(), Arg.Any<CancellationToken>())
+            .Returns(Result.Success(expectedDto));
+
+        // Act
+        var result = await OfflineSyncEndpoints.HandleSyncOperationAsync(
+            "Calving", "RecordCalving", false, request, _userClaims, _tenantContextMock, _senderMock, CancellationToken.None);
+
+        // Assert
+        var statusCodeResult = result as IStatusCodeHttpResult;
+        statusCodeResult.Should().NotBeNull();
+        statusCodeResult!.StatusCode.Should().Be(StatusCodes.Status200OK);
+
+        await _senderMock.Received(1).Send(
+            Arg.Is<RegisterCalvingCommand>(c => c.CalfTagId == "BEZ-101" && c.TenantId == _tenantId),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task HandleSyncOperation_Nutrition_RecordFeedlotTmr_ShouldDispatchCommandAndReturnOk()
+    {
+        // Arrange
+        var lotId = Guid.NewGuid();
+        var rationId = Guid.NewGuid();
+        var payload = JsonSerializer.Serialize(new
+        {
+            LotId = lotId,
+            FeedRationId = rationId,
+            FeedingTime = DateTime.UtcNow,
+            OfferedAsFedKg = 1500m,
+            TroughScore = 1,
+            HeadCountAtFeeding = 80
+        });
+        var request = CreateHttpRequestWithBody(payload);
+
+        var expectedDto = new DailyFeedBatchDto(
+            Guid.NewGuid(), _tenantId, lotId, rationId, DateTime.UtcNow, 1500m, 750m, TroughScore.Score1_ThinLayer, 80);
+
+        _senderMock.Send(Arg.Any<RecordFeedlotTmrCommand>(), Arg.Any<CancellationToken>())
+            .Returns(Result.Success(expectedDto));
+
+        // Act
+        var result = await OfflineSyncEndpoints.HandleSyncOperationAsync(
+            "Nutrition", "RecordFeedlotTmr", false, request, _userClaims, _tenantContextMock, _senderMock, CancellationToken.None);
+
+        // Assert
+        var statusCodeResult = result as IStatusCodeHttpResult;
+        statusCodeResult.Should().NotBeNull();
+        statusCodeResult!.StatusCode.Should().Be(StatusCodes.Status200OK);
+
+        await _senderMock.Received(1).Send(
+            Arg.Is<RecordFeedlotTmrCommand>(c => c.LotId == lotId && c.OfferedAsFedKg == 1500m && c.TenantId == _tenantId),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task HandleSyncOperation_Nutrition_RecordSupplementation_ShouldDispatchCommandAndReturnOk()
+    {
+        // Arrange
+        var paddockId = Guid.NewGuid();
+        var lotId = Guid.NewGuid();
+        var rationId = Guid.NewGuid();
+        var payload = JsonSerializer.Serialize(new
+        {
+            PaddockId = paddockId,
+            LotId = lotId,
+            FeedRationId = rationId,
+            DistributionDate = DateTime.UtcNow,
+            QuantityKg = 120m,
+            HeadCount = 60
+        });
+        var request = CreateHttpRequestWithBody(payload);
+
+        var expectedDto = new PastureSupplementationDto(
+            Guid.NewGuid(), _tenantId, paddockId, lotId, rationId, DateTime.UtcNow, 120m, 60, 200m);
+
+        _senderMock.Send(Arg.Any<RecordSupplementationCommand>(), Arg.Any<CancellationToken>())
+            .Returns(Result.Success(expectedDto));
+
+        // Act
+        var result = await OfflineSyncEndpoints.HandleSyncOperationAsync(
+            "Nutrition", "RecordSupplementation", false, request, _userClaims, _tenantContextMock, _senderMock, CancellationToken.None);
+
+        // Assert
+        var statusCodeResult = result as IStatusCodeHttpResult;
+        statusCodeResult.Should().NotBeNull();
+        statusCodeResult!.StatusCode.Should().Be(StatusCodes.Status200OK);
+
+        await _senderMock.Received(1).Send(
+            Arg.Is<RecordSupplementationCommand>(c => c.PaddockId == paddockId && c.QuantityKg == 120m && c.TenantId == _tenantId),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task HandleSyncOperation_Nutrition_RestockSilo_ShouldDispatchCommandAndReturnOk()
+    {
+        // Arrange
+        var siloId = Guid.NewGuid();
+        var payload = JsonSerializer.Serialize(new
+        {
+            Id = siloId,
+            AddedKg = 6000m,
+            NewUnitCostPerKg = 1.30m
+        });
+        var request = CreateHttpRequestWithBody(payload);
+
+        var expectedDto = new SiloStockDto(
+            siloId, _tenantId, "Milho Grão", FeedCategory.BulkGrain, 16000m, 1.30m, 88m, 2000m, DateTime.UtcNow, false);
+
+        _senderMock.Send(Arg.Any<RestockSiloCommand>(), Arg.Any<CancellationToken>())
+            .Returns(Result.Success(expectedDto));
+
+        // Act
+        var result = await OfflineSyncEndpoints.HandleSyncOperationAsync(
+            "Nutrition", "RestockSilo", false, request, _userClaims, _tenantContextMock, _senderMock, CancellationToken.None);
+
+        // Assert
+        var statusCodeResult = result as IStatusCodeHttpResult;
+        statusCodeResult.Should().NotBeNull();
+        statusCodeResult!.StatusCode.Should().Be(StatusCodes.Status200OK);
+
+        await _senderMock.Received(1).Send(
+            Arg.Is<RestockSiloCommand>(c => c.Id == siloId && c.AddedKg == 6000m && c.TenantId == _tenantId),
             Arg.Any<CancellationToken>());
     }
 

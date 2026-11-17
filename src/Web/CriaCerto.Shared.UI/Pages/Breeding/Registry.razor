@@ -1,10 +1,13 @@
 @page "/breeding/registry"
 @rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
 @attribute [Authorize]
+@implements IDisposable
 @using CriaCerto.Shared.UI.Components.Plantel
 @using CriaCerto.Shared.UI.Components.Sanitary
 @using CriaCerto.Shared.UI.Models
+@using CriaCerto.Shared.UI.Services
 @inject CriaCerto.Shared.UI.Services.PlantelApiClient PlantelApi
+@inject IOfflineSyncService SyncService
 @inject NavigationManager Navigation
 @inject IJSRuntime JSRuntime
 @inject Auth.CustomAuthStateProvider AuthStateProvider
@@ -442,6 +445,10 @@
 
     protected override async Task OnInitializedAsync()
     {
+        SyncService.OnStateChanged += HandleSyncStateChanged;
+        await SyncService.InitializeAsync();
+        _offlineMode = !SyncService.IsOnline;
+
         var authState = await AuthStateProvider.GetAuthenticationStateAsync();
         var user = authState.User;
         if (user.Identity?.IsAuthenticated == true)
@@ -455,6 +462,17 @@
         await LoadCowsAsync();
     }
 
+    private void HandleSyncStateChanged()
+    {
+        _offlineMode = !SyncService.IsOnline;
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        SyncService.OnStateChanged -= HandleSyncStateChanged;
+    }
+
     private async Task LoadCowsAsync()
     {
         try
@@ -465,11 +483,10 @@
             {
                 _cows.AddRange(response.Items);
             }
-            _offlineMode = false;
+            _offlineMode = !SyncService.IsOnline;
         }
         catch
         {
-            _cows.Clear();
             _offlineMode = true;
         }
     }
@@ -497,17 +514,29 @@
 
         try
         {
-            var response = await PlantelApi.CreateCowAsync(_createRequest);
-            if (response.IsSuccessStatusCode)
+            if (SyncService.IsOnline && !_offlineMode)
             {
-                _successMessage = $"Animal {_createRequest.EarTag} cadastrado com sucesso!";
-                _showCreateModal = false;
-                await LoadCowsAsync();
+                var response = await PlantelApi.CreateCowAsync(_createRequest);
+                if (response.IsSuccessStatusCode)
+                {
+                    _successMessage = $"Animal {_createRequest.EarTag} cadastrado com sucesso!";
+                    _showCreateModal = false;
+                    await LoadCowsAsync();
+                }
+                else
+                {
+                    _errorMessage = "Não foi possível cadastrar o animal. Verifique se o brinco já está cadastrado.";
+                }
             }
             else
             {
-                _errorMessage = "Não foi possível cadastrar o animal. Verifique se o brinco já está cadastrado.";
+                await EnqueueCreateAnimalOfflineAsync();
             }
+        }
+        catch (HttpRequestException)
+        {
+            SyncService.SetNetworkStatus(false);
+            await EnqueueCreateAnimalOfflineAsync();
         }
         catch (Exception ex)
         {
@@ -516,6 +545,36 @@
         finally
         {
             _isSaving = false;
+        }
+    }
+
+    private async Task EnqueueCreateAnimalOfflineAsync()
+    {
+        await SyncService.InitializeAsync();
+        var result = await SyncService.EnqueueOperationAsync("Breeding", "RegisterCow", _createRequest);
+        if (result.IsSuccess)
+        {
+            _successMessage = $"Animal {_createRequest.EarTag} salvo offline com sucesso! Será sincronizado assim que houver conexão.";
+            _showCreateModal = false;
+
+            // Insere temporariamente na lista local para feedback visual imediato
+            _cows.Insert(0, new CowSummaryDto(
+                Guid.NewGuid(),
+                _createRequest.EarTag,
+                _createRequest.SisbovId,
+                _createRequest.RfidTag,
+                _createRequest.Nickname,
+                _createRequest.Breed,
+                _createRequest.Category,
+                ReproductiveStatus.Open,
+                0,
+                null,
+                null,
+                _createRequest.BodyConditionScore));
+        }
+        else
+        {
+            _errorMessage = "Falha ao salvar animal offline.";
         }
     }
 

@@ -1,4 +1,5 @@
 @page "/nutrition/pasture-supplementation"
+@implements IDisposable
 @using CriaCerto.Modules.Nutrition.Application.Contracts
 @using CriaCerto.Modules.Nutrition.Application.Features.FeedingFeatures
 @using CriaCerto.Modules.Growth.Application.Contracts
@@ -7,6 +8,7 @@
 @using CriaCerto.Shared.UI.Services
 @inject NutritionApiClient ApiClient
 @inject GrowthApiClient GrowthApiClient
+@inject IOfflineSyncService SyncService
 @inject Auth.CustomAuthStateProvider AuthStateProvider
 @attribute [Authorize]
 
@@ -21,10 +23,26 @@
             </h3>
             <p class="text-muted mb-0">Controle de abastecimento de cochos nos piquetes e cálculo de consumo diário em gramas por cabeça (g/cab/dia).</p>
         </div>
-        <button class="btn btn-success shadow-sm" @onclick="OpenModal">
-            <i class="bi bi-plus-lg me-1"></i> Registrar Suplementação
-        </button>
+        <div class="d-flex align-items-center gap-2">
+            @if (!isOnline)
+            {
+                <span class="badge bg-warning text-dark px-3 py-2 border">
+                    <i class="bi bi-wifi-off me-1"></i> Modo Offline Ativo
+                </span>
+            }
+            <button class="btn btn-success shadow-sm" @onclick="OpenModal">
+                <i class="bi bi-plus-lg me-1"></i> Registrar Suplementação
+            </button>
+        </div>
     </div>
+
+    @if (!string.IsNullOrEmpty(feedbackMessage))
+    {
+        <div class="alert alert-success alert-dismissible fade show mb-4" role="alert">
+            <i class="bi bi-check-circle-fill me-2"></i>@feedbackMessage
+            <button type="button" class="btn-close" @onclick="() => feedbackMessage = null"></button>
+        </div>
+    }
 
     <div class="row g-4">
         <div class="col-12">
@@ -147,6 +165,8 @@
 @code {
     private Guid currentTenantId = Guid.Empty;
     private bool showModal = false;
+    private bool isOnline = true;
+    private string? feedbackMessage;
 
     private Guid selectedPaddockId = Guid.Empty;
     private Guid selectedLotId = Guid.Empty;
@@ -161,6 +181,10 @@
 
     protected override async Task OnInitializedAsync()
     {
+        SyncService.OnStateChanged += HandleSyncStateChanged;
+        await SyncService.InitializeAsync();
+        isOnline = SyncService.IsOnline;
+
         var authState = await AuthStateProvider.GetAuthenticationStateAsync();
         var user = authState.User;
         if (user.Identity?.IsAuthenticated == true)
@@ -174,14 +198,32 @@
 
         if (currentTenantId != Guid.Empty)
         {
-            availablePaddocks = await GrowthApiClient.GetPaddocksAsync(currentTenantId);
-            availableLots = await GrowthApiClient.GetLotsAsync(currentTenantId);
-            availableRations = await ApiClient.GetRationsAsync(currentTenantId);
+            try
+            {
+                availablePaddocks = await GrowthApiClient.GetPaddocksAsync(currentTenantId);
+                availableLots = await GrowthApiClient.GetLotsAsync(currentTenantId);
+                availableRations = await ApiClient.GetRationsAsync(currentTenantId);
 
-            if (availablePaddocks.Any()) selectedPaddockId = availablePaddocks.First().Id;
-            if (availableLots.Any()) selectedLotId = availableLots.First().Id;
-            if (availableRations.Any()) selectedRationId = availableRations.First().Id;
+                if (availablePaddocks.Any()) selectedPaddockId = availablePaddocks.First().Id;
+                if (availableLots.Any()) selectedLotId = availableLots.First().Id;
+                if (availableRations.Any()) selectedRationId = availableRations.First().Id;
+            }
+            catch
+            {
+                // Modo offline: mantém opções padrão
+            }
         }
+    }
+
+    private void HandleSyncStateChanged()
+    {
+        isOnline = SyncService.IsOnline;
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        SyncService.OnStateChanged -= HandleSyncStateChanged;
     }
 
     private void OpenModal() => showModal = true;
@@ -201,10 +243,48 @@
             quantityKg,
             headCount);
 
-        var result = await ApiClient.RecordSupplementationAsync(cmd);
-        if (result != null)
+        try
         {
-            suppList.Insert(0, result);
+            if (isOnline)
+            {
+                var result = await ApiClient.RecordSupplementationAsync(cmd);
+                if (result != null)
+                {
+                    suppList.Insert(0, result);
+                    feedbackMessage = "Suplementação registrada com sucesso!";
+                    CloseModal();
+                }
+            }
+            else
+            {
+                await EnqueueSupplementationOfflineAsync(cmd);
+            }
+        }
+        catch (HttpRequestException)
+        {
+            SyncService.SetNetworkStatus(false);
+            await EnqueueSupplementationOfflineAsync(cmd);
+        }
+    }
+
+    private async Task EnqueueSupplementationOfflineAsync(RecordSupplementationCommand cmd)
+    {
+        await SyncService.InitializeAsync();
+        var enqueued = await SyncService.EnqueueOperationAsync("Nutrition", "RecordSupplementation", cmd);
+        if (enqueued.IsSuccess)
+        {
+            feedbackMessage = "Suplementação salva offline com sucesso! Será sincronizada assim que houver conexão.";
+            var calculatedIntake = headCount > 0 ? (cmd.QuantityKg * 1000m) / cmd.HeadCount : 0m;
+            suppList.Insert(0, new PastureSupplementationDto(
+                Guid.NewGuid(),
+                cmd.TenantId,
+                cmd.PaddockId,
+                cmd.LotId,
+                cmd.FeedRationId,
+                cmd.DistributionDate,
+                cmd.QuantityKg,
+                cmd.HeadCount,
+                calculatedIntake));
             CloseModal();
         }
     }

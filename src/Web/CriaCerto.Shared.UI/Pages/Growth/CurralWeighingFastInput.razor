@@ -1,9 +1,13 @@
 @page "/growth/curral-weighing"
 @rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@implements IDisposable
 @using CriaCerto.Shared.UI.Components.Growth
 @using CriaCerto.Shared.UI.Services
 @using CriaCerto.Shared.UI.Models
+@using CriaCerto.Modules.Growth.Application.Contracts
 @inject PlantelApiClient PlantelApi
+@inject IOfflineSyncService SyncService
+@inject Auth.CustomAuthStateProvider AuthStateProvider
 @attribute [Authorize]
 
 <PageTitle>Manejo de Curral - Pesagem Rápida | CriaCerto</PageTitle>
@@ -19,9 +23,9 @@
             <p class="text-muted mb-0">Entrada ágil de pesagem individual, cálculo automático de GPD e conversão em Arrobas (@@).</p>
         </div>
         <div class="d-flex flex-wrap gap-2">
-            <span class="badge bg-outline-secondary d-flex align-items-center px-3 py-2 border">
-                <i class="bi bi-wifi-off text-warning me-2 fs-6"></i>
-                IndexedDB Cache Off-line Ativo
+            <span class="badge @(isOnline ? "bg-success-subtle text-success border border-success" : "bg-warning-subtle text-dark border border-warning") d-flex align-items-center px-3 py-2">
+                <i class="bi @(isOnline ? "bi-wifi text-success" : "bi-wifi-off text-warning") me-2 fs-6"></i>
+                @(isOnline ? "Conectado ao Servidor" : "Modo Offline - Cache Ativo")
             </span>
             <button class="btn btn-outline-success" @onclick="OpenImportModal">
                 <i class="bi bi-file-earmark-excel me-1"></i> Importar Balança
@@ -31,6 +35,14 @@
             </button>
         </div>
     </div>
+
+    @if (!string.IsNullOrEmpty(saveFeedback))
+    {
+        <div class="alert alert-success alert-dismissible fade show mb-4" role="alert">
+            <i class="bi bi-check-circle-fill me-2"></i>@saveFeedback
+            <button type="button" class="btn-close" @onclick="() => saveFeedback = null"></button>
+        </div>
+    }
 
     <div class="row g-4">
         <!-- Input & Quick Entry Panel -->
@@ -157,8 +169,17 @@
                     </h6>
                     @if (sessionWeighings.Any())
                     {
-                        <button class="btn btn-sm btn-primary" @onclick="SaveSession">
-                            <i class="bi bi-cloud-upload me-1"></i> Finalizar & Salvar Sessão
+                        <button class="btn btn-sm btn-primary" @onclick="SaveSession" disabled="@isSavingSession">
+                            @if (isSavingSession)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                <span>Salvando...</span>
+                            }
+                            else
+                            {
+                                <i class="bi bi-cloud-upload me-1"></i>
+                                <span>Finalizar & Salvar Sessão</span>
+                            }
                         </button>
                     }
                 </div>
@@ -309,10 +330,40 @@
     private bool isLoadingAnimals = false;
     private string? loadAnimalsError;
     private bool manualTagInput = false;
+    private bool isOnline = true;
+    private Guid currentTenantId = Guid.Empty;
+    private string? saveFeedback;
+    private bool isSavingSession = false;
 
     protected override async Task OnInitializedAsync()
     {
+        SyncService.OnStateChanged += HandleSyncStateChanged;
+        await SyncService.InitializeAsync();
+        isOnline = SyncService.IsOnline;
+
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user.Identity?.IsAuthenticated == true)
+        {
+            var tenantClaim = user.FindFirst("TenantId")?.Value;
+            if (Guid.TryParse(tenantClaim, out var tenantId))
+            {
+                currentTenantId = tenantId;
+            }
+        }
+
         await LoadRegisteredAnimalsAsync();
+    }
+
+    private void HandleSyncStateChanged()
+    {
+        isOnline = SyncService.IsOnline;
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        SyncService.OnStateChanged -= HandleSyncStateChanged;
     }
 
     private async Task LoadRegisteredAnimalsAsync()
@@ -489,10 +540,34 @@
         currentWeight = 0.0m;
     }
 
-    private void SaveSession()
+    private async Task SaveSession()
     {
-        // Session persisted
+        if (!sessionWeighings.Any()) return;
+
+        isSavingSession = true;
+        saveFeedback = null;
+        int savedCount = 0;
+
+        await SyncService.InitializeAsync();
+
+        foreach (var item in sessionWeighings)
+        {
+            var command = new RecordWeighingCommand(
+                currentTenantId,
+                item.AnimalTagId,
+                null,
+                DateTime.UtcNow,
+                item.WeightKg,
+                item.CarcassYieldPercentage,
+                item.Notes);
+
+            await SyncService.EnqueueOperationAsync("Growth", "RecordWeighing", command);
+            savedCount++;
+        }
+
+        saveFeedback = $"{savedCount} pesagem(ns) salva(s) com sucesso na fila offline! Serão sincronizadas automaticamente.";
         ClearSession();
+        isSavingSession = false;
     }
 
     private void UpdateChartPoints()

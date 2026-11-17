@@ -1,4 +1,5 @@
 @page "/nutrition/trough-log"
+@implements IDisposable
 @using CriaCerto.Modules.Nutrition.Application.Contracts
 @using CriaCerto.Modules.Nutrition.Application.Domain
 @using CriaCerto.Modules.Nutrition.Application.Features.FeedingFeatures
@@ -8,6 +9,7 @@
 @using CriaCerto.Shared.UI.Services
 @inject NutritionApiClient ApiClient
 @inject GrowthApiClient GrowthApiClient
+@inject IOfflineSyncService SyncService
 @inject IJSRuntime JSRuntime
 @inject Auth.CustomAuthStateProvider AuthStateProvider
 @attribute [Authorize]
@@ -23,11 +25,21 @@
             </h3>
             <p class="text-muted mb-0">Registro rápido para operador de trato em confinamento, escore de cocho (0-3) e controle de Matéria Seca (MS).</p>
         </div>
-        <span class="badge bg-outline-secondary d-flex align-items-center px-3 py-2 border">
-            <i class="bi bi-wifi-off text-warning me-2 fs-6"></i>
-            IndexedDB Cache Off-line Ativo
-        </span>
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge @(isOnline ? "bg-success-subtle text-success border border-success" : "bg-warning-subtle text-dark border border-warning") d-flex align-items-center px-3 py-2">
+                <i class="bi @(isOnline ? "bi-wifi text-success" : "bi-wifi-off text-warning") me-2 fs-6"></i>
+                @(isOnline ? "Conectado ao Servidor" : "Modo Offline Ativo")
+            </span>
+        </div>
     </div>
+
+    @if (!string.IsNullOrEmpty(submitFeedback))
+    {
+        <div class="alert alert-success alert-dismissible fade show mb-4" role="alert">
+            <i class="bi bi-check-circle-fill me-2"></i>@submitFeedback
+            <button type="button" class="btn-close" @onclick="() => submitFeedback = null"></button>
+        </div>
+    }
 
     <div class="row g-4">
         <!-- Input Form -->
@@ -163,6 +175,8 @@
     private Guid selectedRationId = Guid.Empty;
     private decimal offeredAsFedKg = 1200m;
     private TroughScore selectedTroughScore = TroughScore.Score1_ThinLayer;
+    private bool isOnline = true;
+    private string? submitFeedback;
 
     private List<LotDto> availableLots = new();
     private List<FeedRationDto> availableRations = new();
@@ -173,6 +187,10 @@
 
     protected override async Task OnInitializedAsync()
     {
+        SyncService.OnStateChanged += HandleSyncStateChanged;
+        await SyncService.InitializeAsync();
+        isOnline = SyncService.IsOnline;
+
         var authState = await AuthStateProvider.GetAuthenticationStateAsync();
         var user = authState.User;
         if (user.Identity?.IsAuthenticated == true)
@@ -186,20 +204,38 @@
 
         if (currentTenantId != Guid.Empty)
         {
-            availableLots = await GrowthApiClient.GetLotsAsync(currentTenantId);
-            availableRations = await ApiClient.GetRationsAsync(currentTenantId);
-
-            if (availableLots.Any())
+            try
             {
-                selectedLotId = availableLots.First().Id;
-                await UpdateAnalyticsAsync();
+                availableLots = await GrowthApiClient.GetLotsAsync(currentTenantId);
+                availableRations = await ApiClient.GetRationsAsync(currentTenantId);
+
+                if (availableLots.Any())
+                {
+                    selectedLotId = availableLots.First().Id;
+                    await UpdateAnalyticsAsync();
+                }
+
+                if (availableRations.Any())
+                {
+                    selectedRationId = availableRations.First().Id;
+                }
             }
-
-            if (availableRations.Any())
+            catch
             {
-                selectedRationId = availableRations.First().Id;
+                // Modo offline: mantém opções vazias ou padrões
             }
         }
+    }
+
+    private void HandleSyncStateChanged()
+    {
+        isOnline = SyncService.IsOnline;
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        SyncService.OnStateChanged -= HandleSyncStateChanged;
     }
 
     private async Task SubmitFeedBatch()
@@ -218,11 +254,47 @@
             selectedTroughScore,
             headCount);
 
-        var result = await ApiClient.RecordTmrBatchAsync(cmd);
-        if (result != null)
+        try
         {
-            recentBatches.Insert(0, result);
-            await UpdateAnalyticsAsync();
+            if (isOnline)
+            {
+                var result = await ApiClient.RecordTmrBatchAsync(cmd);
+                if (result != null)
+                {
+                    recentBatches.Insert(0, result);
+                    await UpdateAnalyticsAsync();
+                    submitFeedback = "Batida de trato registrada com sucesso!";
+                }
+            }
+            else
+            {
+                await EnqueueTmrOfflineAsync(cmd);
+            }
+        }
+        catch (HttpRequestException)
+        {
+            SyncService.SetNetworkStatus(false);
+            await EnqueueTmrOfflineAsync(cmd);
+        }
+    }
+
+    private async Task EnqueueTmrOfflineAsync(RecordFeedlotTmrCommand cmd)
+    {
+        await SyncService.InitializeAsync();
+        var enqueued = await SyncService.EnqueueOperationAsync("Nutrition", "RecordFeedlotTmr", cmd);
+        if (enqueued.IsSuccess)
+        {
+            submitFeedback = "Trato salvo offline com sucesso! Será sincronizado assim que houver conexão.";
+            recentBatches.Insert(0, new DailyFeedBatchDto(
+                Guid.NewGuid(),
+                cmd.TenantId,
+                cmd.LotId,
+                cmd.FeedRationId,
+                cmd.FeedingTime,
+                cmd.OfferedAsFedKg,
+                cmd.OfferedAsFedKg * 0.5m,
+                cmd.TroughScore,
+                cmd.HeadCountAtFeeding));
         }
     }
 

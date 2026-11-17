@@ -6,7 +6,11 @@ using CriaCerto.BuildingBlocks.Abstractions.Results;
 using CriaCerto.BuildingBlocks.Abstractions.Tenancy;
 using CriaCerto.Modules.Breeding.Application.Domain;
 using CriaCerto.Modules.Breeding.Application.Features.BreedingOps;
+using CriaCerto.Modules.Breeding.Application.Features.Plantel;
+using CriaCerto.Modules.Calving.Application.Contracts;
 using CriaCerto.Modules.Growth.Application.Contracts;
+using CriaCerto.Modules.Nutrition.Application.Features.FeedingFeatures;
+using CriaCerto.Modules.Nutrition.Application.Features.SiloStockFeatures;
 using CriaCerto.Modules.Sanitary.Application.Contracts;
 using MediatR;
 using Microsoft.AspNetCore.Builder;
@@ -217,6 +221,28 @@ public static class OfflineSyncEndpoints
 
                 return ToHttpResult(result);
             }
+
+            if (string.Equals(actionType, "RegisterCow", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(actionType, "CreateCow", StringComparison.OrdinalIgnoreCase))
+            {
+                var parsedCommand = JsonSerializer.Deserialize<CreateCowCommand>(rawBody, jsonOptions);
+                if (parsedCommand is null)
+                {
+                    return Results.BadRequest(new { Error = "Sync.InvalidPayload", Message = "Payload de cadastro de animal inválido." });
+                }
+
+                var command = parsedCommand.TenantId == Guid.Empty
+                    ? parsedCommand with { TenantId = resolvedTenantId }
+                    : parsedCommand;
+
+                var result = await sender.Send(command, cancellationToken);
+                if (result.IsFailure && result.Error.Type == ErrorType.Conflict && !isForce)
+                {
+                    return Results.Conflict(new { Error = result.Error.Code, Message = result.Error.Message });
+                }
+
+                return ToHttpResult(result);
+            }
         }
         else if (string.Equals(moduleName, "Growth", StringComparison.OrdinalIgnoreCase) &&
                  string.Equals(actionType, "RecordWeighing", StringComparison.OrdinalIgnoreCase))
@@ -239,6 +265,52 @@ public static class OfflineSyncEndpoints
 
             return ToHttpResult(result);
         }
+        else if (string.Equals(moduleName, "Calving", StringComparison.OrdinalIgnoreCase))
+        {
+            if (string.Equals(actionType, "RecordCalving", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(actionType, "RegisterCalving", StringComparison.OrdinalIgnoreCase))
+            {
+                var parsedCommand = JsonSerializer.Deserialize<RegisterCalvingCommand>(rawBody, jsonOptions);
+                if (parsedCommand is null)
+                {
+                    return Results.BadRequest(new { Error = "Sync.InvalidPayload", Message = "Payload de registro de parto inválido." });
+                }
+
+                var command = parsedCommand.TenantId == Guid.Empty
+                    ? parsedCommand with { TenantId = resolvedTenantId }
+                    : parsedCommand;
+
+                var result = await sender.Send(command, cancellationToken);
+                if (result.IsFailure && result.Error.Type == ErrorType.Conflict && !isForce)
+                {
+                    return Results.Conflict(new { Error = result.Error.Code, Message = result.Error.Message });
+                }
+
+                return ToHttpResult(result);
+            }
+
+            if (string.Equals(actionType, "RecordWeaning", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(actionType, "RegisterWeaning", StringComparison.OrdinalIgnoreCase))
+            {
+                var parsedCommand = JsonSerializer.Deserialize<RegisterWeaningCommand>(rawBody, jsonOptions);
+                if (parsedCommand is null)
+                {
+                    return Results.BadRequest(new { Error = "Sync.InvalidPayload", Message = "Payload de desmame inválido." });
+                }
+
+                var command = parsedCommand.TenantId == Guid.Empty
+                    ? parsedCommand with { TenantId = resolvedTenantId }
+                    : parsedCommand;
+
+                var result = await sender.Send(command, cancellationToken);
+                if (result.IsFailure && result.Error.Type == ErrorType.Conflict && !isForce)
+                {
+                    return Results.Conflict(new { Error = result.Error.Code, Message = result.Error.Message });
+                }
+
+                return ToHttpResult(result);
+            }
+        }
         else if (string.Equals(moduleName, "Sanitary", StringComparison.OrdinalIgnoreCase) &&
                  (string.Equals(actionType, "ApplyVaccine", StringComparison.OrdinalIgnoreCase) ||
                   string.Equals(actionType, "ApplyTreatment", StringComparison.OrdinalIgnoreCase)))
@@ -256,6 +328,71 @@ public static class OfflineSyncEndpoints
             }
 
             return ToHttpResult(result);
+        }
+        else if (string.Equals(moduleName, "Nutrition", StringComparison.OrdinalIgnoreCase))
+        {
+            if (string.Equals(actionType, "RecordFeedlotTmr", StringComparison.OrdinalIgnoreCase))
+            {
+                var parsedCommand = JsonSerializer.Deserialize<RecordFeedlotTmrCommand>(rawBody, jsonOptions);
+                if (parsedCommand is null)
+                {
+                    return Results.BadRequest(new { Error = "Sync.InvalidPayload", Message = "Payload de trato TMR inválido." });
+                }
+
+                var command = parsedCommand.TenantId == Guid.Empty
+                    ? parsedCommand with { TenantId = resolvedTenantId }
+                    : parsedCommand;
+
+                var result = await sender.Send(command, cancellationToken);
+                if (result.IsFailure && result.Error.Type == ErrorType.Conflict && !isForce)
+                {
+                    return Results.Conflict(new { Error = result.Error.Code, Message = result.Error.Message });
+                }
+
+                return ToHttpResult(result);
+            }
+
+            if (string.Equals(actionType, "RecordSupplementation", StringComparison.OrdinalIgnoreCase))
+            {
+                var parsedCommand = JsonSerializer.Deserialize<RecordSupplementationCommand>(rawBody, jsonOptions);
+                if (parsedCommand is null)
+                {
+                    return Results.BadRequest(new { Error = "Sync.InvalidPayload", Message = "Payload de suplementação inválido." });
+                }
+
+                var command = parsedCommand.TenantId == Guid.Empty
+                    ? parsedCommand with { TenantId = resolvedTenantId }
+                    : parsedCommand;
+
+                var result = await sender.Send(command, cancellationToken);
+                if (result.IsFailure && result.Error.Type == ErrorType.Conflict && !isForce)
+                {
+                    return Results.Conflict(new { Error = result.Error.Code, Message = result.Error.Message });
+                }
+
+                return ToHttpResult(result);
+            }
+
+            if (string.Equals(actionType, "RestockSilo", StringComparison.OrdinalIgnoreCase))
+            {
+                var parsedCommand = JsonSerializer.Deserialize<RestockSiloCommand>(rawBody, jsonOptions);
+                if (parsedCommand is null)
+                {
+                    return Results.BadRequest(new { Error = "Sync.InvalidPayload", Message = "Payload de reabastecimento de silo inválido." });
+                }
+
+                var command = parsedCommand.TenantId == Guid.Empty
+                    ? parsedCommand with { TenantId = resolvedTenantId }
+                    : parsedCommand;
+
+                var result = await sender.Send(command, cancellationToken);
+                if (result.IsFailure && result.Error.Type == ErrorType.Conflict && !isForce)
+                {
+                    return Results.Conflict(new { Error = result.Error.Code, Message = result.Error.Message });
+                }
+
+                return ToHttpResult(result);
+            }
         }
 
         return Results.BadRequest(new

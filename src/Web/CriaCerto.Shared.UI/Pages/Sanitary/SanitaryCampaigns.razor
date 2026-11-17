@@ -1,6 +1,7 @@
 @page "/sanitary/campaigns"
 @rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
 @attribute [Authorize]
+@implements IDisposable
 @using System.ComponentModel.DataAnnotations
 @using CriaCerto.Modules.Sanitary.Application.Domain
 @using CriaCerto.Modules.Sanitary.Application.Contracts
@@ -11,6 +12,7 @@
 @inject PlantelApiClient PlantelApi
 @inject GrowthApiClient GrowthApi
 @inject IToastService ToastService
+@inject IOfflineSyncService SyncService
 @inject AuthenticationStateProvider AuthStateProvider
 
 <PageTitle>Campanhas Sanitárias & Carência | CriaCerto</PageTitle>
@@ -32,7 +34,13 @@
             </h3>
             <p class="text-muted mb-0">Gestão de vacinações oficiais (Aftosa, Brucelose, Raiva), registro de tratamentos e bloqueio sanitário de abate.</p>
         </div>
-        <div class="d-flex flex-wrap gap-2">
+        <div class="d-flex flex-wrap gap-2 align-items-center">
+            @if (!_isOnline)
+            {
+                <span class="badge bg-warning text-dark px-3 py-2 border">
+                    <i class="bi bi-wifi-off me-1"></i> Modo Offline Ativo
+                </span>
+            }
             <button class="btn btn-outline-secondary shadow-sm" @onclick="LoadDataAsync" disabled="@_isLoading" title="Recarregar dados">
                 <i class="bi bi-arrow-clockwise me-1 @(_isLoading ? "spin" : "")"></i> Atualizar
             </button>
@@ -511,10 +519,27 @@
     private CampaignFormModel _campaignForm = new();
     private TreatmentFormModel _treatmentForm = new();
 
+    private bool _isOnline = true;
+
     protected override async Task OnInitializedAsync()
     {
+        SyncService.OnStateChanged += HandleSyncStateChanged;
+        await SyncService.InitializeAsync();
+        _isOnline = SyncService.IsOnline;
+
         await ResolveTenantAsync();
         await LoadDataAsync();
+    }
+
+    private void HandleSyncStateChanged()
+    {
+        _isOnline = SyncService.IsOnline;
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        SyncService.OnStateChanged -= HandleSyncStateChanged;
     }
 
     private async Task ResolveTenantAsync()
@@ -695,17 +720,44 @@
                 _treatmentForm.AppliedByVeterinarian,
                 _treatmentForm.Notes);
 
-            var result = await SanitaryApi.ApplyTreatmentAsync(command);
-            if (result != null)
+            if (_isOnline)
             {
-                ToastService.ShowSuccess("Tratamento registrado com sucesso!");
-                _showTreatmentModal = false;
-                await LoadDataAsync();
+                var result = await SanitaryApi.ApplyTreatmentAsync(command);
+                if (result != null)
+                {
+                    ToastService.ShowSuccess("Tratamento registrado com sucesso!");
+                    _showTreatmentModal = false;
+                    await LoadDataAsync();
+                }
+                else
+                {
+                    ToastService.ShowError("Não foi possível registrar o tratamento. Verifique os dados e tente novamente.");
+                }
             }
             else
             {
-                ToastService.ShowError("Não foi possível registrar o tratamento. Verifique os dados e tente novamente.");
+                await EnqueueTreatmentOfflineAsync(command);
             }
+        }
+        catch (HttpRequestException)
+        {
+            SyncService.SetNetworkStatus(false);
+            var animalId = _treatmentForm.TargetType == TreatmentTargetType.Animal ? _treatmentForm.AnimalId : null;
+            var lotId = _treatmentForm.TargetType == TreatmentTargetType.Lot ? _treatmentForm.LotId : null;
+
+            var command = new ApplyTreatmentCommand(
+                animalId,
+                lotId,
+                _treatmentForm.ProductCommercialName,
+                _treatmentForm.Type,
+                _treatmentForm.BatchNumber,
+                _treatmentForm.Dosage,
+                _treatmentForm.WithdrawalDays,
+                DateTime.SpecifyKind(_treatmentForm.ApplicationDate, DateTimeKind.Utc),
+                _treatmentForm.AppliedByVeterinarian,
+                _treatmentForm.Notes);
+
+            await EnqueueTreatmentOfflineAsync(command);
         }
         catch (Exception ex)
         {
@@ -714,6 +766,36 @@
         finally
         {
             _isSavingTreatment = false;
+        }
+    }
+
+    private async Task EnqueueTreatmentOfflineAsync(ApplyTreatmentCommand command)
+    {
+        await SyncService.InitializeAsync();
+        var result = await SyncService.EnqueueOperationAsync("Sanitary", "ApplyTreatment", command);
+        if (result.IsSuccess)
+        {
+            ToastService.ShowSuccess("Tratamento salvo offline com sucesso! Será sincronizado assim que a conexão retornar.");
+            _showTreatmentModal = false;
+
+            treatments.Insert(0, new TreatmentRecordDto(
+                Guid.NewGuid(),
+                command.AnimalId,
+                command.LotId,
+                command.ProductCommercialName,
+                command.Type,
+                command.BatchNumber,
+                command.Dosage,
+                command.WithdrawalDays,
+                command.ApplicationDateUtc,
+                command.ApplicationDateUtc.AddDays(command.WithdrawalDays),
+                true,
+                command.AppliedByVeterinarian,
+                command.Notes));
+        }
+        else
+        {
+            ToastService.ShowError("Falha ao salvar tratamento offline.");
         }
     }
 
