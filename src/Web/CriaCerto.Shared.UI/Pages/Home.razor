@@ -1,32 +1,32 @@
 @page "/"
 @layout EmptyLayout
-@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: true))
 @inject NavigationManager Navigation
 @inject TenancyApiClient TenancyApiClient
 
-<PageTitle>CriaCerto - Gestão Pecuária Inteligente do Pasto ao Confinamento</PageTitle>
+<PageTitle>CriaCerto - Pare de Perder Dinheiro no Escuro | Gestão Pecuária Off-line</PageTitle>
 
 <HeadContent>
-    <meta name="description" content="Plataforma SaaS pecuária de alta precisão. Manejo de curral 100% off-line (PWA), pesagens RFID SISBOV, curva de GPD, IATF e trava sanitária de carência." />
+    <meta name="description" content="Descubra onde sua fazenda perde lucro sem você perceber. Controle de GPD, curral 100% off-line (PWA), IATF, nutrição e trava sanitária de carência." />
     <meta name="keywords" content="gestão pecuária, software pecuário, curral offline, PWA curral, IATF bovino, curva de GPD, balança eletrônica gado, trava de carência sanitária, pecuária de corte, confinamento bovino, SISBOV RFID" />
     <link rel="canonical" href="https://criacerto.com.br/" />
-    
+
     <!-- Open Graph / Redes Sociais -->
-    <meta property="og:title" content="CriaCerto - Gestão Pecuária Inteligente do Pasto ao Confinamento" />
-    <meta property="og:description" content="Controle individual do rebanho, pesagens com balança eletrônica, GPD, protocolos de IATF, nutrição e trava sanitária de carência — 100% off-line no curral." />
+    <meta property="og:title" content="CriaCerto - Pare de Perder Arrobas e Lucro sem Monitoramento" />
+    <meta property="og:description" content="Identifique animais refugo, evite multas de carência no frigorífico e controle seu rebanho 100% off-line no curral." />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://criacerto.com.br/" />
     <meta property="og:site_name" content="CriaCerto Bovino SaaS" />
     <meta property="og:locale" content="pt_BR" />
     <meta property="og:image" content="https://criacerto.com.br/imgs/CriaCerto.png" />
-    
+
     <!-- Twitter Cards -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="CriaCerto - Gestão Pecuária Inteligente do Pasto ao Confinamento" />
     <meta name="twitter:description" content="Controle individual do rebanho, pesagens com balança eletrônica, GPD, IATF e trava sanitária de carência — 100% off-line no mangueiro." />
     <meta name="twitter:image" content="https://criacerto.com.br/imgs/CriaCerto.png" />
 
-    <!-- Dados Estruturados Schema.org / JSON-LD para Google e Buscadores com IA (GEO) -->
+    <!-- Dados Estruturados Schema.org / JSON-LD -->
     <script type="application/ld+json">
     {
       "@@context": "https://schema.org",
@@ -57,7 +57,7 @@
           "@@type": "Organization",
           "name": "CriaCerto",
           "url": "https://criacerto.com.br",
-          "logo": "https://criacerto.com.br/imgs/CriaCerto.png"
+          "logo": "https://criacerto.com.br/imgs/CriaCerto-logo.png"
         },
         {
           "@@type": "FAQPage",
@@ -115,7 +115,7 @@
     <header class="landing-navbar">
         <div class="landing-nav-container">
             <div class="landing-brand">
-                <img src="imgs/CriaCerto.png" alt="CriaCerto Logo" style="height: 42px; width: auto; object-fit: contain; border-radius: 6px;" />
+                <img src="imgs/CriaCerto-logo.png" alt="CriaCerto Logo" style="height: 42px; width: 42px; object-fit: contain; border-radius: 6px;" />
                 <div class="brand-text">
                     <span class="brand-title">CriaCerto</span>
                     <span class="brand-subtitle">BOVINO SaaS</span>
@@ -123,9 +123,9 @@
             </div>
 
             <nav class="landing-nav-links">
-                <a href="#recursos" class="nav-item">Recursos</a>
+                <a href="#recursos" class="nav-item">Na Prática</a>
+                <a href="#diferenciais" class="nav-item">Antes vs. Depois</a>
                 <a href="#modulos" class="nav-item">Módulos</a>
-                <a href="#diferenciais" class="nav-item">Diferenciais</a>
                 <a href="#planos" class="nav-item">Preços & Simulador</a>
                 <a href="#faq" class="nav-item">Dúvidas</a>
             </nav>
@@ -133,10 +133,10 @@
             <div class="landing-nav-actions">
                 <a href="/login" class="cc-btn cc-btn-outline nav-btn-login">Entrar</a>
                 <a href="/register" class="cc-btn cc-btn-primary nav-btn-register">
-                    <span>Experimentar Grátis</span>
+                    <span>Testar Grátis</span>
                     <span class="material-symbols-outlined icon-sm">arrow_forward</span>
                 </a>
-                <button class="landing-menu-toggle" @onclick="ToggleMobileMenu" aria-label="Abrir menu de navegação">
+                <button type="button" class="landing-menu-toggle" @onclick="ToggleMobileMenu" aria-label="Abrir menu de navegação">
                     <span class="material-symbols-outlined">@(_isMobileMenuOpen ? "close" : "menu")</span>
                 </button>
             </div>
@@ -145,12 +145,12 @@
 
     <!-- Mobile Drawer Navigation -->
     <div class="landing-mobile-drawer @(_isMobileMenuOpen ? "open" : "")">
-        <a href="#recursos" class="mobile-nav-link" @onclick="CloseMobileMenu">Recursos</a>
+        <a href="#recursos" class="mobile-nav-link" @onclick="CloseMobileMenu">Veja na Prática</a>
+        <a href="#diferenciais" class="mobile-nav-link" @onclick="CloseMobileMenu">Antes vs. Depois</a>
         <a href="#modulos" class="mobile-nav-link" @onclick="CloseMobileMenu">Módulos</a>
-        <a href="#diferenciais" class="mobile-nav-link" @onclick="CloseMobileMenu">Diferenciais</a>
         <a href="#planos" class="mobile-nav-link" @onclick="CloseMobileMenu">Preços & Simulador</a>
         <a href="#faq" class="mobile-nav-link" @onclick="CloseMobileMenu">Dúvidas Frequentes</a>
-        
+
         <div class="mobile-drawer-actions">
             <a href="/register" class="cc-btn cc-btn-primary" @onclick="CloseMobileMenu">
                 <span>Criar Conta Gratuita (30 Dias)</span>
@@ -166,27 +166,32 @@
         <div class="hero-container">
             <div class="hero-content">
                 <div class="hero-badge">
-                    <span class="material-symbols-outlined text-emerald-400">wifi_off</span>
-                    <span>100% Funcional Off-line no Curral & Pasto (PWA)</span>
+                    <span class="material-symbols-outlined text-emerald-400">visibility</span>
+                    <span>Pare de perder margem no escuro • 100% Off-line no Curral</span>
                 </div>
                 <h1 class="hero-title">
-                    Gestão Pecuária Inteligente: <br />
-                    <span class="hero-highlight">Do Pasto ao Confinamento</span>
+                    Quanto dinheiro sua fazenda perde hoje <span class="hero-highlight">sem você perceber?</span>
                 </h1>
                 <p class="hero-description">
-                    Controle individual do rebanho, pesagens com balança eletrônica, GPD, protocolos de IATF, 
-                    suplementação e trava sanitária de carência — tudo na palma da mão, mesmo sem sinal de internet no mangueiro.
+                    Animais refugo comendo ração sem ganhar peso, matrizes falhando na IATF, caderno de curral perdido e lotes barrados por carência sanitária drenam seu lucro em silêncio.
+                    Assuma o controle individual do rebanho <strong>mesmo sem sinal de internet no mangueiro</strong>.
                 </p>
 
                 <div class="hero-cta-group">
                     <a href="/register" class="cc-btn cc-btn-primary hero-btn-main">
-                        <span>Iniciar Teste Grátis de 30 Dias</span>
+                        <span>Estancar Perdas — 30 Dias Grátis</span>
                         <span class="material-symbols-outlined">rocket_launch</span>
                     </a>
-                    <a href="#modulos" class="cc-btn hero-btn-sec">
-                        <span>Conhecer Módulos</span>
-                        <span class="material-symbols-outlined">expand_more</span>
+                    <a href="https://wa.me/5575991897068?text=Ol%C3%A1%2C%20quero%20ver%20como%20o%20CriaCerto%20evita%20perdas%20na%20minha%20fazenda" target="_blank" rel="noopener noreferrer" class="cc-btn hero-btn-sec">
+                        <span>Falar com Especialista</span>
+                        <span class="material-symbols-outlined">chat</span>
                     </a>
+                </div>
+
+                <div class="hero-micro-trust font-mono">
+                    <span><span class="material-symbols-outlined icon-sm">check_circle</span> Sem cartão de crédito</span>
+                    <span><span class="material-symbols-outlined icon-sm">check_circle</span> Até 500 cabeças no teste</span>
+                    <span><span class="material-symbols-outlined icon-sm">check_circle</span> Importa seu Excel em 2 min</span>
                 </div>
 
                 <div class="hero-metrics-row">
@@ -197,133 +202,369 @@
                     <div class="metric-divider"></div>
                     <div class="metric-pill">
                         <span class="metric-value">60%</span>
-                        <span class="metric-label">Economia de Tempo no Curral</span>
+                        <span class="metric-label">Menos Tempo no Curral</span>
                     </div>
                     <div class="metric-divider"></div>
                     <div class="metric-pill">
-                        <span class="metric-value">100%</span>
-                        <span class="metric-label">Segurança Sanitária para Abate</span>
+                        <span class="metric-value">Zero</span>
+                        <span class="metric-label">Multas por Carência</span>
                     </div>
                 </div>
             </div>
 
+            <!-- Interactive Hero Monitor Widget -->
             <div class="hero-visual-card">
-                <div class="glass-card-header">
-                    <div class="card-status-dot"></div>
-                    <span class="font-mono text-xs text-emerald-300">CURRAL PWA OFFLINE ACTIVE</span>
-                </div>
-                <div class="hero-card-preview">
-                    <div class="preview-metric-box">
-                        <span class="preview-label">Lote Engorda BR-163</span>
-                        <span class="preview-val">420 Cabeças</span>
-                        <div class="preview-tag-chip">GPD Média: 1,280 kg/dia</div>
+                <div class="glass-card-header" style="justify-content: space-between; flex-wrap: wrap;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <div class="card-status-dot"></div>
+                        <span class="font-mono text-xs text-emerald-300">RAIO-X DO REBANHO (AO VIVO)</span>
                     </div>
-                    <div class="preview-mini-chart">
-                        <div class="chart-bar" style="height: 45%;"></div>
-                        <div class="chart-bar" style="height: 60%;"></div>
-                        <div class="chart-bar" style="height: 75%;"></div>
-                        <div class="chart-bar active" style="height: 90%;"></div>
-                    </div>
-                    <div class="preview-alert-box">
-                        <span class="material-symbols-outlined text-amber-400">verified_user</span>
-                        <span>Trava de Carência Medicamentosa Ativa</span>
+                    <div class="hero-widget-tabs">
+                        <button type="button" class="hero-tab-btn @(_heroWidgetTab == 0 ? "active" : "")" @onclick="() => _heroWidgetTab = 0">Perdas</button>
+                        <button type="button" class="hero-tab-btn @(_heroWidgetTab == 1 ? "active" : "")" @onclick="() => _heroWidgetTab = 1">Curral</button>
+                        <button type="button" class="hero-tab-btn @(_heroWidgetTab == 2 ? "active" : "")" @onclick="() => _heroWidgetTab = 2">Abate</button>
                     </div>
                 </div>
+
+                @if (_heroWidgetTab == 0)
+                {
+                    <div class="hero-card-preview">
+                        <div class="preview-metric-box">
+                            <span class="preview-label">Ralo Invisível Detectado • Lote 04</span>
+                            <span class="preview-val">18 Bois Refugo</span>
+                            <div class="preview-tag-chip hero-chip-warn">GPD abaixo de 0,38 kg/dia (-R$ 4.320/mês)</div>
+                        </div>
+                        <div class="preview-mini-chart">
+                            <div class="chart-bar" style="height: 38%;" title="Animais Abaixo da Meta"></div>
+                            <div class="chart-bar" style="height: 55%;"></div>
+                            <div class="chart-bar" style="height: 76%;"></div>
+                            <div class="chart-bar active" style="height: 94%;"></div>
+                        </div>
+                        <div class="preview-alert-box">
+                            <span class="material-symbols-outlined text-amber-400">lightbulb</span>
+                            <span>Ação sugerida: Apartar lote para descarte ou ajuste de dieta</span>
+                        </div>
+                    </div>
+                }
+                else if (_heroWidgetTab == 1)
+                {
+                    <div class="hero-card-preview">
+                        <div class="preview-metric-box">
+                            <span class="preview-label">Mangueiro Sede • Modo Off-line Ativo</span>
+                            <span class="preview-val">Brinco #4092 • 486 kg</span>
+                            <div class="preview-tag-chip">GPD: +1,42 kg/dia • +18 kg em 12 dias</div>
+                        </div>
+                        <div class="hero-mini-list font-mono">
+                            <div class="mini-list-row"><span>#4091 (Nelore)</span><span class="text-emerald-300">502 kg • +1,35/dia</span></div>
+                            <div class="mini-list-row"><span>#4092 (Nelore)</span><span class="text-emerald-300">486 kg • +1,42/dia</span></div>
+                            <div class="mini-list-row"><span>#4093 (Cruzado)</span><span class="text-amber-300">398 kg • +0,41/dia</span></div>
+                        </div>
+                        <div class="preview-alert-box" style="background: rgba(74, 222, 128, 0.14); border-color: rgba(74, 222, 128, 0.35); color: #dcfce7;">
+                            <span class="material-symbols-outlined text-emerald-400">cloud_done</span>
+                            <span>142 pesagens salvas localmente • Sincroniza ao voltar à sede</span>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="hero-card-preview">
+                        <div class="preview-metric-box">
+                            <span class="preview-label">Lote Embarque Frigorífico • 60 Cab.</span>
+                            <span class="preview-val">58 Liberados / 2 Travados</span>
+                            <div class="preview-tag-chip hero-chip-danger">Bloqueio Automático de Carência Ativo</div>
+                        </div>
+                        <div class="hero-mini-list font-mono">
+                            <div class="mini-list-row"><span>Brinco #2104</span><span class="text-amber-300">Carência até 29/11 (7d)</span></div>
+                            <div class="mini-list-row"><span>Brinco #2188</span><span class="text-amber-300">Carência até 03/12 (11d)</span></div>
+                        </div>
+                        <div class="preview-alert-box">
+                            <span class="material-symbols-outlined text-amber-400">verified_user</span>
+                            <span>Economia estimada de R$ 18.500 evitando devolução de carga</span>
+                        </div>
+                    </div>
+                }
             </div>
         </div>
     </section>
 
-    <!-- Core Features Section (Bento Grid) -->
-    <section id="recursos" class="landing-features">
-        <div class="features-header text-center">
-            <span class="section-tag font-mono">PILARES ZOOTÉCNICOS</span>
-            <h2 class="section-title">Tudo o que sua fazenda precisa para maximizar a arroba (@@)</h2>
-            <p class="section-subtitle">Tecnologia desenvolvida sob medida para a realidade do produtor de corte, cria, recria e confinamento do Brasil.</p>
+    <!-- Trust & Compatibility Strip -->
+    <section class="trust-strip">
+        <div class="trust-strip-container font-mono">
+            <div class="trust-item">
+                <span class="material-symbols-outlined">wifi_off</span>
+                <span>PWA Off-line no Curral</span>
+            </div>
+            <div class="trust-item">
+                <span class="material-symbols-outlined">qr_code_scanner</span>
+                <span>Balanças & Leitor RFID SISBOV</span>
+            </div>
+            <div class="trust-item">
+                <span class="material-symbols-outlined">table_view</span>
+                <span>Importação Excel / CSV</span>
+            </div>
+            <div class="trust-item">
+                <span class="material-symbols-outlined">shield_lock</span>
+                <span>Conformidade LGPD</span>
+            </div>
         </div>
+    </section>
 
-        <div class="bento-grid">
-            <!-- Bento Box 1: PWA Offline -->
-            <div class="bento-card bento-wide">
-                <div class="bento-icon-box text-emerald-600 bg-emerald-50">
-                    <span class="material-symbols-outlined">signal_wifi_off</span>
-                </div>
-                <div class="bento-body">
-                    <span class="bento-badge">PWA Field Technology</span>
-                    <h3>Curral & Pasto 100% Off-line</h3>
-                    <p>
-                        Opere no manejo de curral ou pasto distante sem depender de conexão de celular ou Wi-Fi. 
-                        Todas as pesagens, vacinações e manejos reprodutivos são armazenados localmente e sincronizados 
-                        automaticamente ao retornar à sede.
-                    </p>
-                </div>
+    <!-- Interactive Product Showcase Section -->
+    <section id="recursos" class="landing-showcase">
+        <div class="showcase-container">
+            <div class="features-header text-center">
+                <span class="section-tag font-mono">VEJA NA PRÁTICA</span>
+                <h2 class="section-title">Como o CriaCerto enxerga o que a planilha esconde</h2>
+                <p class="section-subtitle">Clique nas abas abaixo e explore as telas reais de operação do campo ao escritório.</p>
             </div>
 
-            <!-- Bento Box 2: Reprodução & IATF -->
-            <div class="bento-card">
-                <div class="bento-icon-box text-rose-600 bg-rose-50 d-flex align-items-center justify-content-center">
-                    <BovineIcon Size="28" />
-                </div>
-                <div class="bento-body">
-                    <h3>Matrizes & IATF</h3>
-                    <p>
-                        Controle completo do rebanho reprodutivo, protocolos de IATF, diagnóstico de gestação 
-                        e acompanhamento do Intervalo Entre Partos (IEP).
-                    </p>
-                </div>
-            </div>
-
-            <!-- Bento Box 3: Pesagem & Balança -->
-            <div class="bento-card">
-                <div class="bento-icon-box text-blue-600 bg-blue-50">
+            <div class="product-showcase-tabs">
+                <button type="button" class="showcase-tab-btn @(_activeShowcaseTab == 0 ? "active" : "")" @onclick="() => _activeShowcaseTab = 0">
                     <span class="material-symbols-outlined">scale</span>
-                </div>
-                <div class="bento-body">
-                    <h3>Pesagem & Curva de GPD</h3>
-                    <p>
-                        Entrada rápida por brinco SISBOV / Eletrônico RFID, acompanhamento de Ganho de Peso Diário (kg/dia e @@) 
-                        e alertas automáticos para animais com perda de peso.
-                    </p>
-                </div>
-            </div>
-
-            <!-- Bento Box 4: Nutrição & Confinamento -->
-            <div class="bento-card">
-                <div class="bento-icon-box text-amber-600 bg-amber-50">
+                    <span>Curral & Balança Off-line</span>
+                </button>
+                <button type="button" class="showcase-tab-btn @(_activeShowcaseTab == 1 ? "active" : "")" @onclick="() => _activeShowcaseTab = 1">
+                    <span class="material-symbols-outlined">favorite</span>
+                    <span>Reprodução & IATF</span>
+                </button>
+                <button type="button" class="showcase-tab-btn @(_activeShowcaseTab == 2 ? "active" : "")" @onclick="() => _activeShowcaseTab = 2">
                     <span class="material-symbols-outlined">set_meal</span>
-                </div>
-                <div class="bento-body">
-                    <h3>Nutrição & Custo por Arroba</h3>
-                    <p>
-                        Registro de trato total (TMR) em confinamento, suplementação mineral em pasto, estoque de silos 
-                        e indicador em tempo real de custo por @@ produzida.
-                    </p>
-                </div>
+                    <span>Nutrição & Custo por @@</span>
+                </button>
+                <button type="button" class="showcase-tab-btn @(_activeShowcaseTab == 3 ? "active" : "")" @onclick="() => _activeShowcaseTab = 3">
+                    <span class="material-symbols-outlined">vaccines</span>
+                    <span>Sanidade & Trava de Abate</span>
+                </button>
             </div>
 
-            <!-- Bento Box 5: Sanidade & Carência -->
-            <div class="bento-card bento-wide">
-                <div class="bento-icon-box text-purple-600 bg-purple-50">
-                    <span class="material-symbols-outlined">vaccines</span>
-                </div>
-                <div class="bento-body">
-                    <span class="bento-badge">Sanitary Safety</span>
-                    <h3>Segurança Sanitária & Trava de Abate</h3>
-                    <p>
-                        Controle estrito de campanhas vacinais obrigatórias (Febre Aftosa, Brucelose) e trava sanitária 
-                        automática impedindo a venda ou loteamento para abate de animais sob carência medicamentosa.
-                    </p>
-                </div>
+            <div class="showcase-panel">
+                @if (_activeShowcaseTab == 0)
+                {
+                    <div class="showcase-grid">
+                        <div class="showcase-copy">
+                            <span class="bento-badge">CURRAL PWA OFFLINE</span>
+                            <h3>Pesagem ultrarrápida e detecção automática de refugo</h3>
+                            <p>
+                                O vaqueiro bipou o RFID ou digitou o brinco: o sistema já calcula o GPD na hora, compara com o lote e avisa quais animais estão dando prejuízo no cocho — tudo sem precisar de sinal 4G.
+                            </p>
+                            <ul class="showcase-bullets">
+                                <li><span class="material-symbols-outlined">check_circle</span> Leitura contínua via balança eletrônica e bastão RFID</li>
+                                <li><span class="material-symbols-outlined">check_circle</span> Alerta visual imediato de queda de GPD na entrada do tronco</li>
+                                <li><span class="material-symbols-outlined">check_circle</span> Sincronização automática em segundo plano ao voltar à sede</li>
+                            </ul>
+                            <a href="/register" class="cc-btn cc-btn-primary showcase-cta">
+                                <span>Testar Tela de Curral Grátis</span>
+                                <span class="material-symbols-outlined icon-sm">arrow_forward</span>
+                            </a>
+                        </div>
+                        <div class="showcase-mockup">
+                            <div class="mockup-window">
+                                <div class="mockup-topbar font-mono">
+                                    <span>CURRAL RÁPIDO • LOTE ENGORDA 02</span>
+                                    <span class="mockup-pill-offline">OFF-LINE PRONTO</span>
+                                </div>
+                                <div class="mockup-body">
+                                    <div class="mockup-kpi-row">
+                                        <div class="mockup-kpi">
+                                            <small>Pesados Hoje</small>
+                                            <strong>@_mockWeighedCount cab.</strong>
+                                        </div>
+                                        <div class="mockup-kpi">
+                                            <small>GPD Médio Lote</small>
+                                            <strong style="color: #16a34a;">1,24 kg/d</strong>
+                                        </div>
+                                        <div class="mockup-kpi">
+                                            <small>Refugos Alertados</small>
+                                            <strong style="color: #dc2626;">3 cab.</strong>
+                                        </div>
+                                    </div>
+                                    <div class="mockup-action-bar">
+                                        <span>Simule uma pesagem no tronco:</span>
+                                        <button type="button" class="mockup-sim-btn font-mono" @onclick="SimulateWeighing">
+                                            <span class="material-symbols-outlined icon-sm">add</span>
+                                            Registrar +1 Pesagem (RFID)
+                                        </button>
+                                    </div>
+                                    <div class="mockup-table font-mono">
+                                        <div class="mockup-row mockup-row-head">
+                                            <span>Brinco</span><span>Peso Atual</span><span>GPD</span><span>Status</span>
+                                        </div>
+                                        <div class="mockup-row">
+                                            <span>#7812</span><span>494 kg</span><span style="color:#16a34a;">+1,38</span><span class="tag-ok">Meta OK</span>
+                                        </div>
+                                        <div class="mockup-row">
+                                            <span>#7815</span><span>412 kg</span><span style="color:#dc2626;">+0,32</span><span class="tag-warn">Apartar</span>
+                                        </div>
+                                        <div class="mockup-row">
+                                            <span>#7819</span><span>510 kg</span><span style="color:#16a34a;">+1,45</span><span class="tag-ok">Pronto Abate</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+                else if (_activeShowcaseTab == 1)
+                {
+                    <div class="showcase-grid">
+                        <div class="showcase-copy">
+                            <span class="bento-badge">CRIA & IATF</span>
+                            <h3>Não perca mais cio nem deixe matriz vazia comendo pasto</h3>
+                            <p>
+                                Gerencie protocolos D0, D8 e D11 com alertas automáticos de manejo, acompanhe a eficiência por touro/inseminador e enxergue o Intervalo Entre Partos (IEP) real do plantel.
+                            </p>
+                            <ul class="showcase-bullets">
+                                <li><span class="material-symbols-outlined">check_circle</span> Agenda automática de D0, D8, D11 e Diagnóstico (DG)</li>
+                                <li><span class="material-symbols-outlined">check_circle</span> Ranking de taxa de prenhez por touro e partida de sêmen</li>
+                                <li><span class="material-symbols-outlined">check_circle</span> Histórico completo de crias e peso ajustado ao desmame</li>
+                            </ul>
+                            <a href="/register?preset=cria" class="cc-btn cc-btn-primary showcase-cta">
+                                <span>Testar Módulo de Cria Grátis</span>
+                                <span class="material-symbols-outlined icon-sm">arrow_forward</span>
+                            </a>
+                        </div>
+                        <div class="showcase-mockup">
+                            <div class="mockup-window">
+                                <div class="mockup-topbar font-mono">
+                                    <span>ESTAÇÃO DE MONTA 2026 • LOTE MATRIZES A</span>
+                                    <span class="mockup-pill-ok">PRENHEZ: 64,8%</span>
+                                </div>
+                                <div class="mockup-body">
+                                    <div class="mockup-kpi-row">
+                                        <div class="mockup-kpi"><small>Protocoladas</small><strong>420</strong></div>
+                                        <div class="mockup-kpi"><small>Prenhas (DG)</small><strong style="color:#16a34a;">272</strong></div>
+                                        <div class="mockup-kpi"><small>Vazias (Ressinc.)</small><strong style="color:#d97706;">148</strong></div>
+                                    </div>
+                                    <div class="mockup-table font-mono">
+                                        <div class="mockup-row mockup-row-head">
+                                            <span>Etapa</span><span>Data</span><span>Matrizes</span><span>Ação</span>
+                                        </div>
+                                        <div class="mockup-row">
+                                            <span>D0 (Implante)</span><span>10/11</span><span>140 cab.</span><span class="tag-ok">Concluído</span>
+                                        </div>
+                                        <div class="mockup-row">
+                                            <span>D8 (Retirada)</span><span>18/11</span><span>140 cab.</span><span class="tag-ok">Concluído</span>
+                                        </div>
+                                        <div class="mockup-row">
+                                            <span>D10 (IA)</span><span>Hoje</span><span>140 cab.</span><span class="tag-warn">Em Campo</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+                else if (_activeShowcaseTab == 2)
+                {
+                    <div class="showcase-grid">
+                        <div class="showcase-copy">
+                            <span class="bento-badge">NUTRIÇÃO & COCHO</span>
+                            <h3>Saiba quanto custa cada arroba produzida antes de fechar o mês</h3>
+                            <p>
+                                Controle leitura de cocho matinal e vespertina, consumo de matéria seca, estoque de silos e o custo diário por cabeça para proteger sua margem na engorda.
+                            </p>
+                            <ul class="showcase-bullets">
+                                <li><span class="material-symbols-outlined">check_circle</span> Leitura de cocho com ajuste automático de batida (TMR)</li>
+                                <li><span class="material-symbols-outlined">check_circle</span> Custo por @@ produzida calculado em tempo real</li>
+                                <li><span class="material-symbols-outlined">check_circle</span> Alerta de sobra/falta e previsão de estoque de insumos</li>
+                            </ul>
+                            <a href="/register?preset=engorda" class="cc-btn cc-btn-primary showcase-cta">
+                                <span>Calcular Meu Custo por @@</span>
+                                <span class="material-symbols-outlined icon-sm">arrow_forward</span>
+                            </a>
+                        </div>
+                        <div class="showcase-mockup">
+                            <div class="mockup-window">
+                                <div class="mockup-topbar font-mono">
+                                    <span>LEITURA DE COCHO & TMR • CONFINAMENTO</span>
+                                    <span class="mockup-pill-ok">MARGEM POSITIVA</span>
+                                </div>
+                                <div class="mockup-body">
+                                    <div class="mockup-kpi-row">
+                                        <div class="mockup-kpi"><small>Custo / Cab / Dia</small><strong>R$ 11,40</strong></div>
+                                        <div class="mockup-kpi"><small>Custo por @@</small><strong style="color:#16a34a;">R$ 198,50</strong></div>
+                                        <div class="mockup-kpi"><small>Margem Est./Cab</small><strong style="color:#005323;">+R$ 680</strong></div>
+                                    </div>
+                                    <div class="mockup-table font-mono">
+                                        <div class="mockup-row mockup-row-head">
+                                            <span>Curral</span><span>Nota Cocho</span><span>Ajuste</span><span>Trato</span>
+                                        </div>
+                                        <div class="mockup-row">
+                                            <span>Piquete 01</span><span>0 (Limpo)</span><span style="color:#16a34a;">+5%</span><span class="tag-ok">2.450 kg</span>
+                                        </div>
+                                        <div class="mockup-row">
+                                            <span>Piquete 02</span><span>1 (Farelo)</span><span>Manter</span><span class="tag-ok">2.100 kg</span>
+                                        </div>
+                                        <div class="mockup-row">
+                                            <span>Piquete 03</span><span>3 (Sobra)</span><span style="color:#dc2626;">-10%</span><span class="tag-warn">1.800 kg</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="showcase-grid">
+                        <div class="showcase-copy">
+                            <span class="bento-badge">BLINDAGEM SANITÁRIA</span>
+                            <h3>Bloqueio automático que impede prejuízo na balança do frigorífico</h3>
+                            <p>
+                                Aplicou vermífugo ou antibiótico? O CriaCerto trava automaticamente o animal durante todo o período de carência e impede sua inclusão em lotes de abate ou emissão de GTA.
+                            </p>
+                            <ul class="showcase-bullets">
+                                <li><span class="material-symbols-outlined">check_circle</span> Trava sanitária automática por princípio ativo e lote</li>
+                                <li><span class="material-symbols-outlined">check_circle</span> Calendário de campanhas obrigatórias (Aftosa, Brucelose)</li>
+                                <li><span class="material-symbols-outlined">check_circle</span> Rastreabilidade sanitária individual para auditorias</li>
+                            </ul>
+                            <a href="/register?preset=engorda" class="cc-btn cc-btn-primary showcase-cta">
+                                <span>Proteger Meu Embarque Agora</span>
+                                <span class="material-symbols-outlined icon-sm">arrow_forward</span>
+                            </a>
+                        </div>
+                        <div class="showcase-mockup">
+                            <div class="mockup-window">
+                                <div class="mockup-topbar font-mono">
+                                    <span>TRAVA SANITÁRIA • PRÉ-EMBARQUE</span>
+                                    <span class="mockup-pill-warn">2 BLOQUEIOS</span>
+                                </div>
+                                <div class="mockup-body">
+                                    <div class="mockup-kpi-row">
+                                        <div class="mockup-kpi"><small>Aptos Abate</small><strong style="color:#16a34a;">118 cab.</strong></div>
+                                        <div class="mockup-kpi"><small>Em Carência</small><strong style="color:#dc2626;">2 cab.</strong></div>
+                                        <div class="mockup-kpi"><small>Risco Evitado</small><strong>R$ 18.5k</strong></div>
+                                    </div>
+                                    <div class="mockup-table font-mono">
+                                        <div class="mockup-row mockup-row-head">
+                                            <span>Brinco</span><span>Protocolo</span><span>Liberação</span><span>Trava</span>
+                                        </div>
+                                        <div class="mockup-row">
+                                            <span>#3011</span><span>Doramectina 1%</span><span>04/12</span><span class="tag-warn">Bloqueado</span>
+                                        </div>
+                                        <div class="mockup-row">
+                                            <span>#3044</span><span>Oxitetraciclina</span><span>29/11</span><span class="tag-warn">Bloqueado</span>
+                                        </div>
+                                        <div class="mockup-row">
+                                            <span>#3050</span><span>Aftosa</span><span>Livre</span><span class="tag-ok">Liberado</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
             </div>
         </div>
     </section>
 
-    <!-- Modules Section -->
+    <!-- Compact Modules Grid -->
     <section id="modulos" class="landing-modules">
         <div class="modules-container">
             <div class="features-header text-center">
                 <span class="section-tag font-mono">ARQUITETURA MODULAR</span>
-                <h2 class="section-title">Módulos Especializados para cada Etapa do Rebanho</h2>
-                <p class="section-subtitle">Ative apenas o que a sua operação necessita, com integração nativa entre módulos.</p>
+                <h2 class="section-title">Ative só o que a sua fazenda precisa</h2>
+                <p class="section-subtitle">Todos os módulos conversam entre si automaticamente, sem retrabalho.</p>
             </div>
 
             <div class="modules-grid">
@@ -333,12 +574,7 @@
                     </div>
                     <div class="module-header">
                         <h3>Manejo de Curral & Balança</h3>
-                        <p>Leitura por RFID/SISBOV, registro ágil de pesagens, classificação em lotes e exportação para relatórios oficiais.</p>
-                    </div>
-                    <div class="module-tags">
-                        <span class="module-chip">Balança Eletrônica</span>
-                        <span class="module-chip">Leitor RFID</span>
-                        <span class="module-chip">Curva de GPD</span>
+                        <p>Leitura RFID/SISBOV, registro ágil de pesagens off-line, apartação e curva de GPD.</p>
                     </div>
                 </div>
 
@@ -348,12 +584,7 @@
                     </div>
                     <div class="module-header">
                         <h3>Reprodução & IATF</h3>
-                        <p>Gestão de estações de monta, protocolos D0/D8/D11, controle de doses de sêmen por touro e diagnóstico ultrassonográfico precoce.</p>
-                    </div>
-                    <div class="module-tags">
-                        <span class="module-chip">Protocolos IATF</span>
-                        <span class="module-chip">Estoque de Sêmen</span>
-                        <span class="module-chip">Taxa de Prenhez</span>
+                        <p>Estações de monta, protocolos D0/D8/D11, estoque de sêmen e taxa de prenhez por touro.</p>
                     </div>
                 </div>
 
@@ -363,12 +594,7 @@
                     </div>
                     <div class="module-header">
                         <h3>Partos & Bezerreiro</h3>
-                        <p>Acompanhamento de maternidade, avaliação de vigor ao nascer, controle de colostragem e desmame com peso ajustado.</p>
-                    </div>
-                    <div class="module-tags">
-                        <span class="module-chip">Vigor Neonatal</span>
-                        <span class="module-chip">Colostragem</span>
-                        <span class="module-chip">Mortalidade Pré-desmame</span>
+                        <p>Maternidade, vigor neonatal, colostragem e acompanhamento de peso ao desmame.</p>
                     </div>
                 </div>
 
@@ -378,12 +604,7 @@
                     </div>
                     <div class="module-header">
                         <h3>Nutrição & Confinamento</h3>
-                        <p>Controle de vagão forrageiro, leitura de cocho matinal/vespertina, consumo de matéria seca e inventário de grãos em silos.</p>
-                    </div>
-                    <div class="module-tags">
-                        <span class="module-chip">Leitura de Cocho</span>
-                        <span class="module-chip">TMR / Trato</span>
-                        <span class="module-chip">Estoque de Silo</span>
+                        <p>Leitura de cocho, trato total (TMR), consumo de matéria seca e estoque de silos.</p>
                     </div>
                 </div>
 
@@ -393,12 +614,7 @@
                     </div>
                     <div class="module-header">
                         <h3>Sanidade & Bloqueio de Abate</h3>
-                        <p>Calendário de vacinação oficial, controle de lote de vermífugos/antibióticos e bloqueio automático de emissão de GTA para carcaça em carência.</p>
-                    </div>
-                    <div class="module-tags">
-                        <span class="module-chip">Trava de Carência</span>
-                        <span class="module-chip">Campanhas Oficiais</span>
-                        <span class="module-chip">Emissão GTA</span>
+                        <p>Calendário vacinal e trava automática de carência medicamentosa antes da venda.</p>
                     </div>
                 </div>
 
@@ -407,67 +623,67 @@
                         <span class="material-symbols-outlined">query_stats</span>
                     </div>
                     <div class="module-header">
-                        <h3>Analytics & Zootecnia</h3>
-                        <p>Dashboards executivos com evolução zootécnica, custo por @@ engordada, ponto de equilíbrio e projeção de faturamento do lote.</p>
-                    </div>
-                    <div class="module-tags">
-                        <span class="module-chip">Custo por @@</span>
-                        <span class="module-chip">Conversão Alimentar</span>
-                        <span class="module-chip">DRE Zootécnico</span>
+                        <h3>Analytics & Lucro por @@</h3>
+                        <p>Custo por arroba produzida, conversão alimentar, DRE zootécnico e projeção de receita.</p>
                     </div>
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- Strategic Differentials Section -->
+    <!-- Before vs After + 3 Steps Section -->
     <section id="diferenciais" class="landing-differentials">
         <div class="differentials-container">
             <div class="features-header text-center">
-                <span class="section-tag font-mono">POR QUE O CRIACERTO</span>
-                <h2 class="section-title">Projetado por quem conhece a poeira e o ritmo do curral</h2>
-                <p class="section-subtitle">Diferenciais técnicos e práticos que eliminam pranchetas de papel e retrabalho na fazenda.</p>
+                <span class="section-tag font-mono">DO CADERNO AO LUCRO REAL</span>
+                <h2 class="section-title">A diferença entre gerenciar no escuro e ter controle total</h2>
+                <p class="section-subtitle">Veja o que muda na rotina da sua fazenda já na primeira semana de uso.</p>
             </div>
 
-            <div class="differentials-grid">
-                <div class="diff-card">
-                    <div class="diff-icon-box">
-                        <span class="material-symbols-outlined">signal_wifi_off</span>
-                    </div>
-                    <div class="diff-content">
-                        <h3>PWA Offline-First de Verdade</h3>
-                        <p>Nada de telas travadas por falta de sinal 4G. Os dados ficam salvos localmente no navegador do celular ou tablet e sincronizam em segundo plano quando houver conexão.</p>
-                    </div>
+            <div class="comparison-grid">
+                <div class="comparison-card comparison-card--before">
+                    <div class="comparison-badge font-mono">SEM MONITORAMENTO (PLANILHA & CADERNO)</div>
+                    <h3>Onde o dinheiro escorre sem você ver</h3>
+                    <ul>
+                        <li><span class="material-symbols-outlined">close</span> Bois de baixo GPD comendo ração por meses sem alerta</li>
+                        <li><span class="material-symbols-outlined">close</span> Anotações no papel que viram digitação dobrada no Excel</li>
+                        <li><span class="material-symbols-outlined">close</span> Risco de embarcar animal em carência e levar multa/desconto</li>
+                        <li><span class="material-symbols-outlined">close</span> Só descobre o prejuízo da safra meses depois, na venda</li>
+                    </ul>
                 </div>
 
-                <div class="diff-card">
-                    <div class="diff-icon-box">
-                        <span class="material-symbols-outlined">security</span>
-                    </div>
-                    <div class="diff-content">
-                        <h3>Blindagem Sanitária no Embarque</h3>
-                        <p>Evite prejuízos milionários e multas de frigoríficos. O sistema bloqueia automaticamente qualquer animal sob período de carência que for adicionado a um lote de venda.</p>
-                    </div>
+                <div class="comparison-card comparison-card--after">
+                    <div class="comparison-badge font-mono">COM O CRIACERTO (CAMPO + SEDE)</div>
+                    <h3>Cada cabeça monitorada gerando margem</h3>
+                    <ul>
+                        <li><span class="material-symbols-outlined">check</span> Alerta imediato no curral para animais abaixo da meta de GPD</li>
+                        <li><span class="material-symbols-outlined">check</span> Lançamento 100% off-line no celular/tablet com sincronia automática</li>
+                        <li><span class="material-symbols-outlined">check</span> Trava sanitária automática que blinda seu embarque para o frigorífico</li>
+                        <li><span class="material-symbols-outlined">check</span> Custo por @@ e projeção de faturamento atualizados em tempo real</li>
+                    </ul>
                 </div>
+            </div>
 
-                <div class="diff-card">
-                    <div class="diff-icon-box">
-                        <span class="material-symbols-outlined">trending_up</span>
-                    </div>
-                    <div class="diff-content">
-                        <h3>Foco Real no Lucro por Cabeça</h3>
-                        <p>Monitore o ganho médio diário (GPD) individualmente. Descubra rapidamente animais refugos ou de baixa conversão antes que consumam seu lucro em silagem e pasto.</p>
-                    </div>
+            <div class="steps-header text-center" style="margin-top: 4rem;">
+                <span class="section-tag font-mono">COMECE EM MINUTOS</span>
+                <h3 class="steps-title">3 passos simples para rodar na sua fazenda hoje</h3>
+            </div>
+
+            <div class="steps-grid">
+                <div class="step-card">
+                    <div class="step-num font-mono">01</div>
+                    <h4>Crie sua conta grátis (2 min)</h4>
+                    <p>Sem cartão de crédito. Importe seus lotes e animais direto de sua planilha Excel/CSV.</p>
                 </div>
-
-                <div class="diff-card">
-                    <div class="diff-icon-box">
-                        <span class="material-symbols-outlined">hub</span>
-                    </div>
-                    <div class="diff-content">
-                        <h3>Multi-Fazendas & Perfis de Acesso</h3>
-                        <p>Controle vários retiros e fazendas em uma única conta. Dê acesso simplificado para os vaqueiros no curral e visão gerencial completa para veterinários e administradores.</p>
-                    </div>
+                <div class="step-card">
+                    <div class="step-num font-mono">02</div>
+                    <h4>Leve o celular para o curral</h4>
+                    <p>Pesagem, vacinação e IATF funcionando 100% off-line, mesmo no pasto mais distante.</p>
+                </div>
+                <div class="step-card">
+                    <div class="step-num font-mono">03</div>
+                    <h4>Enxergue e corte os prejuízos</h4>
+                    <p>Acompanhe GPD, custo por @@ e travas sanitárias em tempo real no painel executivo.</p>
                 </div>
             </div>
         </div>
@@ -477,20 +693,14 @@
     <section class="landing-testimonials">
         <div class="testimonials-container">
             <div class="features-header text-center">
-                <span class="section-tag font-mono">CASES DE SUCESSO</span>
-                <h2 class="section-title">O que dizem os pecuaristas que usam o CriaCerto</h2>
-                <p class="section-subtitle">Mais de 150.000 animais acompanhados com precisão e segurança zootécnica.</p>
+                <span class="section-tag font-mono">RESULTADOS COMPROVADOS</span>
+                <h2 class="section-title">Quem monitora, lucra mais por cabeça</h2>
+                <p class="section-subtitle">Produtores e veterinários que trocaram a prancheta pelo CriaCerto.</p>
             </div>
 
             <div class="testimonials-grid">
                 <div class="test-card">
-                    <div class="test-stars">
-                        <span class="material-symbols-outlined">star</span>
-                        <span class="material-symbols-outlined">star</span>
-                        <span class="material-symbols-outlined">star</span>
-                        <span class="material-symbols-outlined">star</span>
-                        <span class="material-symbols-outlined">star</span>
-                    </div>
+                    <div class="test-metric-badge font-mono">-60% tempo de curral</div>
                     <p class="test-quote">
                         "O manejo de pesagem no curral demorava o dia todo e depois tínhamos que passar o caderno a limpo no Excel. Com o CriaCerto no tablet off-line, o lote sai do curral com o relatório de GPD pronto."
                     </p>
@@ -498,19 +708,13 @@
                         <div class="author-avatar">MS</div>
                         <div class="author-info">
                             <h4>Marcelo Silveira</h4>
-                            <span>Fazenda Bela Vista (Sorriso - MT) • 8.500 cabeças</span>
+                            <span>Fazenda Bela Vista (Sorriso - MT) • 8.500 cab.</span>
                         </div>
                     </div>
                 </div>
 
                 <div class="test-card">
-                    <div class="test-stars">
-                        <span class="material-symbols-outlined">star</span>
-                        <span class="material-symbols-outlined">star</span>
-                        <span class="material-symbols-outlined">star</span>
-                        <span class="material-symbols-outlined">star</span>
-                        <span class="material-symbols-outlined">star</span>
-                    </div>
+                    <div class="test-metric-badge font-mono">0 multas de carência</div>
                     <p class="test-quote">
                         "A trava de carência medicamentosa salvou a nossa fazenda de mandar um lote com resíduo para o frigorífico. Só essa funcionalidade já pagou 10 anos de assinatura do sistema."
                     </p>
@@ -518,19 +722,13 @@
                         <div class="author-avatar">RC</div>
                         <div class="author-info">
                             <h4>Dra. Renata Campos</h4>
-                            <span>Médica Veterinária • Confinamento Rio Verde (GO)</span>
+                            <span>Médica Veterinária • Rio Verde (GO)</span>
                         </div>
                     </div>
                 </div>
 
                 <div class="test-card">
-                    <div class="test-stars">
-                        <span class="material-symbols-outlined">star</span>
-                        <span class="material-symbols-outlined">star</span>
-                        <span class="material-symbols-outlined">star</span>
-                        <span class="material-symbols-outlined">star</span>
-                        <span class="material-symbols-outlined">star</span>
-                    </div>
+                    <div class="test-metric-badge font-mono">+14% taxa de desmame</div>
                     <p class="test-quote">
                         "Na nossa estação de monta com 3.200 matrizes, saber exatamente a taxa de concepção por touro e protocolo de IATF aumentou o nosso desmame em 14% na primeira safra."
                     </p>
@@ -551,7 +749,7 @@
         <div class="pricing-header text-center">
             <span class="section-tag font-mono">SIMULADOR & INVESTIMENTO</span>
             <h2 class="section-title">Monte o plano ideal para a sua fazenda</h2>
-            <p class="section-subtitle">Sem pacotes engessados. Escolha a faixa do seu rebanho e selecione apenas os módulos que você realmente usa.</p>
+            <p class="section-subtitle">Sem pacotes engessados. Escolha a faixa do seu rebanho e pague apenas pelos módulos que usar.</p>
 
             <div class="pricing-toggle-box">
                 <button type="button" class="toggle-btn @(!_isAnnual ? "active" : "")" @onclick="() => _isAnnual = false">Mensal</button>
@@ -604,14 +802,12 @@
 
             <!-- Etapa 2 e Resumo -->
             <div class="simulator-body">
-                <!-- Coluna da Esquerda: Módulos -->
                 <div class="simulator-modules-panel">
                     <div class="simulator-step-label font-mono">
                         <span class="material-symbols-outlined" style="font-size: 16px;">view_module</span>
                         <span>2. Escolha os módulos que sua fazenda precisa</span>
                     </div>
 
-                    <!-- Módulo Core Base (Plantel / Cows) -->
                     @{
                         var coreModule = _catalog.Modules.FirstOrDefault(m => m.IsCore || string.Equals(m.ModuleKey, "Cows", StringComparison.OrdinalIgnoreCase));
                         var corePrice = coreModule?.PricesByTier.FirstOrDefault(p => string.Equals(p.TierCode, _selectedTierCode, StringComparison.OrdinalIgnoreCase))
@@ -650,15 +846,10 @@
                                     <span class="material-symbols-outlined icon-sm">hub</span>
                                     Lotes & Genealogia
                                 </span>
-                                <span class="core-chip">
-                                    <span class="material-symbols-outlined icon-sm">lock</span>
-                                    Módulo Core Travado
-                                </span>
                             </div>
                         </div>
                     }
 
-                    <!-- Grid dos Módulos Opcionais -->
                     <div class="simulator-addons-grid">
                         @foreach (var mod in _catalog.Modules.Where(m => !m.IsCore && !string.Equals(m.ModuleKey, "Cows", StringComparison.OrdinalIgnoreCase)))
                         {
@@ -694,7 +885,6 @@
                     </div>
                 </div>
 
-                <!-- Coluna da Direita: Card de Resumo Flutuante -->
                 <div class="simulator-summary-card">
                     <div class="summary-header">
                         <span class="summary-badge-tier font-mono">
@@ -725,6 +915,9 @@
                             <span class="material-symbols-outlined icon-sm">calculate</span>
                             <span>Apenas <strong>R$ @FormatPrice(CostPerHeadPerMonth)</strong> por cabeça/mês</span>
                         </div>
+                        <div class="summary-roi-anchor font-mono">
+                            1 único boi refugo identificado já paga vários meses de sistema.
+                        </div>
                     </div>
 
                     <div style="font-size: 0.8rem; font-weight: 800; text-transform: uppercase; color: #475569;" class="font-mono">
@@ -753,14 +946,14 @@
                         }
                     </div>
 
-                    <a href="/register" class="cc-btn cc-btn-primary plan-cta-btn" style="margin-top: 1.5rem; text-decoration: none;">
+                    <a href="@BuildRegisterUrl()" class="cc-btn cc-btn-primary plan-cta-btn" style="margin-top: 1.5rem; text-decoration: none;">
                         <span>Iniciar Teste Grátis de 30 Dias</span>
                         <span class="material-symbols-outlined icon-sm">arrow_forward</span>
                     </a>
 
                     <p class="summary-guarantee-note font-mono">
                         <span class="material-symbols-outlined icon-sm" style="vertical-align: text-bottom; margin-right: 0.2rem; color: #16a34a;">check</span>
-                        30 dias grátis para até 500 cabeças • Sem cartão de crédito • Cancele ou altere a qualquer momento
+                        30 dias grátis para até 500 cabeças • Sem cartão de crédito • Cancele quando quiser
                     </p>
                 </div>
             </div>
@@ -839,7 +1032,7 @@
 
             <div class="faq-list">
                 <div class="faq-item @(IsFaqOpen(0) ? "active" : "")">
-                    <button class="faq-question" @onclick="() => ToggleFaq(0)">
+                    <button type="button" class="faq-question" @onclick="() => ToggleFaq(0)">
                         <span>Preciso de internet para lançar dados no curral ou pasto?</span>
                         <span class="material-symbols-outlined faq-icon">expand_more</span>
                     </button>
@@ -852,7 +1045,7 @@
                 </div>
 
                 <div class="faq-item @(IsFaqOpen(1) ? "active" : "")">
-                    <button class="faq-question" @onclick="() => ToggleFaq(1)">
+                    <button type="button" class="faq-question" @onclick="() => ToggleFaq(1)">
                         <span>O sistema é compatível com brincos eletrônicos RFID e balanças?</span>
                         <span class="material-symbols-outlined faq-icon">expand_more</span>
                     </button>
@@ -865,7 +1058,7 @@
                 </div>
 
                 <div class="faq-item @(IsFaqOpen(2) ? "active" : "")">
-                    <button class="faq-question" @onclick="() => ToggleFaq(2)">
+                    <button type="button" class="faq-question" @onclick="() => ToggleFaq(2)">
                         <span>Como funciona o teste grátis de 30 dias? Preciso cadastrar cartão?</span>
                         <span class="material-symbols-outlined faq-icon">expand_more</span>
                     </button>
@@ -878,7 +1071,7 @@
                 </div>
 
                 <div class="faq-item @(IsFaqOpen(3) ? "active" : "")">
-                    <button class="faq-question" @onclick="() => ToggleFaq(3)">
+                    <button type="button" class="faq-question" @onclick="() => ToggleFaq(3)">
                         <span>Consigo importar meus animais a partir de planilhas Excel?</span>
                         <span class="material-symbols-outlined faq-icon">expand_more</span>
                     </button>
@@ -891,7 +1084,7 @@
                 </div>
 
                 <div class="faq-item @(IsFaqOpen(4) ? "active" : "")">
-                    <button class="faq-question" @onclick="() => ToggleFaq(4)">
+                    <button type="button" class="faq-question" @onclick="() => ToggleFaq(4)">
                         <span>Posso cadastrar vaqueiros e dar permissões personalizadas?</span>
                         <span class="material-symbols-outlined faq-icon">expand_more</span>
                     </button>
@@ -913,17 +1106,17 @@
                 <span class="material-symbols-outlined text-sm">verified</span>
                 <span>EXPERIMENTE SEM COMPROMISSO</span>
             </div>
-            <h2 class="cta-banner-title">Pronto para transformar a rentabilidade do seu rebanho?</h2>
+            <h2 class="cta-banner-title">Pronto para enxergar e estancar cada perda no seu rebanho?</h2>
             <p class="cta-banner-text">
-                Junte-se a centenas de produtores de ponta. Comece agora mesmo seu teste de 30 dias gratuito e experimente o curral inteligente no seu celular.
+                Comece agora seu teste de 30 dias gratuito (sem cartão) ou tire suas dúvidas direto com nossa equipe no WhatsApp.
             </p>
             <div class="cta-banner-actions">
-                <a href="/register" class="cc-btn cc-btn-primary hero-btn-main">
+                <a href="@BuildRegisterUrl()" class="cc-btn cc-btn-primary hero-btn-main">
                     <span>Criar Minha Conta Grátis</span>
                     <span class="material-symbols-outlined">arrow_forward</span>
                 </a>
-                <a href="https://wa.me/5565999999999?text=Ol%C3%A1%2C%20gostaria%20de%20conhecer%20o%20CriaCerto%20para%20minha%20fazenda" target="_blank" rel="noopener noreferrer" class="cc-btn hero-btn-sec">
-                    <span>Falar com Zootecnista no WhatsApp</span>
+                <a href="https://wa.me/5575991897068?text=Ol%C3%A1%2C%20gostaria%20de%20conhecer%20o%20CriaCerto%20para%20minha%20fazenda" target="_blank" rel="noopener noreferrer" class="cc-btn hero-btn-sec">
+                    <span>Falar com Especialista no WhatsApp</span>
                     <span class="material-symbols-outlined">chat</span>
                 </a>
             </div>
@@ -934,16 +1127,16 @@
     <footer class="landing-footer">
         <div class="footer-container">
             <div class="footer-brand">
-                <img src="imgs/CriaCerto.png" alt="CriaCerto Logo" style="height: 44px; width: auto; object-fit: contain; border-radius: 6px; margin-bottom: 0.5rem;" />
+                <img src="imgs/CriaCerto-logo.png" alt="CriaCerto Logo" style="height: 44px; width: 44px; object-fit: contain; border-radius: 6px; margin-bottom: 0.5rem;" />
                 <span class="footer-title">CriaCerto Bovino SaaS</span>
                 <p class="footer-text">Plataforma de alta performance para gestão pecuária de precisão baseada em .NET 10 e Blazor WebAssembly.</p>
             </div>
             <div class="footer-links">
                 <div class="link-col">
                     <span class="col-title font-mono">NAVEGAÇÃO</span>
-                    <a href="#recursos">Recursos</a>
+                    <a href="#recursos">Na Prática</a>
+                    <a href="#diferenciais">Antes vs. Depois</a>
                     <a href="#modulos">Módulos</a>
-                    <a href="#diferenciais">Diferenciais</a>
                     <a href="#planos">Preços & Simulador</a>
                     <a href="#faq">Dúvidas Frequentes</a>
                 </div>
@@ -952,7 +1145,7 @@
                     <a href="/register">Criar Conta (30 Dias Grátis)</a>
                     <a href="/login">Entrar no Sistema</a>
                     <a href="/backoffice/login">Painel Backoffice</a>
-                    <a href="https://wa.me/5565999999999?text=Ol%C3%A1%2C%20preciso%20de%20suporte%20no%20CriaCerto" target="_blank" rel="noopener noreferrer">Suporte Especializado</a>
+                    <a href="https://wa.me/5575991897068?text=Ol%C3%A1%2C%20preciso%20de%20suporte%20no%20CriaCerto" target="_blank" rel="noopener noreferrer">Suporte Especializado</a>
                 </div>
                 <div class="link-col">
                     <span class="col-title font-mono">CONFORMIDADE & LGPD</span>
@@ -968,6 +1161,17 @@
         </div>
     </footer>
 
+    <!-- Mobile Sticky Bottom CTA Bar -->
+    <div class="mobile-sticky-cta">
+        <a href="@BuildRegisterUrl()" class="cc-btn cc-btn-primary mobile-sticky-primary">
+            <span>Testar Grátis (30d)</span>
+            <span class="material-symbols-outlined icon-sm">arrow_forward</span>
+        </a>
+        <a href="https://wa.me/5575991897068?text=Ol%C3%A1%2C%20quero%20tirar%20d%C3%BAvidas%20sobre%20o%20CriaCerto" target="_blank" rel="noopener noreferrer" class="mobile-sticky-wa" aria-label="Falar no WhatsApp">
+            <span class="material-symbols-outlined">chat</span>
+        </a>
+    </div>
+
 </div>
 
 @code {
@@ -975,6 +1179,9 @@
     private bool _isMobileMenuOpen = false;
     private bool _showFullMatrix = false;
     private int _activeFaqIndex = 0;
+    private int _heroWidgetTab = 0;
+    private int _activeShowcaseTab = 0;
+    private int _mockWeighedCount = 142;
     private string _activePreset = "cria";
     private string _selectedTierCode = "TIER_500";
     private HashSet<string> _selectedModuleKeys = new(StringComparer.OrdinalIgnoreCase) { "Cows", "Breeding", "Calving" };
@@ -990,6 +1197,18 @@
         {
             _catalog = TenancyApiClient.GetDefaultModularCatalog();
         }
+    }
+
+    private void SimulateWeighing()
+    {
+        _mockWeighedCount++;
+    }
+
+    private string BuildRegisterUrl()
+    {
+        var billing = _isAnnual ? "annual" : "monthly";
+        var modules = string.Join(",", _selectedModuleKeys);
+        return $"/register?tier={Uri.EscapeDataString(_selectedTierCode)}&billing={billing}&modules={Uri.EscapeDataString(modules)}&preset={Uri.EscapeDataString(_activePreset)}";
     }
 
     private void SelectTier(string tierCode)
@@ -1098,28 +1317,10 @@
         }
     }
 
-    private void ToggleMatrixView()
-    {
-        _showFullMatrix = !_showFullMatrix;
-    }
-
-    private void ToggleMobileMenu()
-    {
-        _isMobileMenuOpen = !_isMobileMenuOpen;
-    }
-
-    private void CloseMobileMenu()
-    {
-        _isMobileMenuOpen = false;
-    }
-
-    private void ToggleFaq(int index)
-    {
-        _activeFaqIndex = _activeFaqIndex == index ? -1 : index;
-    }
-
+    private void ToggleMatrixView() => _showFullMatrix = !_showFullMatrix;
+    private void ToggleMobileMenu() => _isMobileMenuOpen = !_isMobileMenuOpen;
+    private void CloseMobileMenu() => _isMobileMenuOpen = false;
+    private void ToggleFaq(int index) => _activeFaqIndex = _activeFaqIndex == index ? -1 : index;
     private bool IsFaqOpen(int index) => _activeFaqIndex == index;
-
-    private static string FormatPrice(decimal price) =>
-        price % 1 == 0 ? price.ToString("N0") : price.ToString("N2");
+    private static string FormatPrice(decimal price) => price % 1 == 0 ? price.ToString("N0") : price.ToString("N2");
 }
